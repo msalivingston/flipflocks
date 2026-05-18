@@ -4,7 +4,7 @@ export default function Home() {
       style={{
         padding: "60px",
         fontFamily: "Arial",
-        backgroundColor: "#f3f0e8",
+        backgroundColor: "#d9ead3",
         minHeight: "100vh",
       }}
     >
@@ -15,6 +15,13 @@ export default function Home() {
       <p style={{ fontSize: "20px" }}>
         Poultry listings that don’t suck.
       </p>
+      <p>Built for small farms and backyard flocks.</p>
+      <button>Browse Listings</button>
+      <img
+  src="/minorca.jpg"
+  alt="Chicken"
+  style={{ width: "400px", marginTop: "20px" }}
+/>
     </main>
   );
 }
