@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 
 type StorefrontItem = {
+  inventory_item_id: string;
   store_name: string;
   store_slug: string;
   city: string | null;

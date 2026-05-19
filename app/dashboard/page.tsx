@@ -50,18 +50,30 @@ export default function DashboardPage() {
     setBatches(data || []);
   }
 
-  async function loadBreeds() {
-    const { data } = await supabase
-      .from("breeds")
-      .select("id, breed_name")
-      .order("breed_name");
-
-    setBreeds(data || []);
-  }
-
   useEffect(() => {
-    loadBatches();
-    loadBreeds();
+    async function loadInitialData() {
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData.user;
+
+      const [{ data: breedData }, { data: batchData }] = await Promise.all([
+        supabase
+          .from("breeds")
+          .select("id, breed_name")
+          .order("breed_name"),
+        user
+          ? supabase
+              .from("batches")
+              .select("*")
+              .eq("seller_id", user.id)
+              .order("hatch_or_birth_date", { ascending: false })
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      setBreeds(breedData || []);
+      setBatches(batchData || []);
+    }
+
+    void loadInitialData();
   }, []);
 
   async function handleCreateBatch(e: React.FormEvent) {
