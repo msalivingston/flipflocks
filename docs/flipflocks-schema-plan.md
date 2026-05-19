@@ -170,6 +170,10 @@ Use `visibility_status = archived` instead of seller hard delete in V1. Do not c
 
 `seller_notes` is private seller-only content and must not be exposed in public storefront views.
 
+When `breed_id` is supplied, application/server validation must ensure `breeds.species_id` equals `seller_breed_profiles.species_id`.
+
+Sellers must not be allowed to edit `moderation_status` through application UI or API handlers.
+
 `display_name` is historical/public-facing content. Future order item snapshots should preserve historical breed naming rather than changing old orders when seller breed profiles are edited.
 
 ### listing_batches
