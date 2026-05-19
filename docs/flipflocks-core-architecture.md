@@ -40,6 +40,8 @@ A breed grouping that exists inside a batch.
 
 Example: Cream Legbar within the June 1 batch.
 
+Breed-within-batch records should connect through seller breed profiles. Seller breed profiles bridge platform-managed breed templates with seller-specific display names, descriptions, private notes, and custom breed names.
+
 ### Inventory Item
 
 A specific sellable inventory type within a breed grouping. Inventory items are the actual sellable units tied to quantity and pricing.
@@ -167,6 +169,8 @@ Species-specific questions should remain minimal so additional species such as r
 Platform-managed global species and breed templates provide standardized defaults. Seller-specific custom breed profiles belong to the seller's store and do not automatically become global templates.
 
 Canonical breed names and aliases should normalize common variations to reduce duplicate breed chaos.
+
+Seller-created breed names remain in seller breed profiles. They are not automatically promoted into platform-managed breed templates.
 
 ## Photo Architecture
 

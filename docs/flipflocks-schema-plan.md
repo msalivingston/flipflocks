@@ -102,7 +102,6 @@ Recommended fields:
 - `common_name` text
 - `slug` text unique
 - `is_active` boolean default true
-- `age_label_rules` jsonb nullable
 - `created_at` timestamptz default now()
 - `updated_at` timestamptz default now()
 
@@ -138,23 +137,40 @@ Recommended fields:
 
 ### seller_breed_profiles
 
-Purpose: seller-specific breed notes and default breed photos.
+Purpose: seller-specific breed notes, display naming, private seller notes, and future default breed photos.
 
 Recommended fields:
 
 - `id` UUID primary key
 - `store_id` UUID references stores
 - `species_id` UUID references species
-- `global_breed_template_id` UUID references global_breed_templates nullable
+- `breed_id` UUID references breeds nullable
 - `custom_breed_name` text nullable
+- `normalized_custom_breed_name` text nullable
+- `display_name` text
 - `seller_description` text nullable
 - `seller_notes` text nullable
 - `visibility_status` text default active
-- `moderation_status` text nullable
+- `moderation_status` text default normal: normal, flagged
 - `created_at` timestamptz default now()
 - `updated_at` timestamptz default now()
 
-Seller-created custom breeds belong to the store. They do not automatically become global templates.
+Seller breed profiles are the bridge between platform-managed breeds and future `listing_batch_breeds`.
+
+Seller-created custom breeds belong to the store in `seller_breed_profiles`. They do not automatically become global templates or rows in `breeds`.
+
+Each seller breed profile must have exactly one breed source:
+
+- `breed_id`
+- `custom_breed_name`
+
+Do not allow both, and do not allow neither.
+
+Use `visibility_status = archived` instead of seller hard delete in V1. Do not create a seller delete policy for this table in V1.
+
+`seller_notes` is private seller-only content and must not be exposed in public storefront views.
+
+`display_name` is historical/public-facing content. Future order item snapshots should preserve historical breed naming rather than changing old orders when seller breed profiles are edited.
 
 ### listing_batches
 
@@ -198,6 +214,8 @@ Recommended fields:
 - `moderation_status` text nullable
 - `created_at` timestamptz default now()
 - `updated_at` timestamptz default now()
+
+`listing_batch_breeds` should use `seller_breed_profiles` as the seller-owned bridge to platform-managed breeds or seller-created custom breed names.
 
 ### inventory_items
 
@@ -266,7 +284,6 @@ Recommended fields:
 - `pickup_note` text nullable
 - `pickup_option_id` UUID references store_pickup_options nullable
 - `pickup_option_label` text nullable
-- `pickup_note` text nullable
 - `stripe_checkout_session_id` text nullable
 - `stripe_payment_intent_id` text nullable
 - `paid_at` timestamptz nullable
@@ -298,6 +315,8 @@ Recommended fields:
 - `created_at` timestamptz default now()
 
 Historical order item snapshots should not be overwritten when seller edits current listings.
+
+Future order snapshots should preserve historical breed display naming from the listing/order context.
 
 ### store_photos
 
