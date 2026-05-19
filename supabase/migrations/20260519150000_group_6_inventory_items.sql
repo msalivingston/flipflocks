@@ -36,6 +36,76 @@
 --   batch base price, and batch auto-pricing rules.
 -- - No computed current price is stored here.
 
+-- ---------------------------------------------------------------------------
+-- Preserve legacy/pre-architecture inventory_items table, if present.
+-- ---------------------------------------------------------------------------
+--
+-- The remote database may contain an older prototype public.inventory_items
+-- table with a different column shape. Preserve that data before creating the
+-- approved Group 6 inventory_items table.
+--
+-- Do not backfill legacy rows here. The old columns do not map cleanly to the
+-- approved hierarchy.
+
+do $$
+declare
+  legacy_index record;
+  legacy_policy record;
+begin
+  if to_regclass('public.inventory_items') is not null then
+    if to_regclass('public.legacy_inventory_items_before_group6') is not null then
+      raise exception
+        'Both public.inventory_items and public.legacy_inventory_items_before_group6 exist. Stop and inspect before applying Group 6.';
+    end if;
+
+    alter table public.inventory_items
+    rename to legacy_inventory_items_before_group6;
+
+    -- Index names are schema-wide in Postgres. Move legacy index names out of
+    -- the inventory_items_* namespace before creating the new approved table.
+    for legacy_index in
+      select c.relname as index_name
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      join pg_index i on i.indexrelid = c.oid
+      join pg_class t on t.oid = i.indrelid
+      join pg_namespace tn on tn.oid = t.relnamespace
+      where n.nspname = 'public'
+        and tn.nspname = 'public'
+        and t.relname = 'legacy_inventory_items_before_group6'
+        and c.relname like 'inventory_items%'
+    loop
+      execute format(
+        'alter index if exists public.%I rename to %I',
+        legacy_index.index_name,
+        'legacy_inv_items_g6_' || substr(md5(legacy_index.index_name), 1, 24)
+      );
+    end loop;
+
+    -- Policies follow the table rename. Remove them so the preserved legacy
+    -- table has no public or authenticated access path through RLS policies.
+    for legacy_policy in
+      select policyname
+      from pg_policies
+      where schemaname = 'public'
+        and tablename = 'legacy_inventory_items_before_group6'
+    loop
+      execute format(
+        'drop policy if exists %I on public.legacy_inventory_items_before_group6',
+        legacy_policy.policyname
+      );
+    end loop;
+
+    alter table public.legacy_inventory_items_before_group6
+    enable row level security;
+
+    comment on table public.legacy_inventory_items_before_group6 is
+    'Preserved legacy/pre-architecture inventory_items table from before Group 6. Retained for data preservation only. New code should not use this table.';
+  end if;
+end;
+$$;
+
+
 alter table public.listing_batches
 add column batch_type text not null default 'live_animals';
 
