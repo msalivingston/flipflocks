@@ -130,8 +130,7 @@ select
     when listing_batches.visibility_status = 'sold_out' then 'sold_out'
     when listing_batches.available_date > current_date then 'coming_soon'
     else 'available'
-  end as availability_status,
-  listing_batches.sort_order
+  end as batch_availability_status
 from public.listing_batches
 join public.stores
   on stores.id = listing_batches.store_id
