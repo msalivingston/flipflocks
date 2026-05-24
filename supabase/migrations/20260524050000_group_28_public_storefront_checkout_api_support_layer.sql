@@ -25,6 +25,16 @@ where visibility_status = 'active'
   and moderation_status = 'normal';
 
 
+-- Group 28 intentionally owns the following public API views/RPCs. The base
+-- inventory view may exist from a failed draft or legacy prototype shape, so it
+-- must be dropped before recreation when column names change.
+drop function if exists public.get_public_checkout_summary(text, jsonb);
+drop function if exists public.get_public_storefront_by_slug(text);
+drop view if exists public.public_storefront_item_detail;
+drop view if exists public.public_storefront_home;
+drop view if exists public.public_storefront_inventory;
+
+
 create or replace view public.public_storefront_inventory
 with (security_barrier = true)
 as
