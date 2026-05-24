@@ -49,6 +49,49 @@ Do not redesign the Groups 1-28 backend unless a genuine defect is found.
 | 27 | Seller Dashboard API Support Layer | Seller-facing dashboard read projections for UI development. |
 | 28 | Public Storefront / Checkout API Support Layer | Buyer-facing storefront and checkout summary support. |
 
+## Reference Seed Foundation
+
+The platform-managed reference catalog exists for seller onboarding, buyer search, filtering, discoverability, and future analytics. It is not intended to model every breeder program, strain, project, or line.
+
+Catalog naming uses `Breed - Variety` when a variety is part of the platform-managed record, for example `Marans - Black Copper` and `Wyandotte - Silver Laced`. Do not invert these names into `Black Copper Marans` or `Silver Laced Wyandotte` in seed data.
+
+For chickens, `public.breeds.category` uses product-facing V1 labels for seller onboarding and buyer filtering:
+
+- Layers
+- Meat Birds
+- Bantams
+- Dual Purpose
+- Ornamental / Exhibition
+- Specialty / Project
+- Farmers Choice
+
+Bantam wording remains in catalog names when it is buyer/seller meaningful, including entries such as `Bantam Ameraucana - Black`, `Bantam Wyandotte - Silver Laced`, `Old English Game Bantam - Birchen`, and `Dutch Bantam`. All bantam breeds and bantam-first types should use category `Bantams`, including commonly bantam-focused entries whose names do not include `Bantam`, such as `Sebright - Golden` and `Serama`. This intentional redundancy avoids name and slug collisions with standard-size variants.
+
+Seller-created breed profiles remain the place for breeder-specific details such as lines, projects, generation notes, selection goals, and private breeder notes. Examples that must remain seller-created content rather than global catalog entries include dark egg projects, F5 selections, foundation lines, annual breeding groups, and named seller projects.
+
+Reference seed migrations should use a hybrid/phased approach:
+
+- seed all supported species required by V1
+- seed a curated practical catalog for common poultry and specialty sellers
+- add future catalog records through reviewed reference-data migrations
+- avoid importing large poultry encyclopedias or speculative aliases
+- avoid AI-generated breed descriptions, placeholder marketing copy, and placeholder images
+
+The current supported species seed set is:
+
+- Chickens
+- Ducks
+- Geese
+- Turkeys
+- Guinea Fowl
+- Quail
+- Pheasants
+- Peafowl
+- Pigeons & Doves
+- Emus, Ostriches & Rheas
+
+Use only practical, high-confidence global aliases. Seller-defined aliases should not become platform-wide aliases automatically.
+
 Do not assume current test tables are final. If existing tables conflict with this plan, report the conflict before editing schema or app code.
 
 ## Naming Principles
