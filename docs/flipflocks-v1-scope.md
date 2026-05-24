@@ -1,5 +1,17 @@
 # FlipFlocks V1 Scope
 
+## Current Implementation Status
+
+Core backend architecture is complete through Group 28 and is frozen for V1 implementation. Future migrations should be limited to reference seed data, verified implementation/testing defects, security hardening, performance indexes, or proven missing V1 requirements.
+
+The next phase is:
+
+1. Reference seed data
+2. Edge Functions
+3. Seller dashboard UI
+4. Public storefront and checkout UI
+5. End-to-end testing
+
 ## V1 Product Scope
 
 FlipFlocks V1 is a direct-link seller storefront platform for livestock sellers, poultry-first but not poultry-only.
@@ -23,11 +35,13 @@ V1 supports:
 - seller pickup/cancellation policy text
 - minimal admin controls
 - Supabase RLS-based tenant isolation
+- Stripe-hosted/prebuilt payment architecture, without raw card handling or marketplace payout flows
 
 ## Explicitly Not V1
 
 Do not build these unless a later project decision explicitly changes scope:
 
+- no-email customer support
 - centralized marketplace browsing
 - platform-wide buyer search across stores
 - public seller directory
@@ -42,6 +56,7 @@ Do not build these unless a later project decision explicitly changes scope:
 - automated reminder system
 - buyer self-service order editing
 - deposit or partial payment logic
+- buyer accounts
 - internal messaging
 - buyer/seller inboxes
 - chat
@@ -50,7 +65,11 @@ Do not build these unless a later project decision explicitly changes scope:
 - escrow
 - wallet systems
 - platform-held buyer payments
+- Stripe Connect/payouts
 - platform-managed refunds for seller sales
+- chargeback/dispute management
+- accounting exports
+- advanced analytics
 - social/community features
 - pedigree management
 - advanced reservation logic
@@ -168,11 +187,11 @@ V1 intentionally does not include:
 FlipFlocks supports two seller-facing order payment modes:
 
 1. Pay at pickup
-2. Seller-connected Stripe-hosted checkout
+2. Stripe-hosted/prebuilt checkout
 
-Sellers remain merchant of record for bird/animal sales.
+Sellers remain responsible for their animal sales. Stripe Connect, seller payout flows, split payments, and marketplace-style payment administration are deferred.
 
-FlipFlocks does not collect buyer payments, hold funds, store card data, collect seller bank details, collect SSNs, or manage seller payout compliance.
+FlipFlocks does not handle raw card data, hold funds, collect seller bank details, collect SSNs, or manage seller payout compliance.
 
 Platform billing is separate from buyer payments. Sellers pay FlipFlocks for platform access through Stripe-hosted subscription billing.
 

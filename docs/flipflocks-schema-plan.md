@@ -2,6 +2,53 @@
 
 This document describes the intended schema direction. It should be compared against the current Supabase schema before creating migrations.
 
+## Implementation Status
+
+The core backend schema and database-side operations layer are complete through Group 28 and are frozen for V1 implementation. This document remains useful as architectural context, but the applied Supabase migrations are now the source of truth for the implemented schema.
+
+Future migrations should be limited to:
+
+- reference seed data
+- implementation or testing defects
+- security hardening
+- performance indexes
+- proven missing V1 requirements
+
+Do not redesign the Groups 1-28 backend unless a genuine defect is found.
+
+## Implemented Migration Groups
+
+| Group | Name | One-line description |
+| --- | --- | --- |
+| 1 | Ownership & Access Foundation | Stores, roles, ownership helpers, and base RLS. |
+| 2 | Species & Breed Reference Data | Species and global breed reference data. |
+| 3 | Seller Breed Profiles | Seller-owned breed display, description, and notes layer. |
+| 4 | Listing Batches | Seller batch/date/pricing inventory grouping. |
+| 5 | Listing Batch Breeds | Breed groupings inside listing batches. |
+| 6 | Inventory Items | Sellable inventory rows and quantity source of truth. |
+| 7 | Media Assets & Media Links | Reusable image/media attachment model. |
+| 8 | Public Storefront Projection Layer | Buyer-safe public storefront and inventory views. |
+| 9A | Breed Catalog Schema Refinement | Breed catalog normalization refinements. |
+| 10 | Customers, Orders & Order Items Foundation | Customer, order, and order item records. |
+| 11 | Trusted Order Creation Foundation | Server-side order creation and inventory decrement. |
+| 12 | Seller Order Management & Fulfillment Foundation | Seller order lifecycle operations. |
+| 13 | Storefront Discovery & Search Foundation | Constrained opt-in discovery/search support. |
+| 14 | Public Storefront Delivery Foundation | Pickup and delivery-facing storefront fields/status lookup. |
+| 15 | Checkout Delivery Foundation | Checkout contact/address snapshots and validation. |
+| 16 | Seller Storefront Configuration Foundation | Seller storefront publication toggle and availability logic. |
+| 17 | Seller Dashboard Operational Projection Layer | Dashboard status, inventory, order, and attention views. |
+| 18 | Email Notification Foundation | Provider-agnostic transactional email outbox. |
+| 19 | Notification Lifecycle Integration | Lifecycle enqueueing for order notifications. |
+| 20 | Seller Inventory Operations Foundation | Trusted seller inventory operation RPCs and activity logging. |
+| 21 | Notification Processing Foundation | Notification claiming, retry, sent, failed, and suppression controls. |
+| 22 | Seller Manual Order Creation Foundation | Seller-created offline/manual orders with inventory override safety. |
+| 23 | Fulfillment Workflow & Refund Foundation | Partial fulfillment, inventory restoration, and refund records. |
+| 24 | Admin Operations Foundation | Platform operations views, store suspension, and admin audit. |
+| 25 | Stripe Payment Integration Foundation | Hosted checkout, provider event, and refund reconciliation foundation. |
+| 26 | Edge Function & Integration Foundation | Worker run audit and integration recovery support. |
+| 27 | Seller Dashboard API Support Layer | Seller-facing dashboard read projections for UI development. |
+| 28 | Public Storefront / Checkout API Support Layer | Buyer-facing storefront and checkout summary support. |
+
 Do not assume current test tables are final. If existing tables conflict with this plan, report the conflict before editing schema or app code.
 
 ## Naming Principles

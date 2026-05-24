@@ -1,5 +1,20 @@
 # FlipFlocks Security and RLS Rules
 
+## Current Security Posture
+
+Core backend security architecture is complete through Group 28 and is frozen for V1 implementation. Future database changes should be limited to reference seed data, verified defects, security hardening, performance indexes, or proven missing V1 requirements.
+
+Current posture:
+
+- RLS is enabled on sensitive seller, customer, order, notification, payment, refund, admin, and integration tables.
+- Seller-facing access is scoped through store ownership checks such as `owns_store(...)` and explicit admin checks such as `is_admin()`.
+- Seller-facing mutation paths use trusted RPCs for inventory, order, fulfillment, refund, manual order, and storefront operations rather than direct client writes to sensitive state.
+- Service-role/admin-only integration functions handle notification processing, provider event reconciliation, worker recovery, admin operations, and Stripe/payment state changes.
+- Public/anonymous access is limited to public-safe storefront and checkout support views/RPCs.
+- Raw card handling is out of scope. Stripe payments use hosted/prebuilt flows, with API calls and webhook signature verification outside Postgres.
+- Stripe/provider webhook events are tracked idempotently so the same provider event cannot be processed twice.
+- Audit trails exist for inventory activity, order events, refunds, admin activity, notification delivery state, provider events, and integration worker runs.
+
 ## Security Model
 
 FlipFlocks uses a shared database with strict tenant separation through Supabase Row Level Security.
@@ -14,7 +29,7 @@ Ownership and access must be validated through `auth.uid()` and server-side role
 - Each seller has an independent storefront.
 - Sellers remain merchant of record for animal sales.
 - FlipFlocks avoids custody of seller sale proceeds in V1.
-- Stripe Connect direct seller flows are preferred for online checkout.
+- Stripe payments use hosted/prebuilt flows. Stripe Connect, seller payouts, and marketplace-style payment splitting are deferred.
 - FlipFlocks minimizes tax/1099/platform payout complexity.
 - All sensitive data is protected by Supabase RLS.
 - All sensitive ownership is enforced with `auth.uid()` and store ownership/role checks.

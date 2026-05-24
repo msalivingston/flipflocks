@@ -53,6 +53,16 @@ Do not "clean up" broad areas of the project unless specifically asked.
 
 ## Schema Changes Require Gap Analysis First
 
+Core backend architecture is complete through Group 28 and is frozen for V1 implementation.
+
+Future migrations should be limited to:
+
+- reference seed data
+- defects found during implementation or testing
+- security hardening
+- performance indexes
+- proven missing V1 requirements
+
 Before editing Supabase schema or migrations:
 
 1. inspect current schema/migrations/app references
