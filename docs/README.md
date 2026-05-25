@@ -30,6 +30,10 @@ Recommended reading order for Codex:
 4. `flipflocks-security-rls.md`
 5. `codex-development-rules.md`
 
+Group implementation notes:
+
+- `group-29-seller-api-safety.md`
+
 Core instruction for Codex:
 
 Read these documents before making changes. If existing code or schema conflicts with these documents, report the conflict and stop before changing code, schema, migrations, or RLS policies.
