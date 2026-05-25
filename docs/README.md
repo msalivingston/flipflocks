@@ -33,6 +33,7 @@ Recommended reading order for Codex:
 Group implementation notes:
 
 - `group-29-seller-api-safety.md`
+- `group-30-public-storefront-pay-at-pickup-api.md`
 
 Core instruction for Codex:
 
