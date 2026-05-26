@@ -33,6 +33,7 @@ supabase/functions/pay-at-pickup-order
 The Edge Function:
 
 - accepts a store slug, buyer contact/pickup details, checkout items, and an idempotency key
+- accepts an optional seller-defined `pickup_option_id` after Group 32A
 - requires `POST` requests to use `Content-Type: application/json`
 - rejects unknown request fields
 - validates request shape before calling the database

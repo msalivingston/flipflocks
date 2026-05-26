@@ -34,6 +34,9 @@ Group implementation notes:
 
 - `group-29-seller-api-safety.md`
 - `group-30-public-storefront-pay-at-pickup-api.md`
+- `group-31-seller-ui-foundation.md`
+- `group-31-ui-implementation-readiness-review.md`
+- `group-32a-seller-ui-support-gaps.md`
 
 Core instruction for Codex:
 

@@ -24,6 +24,7 @@ type OrderRequest = {
   delivery_country?: string | null;
   buyer_notes?: string | null;
   pickup_note?: string | null;
+  pickup_option_id?: string | null;
   items: CheckoutItem[];
 };
 
@@ -130,6 +131,33 @@ function optionalText(
   return trimmed;
 }
 
+function optionalUuid(
+  body: Record<string, unknown>,
+  key: keyof OrderRequest,
+): string | null {
+  const value = body[key];
+
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw new Error(`${key} must be a valid ID.`);
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  if (!uuidPattern.test(trimmed)) {
+    throw new Error(`${key} must be a valid ID.`);
+  }
+
+  return trimmed;
+}
+
 function normalizeItems(value: unknown): CheckoutItem[] {
   if (!Array.isArray(value) || value.length === 0) {
     throw new Error("At least one checkout item is required.");
@@ -207,6 +235,7 @@ function parseOrderRequest(body: unknown): OrderRequest {
     "delivery_country",
     "buyer_notes",
     "pickup_note",
+    "pickup_option_id",
     "items",
   ]);
 
@@ -252,6 +281,7 @@ function parseOrderRequest(body: unknown): OrderRequest {
     delivery_country: optionalText(record, "delivery_country", 80),
     buyer_notes: optionalText(record, "buyer_notes", 2000),
     pickup_note: optionalText(record, "pickup_note", 1000),
+    pickup_option_id: optionalUuid(record, "pickup_option_id"),
     items: normalizeItems(record.items),
   };
 }
@@ -401,6 +431,7 @@ Deno.serve(async (request: Request) => {
       p_pickup_note: orderRequest.pickup_note,
       p_buyer_ip_address: parseBuyerIp(request),
       p_buyer_user_agent: request.headers.get("user-agent"),
+      p_pickup_option_id: orderRequest.pickup_option_id,
     },
   );
 
@@ -414,6 +445,7 @@ Deno.serve(async (request: Request) => {
       "One or more inventory items are not available for checkout.",
       "Insufficient inventory quantity available.",
       "Invalid inventory type for listing batch type.",
+      "Pickup option is not available for this store.",
     ];
     const safeValidationMessages = [
       "Store is required.",
@@ -431,6 +463,7 @@ Deno.serve(async (request: Request) => {
       "Each order item must include a valid inventory item ID and positive quantity.",
       "At least one valid order item is required.",
       "Invalid inventory relationship for checkout.",
+      "pickup_option_id must be a valid ID.",
       ...conflictMessages,
     ];
     const safeMessage = safeValidationMessages.includes(message)

@@ -115,52 +115,20 @@ Seller configures global storefront-level pickup information:
 
 Exact pickup address should not be shown publicly unless the seller intentionally chooses to do so. Exact pickup instructions may be revealed after order confirmation or handled manually by the seller.
 
-### Seller-Defined Pickup Time Options
+### Seller-Defined Pickup Options
 
 Sellers may optionally create a list of pickup choices that buyers select during checkout.
 Pickup options are optional. Sellers who prefer open-ended coordination may skip pickup options entirely and rely on buyer notes instead.
 
-These are simple seller-defined labels and are not appointment slots or calendar bookings.
+These are simple seller-defined dropdown labels. They are not freeform scheduled pickup dates, appointment slots, capacity-managed slots, or calendar bookings.
 
 Examples:
 
-- Saturday, May 9 at 10:00 AM
-- Saturday, May 16 at 9:00 AM
-- Utah Transport with Cynthia – Next Available Date
-- 50+ Birds – Custom Pickup Date TBD
-
-The selected pickup option is stored with the order and displayed in seller-facing order management screens.
-
-Sellers may edit the selected pickup option after order creation to accommodate reschedules, transport changes, weather delays, hatch timing changes, or other real-world farm adjustments.
-
-To preserve historical accuracy, orders store both:
-
-- pickup_option_id
-- pickup_option_label (snapshot at time of order)
-
-This prevents later edits to pickup options from changing historical order records.
-
-V1 intentionally does not include:
-
-- appointment scheduling
-- calendar integrations
-- automated availability management
-- pickup slot capacity limits
-- automated rescheduling workflows
-- automated reminder systems
-
-### Seller-Defined Pickup Time Options
-
-Sellers may optionally create a list of pickup choices that buyers select during checkout.
-
-These are simple seller-defined labels and are not appointment slots or calendar bookings.
-
-Examples:
-
-- Saturday, May 9 at 10:00 AM
-- Saturday, May 16 at 9:00 AM
-- Utah Transport with Cynthia – Next Available Date
-- 50+ Birds – Custom Pickup Date TBD
+- Thursday afternoon pickup
+- Friday morning pickup
+- Saturday by appointment
+- Farm pickup
+- Delivery route / transport stop if later supported
 
 The selected pickup option is stored with the order and displayed in seller-facing order management screens.
 
