@@ -12,15 +12,75 @@
   --font-mono: "Courier New", Courier, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.seller-small-button {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  border: 1px solid #d6d3d1;
+  background: #ffffff;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #292524;
+  text-decoration: none;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.seller-small-button:hover {
+  border-color: #a8a29e;
+  background: #f5f5f4;
+}
+
+.seller-secondary-button {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  border: 1px solid #a8a29e;
+  background: #ffffff;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #292524;
+  text-decoration: none;
+}
+
+.seller-secondary-button:hover {
+  background: #f5f5f4;
+}
+
+.seller-form-field {
+  min-height: 2.75rem;
+  width: 100%;
+  border-radius: 0.375rem;
+  border: 1px solid #d6d3d1;
+  background: #ffffff;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1c1917;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+
+.seller-form-field:focus {
+  border-color: #047857;
+  outline: 2px solid rgb(4 120 87 / 0.2);
+  outline-offset: 0;
+}
+
+.seller-form-field:disabled {
+  cursor: not-allowed;
+  background: #f5f5f4;
+  color: #78716c;
 }
