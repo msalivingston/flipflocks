@@ -53,6 +53,7 @@ type FormState = {
   availableDate: string;
   basePrice: string;
   internalLabel: string;
+  publicDescription: string;
   sellerNotes: string;
 };
 
@@ -63,8 +64,11 @@ const emptyFormState: FormState = {
   availableDate: "",
   basePrice: "",
   internalLabel: "",
+  publicDescription: "",
   sellerNotes: "",
 };
+
+const publicDescriptionMaxLength = 1000;
 
 const inventoryTypeOptions: { label: string; value: InventoryType }[] = [
   { label: "Female", value: "female" },
@@ -135,7 +139,9 @@ export function SingleBreedBasicsForm() {
           .order("breed_name", { ascending: true }),
         supabase
           .from("seller_breed_profiles")
-          .select("id, species_id, breed_id, display_name, visibility_status")
+          .select(
+            "id, species_id, breed_id, custom_breed_name, display_name, seller_description, seller_notes, visibility_status",
+          )
           .eq("store_id", storeId)
           .eq("visibility_status", "active")
           .eq("moderation_status", "normal")
@@ -195,6 +201,20 @@ export function SingleBreedBasicsForm() {
     setSaveError(null);
   }
 
+  function handleBreedChoiceChange(value: string) {
+    const selectedProfile = sellerProfiles.find(
+      (profile) => `profile:${profile.id}` === value,
+    );
+
+    setForm((current) => ({
+      ...current,
+      breedChoice: value,
+      publicDescription: selectedProfile?.seller_description ?? "",
+    }));
+    setValidationErrors([]);
+    setSaveError(null);
+  }
+
   function handleBasicsSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -241,13 +261,13 @@ export function SingleBreedBasicsForm() {
     setSaveError(null);
 
     const sellerBreedProfileId =
-      selectedBreedChoice.kind === "profile"
-        ? selectedBreedChoice.profileId
-        : await createSellerBreedProfile(
-            seller.store_id,
-            form.speciesId,
-            selectedBreedChoice,
-          );
+      await upsertSellerBreedProfileForListing(
+        seller.store_id,
+        form.speciesId,
+        selectedBreedChoice,
+        sellerProfiles,
+        form.publicDescription,
+      );
 
     if (!sellerBreedProfileId) {
       setSaveError(
@@ -363,9 +383,7 @@ export function SingleBreedBasicsForm() {
                   <select
                     className="seller-form-field"
                     value={form.breedChoice}
-                    onChange={(event) =>
-                      updateField("breedChoice", event.target.value)
-                    }
+                    onChange={(event) => handleBreedChoiceChange(event.target.value)}
                     disabled={!form.speciesId}
                   >
                     <option value="">Choose breed</option>
@@ -449,6 +467,22 @@ export function SingleBreedBasicsForm() {
               />
               <span className="text-xs font-normal leading-5 text-stone-500">
                 This is just for you. Buyers will not see it.
+              </span>
+            </label>
+
+            <label className="grid gap-1 text-sm font-semibold text-stone-700">
+              Public description
+              <textarea
+                className="seller-form-field min-h-32 resize-y py-3"
+                maxLength={publicDescriptionMaxLength}
+                placeholder="Example: Friendly started pullets from our spring hatch, raised on pasture with regular handling."
+                value={form.publicDescription}
+                onChange={(event) =>
+                  updateField("publicDescription", event.target.value)
+                }
+              />
+              <span className="text-xs font-normal leading-5 text-stone-500">
+                This is what buyers will see on your listing. Optional for now.
               </span>
             </label>
 
@@ -794,6 +828,10 @@ function ReviewStep({
           label="Internal label"
           value={form.internalLabel.trim() || "No internal label"}
         />
+        <ReviewItem
+          label="Public description"
+          value={form.publicDescription.trim() || "No public description"}
+        />
       </dl>
 
       <div className="mt-5">
@@ -908,6 +946,12 @@ function validateForm(form: FormState) {
     errors.push("Use a valid price with no more than two decimal places.");
   }
 
+  if (form.publicDescription.trim().length > publicDescriptionMaxLength) {
+    errors.push(
+      `Public description must be ${publicDescriptionMaxLength} characters or less.`,
+    );
+  }
+
   return errors;
 }
 
@@ -951,23 +995,38 @@ function validateInventory(rows: InventoryRow[]) {
   return errors;
 }
 
-async function createSellerBreedProfile(
+async function upsertSellerBreedProfileForListing(
   storeId: string,
   speciesId: string,
   breedChoice: BreedChoice,
+  sellerProfiles: SellerBreedProfileOption[],
+  publicDescription: string,
 ) {
-  if (breedChoice.kind !== "breed" || !breedChoice.breedId) return null;
+  const existingProfile =
+    breedChoice.kind === "profile"
+      ? sellerProfiles.find((profile) => profile.id === breedChoice.profileId)
+      : null;
+
+  if (breedChoice.kind === "profile" && !existingProfile) return null;
+  if (breedChoice.kind === "breed" && !breedChoice.breedId) return null;
 
   const { data, error } = await supabase.rpc("seller_upsert_breed_profile", {
     p_store_id: storeId,
     p_species_id: speciesId,
-    p_breed_id: breedChoice.breedId,
-    p_custom_breed_name: null,
+    p_breed_id:
+      breedChoice.kind === "profile"
+        ? existingProfile?.breed_id ?? null
+        : breedChoice.breedId,
+    p_custom_breed_name:
+      breedChoice.kind === "profile"
+        ? existingProfile?.custom_breed_name ?? null
+        : null,
     p_display_name: breedChoice.label,
-    p_seller_description: null,
-    p_seller_notes: null,
+    p_seller_description: publicDescription.trim() || null,
+    p_seller_notes: existingProfile?.seller_notes ?? null,
     p_visibility_status: "active",
-    p_seller_breed_profile_id: null,
+    p_seller_breed_profile_id:
+      breedChoice.kind === "profile" ? breedChoice.profileId : null,
   });
 
   if (error) return null;

@@ -14,30 +14,21 @@ import {
   StatusBadge,
 } from "../../_components/seller-ui";
 import type { SellerInventoryManagementRow } from "../../_lib/seller-types";
+import {
+  buildPublishReadinessReport,
+  type PublishReadinessListing,
+  type PublishReadinessMediaSummary,
+} from "./publish-readiness";
+import { PublishReadinessReview } from "./publish-readiness-review";
 
-type ListingDetailSummary = {
-  title: string;
-  speciesName: string;
-  breedNames: string[];
-  batchType: string;
-  originDate: string | null;
-  availableDate: string;
-  ageAtAvailabilityDays: number | null;
-  basePrice: number | null;
-  internalLabel: string | null;
-  sellerNotes: string | null;
-  visibilityStatus: string;
-  moderationStatus: string;
-  availabilityStatus: string;
-  totalAvailable: number;
-  rows: SellerInventoryManagementRow[];
-};
+type ListingDetailSummary = PublishReadinessListing;
 
 type EditBasicsState = {
   originDate: string;
   availableDate: string;
   basePrice: string;
   internalLabel: string;
+  publicDescription: string;
   sellerNotes: string;
 };
 
@@ -54,8 +45,36 @@ type EditInventoryRow = {
   isRemoved: boolean;
 };
 
+type SellerMediaManagementRow = {
+  media_link_id: string;
+  entity_type: string;
+  entity_id: string;
+  asset_status: string;
+  moderation_status: string;
+  visibility_status: string;
+};
+
+type SellerBreedProfileRead = {
+  id: string;
+  species_id: string;
+  breed_id: string | null;
+  custom_breed_name: string | null;
+  display_name: string;
+  seller_description: string | null;
+  seller_notes: string | null;
+  visibility_status: string;
+};
+
 const listingDetailSelect =
   "store_id, listing_batch_id, listing_batch_breed_id, inventory_item_id, species_id, species_name, species_slug, seller_breed_profile_id, breed_display_name, batch_type, origin_date, available_date, age_at_availability_days, base_price, auto_price_increase_enabled, auto_price_increase_amount, auto_price_increase_max_price, internal_batch_label, listing_batch_visibility_status, listing_batch_moderation_status, listing_batch_breed_sort_order, listing_batch_breed_visibility_status, listing_batch_breed_moderation_status, inventory_type, custom_inventory_label, quantity_available, price_override, effective_unit_price, inventory_item_sort_order, inventory_visibility_status, inventory_moderation_status, operational_availability_status, inventory_seller_notes, listing_batch_breed_seller_notes, listing_batch_seller_notes, inventory_updated_at, listing_batch_updated_at";
+
+const sellerMediaSelect =
+  "media_link_id, entity_type, entity_id, asset_status, moderation_status, visibility_status";
+
+const sellerBreedProfileSelect =
+  "id, species_id, breed_id, custom_breed_name, display_name, seller_description, seller_notes, visibility_status";
+
+const publicDescriptionMaxLength = 1000;
 
 const liveAnimalInventoryTypes = [
   { label: "Female", value: "female" },
@@ -86,6 +105,9 @@ export function ListingDetail({
   const { seller } = useSellerContext();
   const storeId = seller?.store_id ?? "";
   const [rows, setRows] = useState<SellerInventoryManagementRow[]>([]);
+  const [breedProfiles, setBreedProfiles] = useState<SellerBreedProfileRead[]>(
+    [],
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -96,6 +118,11 @@ export function ListingDetail({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showPublishReview, setShowPublishReview] = useState(false);
+  const [mediaSummary, setMediaSummary] = useState<PublishReadinessMediaSummary>({
+    activeCount: 0,
+    totalCount: 0,
+  });
 
   useEffect(() => {
     if (!storeId) return;
@@ -123,7 +150,68 @@ export function ListingDetail({
         return;
       }
 
-      setRows(data ?? []);
+      const listingRows = data ?? [];
+      setRows(listingRows);
+
+      if (listingRows.length > 0) {
+        const profileIds = uniqueSorted(
+          listingRows.map((row) => row.seller_breed_profile_id),
+        );
+        const { data: profileData, error: profileError } = await supabase
+          .from("seller_breed_profiles")
+          .select(sellerBreedProfileSelect)
+          .eq("store_id", storeId)
+          .in("id", profileIds)
+          .returns<SellerBreedProfileRead[]>();
+
+        if (!isMounted) return;
+
+        if (profileError) {
+          setError(profileError.message);
+          setIsLoading(false);
+          return;
+        }
+
+        setBreedProfiles(profileData ?? []);
+
+        const mediaEntityIds = uniqueSorted([
+          listingBatchId,
+          ...listingRows.map((row) => row.listing_batch_breed_id),
+          ...listingRows.map((row) => row.inventory_item_id),
+        ]);
+        const { data: mediaData, error: mediaError } = await supabase
+          .from("seller_media_management")
+          .select(sellerMediaSelect)
+          .eq("store_id", storeId)
+          .in("entity_id", mediaEntityIds)
+          .returns<SellerMediaManagementRow[]>();
+
+        if (!isMounted) return;
+
+        if (mediaError) {
+          setError(mediaError.message);
+          setIsLoading(false);
+          return;
+        }
+
+        const relevantMedia = (mediaData ?? []).filter((item) =>
+          isListingMedia(item, mediaEntityIds),
+        );
+
+        setMediaSummary({
+          activeCount: relevantMedia.filter(
+            (item) =>
+              item.visibility_status === "active" &&
+              item.asset_status === "active" &&
+              item.moderation_status === "approved",
+          ).length,
+          totalCount: relevantMedia.length,
+        });
+      } else {
+        setBreedProfiles([]);
+        setMediaSummary({ activeCount: 0, totalCount: 0 });
+      }
+
       setIsLoading(false);
     }
 
@@ -134,15 +222,31 @@ export function ListingDetail({
     };
   }, [listingBatchId, reloadKey, storeId]);
 
-  const listing = useMemo(() => summarizeListing(rows), [rows]);
+  const listing = useMemo(
+    () => summarizeListing(rows, breedProfiles),
+    [breedProfiles, rows],
+  );
   const canEdit = listing?.visibilityStatus === "hidden";
+  const publishReadinessReport = useMemo(
+    () =>
+      listing
+        ? buildPublishReadinessReport({
+            listing,
+            media: mediaSummary,
+            seller,
+          })
+        : null,
+    [listing, mediaSummary, seller],
+  );
 
   function startEditing(currentListing: ListingDetailSummary) {
+    setShowPublishReview(false);
     setEditBasics({
       originDate: currentListing.originDate ?? "",
       availableDate: currentListing.availableDate,
       basePrice: currentListing.basePrice?.toString() ?? "",
       internalLabel: currentListing.internalLabel ?? "",
+      publicDescription: currentListing.publicDescription ?? "",
       sellerNotes: currentListing.sellerNotes ?? "",
     });
     setEditRows(
@@ -171,6 +275,36 @@ export function ListingDetail({
     setEditRows([]);
     setValidationErrors([]);
     setSaveError(null);
+  }
+
+  async function updateListingBreedDescriptions(
+    currentListing: ListingDetailSummary,
+    publicDescription: string,
+  ) {
+    const nextDescription = publicDescription.trim() || null;
+
+    if ((currentListing.publicDescription ?? null) === nextDescription) {
+      return null;
+    }
+
+    if (breedProfiles.length !== 1) {
+      return "Public description editing is only available for single-breed listings right now.";
+    }
+
+    const profile = breedProfiles[0];
+    const result = await supabase.rpc("seller_upsert_breed_profile", {
+      p_store_id: storeId,
+      p_species_id: profile.species_id,
+      p_breed_id: profile.breed_id,
+      p_custom_breed_name: profile.custom_breed_name,
+      p_display_name: profile.display_name,
+      p_seller_description: nextDescription,
+      p_seller_notes: profile.seller_notes,
+      p_visibility_status: profile.visibility_status,
+      p_seller_breed_profile_id: profile.id,
+    });
+
+    return result.error?.message ?? null;
   }
 
   async function saveEdits(currentListing: ListingDetailSummary) {
@@ -202,6 +336,17 @@ export function ListingDetail({
 
     if (batchResult.error) {
       setSaveError(batchResult.error.message);
+      setIsSaving(false);
+      return;
+    }
+
+    const breedProfileResult = await updateListingBreedDescriptions(
+      currentListing,
+      editBasics.publicDescription,
+    );
+
+    if (breedProfileResult) {
+      setSaveError(breedProfileResult);
       setIsSaving(false);
       return;
     }
@@ -382,6 +527,35 @@ export function ListingDetail({
             ) : (
               <>
                 <ListingReadOnlyView listing={listing} />
+                {canEdit && publishReadinessReport ? (
+                  <SellerCard className="p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h2 className="text-lg font-semibold text-stone-950">
+                          Review Before Publish
+                        </h2>
+                        <p className="mt-1 text-sm leading-6 text-stone-600">
+                          Preview what looks ready and what still needs
+                          attention. This does not make the listing live.
+                        </p>
+                      </div>
+                      <button
+                        className="seller-secondary-button"
+                        onClick={() =>
+                          setShowPublishReview((current) => !current)
+                        }
+                        type="button"
+                      >
+                        {showPublishReview
+                          ? "Hide Publish Review"
+                          : "Review Before Publish"}
+                      </button>
+                    </div>
+                  </SellerCard>
+                ) : null}
+                {canEdit && showPublishReview && publishReadinessReport ? (
+                  <PublishReadinessReview report={publishReadinessReport} />
+                ) : null}
                 <SellerCard className="p-5">
                   <h2 className="text-lg font-semibold text-stone-950">
                     Editing
@@ -418,10 +592,17 @@ export function ListingDetail({
 
 function summarizeListing(
   rows: SellerInventoryManagementRow[],
+  breedProfiles: SellerBreedProfileRead[],
 ): ListingDetailSummary | null {
   const first = rows[0];
 
   if (!first) return null;
+
+  const publicDescriptions = uniqueSorted(
+    breedProfiles
+      .map((profile) => profile.seller_description?.trim())
+      .filter((value): value is string => Boolean(value)),
+  );
 
   return {
     title:
@@ -435,6 +616,8 @@ function summarizeListing(
     ageAtAvailabilityDays: first.age_at_availability_days,
     basePrice: first.base_price,
     internalLabel: first.internal_batch_label,
+    publicDescription:
+      publicDescriptions.length > 0 ? publicDescriptions.join("\n\n") : null,
     sellerNotes: first.listing_batch_seller_notes,
     visibilityStatus: first.listing_batch_visibility_status,
     moderationStatus: first.listing_batch_moderation_status,
@@ -485,6 +668,12 @@ function validateEditForm(
 
   if (!isValidMoney(basics.basePrice)) {
     errors.push("Base price must be a valid price.");
+  }
+
+  if (basics.publicDescription.trim().length > publicDescriptionMaxLength) {
+    errors.push(
+      `Public description must be ${publicDescriptionMaxLength} characters or less.`,
+    );
   }
 
   if (inventoryTypes.length !== uniqueInventoryTypes.size) {
@@ -564,6 +753,10 @@ function ListingReadOnlyView({ listing }: { listing: ListingDetailSummary }) {
           <DetailItem
             label="Internal label"
             value={listing.internalLabel ?? "No internal label"}
+          />
+          <DetailItem
+            label="Public description"
+            value={listing.publicDescription ?? "No public description"}
           />
           <DetailItem
             label="Seller notes"
@@ -794,6 +987,20 @@ function EditListingForm({
             />
           </label>
           <label className="grid gap-1 text-sm font-semibold text-stone-700">
+            Public description
+            <textarea
+              className="seller-form-field min-h-32 resize-y py-3"
+              maxLength={publicDescriptionMaxLength}
+              value={editBasics.publicDescription}
+              onChange={(event) =>
+                updateBasics({ publicDescription: event.target.value })
+              }
+            />
+            <span className="text-xs font-normal leading-5 text-stone-500">
+              This is what buyers will see on your listing.
+            </span>
+          </label>
+          <label className="grid gap-1 text-sm font-semibold text-stone-700">
             Seller notes
             <textarea
               className="seller-form-field min-h-28 resize-y py-3"
@@ -994,6 +1201,21 @@ function formatCurrency(value: number | null | undefined) {
 
 function uniqueSorted(values: string[]) {
   return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
+}
+
+function isListingMedia(
+  item: SellerMediaManagementRow,
+  mediaEntityIds: string[],
+) {
+  if (
+    !["listing_batch", "listing_batch_breed", "inventory_item"].includes(
+      item.entity_type,
+    )
+  ) {
+    return false;
+  }
+
+  return mediaEntityIds.includes(item.entity_id);
 }
 
 function pickListingAvailabilityStatus(current: string, next: string) {
