@@ -43,12 +43,15 @@ type EditBasicsState = {
 
 type EditInventoryRow = {
   inventoryItemId: string;
+  listingBatchBreedId: string;
   inventoryType: string;
   customLabel: string;
   quantityAvailable: string;
   priceOverride: string;
   sortOrder: number;
   sellerNotes: string;
+  isNew: boolean;
+  isRemoved: boolean;
 };
 
 const listingDetailSelect =
@@ -145,12 +148,15 @@ export function ListingDetail({
     setEditRows(
       currentListing.rows.map((row) => ({
         inventoryItemId: row.inventory_item_id,
+        listingBatchBreedId: row.listing_batch_breed_id,
         inventoryType: row.inventory_type,
         customLabel: row.custom_inventory_label ?? "",
         quantityAvailable: (row.quantity_available ?? 0).toString(),
         priceOverride: row.price_override?.toString() ?? "",
         sortOrder: row.inventory_item_sort_order ?? 0,
         sellerNotes: row.inventory_seller_notes ?? "",
+        isNew: false,
+        isRemoved: false,
       })),
     );
     setValidationErrors([]);
@@ -201,6 +207,51 @@ export function ListingDetail({
     }
 
     for (const row of editRows) {
+      if (row.isRemoved) {
+        if (!row.isNew) {
+          const archiveResult = await supabase.rpc(
+            "seller_set_inventory_visibility",
+            {
+              p_inventory_item_id: row.inventoryItemId,
+              p_visibility_status: "archived",
+              p_note: "Removed from hidden listing edit.",
+            },
+          );
+
+          if (archiveResult.error) {
+            setSaveError(archiveResult.error.message);
+            setIsSaving(false);
+            return;
+          }
+        }
+
+        continue;
+      }
+
+      if (row.isNew) {
+        const createResult = await supabase.rpc("seller_create_inventory_item", {
+          p_listing_batch_breed_id: row.listingBatchBreedId,
+          p_inventory_type: row.inventoryType,
+          p_custom_inventory_label:
+            row.inventoryType === "other" ? row.customLabel.trim() : null,
+          p_quantity_available: Number(row.quantityAvailable),
+          p_price_override: row.priceOverride.trim()
+            ? Number(row.priceOverride)
+            : null,
+          p_sort_order: row.sortOrder,
+          p_visibility_status: "active",
+          p_seller_notes: row.sellerNotes.trim() || null,
+        });
+
+        if (createResult.error) {
+          setSaveError(createResult.error.message);
+          setIsSaving(false);
+          return;
+        }
+
+        continue;
+      }
+
       const originalRow = currentListing.rows.find(
         (item) => item.inventory_item_id === row.inventoryItemId,
       );
@@ -409,8 +460,13 @@ function validateEditForm(
   listing: ListingDetailSummary,
 ) {
   const errors: string[] = [];
-  const inventoryTypes = inventoryRows.map((row) => row.inventoryType);
+  const activeRows = inventoryRows.filter((row) => !row.isRemoved);
+  const inventoryTypes = activeRows.map((row) => row.inventoryType);
   const uniqueInventoryTypes = new Set(inventoryTypes);
+
+  if (activeRows.length === 0) {
+    errors.push("Keep at least one inventory row on this listing.");
+  }
 
   if (!basics.availableDate) errors.push("Add an available date.");
 
@@ -435,7 +491,7 @@ function validateEditForm(
     errors.push("Use each inventory type only once for this listing.");
   }
 
-  inventoryRows.forEach((row, index) => {
+  activeRows.forEach((row, index) => {
     const rowLabel = `Row ${index + 1}`;
 
     if (!row.inventoryType) errors.push(`${rowLabel}: choose an inventory type.`);
@@ -608,6 +664,7 @@ function EditListingForm({
     listing.batchType === "hatching_eggs"
       ? hatchingEggInventoryTypes
       : liveAnimalInventoryTypes;
+  const visibleRows = editRows.filter((row) => !row.isRemoved);
 
   function updateBasics(updates: Partial<EditBasicsState>) {
     setEditBasics((current) => (current ? { ...current, ...updates } : current));
@@ -618,6 +675,49 @@ function EditListingForm({
       current.map((row) =>
         row.inventoryItemId === rowId ? { ...row, ...updates } : row,
       ),
+    );
+  }
+
+  function addInventoryRow() {
+    const parentBreedId = listing.rows[0]?.listing_batch_breed_id;
+    const nextSortOrder =
+      editRows.reduce((largest, row) => Math.max(largest, row.sortOrder), -1) +
+      1;
+
+    if (!parentBreedId) return;
+
+    setEditRows((current) => [
+      ...current,
+      {
+        inventoryItemId: `new-${crypto.randomUUID()}`,
+        listingBatchBreedId: parentBreedId,
+        inventoryType: "",
+        customLabel: "",
+        quantityAvailable: "0",
+        priceOverride: "",
+        sortOrder: nextSortOrder,
+        sellerNotes: "",
+        isNew: true,
+        isRemoved: false,
+      },
+    ]);
+  }
+
+  function removeInventoryRow(rowId: string) {
+    if (visibleRows.length <= 1) return;
+
+    const shouldRemove = window.confirm(
+      "Remove this inventory row from the hidden listing? It will be removed when you save changes.",
+    );
+
+    if (!shouldRemove) return;
+
+    setEditRows((current) =>
+      current
+        .map((row) =>
+          row.inventoryItemId === rowId ? { ...row, isRemoved: true } : row,
+        )
+        .filter((row) => !(row.inventoryItemId === rowId && row.isNew)),
     );
   }
 
@@ -704,15 +804,40 @@ function EditListingForm({
         </section>
 
         <section className="grid gap-4">
-          <h3 className="font-semibold text-stone-950">Inventory Rows</h3>
-          {editRows.map((row, index) => (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h3 className="font-semibold text-stone-950">Inventory Rows</h3>
+            <button
+              className="seller-secondary-button"
+              onClick={addInventoryRow}
+              type="button"
+            >
+              Add Inventory Row
+            </button>
+          </div>
+
+          {visibleRows.map((row, index) => (
             <div
               key={row.inventoryItemId}
               className="rounded-lg border border-stone-200 bg-stone-50 p-4"
             >
-              <p className="mb-3 font-semibold text-stone-950">
-                Row {index + 1}
-              </p>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="font-semibold text-stone-950">
+                  Row {index + 1}
+                  {row.isNew ? (
+                    <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">
+                      New
+                    </span>
+                  ) : null}
+                </p>
+                <button
+                  className="seller-small-button"
+                  disabled={visibleRows.length <= 1}
+                  onClick={() => removeInventoryRow(row.inventoryItemId)}
+                  type="button"
+                >
+                  Remove
+                </button>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-1 text-sm font-semibold text-stone-700">
                   Inventory type
