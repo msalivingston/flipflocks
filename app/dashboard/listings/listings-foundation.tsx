@@ -20,6 +20,7 @@ import type { SellerInventoryManagementRow } from "../_lib/seller-types";
 type ListingView = "listing" | "breed";
 
 type ListingStatusFilter =
+  | "current"
   | "all"
   | "active"
   | "hidden"
@@ -70,19 +71,22 @@ type BreedSummary = {
   rows: SellerInventoryManagementRow[];
 };
 
-const statusOptions: { label: string; value: ListingStatusFilter }[] = [
-  { label: "All statuses", value: "all" },
-  { label: "Active", value: "active" },
+type LifecycleCounts = Record<ListingStatusFilter, number>;
+
+const lifecycleFilterOptions: { label: string; value: ListingStatusFilter }[] = [
+  { label: "Current", value: "current" },
+  { label: "Live", value: "active" },
   { label: "Hidden", value: "hidden" },
-  { label: "Sold out", value: "sold_out" },
+  { label: "Sold Out", value: "sold_out" },
   { label: "Archived", value: "archived" },
+  { label: "All", value: "all" },
 ];
 
 const availabilityOptions: { label: string; value: AvailabilityFilter }[] = [
   { label: "All availability", value: "all" },
   { label: "Ready now", value: "ready_now" },
   { label: "Reserve now", value: "reserve_now" },
-  { label: "Sold out", value: "sold_out" },
+  { label: "Sold Out", value: "sold_out" },
   { label: "Hidden", value: "hidden" },
   { label: "Unavailable", value: "unavailable" },
   { label: "Archived", value: "archived" },
@@ -108,7 +112,7 @@ export function ListingsFoundation() {
   const [view, setView] = useState<ListingView>("listing");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] =
-    useState<ListingStatusFilter>("all");
+    useState<ListingStatusFilter>("current");
   const [availabilityFilter, setAvailabilityFilter] =
     useState<AvailabilityFilter>("all");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -169,6 +173,13 @@ export function ListingsFoundation() {
     [rows, search, statusFilter, availabilityFilter],
   );
 
+  const allListingSummaries = useMemo(() => summarizeByListing(rows), [rows]);
+
+  const lifecycleCounts = useMemo(
+    () => countLifecycleStates(allListingSummaries),
+    [allListingSummaries],
+  );
+
   const listingSummaries = useMemo(
     () => summarizeByListing(filteredRows),
     [filteredRows],
@@ -181,7 +192,7 @@ export function ListingsFoundation() {
 
   const hasFilters =
     search.trim() !== "" ||
-    statusFilter !== "all" ||
+    statusFilter !== "current" ||
     availabilityFilter !== "all";
 
   return (
@@ -225,30 +236,29 @@ export function ListingsFoundation() {
                 onChange={setView}
               />
               <p className="text-sm text-stone-600">
-                {rows.length} inventory row{rows.length === 1 ? "" : "s"} from
-                your seller-safe listing projection.
+                {allListingSummaries.length} listing
+                {allListingSummaries.length === 1 ? "" : "s"} and{" "}
+                {rows.length} bird group{rows.length === 1 ? "" : "s"} ready
+                to review.
               </p>
+              <LifecycleFilterChips
+                counts={lifecycleCounts}
+                value={statusFilter}
+                onChange={setStatusFilter}
+              />
             </div>
 
-            <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_180px_190px] xl:w-[680px]">
+            <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_190px] xl:w-[520px]">
               <label className="grid gap-1 text-sm font-semibold text-stone-700">
                 Search listings
                 <input
                   className="min-h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Breed, species, label, type"
+                  placeholder="Breed, species, label, bird type"
                   type="search"
                 />
               </label>
-              <FilterControl
-                label="Status"
-                value={statusFilter}
-                options={statusOptions}
-                onChange={(value) =>
-                  setStatusFilter(value as ListingStatusFilter)
-                }
-              />
               <FilterControl
                 label="Availability"
                 value={availabilityFilter}
@@ -340,7 +350,7 @@ function ListingsEmptyState({ hasFilters }: { hasFilters: boolean }) {
       title={hasFilters ? "No listings match those filters" : "No listings yet"}
       description={
         hasFilters
-          ? "Try a different breed, status, or availability filter."
+          ? "Try a different breed, lifecycle, or availability filter."
           : "Create your first bird listing when you are ready to publish availability for your flock."
       }
       action={
@@ -355,8 +365,14 @@ function ListingsEmptyState({ hasFilters }: { hasFilters: boolean }) {
 }
 
 function ListingBatchCard({ listing }: { listing: ListingBatchSummary }) {
+  const lifecycleStatus = getDerivedLifecycleStatus(listing);
+
   return (
-    <SellerCard className="p-4">
+    <SellerCard
+      className={`p-4 ${
+        lifecycleStatus === "archived" ? "bg-stone-50" : ""
+      }`}
+    >
       <div className="flex flex-col gap-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -369,8 +385,17 @@ function ListingBatchCard({ listing }: { listing: ListingBatchSummary }) {
               </p>
             ) : null}
           </div>
-          <StatusBadge status={listing.availabilityStatus} />
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <LifecycleBadge status={lifecycleStatus} />
+            {shouldShowAvailabilityBadge(listing) ? (
+              <StatusBadge status={listing.availabilityStatus} />
+            ) : null}
+          </div>
         </div>
+
+        <p className="rounded-md bg-stone-50 px-3 py-2 text-sm font-semibold text-stone-700">
+          {getLifecycleNextStep(listing)}
+        </p>
 
         <ListingMetrics listing={listing} />
 
@@ -416,7 +441,7 @@ function ListingMetrics({ listing }: { listing: ListingBatchSummary }) {
     <dl className="grid grid-cols-3 gap-2">
       <Metric label="Available" value={listing.totalAvailable.toString()} />
       <Metric label="Breeds" value={listing.breedCount.toString()} />
-      <Metric label="Rows" value={listing.rowCount.toString()} />
+      <Metric label="Groups" value={listing.rowCount.toString()} />
     </dl>
   );
 }
@@ -445,62 +470,69 @@ function ListingBatchTable({
           <th className="px-5 py-3">Ready</th>
           <th className="px-5 py-3">Available</th>
           <th className="px-5 py-3">Price</th>
-          <th className="px-5 py-3">Status</th>
+          <th className="px-5 py-3">Lifecycle</th>
           <th className="px-5 py-3 text-right">Actions</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-stone-200 bg-white">
-        {listings.map((listing) => (
-          <tr key={listing.id}>
-            <td className="px-5 py-4 align-top">
-              <Link
-                className="font-semibold text-stone-950 underline-offset-4 hover:underline"
-                href={`/dashboard/listings/${listing.id}`}
-              >
-                {listing.title}
-              </Link>
-              <p className="mt-1 text-stone-600">
-                {listing.breedCount} breed{listing.breedCount === 1 ? "" : "s"}{" "}
-                · {listing.rowCount} row{listing.rowCount === 1 ? "" : "s"}
-              </p>
-              {listing.internalLabel ? (
-                <p className="mt-1 text-xs font-semibold text-stone-500">
-                  {listing.internalLabel}
-                </p>
-              ) : null}
-            </td>
-            <td className="px-5 py-4 align-top text-stone-700">
-              {formatDate(listing.availableDate)}
-            </td>
-            <td className="px-5 py-4 align-top font-semibold text-stone-950">
-              {listing.totalAvailable}
-            </td>
-            <td className="px-5 py-4 align-top text-stone-700">
-              {formatPriceRange(listing.minPrice, listing.maxPrice)}
-            </td>
-            <td className="px-5 py-4 align-top">
-              <div className="flex flex-col items-start gap-2">
-                <StatusBadge status={listing.availabilityStatus} />
-                <span className="text-xs text-stone-500">
-                  Storefront: {formatStatus(listing.visibilityStatus)}
-                </span>
-              </div>
-            </td>
-            <td className="px-5 py-4 text-right align-top">
-              <div className="flex justify-end gap-2">
+        {listings.map((listing) => {
+          const lifecycleStatus = getDerivedLifecycleStatus(listing);
+
+          return (
+            <tr key={listing.id}>
+              <td className="px-5 py-4 align-top">
                 <Link
-                  className="seller-small-button"
+                  className="font-semibold text-stone-950 underline-offset-4 hover:underline"
                   href={`/dashboard/listings/${listing.id}`}
                 >
-                  View
+                  {listing.title}
                 </Link>
-                <Link className="seller-small-button" href="/dashboard/listings/new">
-                  Create similar
-                </Link>
-              </div>
-            </td>
-          </tr>
-        ))}
+                <p className="mt-1 text-stone-600">
+                  {listing.breedCount} breed{listing.breedCount === 1 ? "" : "s"}{" "}
+                  - {listing.rowCount} group{listing.rowCount === 1 ? "" : "s"}
+                </p>
+                {listing.internalLabel ? (
+                  <p className="mt-1 text-xs font-semibold text-stone-500">
+                    {listing.internalLabel}
+                  </p>
+                ) : null}
+              </td>
+              <td className="px-5 py-4 align-top text-stone-700">
+                {formatDate(listing.availableDate)}
+              </td>
+              <td className="px-5 py-4 align-top font-semibold text-stone-950">
+                {listing.totalAvailable}
+              </td>
+              <td className="px-5 py-4 align-top text-stone-700">
+                {formatPriceRange(listing.minPrice, listing.maxPrice)}
+              </td>
+              <td className="px-5 py-4 align-top">
+                <div className="flex flex-col items-start gap-2">
+                  <LifecycleBadge status={lifecycleStatus} />
+                  {shouldShowAvailabilityBadge(listing) ? (
+                    <StatusBadge status={listing.availabilityStatus} />
+                  ) : null}
+                  <span className="text-xs text-stone-500">
+                    {getLifecycleNextStep(listing)}
+                  </span>
+                </div>
+              </td>
+              <td className="px-5 py-4 text-right align-top">
+                <div className="flex justify-end gap-2">
+                  <Link
+                    className="seller-small-button"
+                    href={`/dashboard/listings/${listing.id}`}
+                  >
+                    Open
+                  </Link>
+                  <Link className="seller-small-button" href="/dashboard/listings/new">
+                    Create similar
+                  </Link>
+                </div>
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
@@ -525,7 +557,7 @@ function BreedCard({ breed }: { breed: BreedSummary }) {
         <dl className="grid grid-cols-3 gap-2">
           <Metric label="Available" value={breed.totalAvailable.toString()} />
           <Metric label="Listings" value={breed.listingCount.toString()} />
-          <Metric label="Rows" value={breed.rowCount.toString()} />
+          <Metric label="Groups" value={breed.rowCount.toString()} />
         </dl>
 
         <div className="grid gap-2 text-sm text-stone-600">
@@ -553,7 +585,7 @@ function BreedCard({ breed }: { breed: BreedSummary }) {
                 {formatInventoryType(row)}
               </p>
               <p className="text-stone-600">
-                {row.quantity_available ?? 0} available ·{" "}
+                {row.quantity_available ?? 0} available -{" "}
                 {formatCurrency(row.effective_unit_price)}
               </p>
             </div>
@@ -582,14 +614,67 @@ function matchesFilters(
     .toLowerCase();
   const searchTerm = search.trim().toLowerCase();
   const matchesSearch = searchTerm === "" || haystack.includes(searchTerm);
-  const matchesStatus =
-    statusFilter === "all" ||
-    row.listing_batch_visibility_status === statusFilter;
+  const matchesStatus = matchesLifecycleFilter(
+    getDerivedRowLifecycleStatus(row),
+    statusFilter,
+  );
   const matchesAvailability =
     availabilityFilter === "all" ||
     row.operational_availability_status === availabilityFilter;
 
   return matchesSearch && matchesStatus && matchesAvailability;
+}
+
+function LifecycleFilterChips({
+  counts,
+  onChange,
+  value,
+}: {
+  counts: LifecycleCounts;
+  onChange: (value: ListingStatusFilter) => void;
+  value: ListingStatusFilter;
+}) {
+  return (
+    <div
+      aria-label="Filter listings by lifecycle"
+      className="flex flex-wrap gap-2"
+    >
+      {lifecycleFilterOptions.map((option) => {
+        const isActive = value === option.value;
+        const count = counts[option.value] ?? 0;
+
+        return (
+          <button
+            key={option.value}
+            className={`min-h-9 rounded-full border px-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 ${
+              isActive
+                ? "border-emerald-800 bg-emerald-800 text-white"
+                : "border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+            }`}
+            type="button"
+            onClick={() => onChange(option.value)}
+          >
+            {option.label}{" "}
+            <span className={isActive ? "text-emerald-50" : "text-stone-500"}>
+              {count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function LifecycleBadge({ status }: { status: string }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${getLifecycleTone(
+        status,
+      )}`}
+    >
+      {formatLifecycleStatus(status)}
+    </span>
+  );
 }
 
 function summarizeByListing(rows: SellerInventoryManagementRow[]) {
@@ -691,6 +776,31 @@ function summarizeByBreed(rows: SellerInventoryManagementRow[]) {
   );
 }
 
+function countLifecycleStates(listings: ListingBatchSummary[]): LifecycleCounts {
+  const counts: LifecycleCounts = {
+    current: 0,
+    all: listings.length,
+    active: 0,
+    hidden: 0,
+    sold_out: 0,
+    archived: 0,
+  };
+
+  listings.forEach((listing) => {
+    const lifecycleStatus = getDerivedLifecycleStatus(listing);
+
+    if (matchesLifecycleFilter(lifecycleStatus, "current")) {
+      counts.current += 1;
+    }
+
+    if (isKnownLifecycleStatus(lifecycleStatus)) {
+      counts[lifecycleStatus] += 1;
+    }
+  });
+
+  return counts;
+}
+
 function buildListingTitle(row: SellerInventoryManagementRow) {
   if (row.internal_batch_label) return row.internal_batch_label;
 
@@ -703,6 +813,56 @@ function formatInventoryType(row: SellerInventoryManagementRow) {
 
 function formatStatus(value: string | null | undefined) {
   return value ? value.replaceAll("_", " ") : "Not set";
+}
+
+function formatLifecycleStatus(status: string) {
+  if (status === "active") return "Live";
+  if (status === "sold_out") return "Sold Out";
+  if (status === "hidden") return "Hidden";
+  if (status === "archived") return "Archived";
+
+  return formatStatus(status);
+}
+
+function getLifecycleTone(status: string) {
+  if (status === "active") return "bg-emerald-100 text-emerald-800";
+  if (status === "hidden") return "bg-sky-100 text-sky-800";
+  if (status === "sold_out") return "bg-amber-100 text-amber-800";
+  if (status === "archived") return "bg-stone-200 text-stone-700";
+
+  return "bg-stone-100 text-stone-700";
+}
+
+function getLifecycleNextStep(listing: ListingBatchSummary) {
+  const lifecycleStatus = getDerivedLifecycleStatus(listing);
+
+  if (lifecycleStatus === "active") {
+    return "Live on your storefront. Keep quantities, prices, and photos current.";
+  }
+
+  if (lifecycleStatus === "hidden") {
+    return "Hidden from buyers. Finish setup, then review before publishing.";
+  }
+
+  if (lifecycleStatus === "sold_out") {
+    return "Sold Out. Add quantity when more birds are available.";
+  }
+
+  if (lifecycleStatus === "archived") {
+    return "Archived for your records. Hidden from buyers and read-only until restored.";
+  }
+
+  return "Review this listing before making changes.";
+}
+
+function shouldShowAvailabilityBadge(listing: ListingBatchSummary) {
+  const lifecycleStatus = getDerivedLifecycleStatus(listing);
+
+  if (lifecycleStatus === "archived") return false;
+  if (lifecycleStatus === "hidden") return false;
+  if (lifecycleStatus === "sold_out") return false;
+
+  return listing.availabilityStatus !== lifecycleStatus;
 }
 
 function formatDate(value: string | null | undefined) {
@@ -731,6 +891,38 @@ function formatPriceRange(
   if (minPrice == null) return formatCurrency(maxPrice);
 
   return `${formatCurrency(minPrice)} - ${formatCurrency(maxPrice)}`;
+}
+
+function matchesLifecycleFilter(status: string, filter: ListingStatusFilter) {
+  if (filter === "all") return true;
+  if (filter === "current") return status !== "archived";
+
+  return status === filter;
+}
+
+function getDerivedLifecycleStatus(listing: ListingBatchSummary) {
+  if (listing.visibilityStatus === "active" && listing.totalAvailable <= 0) {
+    return "sold_out";
+  }
+
+  return listing.visibilityStatus;
+}
+
+function getDerivedRowLifecycleStatus(row: SellerInventoryManagementRow) {
+  if (
+    row.listing_batch_visibility_status === "active" &&
+    row.operational_availability_status === "sold_out"
+  ) {
+    return "sold_out";
+  }
+
+  return row.listing_batch_visibility_status;
+}
+
+function isKnownLifecycleStatus(
+  status: string,
+): status is Exclude<ListingStatusFilter, "all" | "current"> {
+  return ["active", "hidden", "sold_out", "archived"].includes(status);
 }
 
 function minNullable(

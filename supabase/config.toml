@@ -1,0 +1,4 @@
+project_id = "ymbnnipiohoccwpltkkj"
+
+[functions.pay-at-pickup-order]
+verify_jwt = false

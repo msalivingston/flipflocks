@@ -4,7 +4,7 @@ export default function BatchListingPage() {
   return (
     <BirdWorkflowPlaceholder
       workflow="Batch / Mixed Group"
-      description="Use this path when one hatch or availability group contains multiple breeds, sexes, or inventory rows."
+      description="Use this path when one hatch or availability group contains multiple breeds or bird groups."
     />
   );
 }

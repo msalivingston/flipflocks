@@ -60,6 +60,24 @@ function jsonResponse(status: number, body: Record<string, unknown>): Response {
   });
 }
 
+function serializeRpcError(error: unknown): Record<string, unknown> {
+  if (!error || typeof error !== "object") {
+    return {
+      message: String(error ?? "Unknown RPC error"),
+    };
+  }
+
+  const record = error as Record<string, unknown>;
+
+  return {
+    message: typeof record.message === "string" ? record.message : null,
+    code: typeof record.code === "string" ? record.code : null,
+    details: typeof record.details === "string" ? record.details : null,
+    hint: typeof record.hint === "string" ? record.hint : null,
+    name: typeof record.name === "string" ? record.name : null,
+  };
+}
+
 function sanitizeOrderConfirmation(
   order: OrderConfirmationRow | null,
 ): Record<string, unknown> | null {
@@ -471,7 +489,10 @@ Deno.serve(async (request: Request) => {
       : "Unable to place order. Please review your cart and try again.";
 
     if (!safeValidationMessages.includes(message)) {
-      console.error("create_pay_at_pickup_order failed", orderError);
+      console.error(
+        "create_pay_at_pickup_order failed",
+        JSON.stringify(serializeRpcError(orderError)),
+      );
     }
 
     return jsonResponse(conflictMessages.includes(message) ? 409 : 400, {

@@ -85,11 +85,11 @@ export function BirdsBranchSelection() {
           />
           <ChoiceCard
             title="Batch / Mixed Group"
-            description="Best when one hatch date includes multiple breeds, sexes, or inventory rows."
+            description="Best when one hatch date includes several breeds or bird groups."
             href="/dashboard/listings/new/birds/batch"
             details={[
               "One hatch or availability group",
-              "Multiple breeds or inventory rows",
+              "Multiple breeds or bird groups",
               "Good for larger farm batches",
             ]}
           />
@@ -229,4 +229,3 @@ function ChoiceCard({
     </Link>
   );
 }
-

@@ -15,6 +15,10 @@ import {
 } from "../../_components/seller-ui";
 import type { SellerInventoryManagementRow } from "../../_lib/seller-types";
 import {
+  ListingPhotosSection,
+  type ListingPhotoItem,
+} from "./listing-photos-section";
+import {
   buildPublishReadinessReport,
   type PublishReadinessListing,
   type PublishReadinessMediaSummary,
@@ -45,13 +49,15 @@ type EditInventoryRow = {
   isRemoved: boolean;
 };
 
-type SellerMediaManagementRow = {
-  media_link_id: string;
-  entity_type: string;
-  entity_id: string;
-  asset_status: string;
-  moderation_status: string;
-  visibility_status: string;
+type OperationalEditRow = {
+  inventoryItemId: string;
+  inventoryType: string;
+  customLabel: string;
+  quantityAvailable: string;
+  priceOverride: string;
+  sortOrder: number;
+  sellerNotes: string;
+  visibilityStatus: string;
 };
 
 type SellerBreedProfileRead = {
@@ -69,7 +75,7 @@ const listingDetailSelect =
   "store_id, listing_batch_id, listing_batch_breed_id, inventory_item_id, species_id, species_name, species_slug, seller_breed_profile_id, breed_display_name, batch_type, origin_date, available_date, age_at_availability_days, base_price, auto_price_increase_enabled, auto_price_increase_amount, auto_price_increase_max_price, internal_batch_label, listing_batch_visibility_status, listing_batch_moderation_status, listing_batch_breed_sort_order, listing_batch_breed_visibility_status, listing_batch_breed_moderation_status, inventory_type, custom_inventory_label, quantity_available, price_override, effective_unit_price, inventory_item_sort_order, inventory_visibility_status, inventory_moderation_status, operational_availability_status, inventory_seller_notes, listing_batch_breed_seller_notes, listing_batch_seller_notes, inventory_updated_at, listing_batch_updated_at";
 
 const sellerMediaSelect =
-  "media_link_id, entity_type, entity_id, asset_status, moderation_status, visibility_status";
+  "media_asset_id, media_link_id, store_id, entity_type, entity_id, display_context, public_url, alt_text, caption, sort_order, is_featured, moderation_status, asset_status, visibility_status, original_filename, content_type, file_size_bytes, width_px, height_px";
 
 const sellerBreedProfileSelect =
   "id, species_id, breed_id, custom_breed_name, display_name, seller_description, seller_notes, visibility_status";
@@ -77,8 +83,8 @@ const sellerBreedProfileSelect =
 const publicDescriptionMaxLength = 1000;
 
 const liveAnimalInventoryTypes = [
-  { label: "Female", value: "female" },
-  { label: "Male", value: "male" },
+  { label: "Female (pullet or hen)", value: "female" },
+  { label: "Male (cockerel or rooster)", value: "male" },
   { label: "Straight run", value: "straight_run" },
   { label: "Unsexed", value: "unsexed" },
   { label: "Pair", value: "pair" },
@@ -108,6 +114,7 @@ export function ListingDetail({
   const [breedProfiles, setBreedProfiles] = useState<SellerBreedProfileRead[]>(
     [],
   );
+  const [mediaItems, setMediaItems] = useState<ListingPhotoItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -118,6 +125,28 @@ export function ListingDetail({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isOperationalEditing, setIsOperationalEditing] = useState(false);
+  const [operationalRows, setOperationalRows] = useState<OperationalEditRow[]>(
+    [],
+  );
+  const [operationalValidationErrors, setOperationalValidationErrors] =
+    useState<string[]>([]);
+  const [operationalSaveError, setOperationalSaveError] = useState<string | null>(
+    null,
+  );
+  const [isOperationalSaving, setIsOperationalSaving] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [isReturningToHidden, setIsReturningToHidden] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [isRestoringArchived, setIsRestoringArchived] = useState(false);
+  const [lifecycleError, setLifecycleError] = useState<string | null>(null);
+  const [isPublicContentEditing, setIsPublicContentEditing] = useState(false);
+  const [publicDescriptionDraft, setPublicDescriptionDraft] = useState("");
+  const [publicContentError, setPublicContentError] = useState<string | null>(
+    null,
+  );
+  const [isPublicContentSaving, setIsPublicContentSaving] = useState(false);
   const [showPublishReview, setShowPublishReview] = useState(false);
   const [mediaSummary, setMediaSummary] = useState<PublishReadinessMediaSummary>({
     activeCount: 0,
@@ -184,7 +213,7 @@ export function ListingDetail({
           .select(sellerMediaSelect)
           .eq("store_id", storeId)
           .in("entity_id", mediaEntityIds)
-          .returns<SellerMediaManagementRow[]>();
+          .returns<ListingPhotoItem[]>();
 
         if (!isMounted) return;
 
@@ -197,18 +226,22 @@ export function ListingDetail({
         const relevantMedia = (mediaData ?? []).filter((item) =>
           isListingMedia(item, mediaEntityIds),
         );
+        const activeListingMedia = relevantMedia.filter(
+          (item) =>
+            item.visibility_status === "active" &&
+            item.asset_status === "active" &&
+            item.moderation_status === "approved",
+        );
+
+        setMediaItems(sortListingMedia(relevantMedia));
 
         setMediaSummary({
-          activeCount: relevantMedia.filter(
-            (item) =>
-              item.visibility_status === "active" &&
-              item.asset_status === "active" &&
-              item.moderation_status === "approved",
-          ).length,
+          activeCount: activeListingMedia.length,
           totalCount: relevantMedia.length,
         });
       } else {
         setBreedProfiles([]);
+        setMediaItems([]);
         setMediaSummary({ activeCount: 0, totalCount: 0 });
       }
 
@@ -226,7 +259,13 @@ export function ListingDetail({
     () => summarizeListing(rows, breedProfiles),
     [breedProfiles, rows],
   );
-  const canEdit = listing?.visibilityStatus === "hidden";
+  const canUseSetupTools = listing?.visibilityStatus === "hidden";
+  const canUseOperationalTools = listing?.visibilityStatus === "active";
+  const canUsePublicContentTools = listing?.visibilityStatus === "active";
+  const canArchiveListing =
+    listing?.visibilityStatus === "active" ||
+    listing?.visibilityStatus === "hidden";
+  const canRestoreArchivedListing = listing?.visibilityStatus === "archived";
   const publishReadinessReport = useMemo(
     () =>
       listing
@@ -240,7 +279,15 @@ export function ListingDetail({
   );
 
   function startEditing(currentListing: ListingDetailSummary) {
+    setIsOperationalEditing(false);
+    setIsPublicContentEditing(false);
+    setPublicContentError(null);
+    setOperationalRows([]);
+    setOperationalValidationErrors([]);
+    setOperationalSaveError(null);
     setShowPublishReview(false);
+    setPublishError(null);
+    setLifecycleError(null);
     setEditBasics({
       originDate: currentListing.originDate ?? "",
       availableDate: currentListing.availableDate,
@@ -277,6 +324,86 @@ export function ListingDetail({
     setSaveError(null);
   }
 
+  function startOperationalEditing(currentListing: ListingDetailSummary) {
+    setIsEditing(false);
+    setIsPublicContentEditing(false);
+    setPublicContentError(null);
+    setEditBasics(null);
+    setEditRows([]);
+    setValidationErrors([]);
+    setSaveError(null);
+    setShowPublishReview(false);
+    setPublishError(null);
+    setLifecycleError(null);
+    setSuccessMessage(null);
+    setOperationalRows(
+      currentListing.rows
+        .filter((row) => row.inventory_visibility_status === "active")
+        .map((row) => ({
+          inventoryItemId: row.inventory_item_id,
+          inventoryType: row.inventory_type,
+          customLabel: row.custom_inventory_label ?? "",
+          quantityAvailable: (row.quantity_available ?? 0).toString(),
+          priceOverride: row.price_override?.toString() ?? "",
+          sortOrder: row.inventory_item_sort_order ?? 0,
+          sellerNotes: row.inventory_seller_notes ?? "",
+          visibilityStatus: row.inventory_visibility_status,
+        })),
+    );
+    setOperationalValidationErrors([]);
+    setOperationalSaveError(null);
+    setIsOperationalEditing(true);
+  }
+
+  function cancelOperationalEditing() {
+    setIsOperationalEditing(false);
+    setOperationalRows([]);
+    setOperationalValidationErrors([]);
+    setOperationalSaveError(null);
+  }
+
+  function startPublicContentEditing(currentListing: ListingDetailSummary) {
+    setIsEditing(false);
+    setEditBasics(null);
+    setEditRows([]);
+    setValidationErrors([]);
+    setSaveError(null);
+    setIsOperationalEditing(false);
+    setOperationalRows([]);
+    setOperationalValidationErrors([]);
+    setOperationalSaveError(null);
+    setShowPublishReview(false);
+    setPublishError(null);
+    setLifecycleError(null);
+    setSuccessMessage(null);
+    setPublicDescriptionDraft(currentListing.publicDescription ?? "");
+    setPublicContentError(null);
+    setIsPublicContentEditing(true);
+  }
+
+  function cancelPublicContentEditing() {
+    setIsPublicContentEditing(false);
+    setPublicDescriptionDraft("");
+    setPublicContentError(null);
+  }
+
+  function closeActiveEditModes() {
+    setIsEditing(false);
+    setEditBasics(null);
+    setEditRows([]);
+    setValidationErrors([]);
+    setSaveError(null);
+    setIsOperationalEditing(false);
+    setOperationalRows([]);
+    setOperationalValidationErrors([]);
+    setOperationalSaveError(null);
+    setIsPublicContentEditing(false);
+    setPublicDescriptionDraft("");
+    setPublicContentError(null);
+    setShowPublishReview(false);
+    setPublishError(null);
+  }
+
   async function updateListingBreedDescriptions(
     currentListing: ListingDetailSummary,
     publicDescription: string,
@@ -308,7 +435,7 @@ export function ListingDetail({
   }
 
   async function saveEdits(currentListing: ListingDetailSummary) {
-    if (!editBasics || !canEdit) return;
+    if (!editBasics || !canUseSetupTools) return;
 
     const errors = validateEditForm(editBasics, editRows, currentListing);
     setValidationErrors(errors);
@@ -448,12 +575,286 @@ export function ListingDetail({
     setReloadKey((current) => current + 1);
   }
 
+  async function saveOperationalEdits(currentListing: ListingDetailSummary) {
+    if (!canUseOperationalTools) return;
+
+    const errors = validateOperationalEditRows(
+      operationalRows,
+      currentListing,
+    );
+    setOperationalValidationErrors(errors);
+    setOperationalSaveError(null);
+    setSuccessMessage(null);
+
+    if (errors.length > 0) return;
+
+    setIsOperationalSaving(true);
+
+    for (const row of operationalRows) {
+      const originalRow = currentListing.rows.find(
+        (item) => item.inventory_item_id === row.inventoryItemId,
+      );
+
+      if (!originalRow || originalRow.inventory_visibility_status !== "active") {
+        setOperationalSaveError(
+          "One bird group could not be updated. Refresh the listing and try again.",
+        );
+        setIsOperationalSaving(false);
+        return;
+      }
+
+      const nextPriceOverride = row.priceOverride.trim()
+        ? Number(row.priceOverride)
+        : null;
+      const originalPriceOverride = originalRow.price_override ?? null;
+
+      if (nextPriceOverride !== originalPriceOverride) {
+        const updateResult = await supabase.rpc("seller_update_inventory_item", {
+          p_inventory_item_id: row.inventoryItemId,
+          p_inventory_type: originalRow.inventory_type,
+          p_custom_inventory_label: originalRow.custom_inventory_label,
+          p_price_override: nextPriceOverride,
+          p_sort_order: originalRow.inventory_item_sort_order ?? 0,
+          p_seller_notes: originalRow.inventory_seller_notes ?? null,
+        });
+
+        if (updateResult.error) {
+          setOperationalSaveError(updateResult.error.message);
+          setIsOperationalSaving(false);
+          return;
+        }
+      }
+
+      const nextQuantity = Number(row.quantityAvailable);
+
+      if (nextQuantity !== (originalRow.quantity_available ?? 0)) {
+        const quantityResult = await supabase.rpc(
+          "seller_adjust_inventory_quantity",
+          {
+            p_inventory_item_id: row.inventoryItemId,
+            p_quantity_available: nextQuantity,
+            p_quantity_delta: null,
+            p_note: "Updated from active listing operational edit.",
+          },
+        );
+
+        if (quantityResult.error) {
+          setOperationalSaveError(quantityResult.error.message);
+          setIsOperationalSaving(false);
+          return;
+        }
+      }
+    }
+
+    setIsOperationalSaving(false);
+    setIsOperationalEditing(false);
+    setOperationalRows([]);
+    setOperationalValidationErrors([]);
+    setSuccessMessage("Availability and pricing updated.");
+    setReloadKey((current) => current + 1);
+  }
+
+  async function savePublicContent(currentListing: ListingDetailSummary) {
+    if (!canUsePublicContentTools) return;
+
+    setPublicContentError(null);
+    setSuccessMessage(null);
+
+    if (publicDescriptionDraft.trim().length > publicDescriptionMaxLength) {
+      setPublicContentError(
+        `Public description must be ${publicDescriptionMaxLength} characters or less.`,
+      );
+      return;
+    }
+
+    setIsPublicContentSaving(true);
+
+    const descriptionResult = await updateListingBreedDescriptions(
+      currentListing,
+      publicDescriptionDraft,
+    );
+
+    if (descriptionResult) {
+      setPublicContentError(descriptionResult);
+      setIsPublicContentSaving(false);
+      return;
+    }
+
+    setIsPublicContentSaving(false);
+    setIsPublicContentEditing(false);
+    setPublicDescriptionDraft("");
+    setSuccessMessage("Public listing content updated.");
+    setReloadKey((current) => current + 1);
+  }
+
+  async function publishListing() {
+    if (!canUseSetupTools || !publishReadinessReport) return;
+
+    setPublishError(null);
+    setLifecycleError(null);
+    setSuccessMessage(null);
+
+    if (!publishReadinessReport.publishGate.canPublish) {
+      setPublishError("Fix the required items before publishing this listing.");
+      return;
+    }
+
+    const warningCount = publishReadinessReport.publishGate.warnings.length;
+    const confirmationMessage =
+      warningCount > 0
+        ? `Publish this listing with ${warningCount} warning${
+            warningCount === 1 ? "" : "s"
+          } still showing? Buyers will be able to see it.`
+        : "Publish this listing now? Buyers will be able to see it.";
+
+    if (!window.confirm(confirmationMessage)) return;
+
+    setIsPublishing(true);
+
+    const { error: visibilityError } = await supabase.rpc(
+      "seller_set_listing_batch_visibility",
+      {
+        p_listing_batch_id: listingBatchId,
+        p_visibility_status: "active",
+        p_note: "Published from seller listing detail.",
+      },
+    );
+
+    if (visibilityError) {
+      setPublishError(
+        "The listing was not published. Please review the listing and try again.",
+      );
+      setIsPublishing(false);
+      return;
+    }
+
+    setIsPublishing(false);
+    setShowPublishReview(false);
+    setSuccessMessage("Listing published. Buyers can now see it on your storefront.");
+    setReloadKey((current) => current + 1);
+  }
+
+  async function returnListingToHidden() {
+    if (!canUseOperationalTools) return;
+
+    const shouldReturnToHidden = window.confirm(
+      "Return this listing to hidden? Buyers will not see it on your storefront until you publish it again.",
+    );
+
+    if (!shouldReturnToHidden) return;
+
+    setLifecycleError(null);
+    setSuccessMessage(null);
+    setIsReturningToHidden(true);
+
+    const { error: visibilityError } = await supabase.rpc(
+      "seller_set_listing_batch_visibility",
+      {
+        p_listing_batch_id: listingBatchId,
+        p_visibility_status: "hidden",
+        p_note: "Returned to hidden from seller listing detail.",
+      },
+    );
+
+    if (visibilityError) {
+      setLifecycleError(
+        "This listing was not hidden. Please refresh and try again.",
+      );
+      setIsReturningToHidden(false);
+      return;
+    }
+
+    setIsReturningToHidden(false);
+    setIsOperationalEditing(false);
+    setOperationalRows([]);
+    setSuccessMessage(
+      "Listing returned to hidden. Buyers cannot see it until you publish it again.",
+    );
+    setReloadKey((current) => current + 1);
+  }
+
+  async function archiveListing() {
+    if (!canArchiveListing) return;
+
+    const shouldArchive = window.confirm(
+      "Archive this listing? It will be hidden from buyers and kept for your records. No photos, bird groups, pricing, notes, or descriptions will be deleted.",
+    );
+
+    if (!shouldArchive) return;
+
+    setLifecycleError(null);
+    setSuccessMessage(null);
+    setIsArchiving(true);
+
+    const { error: visibilityError } = await supabase.rpc(
+      "seller_set_listing_batch_visibility",
+      {
+        p_listing_batch_id: listingBatchId,
+        p_visibility_status: "archived",
+        p_note: "Archived from seller listing detail.",
+      },
+    );
+
+    if (visibilityError) {
+      setLifecycleError(
+        "This listing was not archived. Please refresh and try again.",
+      );
+      setIsArchiving(false);
+      return;
+    }
+
+    setIsArchiving(false);
+    closeActiveEditModes();
+    setSuccessMessage(
+      "Listing archived. Buyers cannot see it, and the listing is preserved for your records.",
+    );
+    setReloadKey((current) => current + 1);
+  }
+
+  async function restoreArchivedListing() {
+    if (!canRestoreArchivedListing) return;
+
+    const shouldRestore = window.confirm(
+      "Restore this archived listing to hidden? It will stay off your storefront until you review and publish it again.",
+    );
+
+    if (!shouldRestore) return;
+
+    setLifecycleError(null);
+    setSuccessMessage(null);
+    setIsRestoringArchived(true);
+
+    const { error: visibilityError } = await supabase.rpc(
+      "seller_set_listing_batch_visibility",
+      {
+        p_listing_batch_id: listingBatchId,
+        p_visibility_status: "hidden",
+        p_note: "Restored to hidden from seller listing detail.",
+      },
+    );
+
+    if (visibilityError) {
+      setLifecycleError(
+        "This listing was not restored. Please refresh and try again.",
+      );
+      setIsRestoringArchived(false);
+      return;
+    }
+
+    setIsRestoringArchived(false);
+    closeActiveEditModes();
+    setSuccessMessage(
+      "Listing restored to hidden. Review it before publishing again.",
+    );
+    setReloadKey((current) => current + 1);
+  }
+
   return (
     <>
       <SellerPageHeader
         eyebrow={seller?.store_name}
         title={listing?.title ?? "Listing Detail"}
-        description="Review the saved listing basics and inventory rows before future edit or publish steps."
+        description="Review listing details and bird groups before publishing or future operational updates."
         action={
           <Link className="seller-secondary-button" href="/dashboard/listings">
             Back to Listings
@@ -505,8 +906,10 @@ export function ListingDetail({
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <StatusBadge status={listing.availabilityStatus} />
-                  <StatusBadge status={listing.visibilityStatus} />
+                  <StatusBadge status={getDisplayedListingStatus(listing)} />
+                  {shouldShowDetailAvailabilityBadge(listing) ? (
+                    <StatusBadge status={listing.availabilityStatus} />
+                  ) : null}
                 </div>
               </div>
             </SellerCard>
@@ -524,10 +927,50 @@ export function ListingDetail({
                 setEditBasics={setEditBasics}
                 setEditRows={setEditRows}
               />
+            ) : isOperationalEditing ? (
+              <OperationalEditForm
+                isSaving={isOperationalSaving}
+                listing={listing}
+                rows={operationalRows}
+                saveError={operationalSaveError}
+                validationErrors={operationalValidationErrors}
+                onCancel={cancelOperationalEditing}
+                onSave={() => saveOperationalEdits(listing)}
+                setRows={setOperationalRows}
+              />
             ) : (
               <>
                 <ListingReadOnlyView listing={listing} />
-                {canEdit && publishReadinessReport ? (
+                <ListingPhotosSection
+                  canManage={Boolean(
+                    canUseSetupTools || canUsePublicContentTools,
+                  )}
+                  listingBatchId={listingBatchId}
+                  mediaItems={mediaItems}
+                  mode={
+                    canUseSetupTools
+                      ? "setup"
+                      : canUsePublicContentTools
+                        ? "public-content"
+                        : "readonly"
+                  }
+                  storeId={storeId}
+                  onReload={() => setReloadKey((current) => current + 1)}
+                />
+                {canUsePublicContentTools ? (
+                  <PublicContentMaintenanceCard
+                    descriptionDraft={publicDescriptionDraft}
+                    error={publicContentError}
+                    isEditing={isPublicContentEditing}
+                    isSaving={isPublicContentSaving}
+                    listing={listing}
+                    onCancel={cancelPublicContentEditing}
+                    onEdit={() => startPublicContentEditing(listing)}
+                    onSave={() => savePublicContent(listing)}
+                    setDescriptionDraft={setPublicDescriptionDraft}
+                  />
+                ) : null}
+                {canUseSetupTools && publishReadinessReport ? (
                   <SellerCard className="p-5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
@@ -553,33 +996,146 @@ export function ListingDetail({
                     </div>
                   </SellerCard>
                 ) : null}
-                {canEdit && showPublishReview && publishReadinessReport ? (
-                  <PublishReadinessReview report={publishReadinessReport} />
+                {canUseSetupTools && showPublishReview && publishReadinessReport ? (
+                  <PublishReadinessReview
+                    isPublishing={isPublishing}
+                    publishError={publishError}
+                    report={publishReadinessReport}
+                    onPublish={() => void publishListing()}
+                  />
                 ) : null}
                 <SellerCard className="p-5">
                   <h2 className="text-lg font-semibold text-stone-950">
-                    Editing
+                    Setup editing
                   </h2>
-                  {canEdit ? (
+                  {canUseSetupTools ? (
                     <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-sm leading-6 text-stone-600">
-                        This listing is hidden, so you can safely fix basics
-                        and inventory before any publish step exists.
+                        This listing is hidden, so setup edits are available
+                        before it goes live.
                       </p>
                       <button
                         className="seller-secondary-button"
                         onClick={() => startEditing(listing)}
                         type="button"
                       >
-                        Edit Hidden Listing
+                        Edit Setup Details
                       </button>
                     </div>
                   ) : (
                     <p className="mt-2 text-sm leading-6 text-stone-600">
-                      This listing is not hidden. Visible or published listings
-                      cannot be edited here yet.
+                      Setup editing is closed here. Future live-listing tools
+                      will handle safe operational changes.
                     </p>
                   )}
+                </SellerCard>
+                <SellerCard className="p-5">
+                  <h2 className="text-lg font-semibold text-stone-950">
+                    Update Availability & Pricing
+                  </h2>
+                  {canUseOperationalTools ? (
+                    <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm leading-6 text-stone-600">
+                        Keep this live listing current after sales or price
+                        changes. Setup details stay read-only here.
+                      </p>
+                      <button
+                        className="seller-secondary-button"
+                        onClick={() => startOperationalEditing(listing)}
+                        type="button"
+                      >
+                        Update Availability & Pricing
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm leading-6 text-stone-600">
+                      Availability and pricing updates are available after a
+                      listing is live.
+                    </p>
+                  )}
+                </SellerCard>
+                <SellerCard className="p-5">
+                  <h2 className="text-lg font-semibold text-stone-950">
+                    Listing lifecycle
+                  </h2>
+                  {canUseOperationalTools ? (
+                    <div className="mt-3 grid gap-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-sm leading-6 text-stone-600">
+                          Need to pause this listing? Return it to hidden to
+                          remove it from your storefront without deleting
+                          photos, bird groups, pricing, or notes.
+                        </p>
+                        <button
+                          className="seller-secondary-button"
+                          disabled={isReturningToHidden}
+                          onClick={() => void returnListingToHidden()}
+                          type="button"
+                        >
+                          {isReturningToHidden
+                            ? "Hiding Listing"
+                            : "Return to Hidden"}
+                        </button>
+                      </div>
+                      <ArchiveListingAction
+                        isArchiving={isArchiving}
+                        onArchive={() => void archiveListing()}
+                      />
+                    </div>
+                  ) : canUseSetupTools ? (
+                    <div className="mt-3 grid gap-4">
+                      <p className="text-sm leading-6 text-stone-600">
+                        Hidden listings stay off your storefront until you
+                        publish them. Archive this listing when you want to
+                        retire it and keep the details for your records.
+                      </p>
+                      <ArchiveListingAction
+                        isArchiving={isArchiving}
+                        onArchive={() => void archiveListing()}
+                      />
+                    </div>
+                  ) : canRestoreArchivedListing ? (
+                    <div className="mt-3 grid gap-4">
+                      <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3">
+                        <p className="font-semibold text-stone-950">
+                          Archived listings are read-only.
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-stone-600">
+                          This listing is hidden from buyers but preserved for
+                          your records. Restore it to hidden if you need to
+                          review, edit, or publish it again.
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-sm leading-6 text-stone-600">
+                          Restore keeps the listing private. It does not make
+                          the listing live.
+                        </p>
+                        <button
+                          className="seller-secondary-button"
+                          disabled={isRestoringArchived}
+                          onClick={() => void restoreArchivedListing()}
+                          type="button"
+                        >
+                          {isRestoringArchived
+                            ? "Restoring Listing"
+                            : "Restore to Hidden"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm leading-6 text-stone-600">
+                      This listing is read-only in its current state.
+                    </p>
+                  )}
+                  {lifecycleError ? (
+                    <div className="mt-4">
+                      <ErrorState
+                        title="Listing was not changed"
+                        message={lifecycleError}
+                      />
+                    </div>
+                  ) : null}
                 </SellerCard>
               </>
             )}
@@ -648,7 +1204,7 @@ function validateEditForm(
   const uniqueInventoryTypes = new Set(inventoryTypes);
 
   if (activeRows.length === 0) {
-    errors.push("Keep at least one inventory row on this listing.");
+    errors.push("Keep at least one bird group on this listing.");
   }
 
   if (!basics.availableDate) errors.push("Add an available date.");
@@ -677,13 +1233,13 @@ function validateEditForm(
   }
 
   if (inventoryTypes.length !== uniqueInventoryTypes.size) {
-    errors.push("Use each inventory type only once for this listing.");
+    errors.push("Use each bird type only once for this listing.");
   }
 
   activeRows.forEach((row, index) => {
-    const rowLabel = `Row ${index + 1}`;
+    const rowLabel = `Group ${index + 1}`;
 
-    if (!row.inventoryType) errors.push(`${rowLabel}: choose an inventory type.`);
+    if (!row.inventoryType) errors.push(`${rowLabel}: choose a bird type.`);
 
     if (listing.batchType === "hatching_eggs") {
       if (row.inventoryType !== "hatching_eggs") {
@@ -694,7 +1250,7 @@ function validateEditForm(
     }
 
     if (row.inventoryType === "other" && !row.customLabel.trim()) {
-      errors.push(`${rowLabel}: add a custom label for Other.`);
+      errors.push(`${rowLabel}: name this group when using Other.`);
     }
 
     if (!isWholeNumber(row.quantityAvailable)) {
@@ -702,7 +1258,40 @@ function validateEditForm(
     }
 
     if (row.priceOverride.trim() && !isValidMoney(row.priceOverride)) {
-      errors.push(`${rowLabel}: price override must be a valid price.`);
+      errors.push(`${rowLabel}: optional custom price must be a valid price.`);
+    }
+  });
+
+  return errors;
+}
+
+function validateOperationalEditRows(
+  rows: OperationalEditRow[],
+  listing: ListingDetailSummary,
+) {
+  const errors: string[] = [];
+
+  if (rows.length === 0) {
+    errors.push("There are no active bird groups to update.");
+  }
+
+  rows.forEach((row, index) => {
+    const rowLabel = `Group ${index + 1}`;
+
+    if (listing.batchType === "hatching_eggs") {
+      if (row.inventoryType !== "hatching_eggs") {
+        errors.push(`${rowLabel}: hatching egg listings can only use hatching eggs.`);
+      }
+    } else if (row.inventoryType === "hatching_eggs") {
+      errors.push(`${rowLabel}: hatching eggs need their own listing.`);
+    }
+
+    if (!isWholeNumber(row.quantityAvailable)) {
+      errors.push(`${rowLabel}: quantity must be a whole number of 0 or more.`);
+    }
+
+    if (row.priceOverride.trim() && !isValidMoney(row.priceOverride)) {
+      errors.push(`${rowLabel}: optional custom price must be a valid price.`);
     }
   });
 
@@ -775,13 +1364,25 @@ function InventoryReadOnlyCard({
 }: {
   listing: ListingDetailSummary;
 }) {
+  const isSoldOut = getDisplayedListingStatus(listing) === "sold_out";
+
   return (
     <SellerCard className="p-5">
-      <h2 className="text-lg font-semibold text-stone-950">Inventory</h2>
-      <p className="mt-1 text-sm text-stone-600">
-        {listing.totalAvailable} available across {listing.rows.length} row
-        {listing.rows.length === 1 ? "" : "s"}.
-      </p>
+      <h2 className="text-lg font-semibold text-stone-950">Bird groups</h2>
+      {isSoldOut ? (
+        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+          <p className="font-semibold">No birds currently available.</p>
+          <p className="mt-1">
+            Buyers will see this listing as Sold Out. Add quantity when more
+            are available to make it read as available again.
+          </p>
+        </div>
+      ) : (
+        <p className="mt-1 text-sm text-stone-600">
+          {listing.totalAvailable} available across {listing.rows.length} group
+          {listing.rows.length === 1 ? "" : "s"}.
+        </p>
+      )}
 
       <div className="mt-4 grid gap-3">
         {listing.rows.map((row) => (
@@ -811,7 +1412,7 @@ function InventoryReadOnlyCard({
                 value={formatCurrency(row.effective_unit_price)}
               />
               <Metric
-                label="Override"
+                label="Custom price"
                 value={
                   row.price_override == null
                     ? "Base"
@@ -819,7 +1420,7 @@ function InventoryReadOnlyCard({
                 }
               />
               <Metric
-                label="Row status"
+                label="Group status"
                 value={formatStatus(row.inventory_visibility_status)}
               />
             </dl>
@@ -827,6 +1428,126 @@ function InventoryReadOnlyCard({
         ))}
       </div>
     </SellerCard>
+  );
+}
+
+function PublicContentMaintenanceCard({
+  descriptionDraft,
+  error,
+  isEditing,
+  isSaving,
+  listing,
+  onCancel,
+  onEdit,
+  onSave,
+  setDescriptionDraft,
+}: {
+  descriptionDraft: string;
+  error: string | null;
+  isEditing: boolean;
+  isSaving: boolean;
+  listing: ListingDetailSummary;
+  onCancel: () => void;
+  onEdit: () => void;
+  onSave: () => void;
+  setDescriptionDraft: Dispatch<SetStateAction<string>>;
+}) {
+  return (
+    <SellerCard className="p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-stone-950">
+            Update Public Listing Content
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-stone-600">
+            Keep the buyer-facing description current while this listing is
+            live. Setup details stay read-only here.
+          </p>
+        </div>
+        {!isEditing ? (
+          <button className="seller-secondary-button" onClick={onEdit} type="button">
+            Update buyer description
+          </button>
+        ) : null}
+      </div>
+
+      {isEditing ? (
+        <div className="mt-5 grid gap-4">
+          <label className="grid gap-1 text-sm font-semibold text-stone-700">
+            Public description
+            <textarea
+              className="seller-form-field min-h-32 resize-y py-3"
+              maxLength={publicDescriptionMaxLength}
+              value={descriptionDraft}
+              onChange={(event) => setDescriptionDraft(event.target.value)}
+            />
+            <span className="text-xs font-normal leading-5 text-stone-500">
+              This is what buyers will see on your listing.
+            </span>
+          </label>
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <button className="seller-secondary-button" onClick={onCancel} type="button">
+              Cancel
+            </button>
+            <button
+              className="inline-flex min-h-10 items-center justify-center rounded-md bg-stone-950 px-4 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-wait disabled:opacity-70"
+              disabled={isSaving}
+              onClick={onSave}
+              type="button"
+            >
+              {isSaving ? "Saving" : "Save Public Description"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm leading-6 text-stone-700">
+          {listing.publicDescription ? (
+            <p className="whitespace-pre-line">{listing.publicDescription}</p>
+          ) : (
+            <p>No public description yet.</p>
+          )}
+        </div>
+      )}
+
+      {error ? (
+        <div className="mt-4">
+          <ErrorState
+            title="Public description was not saved"
+            message={error}
+          />
+        </div>
+      ) : null}
+    </SellerCard>
+  );
+}
+
+function ArchiveListingAction({
+  isArchiving,
+  onArchive,
+}: {
+  isArchiving: boolean;
+  onArchive: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="font-semibold text-stone-950">Archive listing</p>
+          <p className="mt-1 text-sm leading-6 text-stone-700">
+            This removes the listing from your storefront while keeping all
+            listing information for your records.
+          </p>
+        </div>
+        <button
+          className="seller-secondary-button border-amber-300 bg-white hover:bg-amber-100"
+          disabled={isArchiving}
+          onClick={onArchive}
+          type="button"
+        >
+          {isArchiving ? "Archiving Listing" : "Archive Listing"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -900,7 +1621,7 @@ function EditListingForm({
     if (visibleRows.length <= 1) return;
 
     const shouldRemove = window.confirm(
-      "Remove this inventory row from the hidden listing? It will be removed when you save changes.",
+      "Remove this bird group from the hidden listing? It will be removed when you save changes.",
     );
 
     if (!shouldRemove) return;
@@ -919,10 +1640,10 @@ function EditListingForm({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-stone-950">
-            Edit Hidden Listing
+            Edit Setup Details
           </h2>
           <p className="mt-1 text-sm leading-6 text-stone-600">
-            These changes apply only while the listing is hidden.
+            These setup changes apply only while the listing is hidden.
           </p>
         </div>
         <div className="flex gap-2">
@@ -1012,13 +1733,19 @@ function EditListingForm({
 
         <section className="grid gap-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h3 className="font-semibold text-stone-950">Inventory Rows</h3>
+            <div>
+              <h3 className="font-semibold text-stone-950">Bird groups</h3>
+              <p className="mt-1 text-sm leading-6 text-stone-600">
+                Use groups when pullets, cockerels, straight run chicks, or
+                hatching eggs need different counts or prices.
+              </p>
+            </div>
             <button
               className="seller-secondary-button"
               onClick={addInventoryRow}
               type="button"
             >
-              Add Inventory Row
+              Add Bird Group
             </button>
           </div>
 
@@ -1029,7 +1756,7 @@ function EditListingForm({
             >
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="font-semibold text-stone-950">
-                  Row {index + 1}
+                  Group {index + 1}
                   {row.isNew ? (
                     <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">
                       New
@@ -1047,7 +1774,7 @@ function EditListingForm({
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                  Inventory type
+                  Bird type
                   <select
                     className="seller-form-field"
                     value={row.inventoryType}
@@ -1067,7 +1794,7 @@ function EditListingForm({
                   </select>
                 </label>
                 <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                  Quantity available
+                  How many are available?
                   <input
                     className="seller-form-field"
                     inputMode="numeric"
@@ -1085,7 +1812,7 @@ function EditListingForm({
               </div>
               {row.inventoryType === "other" ? (
                 <label className="mt-3 grid gap-1 text-sm font-semibold text-stone-700">
-                  Custom label
+                  Name this group
                   <input
                     className="seller-form-field"
                     value={row.customLabel}
@@ -1095,10 +1822,13 @@ function EditListingForm({
                       })
                     }
                   />
+                  <span className="text-xs font-normal leading-5 text-stone-500">
+                    Use the words buyers will recognize for this group.
+                  </span>
                 </label>
               ) : null}
               <label className="mt-3 grid gap-1 text-sm font-semibold text-stone-700">
-                Price override
+                Optional custom price
                 <input
                   className="seller-form-field"
                   inputMode="decimal"
@@ -1112,6 +1842,9 @@ function EditListingForm({
                     })
                   }
                 />
+                <span className="text-xs font-normal leading-5 text-stone-500">
+                  Leave blank if this group uses the listing base price.
+                </span>
               </label>
             </div>
           ))}
@@ -1130,6 +1863,155 @@ function EditListingForm({
       ) : null}
     </SellerCard>
   );
+}
+
+function OperationalEditForm({
+  isSaving,
+  listing,
+  onCancel,
+  onSave,
+  rows,
+  saveError,
+  setRows,
+  validationErrors,
+}: {
+  isSaving: boolean;
+  listing: ListingDetailSummary;
+  onCancel: () => void;
+  onSave: () => void;
+  rows: OperationalEditRow[];
+  saveError: string | null;
+  setRows: Dispatch<SetStateAction<OperationalEditRow[]>>;
+  validationErrors: string[];
+}) {
+  function updateRow(rowId: string, updates: Partial<OperationalEditRow>) {
+    setRows((current) =>
+      current.map((row) =>
+        row.inventoryItemId === rowId ? { ...row, ...updates } : row,
+      ),
+    );
+  }
+
+  return (
+    <SellerCard className="p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-stone-950">
+            Update Availability & Pricing
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-stone-600">
+            Update live bird groups after sales or price changes. Breed, dates,
+            photos, and setup structure stay unchanged in this step.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button className="seller-secondary-button" onClick={onCancel} type="button">
+            Cancel
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center justify-center rounded-md bg-stone-950 px-4 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-wait disabled:opacity-70"
+            disabled={isSaving}
+            onClick={onSave}
+            type="button"
+          >
+            {isSaving ? "Saving" : "Save Updates"}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4">
+        <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
+          This listing is live. If all groups are set to 0, buyers will see it
+          as Sold Out. Add quantity when more birds are available.
+        </div>
+
+        {rows.map((row) => {
+          const originalRow = listing.rows.find(
+            (item) => item.inventory_item_id === row.inventoryItemId,
+          );
+
+          return (
+            <div
+              key={row.inventoryItemId}
+              className="rounded-lg border border-stone-200 bg-stone-50 p-4"
+            >
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="font-semibold text-stone-950">
+                    {originalRow ? formatInventoryType(originalRow) : "Bird group"}
+                  </h3>
+                  <p className="mt-1 text-sm text-stone-600">
+                    {originalRow?.breed_display_name ?? listing.breedNames.join(", ")}
+                  </p>
+                </div>
+                <StatusBadge
+                  status={getOperationalRowDisplayStatus(row, originalRow)}
+                />
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                  How many are available?
+                  <input
+                    className="seller-form-field"
+                    inputMode="numeric"
+                    min="0"
+                    step="1"
+                    type="number"
+                    value={row.quantityAvailable}
+                    onChange={(event) =>
+                      updateRow(row.inventoryItemId, {
+                        quantityAvailable: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                  Optional custom price
+                  <input
+                    className="seller-form-field"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    type="number"
+                    value={row.priceOverride}
+                    onChange={(event) =>
+                      updateRow(row.inventoryItemId, {
+                        priceOverride: event.target.value,
+                      })
+                    }
+                  />
+                  <span className="text-xs font-normal leading-5 text-stone-500">
+                    Leave blank if this group should use the listing base price.
+                  </span>
+                </label>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {validationErrors.length > 0 ? (
+        <ValidationMessage errors={validationErrors} />
+      ) : null}
+
+      {saveError ? (
+        <ErrorState
+          title="Updates were not saved"
+          message="Please review the availability and pricing, then try again."
+        />
+      ) : null}
+    </SellerCard>
+  );
+}
+
+function getOperationalRowDisplayStatus(
+  row: OperationalEditRow,
+  originalRow: SellerInventoryManagementRow | undefined,
+) {
+  if (Number(row.quantityAvailable) <= 0) return "sold_out";
+
+  return originalRow?.operational_availability_status ?? row.visibilityStatus;
 }
 
 function DetailItem({ label, value }: { label: string; value: string }) {
@@ -1158,6 +2040,24 @@ function formatInventoryType(row: SellerInventoryManagementRow) {
 
 function formatStatus(value: string | null | undefined) {
   return value ? value.replaceAll("_", " ") : "Not set";
+}
+
+function getDisplayedListingStatus(listing: ListingDetailSummary) {
+  if (listing.visibilityStatus === "active" && listing.totalAvailable <= 0) {
+    return "sold_out";
+  }
+
+  return listing.visibilityStatus;
+}
+
+function shouldShowDetailAvailabilityBadge(listing: ListingDetailSummary) {
+  const displayedStatus = getDisplayedListingStatus(listing);
+
+  if (["archived", "hidden", "sold_out"].includes(displayedStatus)) {
+    return false;
+  }
+
+  return listing.availabilityStatus !== displayedStatus;
 }
 
 function isValidMoney(value: string) {
@@ -1204,7 +2104,7 @@ function uniqueSorted(values: string[]) {
 }
 
 function isListingMedia(
-  item: SellerMediaManagementRow,
+  item: ListingPhotoItem,
   mediaEntityIds: string[],
 ) {
   if (
@@ -1216,6 +2116,16 @@ function isListingMedia(
   }
 
   return mediaEntityIds.includes(item.entity_id);
+}
+
+function sortListingMedia(items: ListingPhotoItem[]) {
+  return [...items].sort((first, second) => {
+    if (first.entity_type !== second.entity_type) {
+      return first.entity_type.localeCompare(second.entity_type);
+    }
+
+    return (first.sort_order ?? 0) - (second.sort_order ?? 0);
+  });
 }
 
 function pickListingAvailabilityStatus(current: string, next: string) {

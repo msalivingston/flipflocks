@@ -48,6 +48,11 @@ export type PublishReadinessReport = {
     warningCount: number;
     missingCount: number;
   };
+  publishGate: {
+    canPublish: boolean;
+    blockers: string[];
+    warnings: string[];
+  };
   storefrontPreview: {
     title: string;
     speciesBreed: string;
@@ -78,6 +83,10 @@ export function buildPublishReadinessReport({
   const activeInventoryRows = listing.rows.filter(
     (row) => row.inventory_visibility_status === "active",
   );
+  const activeAvailableQuantity = activeInventoryRows.reduce(
+    (total, row) => total + (row.quantity_available ?? 0),
+    0,
+  );
   const zeroQuantityRows = activeInventoryRows.filter(
     (row) => (row.quantity_available ?? 0) === 0,
   );
@@ -88,6 +97,15 @@ export function buildPublishReadinessReport({
   const hasPublicContact =
     Boolean(seller?.show_public_email && hasText(seller.public_email)) ||
     Boolean(seller?.show_public_phone && hasText(seller.public_phone));
+  const publishGate = buildPublishGate({
+    activeAvailableQuantity,
+    activeInventoryRows,
+    hasPickupNotes,
+    listing,
+    media,
+    seller,
+    zeroQuantityRows,
+  });
 
   const sections: PublishReadinessSection[] = [
     {
@@ -139,7 +157,7 @@ export function buildPublishReadinessReport({
       items: [
         {
           id: "inventory-rows",
-          label: "Inventory rows",
+          label: "Bird groups",
           status:
             activeInventoryRows.length > 0
               ? zeroQuantityRows.length > 0
@@ -149,21 +167,21 @@ export function buildPublishReadinessReport({
           message:
             activeInventoryRows.length > 0
               ? zeroQuantityRows.length > 0
-                ? `${zeroQuantityRows.length} row${
+                ? `${zeroQuantityRows.length} group${
                     zeroQuantityRows.length === 1 ? "" : "s"
                   } show quantity 0.`
-                : `${activeInventoryRows.length} active inventory row${
+                : `${activeInventoryRows.length} active bird group${
                     activeInventoryRows.length === 1 ? "" : "s"
                   } ready for review.`
-              : "All inventory rows are hidden or archived.",
+              : "All bird groups are hidden or archived.",
         },
         {
           id: "quantity",
           label: "Available quantity",
-          status: listing.totalAvailable > 0 ? "ready" : "warning",
+          status: activeAvailableQuantity > 0 ? "ready" : "warning",
           message:
-            listing.totalAvailable > 0
-              ? `${listing.totalAvailable} total available.`
+            activeAvailableQuantity > 0
+              ? `${activeAvailableQuantity} total available.`
               : "This listing has no available quantity.",
         },
         {
@@ -176,7 +194,7 @@ export function buildPublishReadinessReport({
               : "missing",
           message:
             listing.basePrice != null
-              ? "Base price and any row overrides are ready to review."
+              ? "Base price and any custom group prices are ready to review."
               : "Add a base price before publishing.",
         },
         {
@@ -233,12 +251,13 @@ export function buildPublishReadinessReport({
 
   return {
     summary: summarizeSections(sections),
+    publishGate,
     storefrontPreview: {
       title: listing.title,
       speciesBreed: `${listing.speciesName} - ${listing.breedNames.join(", ")}`,
       inventorySummary: `${listing.totalAvailable} available across ${
         listing.rows.length
-      } row${listing.rows.length === 1 ? "" : "s"}`,
+      } group${listing.rows.length === 1 ? "" : "s"}`,
       pricingSummary:
         listing.basePrice == null
           ? "Base price missing"
@@ -249,6 +268,110 @@ export function buildPublishReadinessReport({
       deliverySummary: "Delivery not enabled in this V1 review",
     },
     sections,
+  };
+}
+
+function buildPublishGate({
+  activeAvailableQuantity,
+  activeInventoryRows,
+  hasPickupNotes,
+  listing,
+  media,
+  seller,
+  zeroQuantityRows,
+}: {
+  activeAvailableQuantity: number;
+  activeInventoryRows: SellerInventoryManagementRow[];
+  hasPickupNotes: boolean;
+  listing: PublishReadinessListing;
+  media: PublishReadinessMediaSummary;
+  seller: SellerContext | null;
+  zeroQuantityRows: SellerInventoryManagementRow[];
+}) {
+  const blockers: string[] = [];
+  const warnings: string[] = [];
+  const hasHatchingEggRows = activeInventoryRows.some(
+    (row) => row.inventory_type === "hatching_eggs",
+  );
+  const hasLiveAnimalRows = activeInventoryRows.some(
+    (row) => row.inventory_type !== "hatching_eggs",
+  );
+
+  if (!seller?.store_id) {
+    blockers.push("Seller store context is missing. Refresh and try again.");
+  }
+
+  if (listing.visibilityStatus !== "hidden") {
+    blockers.push("Only hidden listings can be published from this review.");
+  }
+
+  if (activeInventoryRows.length === 0) {
+    blockers.push("Add at least one visible bird group.");
+  }
+
+  if (activeAvailableQuantity <= 0) {
+    blockers.push("At least one bird group needs available quantity.");
+  }
+
+  if (!hasText(listing.availableDate)) {
+    blockers.push("Add an available date.");
+  }
+
+  if (listing.batchType !== "hatching_eggs" && !hasText(listing.originDate)) {
+    blockers.push("Add a hatch or origin date.");
+  }
+
+  if (listing.basePrice == null || listing.basePrice < 0) {
+    blockers.push("Add a valid base price.");
+  }
+
+  if (
+    activeInventoryRows.some(
+      (row) => row.price_override != null && row.price_override < 0,
+    )
+  ) {
+    blockers.push("Fix custom group prices before publishing.");
+  }
+
+  if (listing.batchType === "hatching_eggs" && hasLiveAnimalRows) {
+    blockers.push("Hatching egg listings can only include hatching egg rows.");
+  }
+
+  if (listing.batchType !== "hatching_eggs" && hasHatchingEggRows) {
+    blockers.push("Hatching eggs need their own listing.");
+  }
+
+  if (zeroQuantityRows.length > 0) {
+    warnings.push(
+      `${zeroQuantityRows.length} bird group${
+        zeroQuantityRows.length === 1 ? "" : "s"
+      } will show quantity 0.`,
+    );
+  }
+
+  if (media.activeCount === 0) {
+    warnings.push("No listing photos are attached.");
+  }
+
+  if (!hasText(listing.publicDescription)) {
+    warnings.push("No public description is filled in.");
+  }
+
+  if (!hasPickupNotes) {
+    warnings.push("Pickup details are missing.");
+  }
+
+  if (
+    !Boolean(seller?.show_public_email && hasText(seller.public_email)) &&
+    !Boolean(seller?.show_public_phone && hasText(seller.public_phone))
+  ) {
+    warnings.push("No public buyer contact method is visible.");
+  }
+
+  return {
+    canPublish: blockers.length === 0,
+    blockers,
+    warnings,
   };
 }
 

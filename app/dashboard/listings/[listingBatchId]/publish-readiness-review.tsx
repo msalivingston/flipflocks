@@ -2,8 +2,14 @@ import { SellerCard } from "../../_components/seller-ui";
 import type { PublishReadinessReport, PublishReadinessStatus } from "./publish-readiness";
 
 export function PublishReadinessReview({
+  isPublishing = false,
+  onPublish,
+  publishError,
   report,
 }: {
+  isPublishing?: boolean;
+  onPublish?: () => void;
+  publishError?: string | null;
   report: PublishReadinessReport;
 }) {
   return (
@@ -17,8 +23,8 @@ export function PublishReadinessReview({
             Review Before Publish
           </h2>
           <p className="mt-1 text-sm leading-6 text-stone-700">
-            This checklist does not publish the listing. It shows what needs a
-            seller review before a future go-live step exists.
+            This checklist does not publish by itself. It shows what needs a
+            seller review before making the listing visible.
           </p>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-xs font-semibold">
@@ -39,7 +45,7 @@ export function PublishReadinessReview({
             value={report.storefrontPreview.speciesBreed}
           />
           <PreviewItem
-            label="Inventory"
+            label="Bird groups"
             value={report.storefrontPreview.inventorySummary}
           />
           <PreviewItem
@@ -85,6 +91,53 @@ export function PublishReadinessReview({
           </section>
         ))}
       </div>
+
+      {onPublish ? (
+        <div className="mt-5 rounded-lg border border-stone-200 bg-white p-4">
+          <h3 className="font-semibold text-stone-950">Publish listing</h3>
+          <p className="mt-1 text-sm leading-6 text-stone-600">
+            Publishing makes this listing visible to buyers on your storefront.
+          </p>
+
+          {report.publishGate.blockers.length > 0 ? (
+            <ReviewList
+              items={report.publishGate.blockers}
+              title="Fix these before publishing"
+              tone="missing"
+            />
+          ) : null}
+
+          {report.publishGate.warnings.length > 0 ? (
+            <ReviewList
+              items={report.publishGate.warnings}
+              title="Warnings to review"
+              tone="warning"
+            />
+          ) : null}
+
+          {publishError ? (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800">
+              {publishError}
+            </div>
+          ) : null}
+
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm leading-6 text-stone-600">
+              {report.publishGate.canPublish
+                ? "This listing has no blocking issues. Review any warnings before continuing."
+                : "The publish button is locked until blocking issues are fixed."}
+            </p>
+            <button
+              className="inline-flex min-h-11 items-center justify-center rounded-md bg-stone-950 px-5 text-sm font-semibold text-white transition hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!report.publishGate.canPublish || isPublishing}
+              onClick={onPublish}
+              type="button"
+            >
+              {isPublishing ? "Publishing" : "Publish listing"}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </SellerCard>
   );
 }
@@ -128,5 +181,31 @@ function ReadinessBadge({ status }: { status: PublishReadinessStatus }) {
     >
       {label}
     </span>
+  );
+}
+
+function ReviewList({
+  items,
+  title,
+  tone,
+}: {
+  items: string[];
+  title: string;
+  tone: "missing" | "warning";
+}) {
+  const classes =
+    tone === "missing"
+      ? "border-red-200 bg-red-50 text-red-800"
+      : "border-amber-200 bg-amber-50 text-amber-800";
+
+  return (
+    <div className={`mt-4 rounded-lg border px-4 py-3 ${classes}`}>
+      <h4 className="text-sm font-semibold text-stone-950">{title}</h4>
+      <ul className="mt-2 grid gap-1 text-sm leading-6">
+        {items.map((item) => (
+          <li key={item}>- {item}</li>
+        ))}
+      </ul>
+    </div>
   );
 }

@@ -71,8 +71,8 @@ const emptyFormState: FormState = {
 const publicDescriptionMaxLength = 1000;
 
 const inventoryTypeOptions: { label: string; value: InventoryType }[] = [
-  { label: "Female", value: "female" },
-  { label: "Male", value: "male" },
+  { label: "Female (pullet or hen)", value: "female" },
+  { label: "Male (cockerel or rooster)", value: "male" },
   { label: "Straight run", value: "straight_run" },
   { label: "Unsexed", value: "unsexed" },
   { label: "Pair", value: "pair" },
@@ -513,13 +513,13 @@ export function SingleBreedBasicsForm() {
 
             <div className="flex flex-col gap-3 border-t border-stone-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm leading-6 text-stone-600">
-                Next you will add the inventory rows buyers can choose from.
+                Next you will add the bird groups buyers can choose from.
               </p>
               <button
                 className="inline-flex min-h-11 items-center justify-center rounded-md bg-stone-950 px-5 text-sm font-semibold text-white transition hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
                 type="submit"
               >
-                Continue to Inventory
+                Continue to Bird Groups
               </button>
             </div>
             </form>
@@ -569,7 +569,7 @@ function Header() {
     <SellerPageHeader
       eyebrow="Bird Listing"
       title="Single Breed Basics"
-      description="Add the basics, inventory rows, and review everything before saving a private listing."
+      description="Add the basics, choose what bird groups you have, and review everything before saving privately."
       action={
         <Link
           className="seller-secondary-button"
@@ -585,7 +585,7 @@ function Header() {
 function StepIndicator({ step }: { step: WorkflowStep }) {
   const steps: { label: string; value: WorkflowStep }[] = [
     { label: "Basics", value: "basics" },
-    { label: "Inventory", value: "inventory" },
+    { label: "Bird groups", value: "inventory" },
     { label: "Review", value: "review" },
   ];
 
@@ -654,11 +654,11 @@ function InventoryStep({
       <form className="grid gap-5" onSubmit={onSubmit}>
         <div>
           <h2 className="text-xl font-semibold text-stone-950">
-            Inventory rows
+            Bird groups
           </h2>
           <p className="mt-1 text-sm leading-6 text-stone-600">
-            Add the groups buyers can choose from, like pullets, cockerels, or
-            straight run chicks.
+            Add what you have available, like pullets, cockerels, straight run
+            chicks, or hatching eggs.
           </p>
         </div>
 
@@ -670,7 +670,7 @@ function InventoryStep({
             >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h3 className="font-semibold text-stone-950">
-                  Row {index + 1}
+                  Group {index + 1}
                 </h3>
                 <button
                   className="seller-small-button"
@@ -684,7 +684,7 @@ function InventoryStep({
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                  Inventory type
+                  Bird type
                   <select
                     className="seller-form-field"
                     value={row.inventoryType}
@@ -696,7 +696,7 @@ function InventoryStep({
                       })
                     }
                   >
-                    <option value="">Choose type</option>
+                    <option value="">Choose bird type</option>
                     {inventoryTypeOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
@@ -706,7 +706,7 @@ function InventoryStep({
                 </label>
 
                 <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                  Quantity available
+                  How many are available?
                   <input
                     className="seller-form-field"
                     inputMode="numeric"
@@ -725,7 +725,7 @@ function InventoryStep({
 
               {row.inventoryType === "other" ? (
                 <label className="mt-4 grid gap-1 text-sm font-semibold text-stone-700">
-                  Custom label
+                  Name this group
                   <input
                     className="seller-form-field"
                     placeholder="Example: Started pullets"
@@ -734,11 +734,14 @@ function InventoryStep({
                       updateRow(row.id, { customLabel: event.target.value })
                     }
                   />
+                  <span className="text-xs font-normal leading-5 text-stone-500">
+                    Use the words buyers will recognize for this group.
+                  </span>
                 </label>
               ) : null}
 
               <label className="mt-4 grid gap-1 text-sm font-semibold text-stone-700">
-                Price override
+                Optional custom price
                 <div className="relative">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-stone-500">
                     $
@@ -756,7 +759,9 @@ function InventoryStep({
                   />
                 </div>
                 <span className="text-xs font-normal leading-5 text-stone-500">
-                  Leave blank to use the listing base price.
+                  Leave blank if this group uses the listing base price. Add a
+                  custom price when pullets, cockerels, or eggs should be priced
+                  differently.
                 </span>
               </label>
             </div>
@@ -764,7 +769,7 @@ function InventoryStep({
         </div>
 
         <button className="seller-secondary-button w-full" onClick={addRow} type="button">
-          Add Inventory Row
+          Add Another Bird Group
         </button>
 
         {validationErrors.length > 0 ? (
@@ -773,7 +778,7 @@ function InventoryStep({
 
         <div className="flex flex-col gap-3 border-t border-stone-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
           <button className="seller-secondary-button" onClick={onBack} type="button">
-            Back to Basics
+          Back to Basics
           </button>
           <button
             className="inline-flex min-h-11 items-center justify-center rounded-md bg-stone-950 px-5 text-sm font-semibold text-white transition hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
@@ -815,7 +820,7 @@ function ReviewStep({
         Save this listing privately?
       </h2>
       <p className="mt-2 text-sm leading-6 text-stone-600">
-        The listing will be hidden from buyers until a publish step is added.
+        The listing will stay hidden from buyers until you choose to publish it.
       </p>
 
       <dl className="mt-5 grid gap-3 rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm sm:grid-cols-2">
@@ -835,7 +840,7 @@ function ReviewStep({
       </dl>
 
       <div className="mt-5">
-        <h3 className="text-base font-semibold text-stone-950">Inventory</h3>
+        <h3 className="text-base font-semibold text-stone-950">Bird groups</h3>
         <div className="mt-3 grid gap-3">
           {inventoryRows.map((row) => (
             <div
@@ -846,13 +851,13 @@ function ReviewStep({
                 {formatInventoryType(row)}
               </p>
               <p className="mt-1 text-stone-600">
-                Quantity: {row.quantityAvailable}
+                Available: {row.quantityAvailable}
               </p>
               <p className="mt-1 text-stone-600">
-                Price:{" "}
+                Price for this group:{" "}
                 {row.priceOverride.trim()
                   ? formatCurrency(row.priceOverride)
-                  : "Use base price"}
+                  : "Uses base price"}
               </p>
             </div>
           ))}
@@ -868,7 +873,7 @@ function ReviewStep({
 
       <div className="mt-5 flex flex-col gap-3 border-t border-stone-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
         <button className="seller-secondary-button" onClick={onBack} type="button">
-          Back to Inventory
+          Back to Bird Groups
         </button>
         <button
           className="inline-flex min-h-11 items-center justify-center rounded-md bg-stone-950 px-5 text-sm font-semibold text-white transition hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
@@ -964,15 +969,15 @@ function validateInventory(rows: InventoryRow[]) {
   const hasHatchingEggs = selectedTypes.includes("hatching_eggs");
   const hasLiveBirdTypes = selectedTypes.some((type) => type !== "hatching_eggs");
 
-  if (rows.length === 0) errors.push("Add at least one inventory row.");
+  if (rows.length === 0) errors.push("Add at least one bird group.");
 
   rows.forEach((row, index) => {
-    const rowLabel = `Row ${index + 1}`;
+    const rowLabel = `Group ${index + 1}`;
 
-    if (!row.inventoryType) errors.push(`${rowLabel}: choose an inventory type.`);
+    if (!row.inventoryType) errors.push(`${rowLabel}: choose a bird type.`);
 
     if (row.inventoryType === "other" && !row.customLabel.trim()) {
-      errors.push(`${rowLabel}: add a custom label for Other.`);
+      errors.push(`${rowLabel}: name this group when using Other.`);
     }
 
     if (!isPositiveWholeNumber(row.quantityAvailable)) {
@@ -980,12 +985,12 @@ function validateInventory(rows: InventoryRow[]) {
     }
 
     if (row.priceOverride.trim() && !isValidMoney(row.priceOverride)) {
-      errors.push(`${rowLabel}: price override must be a valid price.`);
+      errors.push(`${rowLabel}: optional custom price must be a valid price.`);
     }
   });
 
   if (selectedTypes.length !== uniqueTypes.size) {
-    errors.push("Use each inventory type only once for this listing.");
+    errors.push("Use each bird type only once for this listing.");
   }
 
   if (hasHatchingEggs && hasLiveBirdTypes) {
