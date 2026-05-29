@@ -15,6 +15,10 @@ import {
 } from "../../_components/seller-ui";
 import type { SellerInventoryManagementRow } from "../../_lib/seller-types";
 import {
+  formatAgeAtAvailability,
+  formatInventoryTypeLabel,
+} from "../../_lib/listing-formatters";
+import {
   ListingPhotosSection,
   type ListingPhotoItem,
 } from "./listing-photos-section";
@@ -1333,7 +1337,7 @@ function ListingReadOnlyView({ listing }: { listing: ListingDetailSummary }) {
           />
           <DetailItem
             label="Age at availability"
-            value={formatAge(listing.ageAtAvailabilityDays)}
+            value={formatAgeAtAvailability(listing.ageAtAvailabilityDays)}
           />
           <DetailItem
             label="Base price"
@@ -2035,7 +2039,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function formatInventoryType(row: SellerInventoryManagementRow) {
-  return row.custom_inventory_label || formatStatus(row.inventory_type);
+  return row.custom_inventory_label || formatInventoryTypeLabel(row.inventory_type);
 }
 
 function formatStatus(value: string | null | undefined) {
@@ -2076,20 +2080,6 @@ function formatDate(value: string | null | undefined) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(`${value}T00:00:00`));
-}
-
-function formatAge(days: number | null | undefined) {
-  if (days == null) return "Not set";
-  if (days < 7) return `${days} day${days === 1 ? "" : "s"}`;
-
-  const weeks = Math.floor(days / 7);
-  const remainder = days % 7;
-
-  if (remainder === 0) return `${weeks} week${weeks === 1 ? "" : "s"}`;
-
-  return `${weeks} week${weeks === 1 ? "" : "s"}, ${remainder} day${
-    remainder === 1 ? "" : "s"
-  }`;
 }
 
 function formatCurrency(value: number | null | undefined) {

@@ -1,19 +1,16 @@
-import { EmptyState, SellerPageHeader } from "../_components/seller-ui";
+import { SellerPageHeader } from "../_components/seller-ui";
+import { CustomersList } from "./customers-list";
 
 export default function SellerCustomersPage() {
   return (
     <>
       <SellerPageHeader
         title="Customers"
-        description="Read-mostly customer lookup with call, text, email, notes, and recent order context."
+        description="Look up customer contact details and recent order history."
       />
       <div className="mx-auto w-full max-w-7xl px-5 py-5 sm:px-7">
-        <EmptyState
-          title="Customers screen scaffold"
-          description="Customer list and detail screens can use seller_customer_summary, seller_customer_detail, and seller_update_customer without a new backend layer."
-        />
+        <CustomersList />
       </div>
     </>
   );
 }
-

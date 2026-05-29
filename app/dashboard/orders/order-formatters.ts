@@ -3,6 +3,42 @@ type OrderSource = {
   payment_method: string | null;
 };
 
+export type OrderLifecycleSnapshot = {
+  order_status: string | null;
+  ready_for_pickup_at?: string | null;
+};
+
+export type OrderLifecycleState =
+  | "needs_attention"
+  | "ready_for_pickup"
+  | "completed"
+  | "canceled";
+
+export function getOrderLifecycleState(
+  order: OrderLifecycleSnapshot,
+): OrderLifecycleState {
+  if (order.order_status === "canceled") return "canceled";
+  if (order.order_status === "fulfilled") return "completed";
+  if (
+    ["pending", "open"].includes(order.order_status ?? "") &&
+    order.ready_for_pickup_at
+  ) {
+    return "ready_for_pickup";
+  }
+
+  return "needs_attention";
+}
+
+export function formatOrderLifecycle(order: OrderLifecycleSnapshot) {
+  const lifecycle = getOrderLifecycleState(order);
+
+  if (lifecycle === "ready_for_pickup") return "Ready for pickup";
+  if (lifecycle === "completed") return "Picked up / complete";
+  if (lifecycle === "canceled") return "Canceled";
+
+  return "New / open";
+}
+
 export function formatOrderSource(order: OrderSource) {
   if (
     order.order_source === "storefront" &&

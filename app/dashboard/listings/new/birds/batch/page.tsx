@@ -1,10 +1,5 @@
-import { BirdWorkflowPlaceholder } from "../../create-listing-start";
+import { BatchListingForm } from "./batch-listing-form";
 
 export default function BatchListingPage() {
-  return (
-    <BirdWorkflowPlaceholder
-      workflow="Batch / Mixed Group"
-      description="Use this path when one hatch or availability group contains multiple breeds or bird groups."
-    />
-  );
+  return <BatchListingForm />;
 }

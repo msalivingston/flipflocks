@@ -6,7 +6,7 @@ export default function SellerOrdersPage() {
     <>
       <SellerPageHeader
         title="Orders"
-        description="Review storefront pickup requests and contact buyers to coordinate pickup."
+        description="Review pickup requests by status and open each order for next steps."
       />
       <div className="mx-auto w-full max-w-7xl px-5 py-5 sm:px-7">
         <OrdersList />

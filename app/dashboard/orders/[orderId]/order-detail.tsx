@@ -5,21 +5,21 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../../_components/seller-context";
 import {
-  ContactActionButtons,
   EmptyState,
   ErrorState,
   LoadingState,
   SellerCard,
   SellerPageHeader,
-  StatusBadge,
 } from "../../_components/seller-ui";
 import {
   formatCurrency,
   formatDateTime,
   formatInventoryLabel,
+  formatOrderLifecycle,
   formatOrderSource,
   formatPaymentMethod,
   formatPlainLabel,
+  getOrderLifecycleState,
 } from "../order-formatters";
 
 type SellerOrderDetailRow = {
@@ -91,6 +91,10 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [showCancelPanel, setShowCancelPanel] = useState(false);
+  const [copiedContact, setCopiedContact] = useState<"email" | "phone" | null>(
+    null,
+  );
+  const [contactCopyError, setContactCopyError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -304,6 +308,21 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setIsCanceling(false);
   }
 
+  async function copyContactValue(kind: "email" | "phone", value: string | null) {
+    if (!value) return;
+
+    try {
+      await navigator.clipboard.writeText(value);
+      setContactCopyError(null);
+      setCopiedContact(kind);
+      window.setTimeout(() => {
+        setCopiedContact((current) => (current === kind ? null : current));
+      }, 2000);
+    } catch {
+      setContactCopyError("That contact detail could not be copied.");
+    }
+  }
+
   return (
     <>
       <SellerPageHeader
@@ -327,7 +346,11 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <StatusBadge status={order.order_status} />
+                <span
+                  className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getOrderLifecycleTone(order)}`}
+                >
+                  {formatOrderLifecycle(order)}
+                </span>
                 <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
                   {formatPaymentMethod(order.payment_method)}
                 </span>
@@ -518,17 +541,19 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           </SellerCard>
 
           <SellerCard className="p-5">
-            <h2 className="text-lg font-semibold text-stone-950">Notes</h2>
+            <h2 className="text-lg font-semibold text-stone-950">
+              Pickup / order notes
+            </h2>
             <div className="mt-3 grid gap-3 text-sm leading-6 text-stone-700">
               <NoteBlock
-                label="Buyer notes"
+                label="Note from buyer"
                 value={order.buyer_notes}
-                empty="No buyer notes."
+                empty="No buyer note added."
               />
               <NoteBlock
-                label="Pickup notes"
+                label="Pickup note"
                 value={order.pickup_note}
-                empty="No pickup notes yet."
+                empty="No pickup note added."
               />
             </div>
           </SellerCard>
@@ -536,15 +561,47 @@ export function OrderDetail({ orderId }: { orderId: string }) {
 
         <aside className="grid h-fit gap-5">
           <SellerCard className="p-5">
-            <h2 className="text-lg font-semibold text-stone-950">Buyer</h2>
-            <div className="mt-3 grid gap-2 text-sm leading-6 text-stone-700">
-              <p className="font-semibold text-stone-950">{customerName}</p>
-              <p>{order.buyer_email_snapshot ?? "No email"}</p>
-              <p>{order.buyer_phone_snapshot ?? "No phone"}</p>
-              <ContactActionButtons
-                phone={order.buyer_phone_snapshot}
-                email={order.buyer_email_snapshot}
-                label="buyer"
+            <h2 className="text-lg font-semibold text-stone-950">
+              Buyer contact
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-stone-600">
+              Use these details to coordinate pickup directly with the buyer.
+            </p>
+            {contactCopyError ? (
+              <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+                {contactCopyError}
+              </p>
+            ) : null}
+            <div className="mt-4 grid gap-3">
+              <ContactDetailRow
+                label="Name"
+                value={customerName}
+              />
+              <ContactDetailRow
+                actionLabel="Email buyer"
+                copiedLabel={copiedContact === "email" ? "Email copied" : null}
+                emptyValue="No email provided"
+                href={
+                  order.buyer_email_snapshot
+                    ? `mailto:${order.buyer_email_snapshot}`
+                    : null
+                }
+                label="Email"
+                onCopy={() => copyContactValue("email", order.buyer_email_snapshot)}
+                value={order.buyer_email_snapshot}
+              />
+              <ContactDetailRow
+                actionLabel="Call buyer"
+                copiedLabel={copiedContact === "phone" ? "Phone copied" : null}
+                emptyValue="No phone provided"
+                href={
+                  order.buyer_phone_snapshot
+                    ? `tel:${formatPhoneHref(order.buyer_phone_snapshot)}`
+                    : null
+                }
+                label="Phone"
+                onCopy={() => copyContactValue("phone", order.buyer_phone_snapshot)}
+                value={order.buyer_phone_snapshot}
               />
             </div>
           </SellerCard>
@@ -642,6 +699,55 @@ function NoteBlock({
   );
 }
 
+function ContactDetailRow({
+  actionLabel,
+  copiedLabel,
+  emptyValue = "Not provided",
+  href,
+  label,
+  onCopy,
+  value,
+}: {
+  actionLabel?: string;
+  copiedLabel?: string | null;
+  emptyValue?: string;
+  href?: string | null;
+  label: string;
+  onCopy?: () => void;
+  value: string | null;
+}) {
+  const hasValue = Boolean(value);
+
+  return (
+    <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
+        {label}
+      </p>
+      <p className="mt-1 break-words text-sm font-semibold text-stone-950">
+        {value || emptyValue}
+      </p>
+      {hasValue && (href || onCopy) ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {href && actionLabel ? (
+            <a className="seller-small-button" href={href}>
+              {actionLabel}
+            </a>
+          ) : null}
+          {onCopy ? (
+            <button
+              className="seller-small-button"
+              type="button"
+              onClick={onCopy}
+            >
+              {copiedLabel ?? `Copy ${label.toLowerCase()}`}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function TotalRow({
   isStrong = false,
   label,
@@ -697,6 +803,10 @@ function formatBuyerAddress(order: SellerOrderDetailRow) {
   return lines.length > 0 ? lines.join("\n") : "No pickup contact address.";
 }
 
+function formatPhoneHref(value: string) {
+  return value.replace(/[^\d+]/g, "");
+}
+
 function canMarkReady(order: SellerOrderDetailRow) {
   return (
     ["pending", "open"].includes(order.order_status) &&
@@ -727,6 +837,16 @@ function formatPickupStatus(order: SellerOrderDetailRow) {
   if (order.ready_for_pickup_at) return "Ready for pickup";
 
   return order.pickup_option_label_snapshot ?? "Needs coordination";
+}
+
+function getOrderLifecycleTone(order: SellerOrderDetailRow) {
+  const lifecycle = getOrderLifecycleState(order);
+
+  if (lifecycle === "completed") return "bg-emerald-100 text-emerald-800";
+  if (lifecycle === "ready_for_pickup") return "bg-sky-100 text-sky-800";
+  if (lifecycle === "canceled") return "bg-red-100 text-red-800";
+
+  return "bg-amber-100 text-amber-800";
 }
 
 function toSellerOrderActionError(message: string | undefined) {
