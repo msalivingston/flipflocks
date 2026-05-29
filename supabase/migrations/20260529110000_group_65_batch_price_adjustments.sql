@@ -161,12 +161,18 @@ as $$
     when price_adjustment_direction = 'increase'
       then least(
         uncapped_price,
-        coalesce(price_adjustment_max_price, uncapped_price)
+        coalesce(
+          greatest(price_adjustment_max_price, starting_price),
+          uncapped_price
+        )
       )::numeric(10, 2)
     when price_adjustment_direction = 'decrease'
       then greatest(
         uncapped_price,
-        coalesce(price_adjustment_min_price, 0),
+        coalesce(
+          least(price_adjustment_min_price, starting_price),
+          0
+        ),
         0
       )::numeric(10, 2)
     else starting_price::numeric(10, 2)
@@ -581,7 +587,7 @@ where stores.storefront_enabled = true
 
 
 comment on view public.public_storefront_breed_inventory is
-'Primary official buyer-facing storefront projection. One enriched public inventory row per item;
+'Primary official buyer-facing storefront projection. One enriched public inventory row per item; frontend groups rows into breed-first storefront cards. Exposes buyer-safe fields only and applies featured image fallback from inventory item, listing batch breed, listing batch, seller breed profile, then store. unit_price is current_date-dependent through calculate_inventory_unit_price. Inventory rows are visible only when the seller publication toggle and platform availability checks both pass.';
 
 create or replace view public.seller_inventory_management
 with (security_barrier = true)

@@ -93,14 +93,18 @@ export function calculateAdjustedUnitPrice(
       : basePrice - rule.amount * completedIntervals;
 
   if (rule.direction === "increase") {
-    return roundCurrency(
-      rule.maxPrice == null ? uncappedPrice : Math.min(uncappedPrice, rule.maxPrice),
-    );
+    const cappedPrice =
+      rule.maxPrice == null
+        ? uncappedPrice
+        : Math.min(uncappedPrice, Math.max(rule.maxPrice, basePrice));
+
+    return roundCurrency(cappedPrice);
   }
 
-  return roundCurrency(
-    Math.max(uncappedPrice, rule.minPrice == null ? 0 : rule.minPrice, 0),
-  );
+  const cappedFloor =
+    rule.minPrice == null ? 0 : Math.min(rule.minPrice, basePrice);
+
+  return roundCurrency(Math.max(uncappedPrice, cappedFloor, 0));
 }
 
 function roundCurrency(value: number) {
