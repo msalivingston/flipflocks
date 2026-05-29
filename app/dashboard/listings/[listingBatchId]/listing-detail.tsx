@@ -15,8 +15,10 @@ import {
 } from "../../_components/seller-ui";
 import type { SellerInventoryManagementRow } from "../../_lib/seller-types";
 import {
+  calculateAdjustedUnitPrice,
   formatAgeAtAvailability,
   formatInventoryTypeLabel,
+  type PriceAdjustmentDirection,
 } from "../../_lib/listing-formatters";
 import {
   ListingPhotosSection,
@@ -35,6 +37,12 @@ type EditBasicsState = {
   originDate: string;
   availableDate: string;
   basePrice: string;
+  autoPriceAdjustmentEnabled: boolean;
+  priceAdjustmentDirection: PriceAdjustmentDirection;
+  priceAdjustmentAmount: string;
+  priceAdjustmentIntervalWeeks: string;
+  priceAdjustmentMaxPrice: string;
+  priceAdjustmentMinPrice: string;
   internalLabel: string;
   publicDescription: string;
   sellerNotes: string;
@@ -76,7 +84,7 @@ type SellerBreedProfileRead = {
 };
 
 const listingDetailSelect =
-  "store_id, listing_batch_id, listing_batch_breed_id, inventory_item_id, species_id, species_name, species_slug, seller_breed_profile_id, breed_display_name, batch_type, origin_date, available_date, age_at_availability_days, base_price, auto_price_increase_enabled, auto_price_increase_amount, auto_price_increase_max_price, internal_batch_label, listing_batch_visibility_status, listing_batch_moderation_status, listing_batch_breed_sort_order, listing_batch_breed_visibility_status, listing_batch_breed_moderation_status, inventory_type, custom_inventory_label, quantity_available, price_override, effective_unit_price, inventory_item_sort_order, inventory_visibility_status, inventory_moderation_status, operational_availability_status, inventory_seller_notes, listing_batch_breed_seller_notes, listing_batch_seller_notes, inventory_updated_at, listing_batch_updated_at";
+  "store_id, listing_batch_id, listing_batch_breed_id, inventory_item_id, species_id, species_name, species_slug, seller_breed_profile_id, breed_display_name, batch_type, origin_date, available_date, age_at_availability_days, base_price, auto_price_increase_enabled, auto_price_increase_amount, auto_price_increase_max_price, auto_price_adjustment_enabled, price_adjustment_direction, price_adjustment_amount, price_adjustment_interval_weeks, price_adjustment_max_price, price_adjustment_min_price, internal_batch_label, listing_batch_visibility_status, listing_batch_moderation_status, listing_batch_breed_sort_order, listing_batch_breed_visibility_status, listing_batch_breed_moderation_status, inventory_type, custom_inventory_label, quantity_available, price_override, effective_unit_price, inventory_item_sort_order, inventory_visibility_status, inventory_moderation_status, operational_availability_status, inventory_seller_notes, listing_batch_breed_seller_notes, listing_batch_seller_notes, inventory_updated_at, listing_batch_updated_at";
 
 const sellerMediaSelect =
   "media_asset_id, media_link_id, store_id, entity_type, entity_id, display_context, public_url, alt_text, caption, sort_order, is_featured, moderation_status, asset_status, visibility_status, original_filename, content_type, file_size_bytes, width_px, height_px";
@@ -296,6 +304,19 @@ export function ListingDetail({
       originDate: currentListing.originDate ?? "",
       availableDate: currentListing.availableDate,
       basePrice: currentListing.basePrice?.toString() ?? "",
+      autoPriceAdjustmentEnabled: currentListing.autoPriceAdjustmentEnabled,
+      priceAdjustmentDirection:
+        currentListing.priceAdjustmentDirection === "decrease"
+          ? "decrease"
+          : "increase",
+      priceAdjustmentAmount:
+        currentListing.priceAdjustmentAmount?.toString() ?? "",
+      priceAdjustmentIntervalWeeks:
+        currentListing.priceAdjustmentIntervalWeeks?.toString() ?? "1",
+      priceAdjustmentMaxPrice:
+        currentListing.priceAdjustmentMaxPrice?.toString() ?? "",
+      priceAdjustmentMinPrice:
+        currentListing.priceAdjustmentMinPrice?.toString() ?? "",
       internalLabel: currentListing.internalLabel ?? "",
       publicDescription: currentListing.publicDescription ?? "",
       sellerNotes: currentListing.sellerNotes ?? "",
@@ -438,6 +459,39 @@ export function ListingDetail({
     return result.error?.message ?? null;
   }
 
+  async function savePriceAdjustment(
+    listingBatchId: string,
+    basics: EditBasicsState,
+  ) {
+    const result = await supabase.rpc("seller_set_listing_batch_price_adjustment", {
+      p_listing_batch_id: listingBatchId,
+      p_auto_price_adjustment_enabled: basics.autoPriceAdjustmentEnabled,
+      p_price_adjustment_direction: basics.autoPriceAdjustmentEnabled
+        ? basics.priceAdjustmentDirection
+        : null,
+      p_price_adjustment_amount: basics.autoPriceAdjustmentEnabled
+        ? Number(basics.priceAdjustmentAmount)
+        : null,
+      p_price_adjustment_interval_weeks: basics.autoPriceAdjustmentEnabled
+        ? Number(basics.priceAdjustmentIntervalWeeks)
+        : null,
+      p_price_adjustment_max_price:
+        basics.autoPriceAdjustmentEnabled &&
+        basics.priceAdjustmentDirection === "increase" &&
+        basics.priceAdjustmentMaxPrice.trim()
+          ? Number(basics.priceAdjustmentMaxPrice)
+          : null,
+      p_price_adjustment_min_price:
+        basics.autoPriceAdjustmentEnabled &&
+        basics.priceAdjustmentDirection === "decrease" &&
+        basics.priceAdjustmentMinPrice.trim()
+          ? Number(basics.priceAdjustmentMinPrice)
+          : null,
+    });
+
+    return result.error?.message ?? null;
+  }
+
   async function saveEdits(currentListing: ListingDetailSummary) {
     if (!editBasics || !canUseSetupTools) return;
 
@@ -467,6 +521,17 @@ export function ListingDetail({
 
     if (batchResult.error) {
       setSaveError(batchResult.error.message);
+      setIsSaving(false);
+      return;
+    }
+
+    const priceAdjustmentResult = await savePriceAdjustment(
+      listingBatchId,
+      editBasics,
+    );
+
+    if (priceAdjustmentResult) {
+      setSaveError(priceAdjustmentResult);
       setIsSaving(false);
       return;
     }
@@ -1175,6 +1240,12 @@ function summarizeListing(
     availableDate: first.available_date,
     ageAtAvailabilityDays: first.age_at_availability_days,
     basePrice: first.base_price,
+    autoPriceAdjustmentEnabled: Boolean(first.auto_price_adjustment_enabled),
+    priceAdjustmentDirection: first.price_adjustment_direction,
+    priceAdjustmentAmount: first.price_adjustment_amount,
+    priceAdjustmentIntervalWeeks: first.price_adjustment_interval_weeks,
+    priceAdjustmentMaxPrice: first.price_adjustment_max_price,
+    priceAdjustmentMinPrice: first.price_adjustment_min_price,
     internalLabel: first.internal_batch_label,
     publicDescription:
       publicDescriptions.length > 0 ? publicDescriptions.join("\n\n") : null,
@@ -1229,6 +1300,8 @@ function validateEditForm(
   if (!isValidMoney(basics.basePrice)) {
     errors.push("Base price must be a valid price.");
   }
+
+  errors.push(...validatePriceAdjustmentFields(basics));
 
   if (basics.publicDescription.trim().length > publicDescriptionMaxLength) {
     errors.push(
@@ -1302,6 +1375,42 @@ function validateOperationalEditRows(
   return errors;
 }
 
+function validatePriceAdjustmentFields(basics: EditBasicsState) {
+  const errors: string[] = [];
+
+  if (!basics.autoPriceAdjustmentEnabled) return errors;
+
+  if (!basics.priceAdjustmentDirection) {
+    errors.push("Choose whether prices should increase or decrease.");
+  }
+
+  if (!isValidPositiveMoney(basics.priceAdjustmentAmount)) {
+    errors.push("Price adjustment amount must be greater than zero.");
+  }
+
+  if (!isPositiveWholeNumber(basics.priceAdjustmentIntervalWeeks)) {
+    errors.push("Price adjustment interval must be one week or more.");
+  }
+
+  if (
+    basics.priceAdjustmentDirection === "increase" &&
+    basics.priceAdjustmentMaxPrice.trim() &&
+    !isValidMoney(basics.priceAdjustmentMaxPrice)
+  ) {
+    errors.push("Maximum price must be a valid price.");
+  }
+
+  if (
+    basics.priceAdjustmentDirection === "decrease" &&
+    basics.priceAdjustmentMinPrice.trim() &&
+    !isValidMoney(basics.priceAdjustmentMinPrice)
+  ) {
+    errors.push("Minimum price must be a valid price.");
+  }
+
+  return errors;
+}
+
 function ValidationMessage({ errors }: { errors: string[] }) {
   return (
     <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
@@ -1342,6 +1451,10 @@ function ListingReadOnlyView({ listing }: { listing: ListingDetailSummary }) {
           <DetailItem
             label="Base price"
             value={formatCurrency(listing.basePrice)}
+          />
+          <DetailItem
+            label="Price adjustment"
+            value={formatPriceAdjustmentSummary(listing)}
           />
           <DetailItem
             label="Internal label"
@@ -1701,6 +1814,127 @@ function EditListingForm({
               onChange={(event) => updateBasics({ basePrice: event.target.value })}
             />
           </label>
+          <fieldset className="grid gap-3 rounded-lg border border-stone-200 bg-stone-50 p-4">
+            <label className="flex items-start gap-3 text-sm font-semibold text-stone-800">
+              <input
+                checked={editBasics.autoPriceAdjustmentEnabled}
+                className="mt-1 h-4 w-4 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
+                type="checkbox"
+                onChange={(event) =>
+                  updateBasics({
+                    autoPriceAdjustmentEnabled: event.target.checked,
+                  })
+                }
+              />
+              <span>
+                Automatically adjust this batch price after the available date
+              </span>
+            </label>
+
+            {editBasics.autoPriceAdjustmentEnabled ? (
+              <div className="grid gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    Direction
+                    <select
+                      className="seller-form-field"
+                      value={editBasics.priceAdjustmentDirection}
+                      onChange={(event) =>
+                        updateBasics({
+                          priceAdjustmentDirection: event.target
+                            .value as PriceAdjustmentDirection,
+                          priceAdjustmentMaxPrice: "",
+                          priceAdjustmentMinPrice: "",
+                        })
+                      }
+                    >
+                      <option value="increase">Increase</option>
+                      <option value="decrease">Decrease</option>
+                    </select>
+                  </label>
+
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    Every
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="seller-form-field"
+                        inputMode="numeric"
+                        min="1"
+                        step="1"
+                        type="number"
+                        value={editBasics.priceAdjustmentIntervalWeeks}
+                        onChange={(event) =>
+                          updateBasics({
+                            priceAdjustmentIntervalWeeks: event.target.value,
+                          })
+                        }
+                      />
+                      <span className="text-sm font-normal text-stone-600">
+                        week(s)
+                      </span>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    Amount
+                    <MoneyInput
+                      value={editBasics.priceAdjustmentAmount}
+                      onChange={(value) =>
+                        updateBasics({ priceAdjustmentAmount: value })
+                      }
+                    />
+                  </label>
+
+                  {editBasics.priceAdjustmentDirection === "increase" ? (
+                    <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                      Maximum price
+                      <MoneyInput
+                        value={editBasics.priceAdjustmentMaxPrice}
+                        onChange={(value) =>
+                          updateBasics({ priceAdjustmentMaxPrice: value })
+                        }
+                      />
+                    </label>
+                  ) : (
+                    <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                      Minimum price
+                      <MoneyInput
+                        value={editBasics.priceAdjustmentMinPrice}
+                        onChange={(value) =>
+                          updateBasics({ priceAdjustmentMinPrice: value })
+                        }
+                      />
+                    </label>
+                  )}
+                </div>
+
+                <div className="rounded-md border border-emerald-100 bg-white px-3 py-2 text-sm leading-6 text-stone-700">
+                  Current default price preview:{" "}
+                  <span className="font-semibold text-stone-950">
+                    {formatCurrency(
+                      calculateAdjustedUnitPrice(Number(editBasics.basePrice), {
+                        enabled: editBasics.autoPriceAdjustmentEnabled,
+                        direction: editBasics.priceAdjustmentDirection,
+                        amount: Number(editBasics.priceAdjustmentAmount),
+                        intervalWeeks: Number(
+                          editBasics.priceAdjustmentIntervalWeeks,
+                        ),
+                        maxPrice: editBasics.priceAdjustmentMaxPrice.trim()
+                          ? Number(editBasics.priceAdjustmentMaxPrice)
+                          : null,
+                        minPrice: editBasics.priceAdjustmentMinPrice.trim()
+                          ? Number(editBasics.priceAdjustmentMinPrice)
+                          : null,
+                        availableDate: editBasics.availableDate,
+                      }),
+                    )}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+          </fieldset>
           <label className="grid gap-1 text-sm font-semibold text-stone-700">
             Internal label
             <input
@@ -2027,6 +2261,31 @@ function DetailItem({ label, value }: { label: string; value: string }) {
   );
 }
 
+function MoneyInput({
+  onChange,
+  value,
+}: {
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-stone-500">
+        $
+      </span>
+      <input
+        className="seller-form-field pl-7"
+        inputMode="decimal"
+        min="0"
+        step="0.01"
+        type="number"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </div>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -2044,6 +2303,34 @@ function formatInventoryType(row: SellerInventoryManagementRow) {
 
 function formatStatus(value: string | null | undefined) {
   return value ? value.replaceAll("_", " ") : "Not set";
+}
+
+function formatPriceAdjustmentSummary(listing: ListingDetailSummary) {
+  if (
+    !listing.autoPriceAdjustmentEnabled ||
+    !listing.priceAdjustmentDirection ||
+    listing.priceAdjustmentAmount == null ||
+    listing.priceAdjustmentIntervalWeeks == null
+  ) {
+    return "No automatic adjustment";
+  }
+
+  const direction =
+    listing.priceAdjustmentDirection === "increase" ? "Increase" : "Decrease";
+  const cap =
+    listing.priceAdjustmentDirection === "increase"
+      ? listing.priceAdjustmentMaxPrice == null
+        ? ""
+        : `, max ${formatCurrency(listing.priceAdjustmentMaxPrice)}`
+      : listing.priceAdjustmentMinPrice == null
+        ? ""
+        : `, min ${formatCurrency(listing.priceAdjustmentMinPrice)}`;
+
+  return `${direction} ${formatCurrency(
+    listing.priceAdjustmentAmount,
+  )} every ${listing.priceAdjustmentIntervalWeeks} week${
+    listing.priceAdjustmentIntervalWeeks === 1 ? "" : "s"
+  } after available date${cap}`;
 }
 
 function getDisplayedListingStatus(listing: ListingDetailSummary) {
@@ -2068,8 +2355,16 @@ function isValidMoney(value: string) {
   return /^\d+(\.\d{1,2})?$/.test(value.trim());
 }
 
+function isValidPositiveMoney(value: string) {
+  return isValidMoney(value) && Number(value) > 0;
+}
+
 function isWholeNumber(value: string) {
   return /^(0|[1-9]\d*)$/.test(value.trim());
+}
+
+function isPositiveWholeNumber(value: string) {
+  return /^[1-9]\d*$/.test(value.trim());
 }
 
 function formatDate(value: string | null | undefined) {

@@ -13,8 +13,10 @@ import {
   SellerPageHeader,
 } from "../../../../_components/seller-ui";
 import {
+  calculateAdjustedUnitPrice,
   calculateAgeAtAvailabilityDays,
   formatAgeAtAvailability,
+  type PriceAdjustmentDirection,
 } from "../../../../_lib/listing-formatters";
 import type {
   ReferenceBreed,
@@ -46,6 +48,12 @@ type BatchFormState = {
   hatchDate: string;
   availableDate: string;
   basePrice: string;
+  autoPriceAdjustmentEnabled: boolean;
+  priceAdjustmentDirection: PriceAdjustmentDirection;
+  priceAdjustmentAmount: string;
+  priceAdjustmentIntervalWeeks: string;
+  priceAdjustmentMaxPrice: string;
+  priceAdjustmentMinPrice: string;
   internalLabel: string;
   sellerNotes: string;
 };
@@ -87,6 +95,12 @@ const emptyBatchForm: BatchFormState = {
   hatchDate: "",
   availableDate: "",
   basePrice: "",
+  autoPriceAdjustmentEnabled: false,
+  priceAdjustmentDirection: "increase",
+  priceAdjustmentAmount: "",
+  priceAdjustmentIntervalWeeks: "1",
+  priceAdjustmentMaxPrice: "",
+  priceAdjustmentMinPrice: "",
   internalLabel: "",
   sellerNotes: "",
 };
@@ -344,6 +358,19 @@ export function BatchListingForm() {
       ? (createResult.data as CreateListingBatchResult[])
       : [];
     const listingBatchId = createdRows[0]?.listing_batch_id;
+
+    if (listingBatchId) {
+      const priceAdjustmentResult = await supabase.rpc(
+        "seller_set_listing_batch_price_adjustment",
+        buildPriceAdjustmentPayload(listingBatchId, form),
+      );
+
+      if (priceAdjustmentResult.error) {
+        setSaveError(priceAdjustmentResult.error.message);
+        setIsSaving(false);
+        return;
+      }
+    }
 
     window.sessionStorage.setItem(
       "flipflocksListingCreatedMessage",
@@ -609,6 +636,125 @@ function BatchStep({
             more or less.
           </span>
         </label>
+
+        <fieldset className="grid gap-3 rounded-lg border border-stone-200 bg-stone-50 p-4">
+          <label className="flex items-start gap-3 text-sm font-semibold text-stone-800">
+            <input
+              checked={form.autoPriceAdjustmentEnabled}
+              className="mt-1 h-4 w-4 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
+              type="checkbox"
+              onChange={(event) =>
+                updateField("autoPriceAdjustmentEnabled", event.target.checked)
+              }
+            />
+            <span>
+              Automatically adjust this batch price after the available date
+            </span>
+          </label>
+
+          {form.autoPriceAdjustmentEnabled ? (
+            <div className="grid gap-3">
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                  Direction
+                  <select
+                    className="seller-form-field"
+                    value={form.priceAdjustmentDirection}
+                    onChange={(event) => {
+                      updateField(
+                        "priceAdjustmentDirection",
+                        event.target.value as PriceAdjustmentDirection,
+                      );
+                      updateField("priceAdjustmentMaxPrice", "");
+                      updateField("priceAdjustmentMinPrice", "");
+                    }}
+                  >
+                    <option value="increase">Increase</option>
+                    <option value="decrease">Decrease</option>
+                  </select>
+                </label>
+
+                <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                  Every
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="seller-form-field"
+                      inputMode="numeric"
+                      min="1"
+                      step="1"
+                      type="number"
+                      value={form.priceAdjustmentIntervalWeeks}
+                      onChange={(event) =>
+                        updateField(
+                          "priceAdjustmentIntervalWeeks",
+                          event.target.value,
+                        )
+                      }
+                    />
+                    <span className="text-sm font-normal text-stone-600">
+                      week(s)
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                  Amount
+                  <MoneyInput
+                    value={form.priceAdjustmentAmount}
+                    onChange={(value) =>
+                      updateField("priceAdjustmentAmount", value)
+                    }
+                  />
+                </label>
+
+                {form.priceAdjustmentDirection === "increase" ? (
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    Maximum price
+                    <MoneyInput
+                      value={form.priceAdjustmentMaxPrice}
+                      onChange={(value) =>
+                        updateField("priceAdjustmentMaxPrice", value)
+                      }
+                    />
+                  </label>
+                ) : (
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    Minimum price
+                    <MoneyInput
+                      value={form.priceAdjustmentMinPrice}
+                      onChange={(value) =>
+                        updateField("priceAdjustmentMinPrice", value)
+                      }
+                    />
+                  </label>
+                )}
+              </div>
+
+              <div className="rounded-md border border-emerald-100 bg-white px-3 py-2 text-sm leading-6 text-stone-700">
+                Current default price preview:{" "}
+                <span className="font-semibold text-stone-950">
+                  {formatCurrencyNumber(
+                    calculateAdjustedUnitPrice(Number(form.basePrice), {
+                      enabled: form.autoPriceAdjustmentEnabled,
+                      direction: form.priceAdjustmentDirection,
+                      amount: Number(form.priceAdjustmentAmount),
+                      intervalWeeks: Number(form.priceAdjustmentIntervalWeeks),
+                      maxPrice: form.priceAdjustmentMaxPrice.trim()
+                        ? Number(form.priceAdjustmentMaxPrice)
+                        : null,
+                      minPrice: form.priceAdjustmentMinPrice.trim()
+                        ? Number(form.priceAdjustmentMinPrice)
+                        : null,
+                      availableDate: form.availableDate,
+                    }),
+                  )}
+                </span>
+              </div>
+            </div>
+          ) : null}
+        </fieldset>
 
         <label className="grid gap-1 text-sm font-semibold text-stone-700">
           Batch notes
@@ -903,6 +1049,10 @@ function ReviewStep({
           label="Default price"
           value={formatCurrency(form.basePrice)}
         />
+        <ReviewItem
+          label="Price adjustment"
+          value={formatPriceAdjustmentSummary(form)}
+        />
       </dl>
 
       <div className="mt-5">
@@ -1029,6 +1179,8 @@ function validateBatchForm(form: BatchFormState) {
     errors.push("Default price must be a valid price.");
   }
 
+  errors.push(...validatePriceAdjustmentFields(form));
+
   return errors;
 }
 
@@ -1074,6 +1226,38 @@ function validateInventoryRows(
       rowKeys.add(rowKey);
     }
   });
+
+  return errors;
+}
+
+function validatePriceAdjustmentFields(form: BatchFormState) {
+  const errors: string[] = [];
+
+  if (!form.autoPriceAdjustmentEnabled) return errors;
+
+  if (!isValidPositiveMoney(form.priceAdjustmentAmount)) {
+    errors.push("Price adjustment amount must be greater than zero.");
+  }
+
+  if (!isPositiveWholeNumber(form.priceAdjustmentIntervalWeeks)) {
+    errors.push("Price adjustment interval must be one week or more.");
+  }
+
+  if (
+    form.priceAdjustmentDirection === "increase" &&
+    form.priceAdjustmentMaxPrice.trim() &&
+    !isValidMoney(form.priceAdjustmentMaxPrice)
+  ) {
+    errors.push("Maximum price must be a valid price.");
+  }
+
+  if (
+    form.priceAdjustmentDirection === "decrease" &&
+    form.priceAdjustmentMinPrice.trim() &&
+    !isValidMoney(form.priceAdjustmentMinPrice)
+  ) {
+    errors.push("Minimum price must be a valid price.");
+  }
 
   return errors;
 }
@@ -1201,6 +1385,37 @@ function buildInventoryItemPayload(row: InventoryRow, sortOrder: number) {
   };
 }
 
+function buildPriceAdjustmentPayload(
+  listingBatchId: string,
+  form: BatchFormState,
+) {
+  return {
+    p_listing_batch_id: listingBatchId,
+    p_auto_price_adjustment_enabled: form.autoPriceAdjustmentEnabled,
+    p_price_adjustment_direction: form.autoPriceAdjustmentEnabled
+      ? form.priceAdjustmentDirection
+      : null,
+    p_price_adjustment_amount: form.autoPriceAdjustmentEnabled
+      ? Number(form.priceAdjustmentAmount)
+      : null,
+    p_price_adjustment_interval_weeks: form.autoPriceAdjustmentEnabled
+      ? Number(form.priceAdjustmentIntervalWeeks)
+      : null,
+    p_price_adjustment_max_price:
+      form.autoPriceAdjustmentEnabled &&
+      form.priceAdjustmentDirection === "increase" &&
+      form.priceAdjustmentMaxPrice.trim()
+        ? Number(form.priceAdjustmentMaxPrice)
+        : null,
+    p_price_adjustment_min_price:
+      form.autoPriceAdjustmentEnabled &&
+      form.priceAdjustmentDirection === "decrease" &&
+      form.priceAdjustmentMinPrice.trim()
+        ? Number(form.priceAdjustmentMinPrice)
+        : null,
+  };
+}
+
 function getBreedLabel(value: string, breedChoices: BreedChoice[]) {
   return (
     breedChoices.find((choice) => choice.value === value)?.label ??
@@ -1223,6 +1438,10 @@ function isValidMoney(value: string) {
   return /^\d+(\.\d{1,2})?$/.test(value.trim());
 }
 
+function isValidPositiveMoney(value: string) {
+  return isValidMoney(value) && Number(value) > 0;
+}
+
 function isPositiveWholeNumber(value: string) {
   return /^[1-9]\d*$/.test(value.trim());
 }
@@ -1242,6 +1461,59 @@ function formatCurrency(value: string) {
     style: "currency",
     currency: "USD",
   }).format(Number(value || 0));
+}
+
+function formatCurrencyNumber(value: number | null | undefined) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(value ?? 0);
+}
+
+function formatPriceAdjustmentSummary(form: BatchFormState) {
+  if (!form.autoPriceAdjustmentEnabled) return "No automatic adjustment";
+
+  const direction =
+    form.priceAdjustmentDirection === "increase" ? "Increase" : "Decrease";
+  const cap =
+    form.priceAdjustmentDirection === "increase"
+      ? form.priceAdjustmentMaxPrice.trim()
+        ? `, max ${formatCurrency(form.priceAdjustmentMaxPrice)}`
+        : ""
+      : form.priceAdjustmentMinPrice.trim()
+        ? `, min ${formatCurrency(form.priceAdjustmentMinPrice)}`
+        : "";
+
+  return `${direction} ${formatCurrency(
+    form.priceAdjustmentAmount,
+  )} every ${form.priceAdjustmentIntervalWeeks || "?"} week${
+    form.priceAdjustmentIntervalWeeks === "1" ? "" : "s"
+  } after available date${cap}`;
+}
+
+function MoneyInput({
+  onChange,
+  value,
+}: {
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-stone-500">
+        $
+      </span>
+      <input
+        className="seller-form-field pl-7"
+        inputMode="decimal"
+        min="0"
+        step="0.01"
+        type="number"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </div>
+  );
 }
 
 function uniqueSorted(values: string[]) {

@@ -102,6 +102,12 @@ export type SellerInventoryManagementRow = SellerInventoryRow & {
   auto_price_increase_enabled: boolean | null;
   auto_price_increase_amount: number | null;
   auto_price_increase_max_price: number | null;
+  auto_price_adjustment_enabled: boolean | null;
+  price_adjustment_direction: string | null;
+  price_adjustment_amount: number | null;
+  price_adjustment_interval_weeks: number | null;
+  price_adjustment_max_price: number | null;
+  price_adjustment_min_price: number | null;
   internal_batch_label: string | null;
   listing_batch_moderation_status: string;
   listing_batch_breed_sort_order: number | null;

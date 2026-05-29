@@ -17,6 +17,12 @@ export type PublishReadinessListing = {
   availableDate: string;
   ageAtAvailabilityDays: number | null;
   basePrice: number | null;
+  autoPriceAdjustmentEnabled: boolean;
+  priceAdjustmentDirection: string | null;
+  priceAdjustmentAmount: number | null;
+  priceAdjustmentIntervalWeeks: number | null;
+  priceAdjustmentMaxPrice: number | null;
+  priceAdjustmentMinPrice: number | null;
   internalLabel: string | null;
   publicDescription: string | null;
   sellerNotes: string | null;
