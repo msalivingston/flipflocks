@@ -1,6 +1,7 @@
 export type SellerContext = {
   store_id: string;
   store_name: string;
+  store_tagline: string | null;
   store_slug: string;
   store_status: string;
   storefront_mode: string;
@@ -12,6 +13,7 @@ export type SellerContext = {
   about_text: string | null;
   pickup_policy: string | null;
   cancellation_policy: string | null;
+  other_policies: string | null;
   pickup_instructions: string | null;
   public_email: string | null;
   public_phone: string | null;

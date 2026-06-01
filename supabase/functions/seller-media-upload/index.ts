@@ -8,7 +8,19 @@ const corsHeaders = {
 
 const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
 const BUCKET_NAME = "seller-media";
-const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp"] as const;
+const ALLOWED_TYPES = new Set<string>(allowedMimeTypes);
+
+type SupportedMimeType = (typeof allowedMimeTypes)[number];
+
+const MIME_TYPE_ALIASES: Record<string, SupportedMimeType> = {
+  "image/jpeg": "image/jpeg",
+  "image/jpg": "image/jpeg",
+  "image/pjpeg": "image/jpeg",
+  "image/png": "image/png",
+  "image/x-png": "image/png",
+  "image/webp": "image/webp",
+};
 
 type PublicErrorCode =
   | "invalid_request"
@@ -140,6 +152,41 @@ function sniffMimeType(bytes: Uint8Array): string | null {
   }
 
   return null;
+}
+
+function normalizeMimeType(value: string | null | undefined): SupportedMimeType | null {
+  const normalized = value?.split(";")[0]?.trim().toLowerCase();
+
+  if (!normalized) {
+    return null;
+  }
+
+  return MIME_TYPE_ALIASES[normalized] ?? null;
+}
+
+function mimeTypeFromFileName(fileName: string): SupportedMimeType | null {
+  const extension = fileName.split(".").pop()?.trim().toLowerCase();
+
+  if (extension === "jpg" || extension === "jpeg") {
+    return "image/jpeg";
+  }
+
+  if (extension === "png") {
+    return "image/png";
+  }
+
+  if (extension === "webp") {
+    return "image/webp";
+  }
+
+  return null;
+}
+
+function hasConflictingClaim(
+  claimedMimeType: SupportedMimeType | null,
+  detectedMimeType: string,
+) {
+  return claimedMimeType !== null && claimedMimeType !== detectedMimeType;
 }
 
 function readUint24LittleEndian(bytes: Uint8Array, offset: number): number {
@@ -347,13 +394,17 @@ Deno.serve(async (req) => {
 
     const bytes = new Uint8Array(await fileValue.arrayBuffer());
     const detectedMimeType = sniffMimeType(bytes);
-    const declaredMimeType = fileValue.type.toLowerCase();
+    const declaredMimeType = normalizeMimeType(fileValue.type);
+    const extensionMimeType = mimeTypeFromFileName(fileValue.name);
 
     if (!detectedMimeType || !ALLOWED_TYPES.has(detectedMimeType)) {
       return errorResponse("unsupported_media_type", "Unsupported media type", 400);
     }
 
-    if (declaredMimeType && declaredMimeType !== detectedMimeType) {
+    if (
+      hasConflictingClaim(declaredMimeType, detectedMimeType) ||
+      hasConflictingClaim(extensionMimeType, detectedMimeType)
+    ) {
       return errorResponse("unsupported_media_type", "Media type does not match file contents", 400);
     }
 

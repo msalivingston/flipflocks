@@ -47,9 +47,9 @@ export function SellerDashboard() {
 
       const [homeResult, orderResult, inventoryResult] = await Promise.all([
         supabase
-          .from("seller_dashboard_home")
-          .select("*")
-          .eq("store_id", seller.store_id)
+          .rpc("get_seller_dashboard_home", {
+            p_store_id: seller.store_id,
+          })
           .maybeSingle<SellerDashboardHome>(),
         supabase
           .from("seller_order_management")
@@ -375,4 +375,3 @@ function formatDate(value: string | null | undefined) {
     day: "numeric",
   }).format(new Date(`${value}T00:00:00`));
 }
-

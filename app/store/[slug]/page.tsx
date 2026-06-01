@@ -55,9 +55,9 @@ export default async function StorefrontPage({
 
   const [homeResult, inventoryResult] = await Promise.all([
     supabase
-      .from("public_storefront_home")
-      .select("*")
-      .eq("store_slug", slug)
+      .rpc("get_public_storefront_home", {
+        p_store_slug: slug,
+      })
       .maybeSingle(),
     supabase
       .from("public_storefront_inventory")

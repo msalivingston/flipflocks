@@ -11,6 +11,7 @@ import {
   SellerCard,
   SellerPageHeader,
 } from "../../_components/seller-ui";
+import { formatAgeAtAvailability } from "../../_lib/listing-formatters";
 import {
   formatCurrency,
   formatDateTime,
@@ -60,7 +61,11 @@ type SellerOrderItemRow = {
   breed_display_name_snapshot: string;
   inventory_type_snapshot: string;
   custom_inventory_label_snapshot: string | null;
+  hatch_date_snapshot: string | null;
   available_date_snapshot: string | null;
+  age_at_sale_days_snapshot: number | null;
+  order_item_source: string | null;
+  custom_item_name_snapshot: string | null;
   unit_price_snapshot: number | null;
   quantity: number;
   fulfilled_quantity: number;
@@ -90,6 +95,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [restoreInventoryOnCancel, setRestoreInventoryOnCancel] = useState(false);
   const [showCancelPanel, setShowCancelPanel] = useState(false);
   const [copiedContact, setCopiedContact] = useState<"email" | "phone" | null>(
     null,
@@ -118,7 +124,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         supabase
           .from("seller_order_item_detail")
           .select(
-            "order_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, available_date_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
+            "order_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
           )
           .eq("store_id", seller.store_id)
           .eq("order_id", orderId)
@@ -293,6 +299,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     const { error: cancelError } = await supabase.rpc("cancel_order", {
       p_order_id: order.order_id,
       p_canceled_reason: trimmedReason,
+      p_restore_inventory: restoreInventoryOnCancel,
     });
 
     if (cancelError) {
@@ -301,8 +308,13 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       return;
     }
 
-    setActionMessage("Order canceled. Any unpicked-up birds were returned to available inventory.");
+    setActionMessage(
+      restoreInventoryOnCancel
+        ? "Order canceled. Inventory-backed items were returned to available inventory."
+        : "Order canceled. Inventory was not changed.",
+    );
     setCancelReason("");
+    setRestoreInventoryOnCancel(false);
     setShowCancelPanel(false);
     setRefreshKey((current) => current + 1);
     setIsCanceling(false);
@@ -380,8 +392,8 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                   </h2>
                   <p className="mt-1 text-sm leading-6 text-stone-600">
                     Canceling removes this pickup request from your open orders.
-                    Any birds that have not been picked up will be returned to
-                    available inventory.
+                    You can choose whether inventory-backed items should be
+                    returned to available inventory.
                   </p>
                 </div>
                 {!showCancelPanel ? (
@@ -392,6 +404,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                     onClick={() => {
                       setActionError(null);
                       setActionMessage(null);
+                      setRestoreInventoryOnCancel(false);
                       setShowCancelPanel(true);
                     }}
                   >
@@ -416,6 +429,27 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                     </span>
                   </label>
 
+                  <label className="mt-4 flex gap-3 rounded-md border border-red-200 bg-white p-3 text-sm text-stone-700">
+                    <input
+                      className="mt-1 h-4 w-4 rounded border-stone-300 text-red-700 focus:ring-red-500"
+                      checked={restoreInventoryOnCancel}
+                      onChange={(event) =>
+                        setRestoreInventoryOnCancel(event.target.checked)
+                      }
+                      type="checkbox"
+                    />
+                    <span>
+                      <span className="block font-semibold text-stone-950">
+                        Restore inventory?
+                      </span>
+                      <span className="mt-1 block leading-6 text-stone-600">
+                        If checked, inventory-backed items will be returned to
+                        available inventory. Leave unchecked if you want to
+                        review inventory manually.
+                      </span>
+                    </span>
+                  </label>
+
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button
                       className="min-h-10 rounded-md bg-red-700 px-4 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-stone-300"
@@ -431,6 +465,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                       type="button"
                       onClick={() => {
                         setCancelReason("");
+                        setRestoreInventoryOnCancel(false);
                         setShowCancelPanel(false);
                       }}
                     >
@@ -641,25 +676,37 @@ export function OrderDetail({ orderId }: { orderId: string }) {
 }
 
 function OrderItemRow({ item }: { item: SellerOrderItemRow }) {
+  const isCustomItem = item.order_item_source === "custom";
   const label = formatInventoryLabel({
     custom_inventory_label: item.custom_inventory_label_snapshot,
     inventory_type: item.inventory_type_snapshot,
   });
+  const itemTitle =
+    item.custom_item_name_snapshot || item.breed_display_name_snapshot;
 
   return (
     <article className="grid gap-3 px-5 py-4 sm:grid-cols-[1fr_auto]">
       <div>
         <h3 className="font-semibold text-stone-950">
-          {item.breed_display_name_snapshot} {label}
+          {itemTitle}
+          {isCustomItem ? "" : ` ${label}`}
         </h3>
         <p className="mt-1 text-sm text-stone-600">
-          {item.species_name_snapshot}
-          {item.available_date_snapshot
+          {isCustomItem ? "Custom item" : item.species_name_snapshot}
+          {!isCustomItem && item.hatch_date_snapshot
+            ? ` - hatched ${formatShortDate(item.hatch_date_snapshot)}`
+            : ""}
+          {!isCustomItem && item.available_date_snapshot
             ? ` · available ${formatShortDate(item.available_date_snapshot)}`
             : ""}
         </p>
         <p className="mt-1 text-sm text-stone-500">
-          {item.remaining_unfulfilled_quantity} still needing pickup
+          {!isCustomItem && item.age_at_sale_days_snapshot != null
+            ? `${formatAgeAtAvailability(item.age_at_sale_days_snapshot)} at sale - `
+            : ""}
+          {isCustomItem
+            ? `${item.remaining_unfulfilled_quantity} remaining on order`
+            : `${item.remaining_unfulfilled_quantity} still needing pickup`}
         </p>
       </div>
       <dl className="grid grid-cols-3 gap-3 text-right text-sm sm:min-w-64">

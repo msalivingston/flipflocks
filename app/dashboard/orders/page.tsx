@@ -1,4 +1,4 @@
-import { SellerPageHeader } from "../_components/seller-ui";
+import { PrimaryActionLink, SellerPageHeader } from "../_components/seller-ui";
 import { OrdersList } from "./orders-list";
 
 export default function SellerOrdersPage() {
@@ -7,6 +7,7 @@ export default function SellerOrdersPage() {
       <SellerPageHeader
         title="Orders"
         description="Review pickup requests by status and open each order for next steps."
+        action={<PrimaryActionLink href="/dashboard/orders/new">New Order</PrimaryActionLink>}
       />
       <div className="mx-auto w-full max-w-7xl px-5 py-5 sm:px-7">
         <OrdersList />

@@ -48,9 +48,21 @@ type FunctionErrorContext = {
 
 type PhotoManagerMode = "setup" | "public-content" | "readonly";
 
-const acceptedImageTypes = ["image/jpeg", "image/png", "image/webp"];
+const acceptedImageTypes = ["image/jpeg", "image/png", "image/webp"] as const;
 const maxImageSizeBytes = 8 * 1024 * 1024;
 const maxListingPhotos = 4;
+
+type AcceptedImageType = (typeof acceptedImageTypes)[number];
+
+const acceptedImageTypeSet = new Set<string>(acceptedImageTypes);
+const imageTypeAliases: Record<string, AcceptedImageType> = {
+  "image/jpeg": "image/jpeg",
+  "image/jpg": "image/jpeg",
+  "image/pjpeg": "image/jpeg",
+  "image/png": "image/png",
+  "image/x-png": "image/png",
+  "image/webp": "image/webp",
+};
 
 /**
  * Setup photo manager for the hidden-listing workflow.
@@ -562,7 +574,7 @@ function AddPhotoSlot({
 
 function validateFiles(files: File[]) {
   for (const file of files) {
-    if (!acceptedImageTypes.includes(file.type)) {
+    if (!getSupportedImageType(file)) {
       return {
         title: "File type not supported",
         message: "Use a JPG, PNG, or WebP photo.",
@@ -578,6 +590,44 @@ function validateFiles(files: File[]) {
   }
 
   return null;
+}
+
+function normalizeImageType(value: string | null | undefined): AcceptedImageType | null {
+  const normalized = value?.split(";")[0]?.trim().toLowerCase();
+
+  if (!normalized) {
+    return null;
+  }
+
+  return imageTypeAliases[normalized] ?? null;
+}
+
+function imageTypeFromFileName(fileName: string): AcceptedImageType | null {
+  const extension = fileName.split(".").pop()?.trim().toLowerCase();
+
+  if (extension === "jpg" || extension === "jpeg") {
+    return "image/jpeg";
+  }
+
+  if (extension === "png") {
+    return "image/png";
+  }
+
+  if (extension === "webp") {
+    return "image/webp";
+  }
+
+  return null;
+}
+
+function getSupportedImageType(file: File) {
+  const browserType = normalizeImageType(file.type);
+
+  if (browserType && acceptedImageTypeSet.has(browserType)) {
+    return browserType;
+  }
+
+  return imageTypeFromFileName(file.name);
 }
 
 function sortPhotos(photos: ListingPhotoItem[]) {
