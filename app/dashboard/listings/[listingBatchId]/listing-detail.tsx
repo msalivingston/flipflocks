@@ -97,8 +97,7 @@ const publicDescriptionMaxLength = 1000;
 const liveAnimalInventoryTypes = [
   { label: "Female (pullet or hen)", value: "female" },
   { label: "Male (cockerel or rooster)", value: "male" },
-  { label: "Straight run", value: "straight_run" },
-  { label: "Unsexed", value: "unsexed" },
+  { label: "Straight Run", value: "straight_run" },
   { label: "Pair", value: "pair" },
   { label: "Trio", value: "trio" },
   { label: "Other", value: "other" },

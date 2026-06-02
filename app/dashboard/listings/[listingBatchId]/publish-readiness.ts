@@ -48,12 +48,19 @@ export type PublishReadinessSection = {
   items: PublishReadinessItem[];
 };
 
+export type PublishReadinessPolicyStatus = {
+  label: string;
+  value: string;
+};
+
 export type PublishReadinessReport = {
   summary: {
     readyCount: number;
     warningCount: number;
     missingCount: number;
   };
+  checklist: PublishReadinessItem[];
+  policyStatuses: PublishReadinessPolicyStatus[];
   publishGate: {
     canPublish: boolean;
     blockers: string[];
@@ -163,7 +170,7 @@ export function buildPublishReadinessReport({
       items: [
         {
           id: "inventory-rows",
-          label: "Bird groups",
+          label: "Available Birds",
           status:
             activeInventoryRows.length > 0
               ? zeroQuantityRows.length > 0
@@ -173,13 +180,13 @@ export function buildPublishReadinessReport({
           message:
             activeInventoryRows.length > 0
               ? zeroQuantityRows.length > 0
-                ? `${zeroQuantityRows.length} group${
+                ? `${zeroQuantityRows.length} row${
                     zeroQuantityRows.length === 1 ? "" : "s"
                   } show quantity 0.`
-                : `${activeInventoryRows.length} active bird group${
+                : `${activeInventoryRows.length} available option${
                     activeInventoryRows.length === 1 ? "" : "s"
                   } ready for review.`
-              : "All bird groups are hidden or archived.",
+              : "No available birds are ready.",
         },
         {
           id: "quantity",
@@ -200,7 +207,7 @@ export function buildPublishReadinessReport({
               : "missing",
           message:
             listing.basePrice != null
-              ? "Base price and any custom group prices are ready to review."
+              ? "Base price and any custom row prices are ready to review."
               : "Add a base price before publishing.",
         },
         {
@@ -256,6 +263,32 @@ export function buildPublishReadinessReport({
   ];
 
   return {
+    checklist: buildCompactChecklist({
+      activeAvailableQuantity,
+      activeInventoryRows,
+      hasPickupNotes,
+      hasPublicContact,
+      listing,
+      media,
+    }),
+    policyStatuses: [
+      {
+        label: "Pickup policy",
+        value: hasPickupNotes ? "Using store default" : "Store default missing",
+      },
+      {
+        label: "Cancellation policy",
+        value: hasText(seller?.cancellation_policy)
+          ? "Using store default"
+          : "Store default missing",
+      },
+      {
+        label: "Additional policies",
+        value: hasText(seller?.other_policies)
+          ? "Using store default"
+          : "None set",
+      },
+    ],
     summary: summarizeSections(sections),
     publishGate,
     storefrontPreview: {
@@ -263,7 +296,7 @@ export function buildPublishReadinessReport({
       speciesBreed: `${listing.speciesName} - ${listing.breedNames.join(", ")}`,
       inventorySummary: `${listing.totalAvailable} available across ${
         listing.rows.length
-      } group${listing.rows.length === 1 ? "" : "s"}`,
+      } row${listing.rows.length === 1 ? "" : "s"}`,
       pricingSummary:
         listing.basePrice == null
           ? "Base price missing"
@@ -275,6 +308,81 @@ export function buildPublishReadinessReport({
     },
     sections,
   };
+}
+
+function buildCompactChecklist({
+  activeAvailableQuantity,
+  activeInventoryRows,
+  hasPickupNotes,
+  hasPublicContact,
+  listing,
+  media,
+}: {
+  activeAvailableQuantity: number;
+  activeInventoryRows: SellerInventoryManagementRow[];
+  hasPickupNotes: boolean;
+  hasPublicContact: boolean;
+  listing: PublishReadinessListing;
+  media: PublishReadinessMediaSummary;
+}) {
+  return [
+    {
+      id: "photos",
+      label: "Photos added",
+      status: media.activeCount > 0 ? "ready" : "warning",
+      message:
+        media.activeCount > 0
+          ? `${media.activeCount} photo${media.activeCount === 1 ? "" : "s"} added.`
+          : "No photos yet.",
+    },
+    {
+      id: "available-birds",
+      label: "Available birds entered",
+      status:
+        activeInventoryRows.length > 0 && activeAvailableQuantity > 0
+          ? "ready"
+          : "missing",
+      message:
+        activeInventoryRows.length > 0 && activeAvailableQuantity > 0
+          ? `${activeAvailableQuantity} available.`
+          : "Add at least one available bird.",
+    },
+    {
+      id: "pricing",
+      label: "Pricing entered",
+      status:
+        listing.basePrice != null &&
+        activeInventoryRows.every((row) => row.effective_unit_price != null)
+          ? "ready"
+          : "missing",
+      message:
+        listing.basePrice != null
+          ? "Prices are ready."
+          : "Add a valid price.",
+    },
+    {
+      id: "description",
+      label: "Description",
+      status: hasText(listing.publicDescription) ? "ready" : "warning",
+      message: hasText(listing.publicDescription)
+        ? "Description added."
+        : "Description missing.",
+    },
+    {
+      id: "pickup-policy",
+      label: "Pickup policy",
+      status: hasPickupNotes ? "ready" : "warning",
+      message: hasPickupNotes ? "Using store default." : "Store default missing.",
+    },
+    {
+      id: "contact-method",
+      label: "Contact method",
+      status: hasPublicContact ? "ready" : "warning",
+      message: hasPublicContact
+        ? "Buyer contact is visible."
+        : "No public contact method is visible.",
+    },
+  ] satisfies PublishReadinessItem[];
 }
 
 function buildPublishGate({
@@ -312,11 +420,11 @@ function buildPublishGate({
   }
 
   if (activeInventoryRows.length === 0) {
-    blockers.push("Add at least one visible bird group.");
+    blockers.push("Add at least one available bird.");
   }
 
   if (activeAvailableQuantity <= 0) {
-    blockers.push("At least one bird group needs available quantity.");
+    blockers.push("At least one available bird needs a quantity.");
   }
 
   if (!hasText(listing.availableDate)) {
@@ -336,7 +444,7 @@ function buildPublishGate({
       (row) => row.price_override != null && row.price_override < 0,
     )
   ) {
-    blockers.push("Fix custom group prices before publishing.");
+    blockers.push("Fix custom prices before publishing.");
   }
 
   if (listing.batchType === "hatching_eggs" && hasLiveAnimalRows) {
@@ -349,7 +457,7 @@ function buildPublishGate({
 
   if (zeroQuantityRows.length > 0) {
     warnings.push(
-      `${zeroQuantityRows.length} bird group${
+      `${zeroQuantityRows.length} available option${
         zeroQuantityRows.length === 1 ? "" : "s"
       } will show quantity 0.`,
     );

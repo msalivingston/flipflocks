@@ -30,8 +30,8 @@ export function formatAgeAtAvailability(days: number | null | undefined) {
 export function formatInventoryTypeLabel(value: string | null | undefined) {
   if (value === "female") return "Female";
   if (value === "male") return "Male";
-  if (value === "straight_run") return "Straight run";
-  if (value === "unsexed") return "Unsexed";
+  if (value === "straight_run") return "Straight Run";
+  if (value === "unsexed") return "Straight Run";
   if (value === "pair") return "Pair";
   if (value === "trio") return "Trio";
   if (value === "hatching_eggs") return "Hatching eggs";

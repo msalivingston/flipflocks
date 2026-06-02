@@ -141,6 +141,11 @@ export type ReferenceBreed = {
   sort_order: number | null;
 };
 
+export type ReferenceBreedAlias = {
+  breed_id: string;
+  alias: string;
+};
+
 export type SellerBreedProfileOption = {
   id: string;
   species_id: string;

@@ -63,7 +63,7 @@ export function BirdsBranchSelection() {
     <>
       <SellerPageHeader
         title="Bird Listing"
-        description="Choose the way you naturally think about this group. Both options use the same listing structure behind the scenes."
+        description="Every listing is organized around one hatch date. Choose Simple for one breed/type, or Group when this hatch needs multiple rows."
         action={
           <Link className="seller-secondary-button" href="/dashboard/listings/new">
             Back
@@ -74,23 +74,23 @@ export function BirdsBranchSelection() {
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-5 py-5 sm:px-7">
         <section className="grid gap-4 md:grid-cols-2">
           <ChoiceCard
-            title="Single Breed / Offering"
-            description="Best when the listing is one breed or one simple offering, like Lavender Ameraucana pullets."
+            title="Simple Listing"
+            description="I'm selling one breed/type from one hatch date."
             href="/dashboard/listings/new/birds/single"
             details={[
-              "One main breed or offering",
-              "Simple quantity and price setup",
-              "Good for a quick listing",
+              "One breed",
+              "One type, quantity, and price",
+              "Good for one bird, a trio, or many birds of the same breed/type",
             ]}
           />
           <ChoiceCard
-            title="Batch / Mixed Group"
-            description="Best when one hatch date includes several breeds or bird groups."
+            title="Group Listing"
+            description="I'm selling multiple types or breeds from the same hatch date."
             href="/dashboard/listings/new/birds/batch"
             details={[
-              "One hatch or availability group",
-              "Multiple breeds or bird groups",
-              "Good for larger farm batches",
+              "One shared hatch date",
+              "Multiple inventory rows",
+              "Good for hatchery-style availability lists",
             ]}
           />
         </section>

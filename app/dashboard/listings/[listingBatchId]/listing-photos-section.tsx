@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ErrorState, SellerCard } from "../../_components/seller-ui";
 
@@ -47,22 +47,11 @@ type FunctionErrorContext = {
 };
 
 type PhotoManagerMode = "setup" | "public-content" | "readonly";
+type PhotoEntityType = "listing_batch" | "inventory_item" | "listing_batch_breed";
 
 const acceptedImageTypes = ["image/jpeg", "image/png", "image/webp"] as const;
 const maxImageSizeBytes = 8 * 1024 * 1024;
 const maxListingPhotos = 4;
-
-type AcceptedImageType = (typeof acceptedImageTypes)[number];
-
-const acceptedImageTypeSet = new Set<string>(acceptedImageTypes);
-const imageTypeAliases: Record<string, AcceptedImageType> = {
-  "image/jpeg": "image/jpeg",
-  "image/jpg": "image/jpeg",
-  "image/pjpeg": "image/jpeg",
-  "image/png": "image/png",
-  "image/x-png": "image/png",
-  "image/webp": "image/webp",
-};
 
 /**
  * Setup photo manager for the hidden-listing workflow.
@@ -72,19 +61,31 @@ const imageTypeAliases: Record<string, AcceptedImageType> = {
  */
 export function ListingPhotosSection({
   canManage,
+  description,
+  emptyDescription,
+  entityId,
+  entityType = "listing_batch",
   listingBatchId,
   mode = "readonly",
   mediaItems,
   onReload,
   storeId,
+  title = "Photos",
 }: {
   canManage: boolean;
+  description?: string;
+  emptyDescription?: string;
+  entityId?: string;
+  entityType?: PhotoEntityType;
   listingBatchId: string;
   mode?: PhotoManagerMode;
   mediaItems: ListingPhotoItem[];
   onReload: () => void;
   storeId: string;
+  title?: string;
 }) {
+  const mediaEntityId = entityId ?? listingBatchId;
+  const headingId = useId();
   const activePhotos = mediaItems.filter(
     (item) =>
       item.visibility_status === "active" &&
@@ -158,8 +159,8 @@ export function ListingPhotosSection({
       const formData = new FormData();
       formData.append("file", file);
       formData.append("store_id", storeId);
-      formData.append("entity_type", "listing_batch");
-      formData.append("entity_id", listingBatchId);
+      formData.append("entity_type", entityType);
+      formData.append("entity_id", mediaEntityId);
       formData.append("display_context", "gallery");
       formData.append("sort_order", String(photoCount + index));
       formData.append("is_featured", String(photoCount === 0 && index === 0));
@@ -187,8 +188,8 @@ export function ListingPhotosSection({
     setIsUploading(false);
     setMessage(
       selectedFiles.length === 1
-        ? "Photo attached to this listing."
-        : "Photos attached to this listing.",
+        ? "Photo attached."
+        : "Photos attached.",
     );
     onReload();
     keepPhotosInView();
@@ -198,7 +199,7 @@ export function ListingPhotosSection({
     if (!canManage) return;
 
     const shouldRemove = window.confirm(
-      "Remove this photo from the listing? The image file will not be deleted.",
+      "Remove this photo? The image file will not be deleted.",
     );
 
     if (!shouldRemove) return;
@@ -228,7 +229,7 @@ export function ListingPhotosSection({
     }
 
     setIsRemovingLinkId(null);
-    setMessage("Photo removed from this listing.");
+    setMessage("Photo removed.");
     onReload();
     keepPhotosInView();
   }
@@ -287,8 +288,8 @@ export function ListingPhotosSection({
     setIsUpdatingLinkId(photo.media_link_id);
 
     const { error: reorderError } = await supabase.rpc("seller_reorder_media", {
-      p_entity_type: "listing_batch",
-      p_entity_id: listingBatchId,
+      p_entity_type: entityType,
+      p_entity_id: mediaEntityId,
       p_display_context: "gallery",
       p_media_link_ids: reorderedPhotos.map((item) => item.media_link_id),
     });
@@ -323,19 +324,20 @@ export function ListingPhotosSection({
 
   return (
     <SellerCard className="p-5">
-      <section ref={sectionRef} aria-labelledby="listing-photos-heading">
+      <section ref={sectionRef} aria-labelledby={headingId}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2
             className="text-lg font-semibold text-stone-950"
-            id="listing-photos-heading"
+            id={headingId}
           >
-            Photos
+            {title}
           </h2>
           <p className="mt-1 text-sm leading-6 text-stone-600">
-            {mode === "public-content"
-              ? "Update the photos buyers see on this live listing. Add up to 4 photos."
-              : "Add up to 4 photos. The featured photo is shown first to buyers."}
+            {description ??
+              (mode === "public-content"
+                ? "Update the photos buyers see on this live listing. Add up to 4 photos."
+                : "Add up to 4 photos. The featured photo is shown first to buyers.")}
           </p>
           <p className="mt-1 text-xs font-semibold text-stone-500">
             {photoCount} of {maxListingPhotos} photos added
@@ -379,7 +381,8 @@ export function ListingPhotosSection({
         <div className="mt-5 rounded-lg border border-dashed border-stone-300 bg-stone-50 px-4 py-6 text-center">
           <h3 className="font-semibold text-stone-950">No photos yet</h3>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">
-            Add up to 4 clear photos so buyers can recognize these birds.
+            {emptyDescription ??
+              "Add up to 4 clear photos so buyers can recognize these birds."}
           </p>
           {canAddPhotos ? <AddPhotoSlot isUploading={isUploading} onUpload={uploadPhotos} /> : null}
         </div>
@@ -574,13 +577,6 @@ function AddPhotoSlot({
 
 function validateFiles(files: File[]) {
   for (const file of files) {
-    if (!getSupportedImageType(file)) {
-      return {
-        title: "File type not supported",
-        message: "Use a JPG, PNG, or WebP photo.",
-      };
-    }
-
     if (file.size <= 0 || file.size > maxImageSizeBytes) {
       return {
         title: "Photo is too large",
@@ -590,44 +586,6 @@ function validateFiles(files: File[]) {
   }
 
   return null;
-}
-
-function normalizeImageType(value: string | null | undefined): AcceptedImageType | null {
-  const normalized = value?.split(";")[0]?.trim().toLowerCase();
-
-  if (!normalized) {
-    return null;
-  }
-
-  return imageTypeAliases[normalized] ?? null;
-}
-
-function imageTypeFromFileName(fileName: string): AcceptedImageType | null {
-  const extension = fileName.split(".").pop()?.trim().toLowerCase();
-
-  if (extension === "jpg" || extension === "jpeg") {
-    return "image/jpeg";
-  }
-
-  if (extension === "png") {
-    return "image/png";
-  }
-
-  if (extension === "webp") {
-    return "image/webp";
-  }
-
-  return null;
-}
-
-function getSupportedImageType(file: File) {
-  const browserType = normalizeImageType(file.type);
-
-  if (browserType && acceptedImageTypeSet.has(browserType)) {
-    return browserType;
-  }
-
-  return imageTypeFromFileName(file.name);
 }
 
 function sortPhotos(photos: ListingPhotoItem[]) {

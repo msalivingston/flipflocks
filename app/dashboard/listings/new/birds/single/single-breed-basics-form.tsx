@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Dispatch, SetStateAction } from "react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../../../../_components/seller-context";
 import {
@@ -14,106 +13,134 @@ import {
 } from "../../../../_components/seller-ui";
 import type {
   ReferenceBreed,
+  ReferenceBreedAlias,
   ReferenceSpecies,
   SellerBreedProfileOption,
+  SellerInventoryManagementRow,
 } from "../../../../_lib/seller-types";
+import {
+  buildMediaSummary,
+  buildReadinessListing,
+  CreationStepIndicator,
+  emptyPriceAdjustmentState,
+  formatCurrency,
+  formatInventoryType,
+  formatPriceAdjustmentSummary,
+  hydratePriceAdjustment,
+  inventoryTypeOptions,
+  isPositiveWholeNumber,
+  isValidMoney,
+  ListingCreationBuyerPreview,
+  ListingCreationPhotosStep,
+  listingInventorySelect,
+  type CreationStep,
+  type InventoryType,
+  type ListingPhotoItem,
+  type PriceAdjustmentState,
+  MoneyInput,
+  PriceAdjustmentFields,
+  sellerMediaSelect,
+  validatePriceAdjustment,
+  ValidationMessage,
+} from "../../_components/creation-wizard-shared";
+import { BreedCombobox } from "../../_components/breed-combobox";
+import { buildPublishReadinessReport } from "../../../[listingBatchId]/publish-readiness";
+import { PublishReadinessReview } from "../../../[listingBatchId]/publish-readiness-review";
 
 type BreedChoice = {
   value: string;
   label: string;
+  aliases?: string[];
   kind: "profile" | "breed";
   profileId?: string;
   breedId?: string;
 };
 
-type WorkflowStep = "basics" | "inventory" | "review";
-
-type InventoryType =
-  | "female"
-  | "male"
-  | "straight_run"
-  | "unsexed"
-  | "pair"
-  | "trio"
-  | "hatching_eggs"
-  | "other";
-
-type InventoryRow = {
-  id: string;
-  inventoryType: InventoryType | "";
-  customLabel: string;
-  quantityAvailable: string;
-  priceOverride: string;
-};
-
 type FormState = {
   speciesId: string;
   breedChoice: string;
-  originDate: string;
+  hatchDate: string;
   availableDate: string;
-  basePrice: string;
-  internalLabel: string;
   publicDescription: string;
   sellerNotes: string;
+};
+
+type InventoryState = {
+  inventoryType: InventoryType | "";
+  customLabel: string;
+  quantity: string;
+  price: string;
+};
+
+type CreateListingBatchResult = {
+  listing_batch_id: string;
+};
+
+type RecentBreedUsage = {
+  seller_breed_profile_id: string;
+  inventory_updated_at: string | null;
+  listing_batch_updated_at: string | null;
 };
 
 const emptyFormState: FormState = {
   speciesId: "",
   breedChoice: "",
-  originDate: "",
+  hatchDate: "",
   availableDate: "",
-  basePrice: "",
-  internalLabel: "",
   publicDescription: "",
   sellerNotes: "",
 };
 
-const publicDescriptionMaxLength = 1000;
-
-const inventoryTypeOptions: { label: string; value: InventoryType }[] = [
-  { label: "Female (pullet or hen)", value: "female" },
-  { label: "Male (cockerel or rooster)", value: "male" },
-  { label: "Straight run", value: "straight_run" },
-  { label: "Unsexed", value: "unsexed" },
-  { label: "Pair", value: "pair" },
-  { label: "Trio", value: "trio" },
-  { label: "Hatching eggs", value: "hatching_eggs" },
-  { label: "Other", value: "other" },
-];
-
-const firstInventoryRow: InventoryRow = {
-  id: "inventory-row-1",
+const emptyInventoryState: InventoryState = {
   inventoryType: "",
   customLabel: "",
-  quantityAvailable: "",
-  priceOverride: "",
+  quantity: "",
+  price: "",
 };
 
-/**
- * Runs the first complete Single Breed listing creation flow.
- *
- * The save step uses the existing seller-safe creation RPCs and creates the
- * listing as hidden so sellers can review it before any public launch flow.
- */
-export function SingleBreedBasicsForm() {
+const publicDescriptionMaxLength = 1000;
+const steps = [
+  { label: "Details", value: "details" as const },
+  { label: "Available Birds", value: "inventory" as const },
+  { label: "Photos", value: "photos" as const },
+  { label: "Review", value: "review" as const },
+];
+
+export function SimpleListingForm({
+  draftListingBatchId,
+}: {
+  draftListingBatchId?: string;
+}) {
   const { seller } = useSellerContext();
   const router = useRouter();
   const storeId = seller?.store_id ?? "";
   const [species, setSpecies] = useState<ReferenceSpecies[]>([]);
   const [breeds, setBreeds] = useState<ReferenceBreed[]>([]);
+  const [breedAliases, setBreedAliases] = useState<ReferenceBreedAlias[]>([]);
+  const [breedAliasError, setBreedAliasError] = useState<string | null>(null);
+  const [recentBreedProfileIds, setRecentBreedProfileIds] = useState<string[]>([]);
   const [sellerProfiles, setSellerProfiles] = useState<
     SellerBreedProfileOption[]
   >([]);
   const [form, setForm] = useState<FormState>(emptyFormState);
+  const [inventory, setInventory] =
+    useState<InventoryState>(emptyInventoryState);
+  const [priceAdjustment, setPriceAdjustment] =
+    useState<PriceAdjustmentState>(emptyPriceAdjustmentState);
+  const [step, setStep] = useState<CreationStep>("details");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([
-    firstInventoryRow,
-  ]);
-  const [step, setStep] = useState<WorkflowStep>("basics");
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [isPreparingDraft, setIsPreparingDraft] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [listingBatchId, setListingBatchId] = useState(
+    draftListingBatchId ?? "",
+  );
+  const [draftBreedChoice, setDraftBreedChoice] = useState("");
+  const [draftRows, setDraftRows] = useState<SellerInventoryManagementRow[]>([]);
+  const [mediaItems, setMediaItems] = useState<ListingPhotoItem[]>([]);
 
   useEffect(() => {
     if (!storeId) return;
@@ -124,7 +151,13 @@ export function SingleBreedBasicsForm() {
       setIsLoading(true);
       setError(null);
 
-      const [speciesResult, breedResult, profileResult] = await Promise.all([
+      const [
+        speciesResult,
+        breedResult,
+        aliasResult,
+        profileResult,
+        recentBreedResult,
+      ] = await Promise.all([
         supabase
           .from("species")
           .select("id, common_name, slug, sort_order")
@@ -137,6 +170,7 @@ export function SingleBreedBasicsForm() {
           .eq("is_active", true)
           .order("sort_order", { ascending: true })
           .order("breed_name", { ascending: true }),
+        supabase.from("breed_aliases").select("breed_id, alias"),
         supabase
           .from("seller_breed_profiles")
           .select(
@@ -146,6 +180,14 @@ export function SingleBreedBasicsForm() {
           .eq("visibility_status", "active")
           .eq("moderation_status", "normal")
           .order("display_name", { ascending: true }),
+        supabase
+          .from("seller_inventory_management")
+          .select(
+            "seller_breed_profile_id, inventory_updated_at, listing_batch_updated_at",
+          )
+          .eq("store_id", storeId)
+          .order("listing_batch_updated_at", { ascending: false })
+          .limit(50),
       ]);
 
       if (!isMounted) return;
@@ -160,17 +202,23 @@ export function SingleBreedBasicsForm() {
       }
 
       const loadedSpecies = (speciesResult.data ?? []) as ReferenceSpecies[];
-      const loadedBreeds = (breedResult.data ?? []) as ReferenceBreed[];
-      const loadedProfiles = (profileResult.data ??
-        []) as SellerBreedProfileOption[];
       const defaultSpecies =
         loadedSpecies.find((item) => item.slug === "chicken") ??
         loadedSpecies[0] ??
         null;
 
       setSpecies(loadedSpecies);
-      setBreeds(loadedBreeds);
-      setSellerProfiles(loadedProfiles);
+      setBreeds((breedResult.data ?? []) as ReferenceBreed[]);
+      setBreedAliases((aliasResult.data ?? []) as ReferenceBreedAlias[]);
+      setBreedAliasError(aliasResult.error?.message ?? null);
+      setRecentBreedProfileIds(
+        buildRecentBreedProfileIds(
+          (recentBreedResult.data ?? []) as RecentBreedUsage[],
+        ),
+      );
+      setSellerProfiles(
+        (profileResult.data ?? []) as SellerBreedProfileOption[],
+      );
       setForm((current) => ({
         ...current,
         speciesId: current.speciesId || defaultSpecies?.id || "",
@@ -185,12 +233,30 @@ export function SingleBreedBasicsForm() {
     };
   }, [storeId]);
 
-  const selectedSpecies = species.find((item) => item.id === form.speciesId);
-
   const breedChoices = useMemo(
-    () => buildBreedChoices(form.speciesId, breeds, sellerProfiles),
-    [form.speciesId, breeds, sellerProfiles],
+    () => buildBreedChoices(form.speciesId, breeds, sellerProfiles, breedAliases),
+    [breedAliases, breeds, form.speciesId, sellerProfiles],
   );
+  const recentBreedChoices = useMemo(
+    () => buildRecentBreedChoices(breedChoices, recentBreedProfileIds),
+    [breedChoices, recentBreedProfileIds],
+  );
+  const selectedSpecies = species.find((item) => item.id === form.speciesId);
+  const selectedBreedChoice = breedChoices.find(
+    (choice) => choice.value === form.breedChoice,
+  );
+  const readinessListing = buildReadinessListing({
+    publicDescription: form.publicDescription,
+    rows: draftRows,
+  });
+  const readinessReport =
+    readinessListing && seller
+      ? buildPublishReadinessReport({
+          listing: readinessListing,
+          media: buildMediaSummary(mediaItems),
+          seller,
+        })
+      : null;
 
   function updateField<TKey extends keyof FormState>(
     key: TKey,
@@ -198,7 +264,18 @@ export function SingleBreedBasicsForm() {
   ) {
     setForm((current) => ({ ...current, [key]: value }));
     setValidationErrors([]);
-    setSaveError(null);
+    setDraftError(null);
+    setPublishError(null);
+  }
+
+  function updateInventory<TKey extends keyof InventoryState>(
+    key: TKey,
+    value: InventoryState[TKey],
+  ) {
+    setInventory((current) => ({ ...current, [key]: value }));
+    setValidationErrors([]);
+    setDraftError(null);
+    setPublishError(null);
   }
 
   function handleBreedChoiceChange(value: string) {
@@ -212,13 +289,14 @@ export function SingleBreedBasicsForm() {
       publicDescription: selectedProfile?.seller_description ?? "",
     }));
     setValidationErrors([]);
-    setSaveError(null);
+    setDraftError(null);
+    setPublishError(null);
   }
 
-  function handleBasicsSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleDetailsSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const nextErrors = validateForm(form);
+    const nextErrors = validateDetails(form);
     setValidationErrors(nextErrors);
 
     if (nextErrors.length === 0) {
@@ -230,92 +308,337 @@ export function SingleBreedBasicsForm() {
   function handleInventorySubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const nextErrors = validateInventory(inventoryRows);
+    const nextErrors = [
+      ...validateInventory(inventory),
+      ...validatePriceAdjustment(priceAdjustment),
+    ];
     setValidationErrors(nextErrors);
 
     if (nextErrors.length === 0) {
-      setStep("review");
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      void prepareDraftAndContinue();
     }
   }
 
-  async function handleSave() {
+  async function prepareDraftAndContinue() {
     if (!seller) return;
 
-    const basicsErrors = validateForm(form);
-    const inventoryErrors = validateInventory(inventoryRows);
-    const selectedBreedChoice = breedChoices.find(
-      (choice) => choice.value === form.breedChoice,
+    setIsPreparingDraft(true);
+    setDraftError(null);
+    setPublishError(null);
+
+    const preparedListingId = await ensureDraftListing();
+
+    setIsPreparingDraft(false);
+
+    if (!preparedListingId) return;
+
+    setStep("photos");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function ensureDraftListing() {
+    if (!seller || !selectedBreedChoice) return null;
+
+    const shouldReplaceDraft =
+      listingBatchId && draftBreedChoice && draftBreedChoice !== form.breedChoice;
+
+    if (shouldReplaceDraft) {
+      const shouldContinue = window.confirm(
+        "Changing the breed after photos have started requires starting a new draft. Existing photos stay with the old draft.",
+      );
+
+      if (!shouldContinue) return null;
+    }
+
+    if (listingBatchId && !shouldReplaceDraft) {
+      const updated = await updateExistingDraft(listingBatchId);
+
+      if (!updated) return null;
+      await loadDraft(listingBatchId);
+      return listingBatchId;
+    }
+
+    const sellerBreedProfileId = await upsertSellerBreedProfileForListing(
+      seller.store_id,
+      form.speciesId,
+      selectedBreedChoice,
+      sellerProfiles,
+      form.publicDescription,
     );
 
-    if (!selectedBreedChoice) {
-      basicsErrors.push("Choose a breed.");
-    }
-
-    const nextErrors = [...basicsErrors, ...inventoryErrors];
-    setValidationErrors(nextErrors);
-
-    if (nextErrors.length > 0 || !selectedBreedChoice) return;
-
-    setIsSaving(true);
-    setSaveError(null);
-
-    const sellerBreedProfileId =
-      await upsertSellerBreedProfileForListing(
-        seller.store_id,
-        form.speciesId,
-        selectedBreedChoice,
-        sellerProfiles,
-        form.publicDescription,
-      );
-
     if (!sellerBreedProfileId) {
-      setSaveError(
-        "The breed could not be prepared for this store. Please try again.",
-      );
-      setIsSaving(false);
-      return;
+      setDraftError("The breed could not be prepared. Please try again.");
+      return null;
     }
 
-    const batchType = getBatchType(inventoryRows);
     const createResult = await supabase.rpc(
       "seller_create_listing_batch_with_inventory",
       {
         p_store_id: seller.store_id,
         p_species_id: form.speciesId,
-        p_batch_type: batchType,
-        p_origin_date:
-          batchType === "hatching_eggs" ? form.availableDate : form.originDate,
+        p_batch_type: "live_animals",
+        p_origin_date: form.hatchDate,
         p_available_date: form.availableDate,
-        p_base_price: Number(form.basePrice),
+        p_base_price: Number(inventory.price),
         p_breed_groups: [
           {
             seller_breed_profile_id: sellerBreedProfileId,
             sort_order: 0,
             visibility_status: "active",
-            inventory_items: buildInventoryPayload(inventoryRows),
+            inventory_items: [
+              {
+                inventory_type: inventory.inventoryType,
+                custom_inventory_label:
+                  inventory.inventoryType === "other"
+                    ? inventory.customLabel.trim()
+                    : null,
+                quantity_available: Number(inventory.quantity),
+                price_override: null,
+                sort_order: 0,
+                visibility_status: "active",
+              },
+            ],
           },
         ],
         p_auto_price_increase_enabled: false,
         p_auto_price_increase_amount: null,
         p_auto_price_increase_max_price: null,
-        p_internal_batch_label: form.internalLabel.trim() || null,
+        p_internal_batch_label: null,
         p_seller_notes: form.sellerNotes.trim() || null,
         p_visibility_status: "hidden",
       },
     );
 
     if (createResult.error) {
-      setSaveError(createResult.error.message);
-      setIsSaving(false);
+      setDraftError(createResult.error.message);
+      return null;
+    }
+
+    const rows = Array.isArray(createResult.data)
+      ? (createResult.data as CreateListingBatchResult[])
+      : [];
+    const createdListingBatchId = rows[0]?.listing_batch_id;
+
+    if (!createdListingBatchId) {
+      setDraftError("The listing draft was not prepared. Please try again.");
+      return null;
+    }
+
+    setListingBatchId(createdListingBatchId);
+    setDraftBreedChoice(form.breedChoice);
+    const priceAdjustmentSaved = await savePriceAdjustment(createdListingBatchId);
+
+    if (!priceAdjustmentSaved) return null;
+
+    await loadDraft(createdListingBatchId);
+
+    return createdListingBatchId;
+  }
+
+  async function updateExistingDraft(currentListingBatchId: string) {
+    if (draftRows.length === 0) return true;
+
+    const row = draftRows[0];
+
+    const batchResult = await supabase.rpc("seller_update_listing_batch", {
+      p_listing_batch_id: currentListingBatchId,
+      p_origin_date: form.hatchDate,
+      p_available_date: form.availableDate,
+      p_base_price: Number(inventory.price),
+      p_auto_price_increase_enabled: false,
+      p_auto_price_increase_amount: null,
+      p_auto_price_increase_max_price: null,
+      p_internal_batch_label: null,
+      p_seller_notes: form.sellerNotes.trim() || null,
+    });
+
+    if (batchResult.error) {
+      setDraftError(batchResult.error.message);
+      return false;
+    }
+
+    const inventoryResult = await supabase.rpc("seller_update_inventory_item", {
+      p_inventory_item_id: row.inventory_item_id,
+      p_inventory_type: inventory.inventoryType,
+      p_custom_inventory_label:
+        inventory.inventoryType === "other"
+          ? inventory.customLabel.trim()
+          : null,
+      p_quantity_available: Number(inventory.quantity),
+      p_price_override: null,
+      p_sort_order: 0,
+      p_seller_notes: null,
+    });
+
+    if (inventoryResult.error) {
+      setDraftError(inventoryResult.error.message);
+      return false;
+    }
+
+    const priceAdjustmentSaved = await savePriceAdjustment(currentListingBatchId);
+
+    if (!priceAdjustmentSaved) return false;
+
+    if (selectedBreedChoice) {
+      await upsertSellerBreedProfileForListing(
+        storeId,
+        form.speciesId,
+        selectedBreedChoice,
+        sellerProfiles,
+        form.publicDescription,
+      );
+    }
+
+    return true;
+  }
+
+  async function savePriceAdjustment(currentListingBatchId: string) {
+    const { error: adjustmentError } = await supabase.rpc(
+      "seller_set_listing_batch_price_adjustment",
+      {
+        p_listing_batch_id: currentListingBatchId,
+        p_auto_price_adjustment_enabled: priceAdjustment.enabled,
+        p_price_adjustment_direction: priceAdjustment.enabled
+          ? priceAdjustment.direction
+          : null,
+        p_price_adjustment_amount: priceAdjustment.enabled
+          ? Number(priceAdjustment.amount)
+          : null,
+        p_price_adjustment_interval_weeks: priceAdjustment.enabled
+          ? Number(priceAdjustment.intervalWeeks)
+          : null,
+        p_price_adjustment_max_price:
+          priceAdjustment.enabled &&
+          priceAdjustment.direction === "increase" &&
+          priceAdjustment.maxPrice.trim()
+            ? Number(priceAdjustment.maxPrice)
+            : null,
+        p_price_adjustment_min_price:
+          priceAdjustment.enabled &&
+          priceAdjustment.direction === "decrease" &&
+          priceAdjustment.minPrice.trim()
+            ? Number(priceAdjustment.minPrice)
+            : null,
+      },
+    );
+
+    if (adjustmentError) {
+      setDraftError(adjustmentError.message);
+      return false;
+    }
+
+    return true;
+  }
+
+  const loadDraft = useCallback(async (currentListingBatchId: string, hydrate = false) => {
+    if (!storeId) return;
+
+    const [listingResult, mediaResult] = await Promise.all([
+      supabase
+        .from("seller_inventory_management")
+        .select(listingInventorySelect)
+        .eq("store_id", storeId)
+        .eq("listing_batch_id", currentListingBatchId)
+        .order("listing_batch_breed_sort_order", { ascending: true })
+        .order("inventory_item_sort_order", { ascending: true })
+        .returns<SellerInventoryManagementRow[]>(),
+      supabase
+        .from("seller_media_management")
+        .select(sellerMediaSelect)
+        .eq("store_id", storeId)
+        .eq("entity_type", "listing_batch")
+        .eq("entity_id", currentListingBatchId)
+        .returns<ListingPhotoItem[]>(),
+    ]);
+
+    if (listingResult.error) {
+      setDraftError(listingResult.error.message);
+      return;
+    }
+
+    if (mediaResult.error) {
+      setDraftError(mediaResult.error.message);
+      return;
+    }
+
+    const loadedRows = listingResult.data ?? [];
+    setDraftRows(loadedRows);
+    setMediaItems(mediaResult.data ?? []);
+
+    if (hydrate && loadedRows[0]) {
+      const row = loadedRows[0];
+      const profileChoice = `profile:${row.seller_breed_profile_id}`;
+
+      setForm({
+        speciesId: row.species_id,
+        breedChoice: profileChoice,
+        hatchDate: row.origin_date ?? "",
+        availableDate: row.available_date,
+        publicDescription: "",
+        sellerNotes: row.listing_batch_seller_notes ?? "",
+      });
+      setInventory({
+        inventoryType: row.inventory_type as InventoryType,
+        customLabel: row.custom_inventory_label ?? "",
+        quantity: String(row.quantity_available ?? ""),
+        price: String(row.base_price ?? row.effective_unit_price ?? ""),
+      });
+      setPriceAdjustment(hydratePriceAdjustment(row));
+      setDraftBreedChoice(profileChoice);
+    }
+  }, [storeId]);
+
+  useEffect(() => {
+    if (!listingBatchId || !storeId || isLoading || draftRows.length > 0) {
+      return;
+    }
+
+    void loadDraft(listingBatchId, true);
+  }, [draftRows.length, isLoading, listingBatchId, loadDraft, storeId]);
+
+  async function publishListing() {
+    if (!listingBatchId || !readinessReport) return;
+
+    setPublishError(null);
+
+    if (!readinessReport.publishGate.canPublish) {
+      setPublishError("Fix the required items before publishing this listing.");
+      return;
+    }
+
+    const warningCount = readinessReport.publishGate.warnings.length;
+    const shouldPublish =
+      warningCount === 0 ||
+      window.confirm(
+        `Publish this listing with ${warningCount} warning${
+          warningCount === 1 ? "" : "s"
+        } still showing? Buyers will be able to see it.`,
+      );
+
+    if (!shouldPublish) return;
+
+    setIsPublishing(true);
+
+    const { error: visibilityError } = await supabase.rpc(
+      "seller_set_listing_batch_visibility",
+      {
+        p_listing_batch_id: listingBatchId,
+        p_visibility_status: "active",
+        p_note: "Published from listing creation wizard.",
+      },
+    );
+
+    if (visibilityError) {
+      setPublishError("The listing was not published. Please try again.");
+      setIsPublishing(false);
       return;
     }
 
     window.sessionStorage.setItem(
       "flipflocksListingCreatedMessage",
-      "Listing saved privately. It is hidden until you choose to publish it.",
+      "Listing published. Buyers can now see it on your storefront.",
     );
-    router.push("/dashboard/listings");
+    router.push(`/dashboard/listings/${listingBatchId}`);
   }
 
   if (isLoading) {
@@ -336,7 +659,7 @@ export function SingleBreedBasicsForm() {
         <main className="mx-auto w-full max-w-4xl px-5 py-5 sm:px-7">
           <ErrorState
             title="Listing setup could not load"
-            message="Refresh the page and try again. If this keeps happening, the breed list may need attention."
+            message="Refresh the page and try again."
           />
         </main>
       </>
@@ -346,14 +669,27 @@ export function SingleBreedBasicsForm() {
   return (
     <>
       <Header />
-
       <main className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-5 py-5 sm:px-7">
-        <StepIndicator step={step} />
+        <CreationStepIndicator step={step} steps={steps} />
 
-        {step === "basics" ? (
+        {draftError ? (
+          <ErrorState title="Listing could not be prepared" message={draftError} />
+        ) : null}
+
+        {step === "details" ? (
           <SellerCard className="p-5">
-            <form className="grid gap-5" onSubmit={handleBasicsSubmit}>
-              <div className="grid gap-4 md:grid-cols-2">
+            <form className="grid gap-5" onSubmit={handleDetailsSubmit}>
+              <div>
+                <h2 className="text-xl font-semibold text-stone-950">
+                  Listing details
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-stone-600">
+                  A Simple Listing is one breed and one type from one hatch date.
+                  Use a separate listing for a different hatch date.
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
                 <label className="grid gap-1 text-sm font-semibold text-stone-700">
                   Species
                   <select
@@ -366,7 +702,6 @@ export function SingleBreedBasicsForm() {
                         breedChoice: "",
                       }));
                       setValidationErrors([]);
-                      setSaveError(null);
                     }}
                   >
                     <option value="">Choose species</option>
@@ -380,323 +715,118 @@ export function SingleBreedBasicsForm() {
 
                 <label className="grid gap-1 text-sm font-semibold text-stone-700">
                   Breed
-                  <select
-                    className="seller-form-field"
-                    value={form.breedChoice}
-                    onChange={(event) => handleBreedChoiceChange(event.target.value)}
+                  <BreedCombobox
+                    aliasSearchError={breedAliasError}
+                    choices={breedChoices}
                     disabled={!form.speciesId}
-                  >
-                    <option value="">Choose breed</option>
-                    {breedChoices.map((choice) => (
-                      <option key={choice.value} value={choice.value}>
-                        {choice.label}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="text-xs font-normal leading-5 text-stone-500">
-                    Existing farm breed names appear first when you have them.
-                  </span>
+                    recentChoices={recentBreedChoices}
+                    value={form.breedChoice}
+                    onChange={handleBreedChoiceChange}
+                  />
                 </label>
               </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                  Hatch date
+                  <input
+                    className="seller-form-field"
+                    type="date"
+                    value={form.hatchDate}
+                    onChange={(event) =>
+                      updateField("hatchDate", event.target.value)
+                    }
+                  />
+                </label>
+
+                <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                  Available date
+                  <input
+                    className="seller-form-field"
+                    type="date"
+                    value={form.availableDate}
+                    onChange={(event) =>
+                      updateField("availableDate", event.target.value)
+                    }
+                  />
+                </label>
+              </div>
+
               <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                Hatch or origin date
-                <input
-                  className="seller-form-field"
-                  type="date"
-                  value={form.originDate}
+                Description
+                <textarea
+                  className="seller-form-field min-h-32 resize-y py-3"
+                  maxLength={publicDescriptionMaxLength}
+                  placeholder="Tell buyers what they should know about this listing."
+                  value={form.publicDescription}
                   onChange={(event) =>
-                    updateField("originDate", event.target.value)
+                    updateField("publicDescription", event.target.value)
                   }
                 />
-                <span className="text-xs font-normal leading-5 text-stone-500">
-                  Use the hatch date for chicks or the date you want age counted
-                  from.
-                </span>
               </label>
 
               <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                Available for pickup
-                <input
-                  className="seller-form-field"
-                  type="date"
-                  value={form.availableDate}
+                Private notes
+                <textarea
+                  className="seller-form-field min-h-24 resize-y py-3"
+                  placeholder="Optional notes for yourself."
+                  value={form.sellerNotes}
                   onChange={(event) =>
-                    updateField("availableDate", event.target.value)
+                    updateField("sellerNotes", event.target.value)
                   }
                 />
               </label>
-            </div>
 
-            <label className="grid gap-1 text-sm font-semibold text-stone-700">
-              Base price
-              <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-stone-500">
-                  $
-                </span>
-                <input
-                  className="seller-form-field pl-7"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  type="number"
-                  value={form.basePrice}
-                  onChange={(event) =>
-                    updateField("basePrice", event.target.value)
-                  }
-                />
+              <ValidationMessage errors={validationErrors} />
+
+              <div className="flex flex-col gap-3 border-t border-stone-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <Link
+                  className="seller-secondary-button"
+                  href="/dashboard/listings/new/birds"
+                >
+                  Back
+                </Link>
+                <button
+                  className="inline-flex min-h-11 items-center justify-center rounded-md bg-stone-950 px-5 text-sm font-semibold text-white transition hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+                  type="submit"
+                >
+                  Continue to Available Birds
+                </button>
               </div>
-              <span className="text-xs font-normal leading-5 text-stone-500">
-                Age-based pricing will be handled in the pricing step so the
-                rule is clear before anything is published.
-              </span>
-            </label>
-
-            <label className="grid gap-1 text-sm font-semibold text-stone-700">
-              Internal label
-              <input
-                className="seller-form-field"
-                maxLength={120}
-                placeholder="Example: May 12 lavender pullets"
-                type="text"
-                value={form.internalLabel}
-                onChange={(event) =>
-                  updateField("internalLabel", event.target.value)
-                }
-              />
-              <span className="text-xs font-normal leading-5 text-stone-500">
-                This is just for you. Buyers will not see it.
-              </span>
-            </label>
-
-            <label className="grid gap-1 text-sm font-semibold text-stone-700">
-              Public description
-              <textarea
-                className="seller-form-field min-h-32 resize-y py-3"
-                maxLength={publicDescriptionMaxLength}
-                placeholder="Example: Friendly started pullets from our spring hatch, raised on pasture with regular handling."
-                value={form.publicDescription}
-                onChange={(event) =>
-                  updateField("publicDescription", event.target.value)
-                }
-              />
-              <span className="text-xs font-normal leading-5 text-stone-500">
-                This is what buyers will see on your listing. Optional for now.
-              </span>
-            </label>
-
-            <label className="grid gap-1 text-sm font-semibold text-stone-700">
-              Seller notes
-              <textarea
-                className="seller-form-field min-h-28 resize-y py-3"
-                placeholder="Private reminders like brooder group, source pen, or follow-up notes."
-                value={form.sellerNotes}
-                onChange={(event) =>
-                  updateField("sellerNotes", event.target.value)
-                }
-              />
-            </label>
-
-            {validationErrors.length > 0 ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-                <h2 className="text-sm font-semibold text-amber-950">
-                  A few basics need attention
-                </h2>
-                <ul className="mt-2 grid gap-1 text-sm leading-6 text-amber-800">
-                  {validationErrors.map((item) => (
-                    <li key={item}>- {item}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            <div className="flex flex-col gap-3 border-t border-stone-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm leading-6 text-stone-600">
-                Next you will add the bird groups buyers can choose from.
-              </p>
-              <button
-                className="inline-flex min-h-11 items-center justify-center rounded-md bg-stone-950 px-5 text-sm font-semibold text-white transition hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-                type="submit"
-              >
-                Continue to Bird Groups
-              </button>
-            </div>
             </form>
           </SellerCard>
         ) : null}
 
         {step === "inventory" ? (
-          <InventoryStep
-            inventoryRows={inventoryRows}
-            setInventoryRows={setInventoryRows}
-            validationErrors={validationErrors}
-            onBack={() => {
-              setValidationErrors([]);
-              setStep("basics");
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            onSubmit={handleInventorySubmit}
-          />
-        ) : null}
-
-        {step === "review" ? (
-          <ReviewStep
-            breedChoice={breedChoices.find(
-              (choice) => choice.value === form.breedChoice,
-            )}
-            form={form}
-            inventoryRows={inventoryRows}
-            isSaving={isSaving}
-            saveError={saveError}
-            speciesName={selectedSpecies?.common_name ?? "Selected species"}
-            onBack={() => {
-              setValidationErrors([]);
-              setSaveError(null);
-              setStep("inventory");
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            onSave={handleSave}
-          />
-        ) : null}
-      </main>
-    </>
-  );
-}
-
-function Header() {
-  return (
-    <SellerPageHeader
-      eyebrow="Bird Listing"
-      title="Single Breed Basics"
-      description="Add the basics, choose what bird groups you have, and review everything before saving privately."
-      action={
-        <Link
-          className="seller-secondary-button"
-          href="/dashboard/listings/new/birds"
-        >
-          Back to Bird Options
-        </Link>
-      }
-    />
-  );
-}
-
-function StepIndicator({ step }: { step: WorkflowStep }) {
-  const steps: { label: string; value: WorkflowStep }[] = [
-    { label: "Basics", value: "basics" },
-    { label: "Bird groups", value: "inventory" },
-    { label: "Review", value: "review" },
-  ];
-
-  return (
-    <ol className="grid grid-cols-3 gap-2 rounded-lg border border-stone-200 bg-white p-2 text-center text-xs font-semibold text-stone-600 shadow-sm">
-      {steps.map((item, index) => {
-        const isActive = item.value === step;
-
-        return (
-          <li
-            key={item.value}
-            className={`rounded-md px-2 py-2 ${
-              isActive ? "bg-emerald-800 text-white" : "bg-stone-50"
-            }`}
-          >
-            {index + 1}. {item.label}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-function InventoryStep({
-  inventoryRows,
-  onBack,
-  onSubmit,
-  setInventoryRows,
-  validationErrors,
-}: {
-  inventoryRows: InventoryRow[];
-  onBack: () => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  setInventoryRows: Dispatch<SetStateAction<InventoryRow[]>>;
-  validationErrors: string[];
-}) {
-  function updateRow(rowId: string, updates: Partial<InventoryRow>) {
-    setInventoryRows((current) =>
-      current.map((row) => (row.id === rowId ? { ...row, ...updates } : row)),
-    );
-  }
-
-  function addRow() {
-    setInventoryRows((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        inventoryType: "",
-        customLabel: "",
-        quantityAvailable: "",
-        priceOverride: "",
-      },
-    ]);
-  }
-
-  function removeRow(rowId: string) {
-    setInventoryRows((current) =>
-      current.length === 1
-        ? current
-        : current.filter((row) => row.id !== rowId),
-    );
-  }
-
-  return (
-    <SellerCard className="p-5">
-      <form className="grid gap-5" onSubmit={onSubmit}>
-        <div>
-          <h2 className="text-xl font-semibold text-stone-950">
-            Bird groups
-          </h2>
-          <p className="mt-1 text-sm leading-6 text-stone-600">
-            Add what you have available, like pullets, cockerels, straight run
-            chicks, or hatching eggs.
-          </p>
-        </div>
-
-        <div className="grid gap-4">
-          {inventoryRows.map((row, index) => (
-            <div
-              key={row.id}
-              className="rounded-lg border border-stone-200 bg-stone-50 p-4"
-            >
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h3 className="font-semibold text-stone-950">
-                  Group {index + 1}
-                </h3>
-                <button
-                  className="seller-small-button"
-                  disabled={inventoryRows.length === 1}
-                  onClick={() => removeRow(row.id)}
-                  type="button"
-                >
-                  Remove
-                </button>
+          <SellerCard className="p-5">
+            <form className="grid gap-5" onSubmit={handleInventorySubmit}>
+              <div>
+                <h2 className="text-xl font-semibold text-stone-950">
+                  Available Birds
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-stone-600">
+                  Add what you have available from this hatch date.
+                </p>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                  Bird type
+                  Type
                   <select
                     className="seller-form-field"
-                    value={row.inventoryType}
+                    value={inventory.inventoryType}
                     onChange={(event) =>
-                      updateRow(row.id, {
+                      setInventory((current) => ({
+                        ...current,
                         inventoryType: event.target.value as InventoryType | "",
                         customLabel:
-                          event.target.value === "other" ? row.customLabel : "",
-                      })
+                          event.target.value === "other"
+                            ? current.customLabel
+                            : "",
+                      }))
                     }
                   >
-                    <option value="">Choose bird type</option>
+                    <option value="">Choose type</option>
                     {inventoryTypeOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
@@ -706,194 +836,161 @@ function InventoryStep({
                 </label>
 
                 <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                  How many are available?
+                  Quantity
                   <input
                     className="seller-form-field"
                     inputMode="numeric"
                     min="1"
                     step="1"
                     type="number"
-                    value={row.quantityAvailable}
+                    value={inventory.quantity}
                     onChange={(event) =>
-                      updateRow(row.id, {
-                        quantityAvailable: event.target.value,
-                      })
+                      updateInventory("quantity", event.target.value)
                     }
+                  />
+                </label>
+
+                <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                  Price
+                  <MoneyInput
+                    value={inventory.price}
+                    onChange={(value) => updateInventory("price", value)}
                   />
                 </label>
               </div>
 
-              {row.inventoryType === "other" ? (
-                <label className="mt-4 grid gap-1 text-sm font-semibold text-stone-700">
-                  Name this group
+              {inventory.inventoryType === "other" ? (
+                <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                  Type label
                   <input
                     className="seller-form-field"
                     placeholder="Example: Started pullets"
-                    value={row.customLabel}
+                    value={inventory.customLabel}
                     onChange={(event) =>
-                      updateRow(row.id, { customLabel: event.target.value })
+                      updateInventory("customLabel", event.target.value)
                     }
                   />
-                  <span className="text-xs font-normal leading-5 text-stone-500">
-                    Use the words buyers will recognize for this group.
-                  </span>
                 </label>
               ) : null}
 
-              <label className="mt-4 grid gap-1 text-sm font-semibold text-stone-700">
-                Optional custom price
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-stone-500">
-                    $
-                  </span>
-                  <input
-                    className="seller-form-field pl-7"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.01"
-                    type="number"
-                    value={row.priceOverride}
-                    onChange={(event) =>
-                      updateRow(row.id, { priceOverride: event.target.value })
-                    }
-                  />
-                </div>
-                <span className="text-xs font-normal leading-5 text-stone-500">
-                  Leave blank if this group uses the listing base price. Add a
-                  custom price when pullets, cockerels, or eggs should be priced
-                  differently.
-                </span>
-              </label>
-            </div>
-          ))}
-        </div>
+              <PriceAdjustmentFields
+                value={priceAdjustment}
+                onChange={(nextValue) => {
+                  setPriceAdjustment(nextValue);
+                  setValidationErrors([]);
+                  setDraftError(null);
+                  setPublishError(null);
+                }}
+              />
 
-        <button className="seller-secondary-button w-full" onClick={addRow} type="button">
-          Add Another Bird Group
-        </button>
+              <ValidationMessage errors={validationErrors} />
 
-        {validationErrors.length > 0 ? (
-          <ValidationMessage errors={validationErrors} />
+              <div className="flex flex-col gap-3 border-t border-stone-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <button
+                  className="seller-secondary-button"
+                  onClick={() => setStep("details")}
+                  type="button"
+                >
+                  Back to Details
+                </button>
+                <button
+                  className="inline-flex min-h-11 items-center justify-center rounded-md bg-stone-950 px-5 text-sm font-semibold text-white transition hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
+                  disabled={isPreparingDraft}
+                  type="submit"
+                >
+                  {isPreparingDraft ? "Preparing Photos" : "Continue to Photos"}
+                </button>
+              </div>
+            </form>
+          </SellerCard>
         ) : null}
 
-        <div className="flex flex-col gap-3 border-t border-stone-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <button className="seller-secondary-button" onClick={onBack} type="button">
-          Back to Basics
-          </button>
-          <button
-            className="inline-flex min-h-11 items-center justify-center rounded-md bg-stone-950 px-5 text-sm font-semibold text-white transition hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-            type="submit"
-          >
-            Review Listing
-          </button>
-        </div>
-      </form>
-    </SellerCard>
-  );
-}
+        {step === "photos" && listingBatchId ? (
+          <ListingCreationPhotosStep
+            canManage
+            listingBatchId={listingBatchId}
+            mediaItems={mediaItems}
+            storeId={storeId}
+            onBack={() => setStep("inventory")}
+            onContinue={() => {
+              setStep("review");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            onReload={() => void loadDraft(listingBatchId)}
+          />
+        ) : null}
 
-function ReviewStep({
-  breedChoice,
-  form,
-  inventoryRows,
-  isSaving,
-  onBack,
-  onSave,
-  saveError,
-  speciesName,
-}: {
-  breedChoice: BreedChoice | undefined;
-  form: FormState;
-  inventoryRows: InventoryRow[];
-  isSaving: boolean;
-  onBack: () => void;
-  onSave: () => void;
-  saveError: string | null;
-  speciesName: string;
-}) {
-  return (
-    <SellerCard className="p-5">
-      <p className="text-sm font-semibold uppercase tracking-[0.08em] text-emerald-800">
-        Review
-      </p>
-      <h2 className="mt-2 text-xl font-semibold text-stone-950">
-        Save this listing privately?
-      </h2>
-      <p className="mt-2 text-sm leading-6 text-stone-600">
-        The listing will stay hidden from buyers until you choose to publish it.
-      </p>
-
-      <dl className="mt-5 grid gap-3 rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm sm:grid-cols-2">
-        <ReviewItem label="Species" value={speciesName} />
-        <ReviewItem label="Breed" value={breedChoice?.label ?? "Selected"} />
-        <ReviewItem label="Hatch/origin date" value={formatDate(form.originDate)} />
-        <ReviewItem label="Available date" value={formatDate(form.availableDate)} />
-        <ReviewItem label="Base price" value={formatCurrency(form.basePrice)} />
-        <ReviewItem
-          label="Internal label"
-          value={form.internalLabel.trim() || "No internal label"}
-        />
-        <ReviewItem
-          label="Public description"
-          value={form.publicDescription.trim() || "No public description"}
-        />
-      </dl>
-
-      <div className="mt-5">
-        <h3 className="text-base font-semibold text-stone-950">Bird groups</h3>
-        <div className="mt-3 grid gap-3">
-          {inventoryRows.map((row) => (
-            <div
-              key={row.id}
-              className="rounded-lg border border-stone-200 bg-white p-4 text-sm"
-            >
-              <p className="font-semibold text-stone-950">
-                {formatInventoryType(row)}
-              </p>
-              <p className="mt-1 text-stone-600">
-                Available: {row.quantityAvailable}
-              </p>
-              <p className="mt-1 text-stone-600">
-                Price for this group:{" "}
-                {row.priceOverride.trim()
-                  ? formatCurrency(row.priceOverride)
-                  : "Uses base price"}
-              </p>
+        {step === "review" ? (
+          readinessReport ? (
+            <div className="grid gap-5">
+              <ListingCreationBuyerPreview
+                availableDate={form.availableDate}
+                description={form.publicDescription}
+                dynamicPricingSummary={formatPriceAdjustmentSummary(
+                  priceAdjustment,
+                )}
+                hatchDate={form.hatchDate}
+                mediaItems={mediaItems}
+                price={formatCurrency(inventory.price)}
+                quantity={inventory.quantity}
+                speciesBreed={`${selectedSpecies?.common_name ?? "Species"} / ${
+                  selectedBreedChoice?.label ?? "Breed"
+                }`}
+                title={
+                  selectedBreedChoice
+                    ? `${selectedBreedChoice.label} ${formatInventoryType(
+                        inventory.inventoryType,
+                        inventory.customLabel,
+                      )}`
+                    : "Simple Listing"
+                }
+                type={formatInventoryType(
+                  inventory.inventoryType,
+                  inventory.customLabel,
+                )}
+                variant="simple"
+              />
+              <PublishReadinessReview
+                isPublishing={isPublishing}
+                publishError={publishError}
+                report={readinessReport}
+                onPublish={() => void publishListing()}
+              />
+              <button
+                className="seller-secondary-button w-full"
+                onClick={() => setStep("photos")}
+                type="button"
+              >
+                Back to Photos
+              </button>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {saveError ? (
-        <ErrorState
-          title="Listing was not saved"
-          message="Please try again. If it keeps happening, the listing details may need attention."
-        />
-      ) : null}
-
-      <div className="mt-5 flex flex-col gap-3 border-t border-stone-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
-        <button className="seller-secondary-button" onClick={onBack} type="button">
-          Back to Bird Groups
-        </button>
-        <button
-          className="inline-flex min-h-11 items-center justify-center rounded-md bg-stone-950 px-5 text-sm font-semibold text-white transition hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
-          disabled={isSaving}
-          onClick={onSave}
-          type="button"
-        >
-          {isSaving ? "Saving" : "Save Private Listing"}
-        </button>
-      </div>
-    </SellerCard>
+          ) : (
+            <ErrorState
+              title="Review is not ready"
+              message="Return to the previous step and try again."
+            />
+          )
+        ) : null}
+      </main>
+    </>
   );
 }
 
-function ReviewItem({ label, value }: { label: string; value: string }) {
+function Header() {
   return (
-    <div>
-      <dt className="font-semibold text-stone-600">{label}</dt>
-      <dd className="mt-1 font-semibold text-stone-950">{value}</dd>
-    </div>
+    <SellerPageHeader
+      eyebrow="Create Listing"
+      title="Simple Listing"
+      description="One breed, one type, and one hatch date."
+      action={
+        <Link
+          className="seller-secondary-button"
+          href="/dashboard/listings/new/birds"
+        >
+          Back to Listing Types
+        </Link>
+      }
+    />
   );
 }
 
@@ -901,9 +998,11 @@ function buildBreedChoices(
   speciesId: string,
   breeds: ReferenceBreed[],
   sellerProfiles: SellerBreedProfileOption[],
+  breedAliases: ReferenceBreedAlias[],
 ) {
   if (!speciesId) return [];
 
+  const aliasesByBreedId = buildAliasesByBreedId(breedAliases);
   const profilesForSpecies = sellerProfiles.filter(
     (profile) => profile.species_id === speciesId,
   );
@@ -921,80 +1020,117 @@ function buildBreedChoices(
     ...profilesForSpecies.map((profile) => ({
       value: `profile:${profile.id}`,
       label: profile.display_name,
+      aliases: profile.breed_id ? aliasesByBreedId.get(profile.breed_id) : [],
       kind: "profile" as const,
       profileId: profile.id,
     })),
     ...catalogBreeds.map((breed) => ({
       value: `breed:${breed.id}`,
       label: breed.breed_name,
+      aliases: aliasesByBreedId.get(breed.id),
       kind: "breed" as const,
       breedId: breed.id,
     })),
   ];
 }
 
-function validateForm(form: FormState) {
+function buildAliasesByBreedId(breedAliases: ReferenceBreedAlias[]) {
+  const aliasesByBreedId = new Map<string, string[]>();
+
+  breedAliases.forEach((breedAlias) => {
+    aliasesByBreedId.set(breedAlias.breed_id, [
+      ...(aliasesByBreedId.get(breedAlias.breed_id) ?? []),
+      breedAlias.alias,
+    ]);
+  });
+
+  return aliasesByBreedId;
+}
+
+function buildRecentBreedProfileIds(recentBreedUsages: RecentBreedUsage[]) {
+  const profileIds: string[] = [];
+  const seenProfileIds = new Set<string>();
+
+  recentBreedUsages
+    .slice()
+    .sort((first, second) => {
+      const firstTime = Date.parse(
+        first.inventory_updated_at ?? first.listing_batch_updated_at ?? "",
+      );
+      const secondTime = Date.parse(
+        second.inventory_updated_at ?? second.listing_batch_updated_at ?? "",
+      );
+
+      return (
+        (Number.isNaN(secondTime) ? 0 : secondTime) -
+        (Number.isNaN(firstTime) ? 0 : firstTime)
+      );
+    })
+    .forEach((usage) => {
+      if (seenProfileIds.has(usage.seller_breed_profile_id)) return;
+
+      seenProfileIds.add(usage.seller_breed_profile_id);
+      profileIds.push(usage.seller_breed_profile_id);
+    });
+
+  return profileIds.slice(0, 10);
+}
+
+function buildRecentBreedChoices(
+  breedChoices: BreedChoice[],
+  recentBreedProfileIds: string[],
+) {
+  const choicesByProfileId = new Map(
+    breedChoices
+      .filter((choice) => choice.profileId)
+      .map((choice) => [choice.profileId, choice]),
+  );
+
+  return recentBreedProfileIds
+    .map((profileId) => choicesByProfileId.get(profileId))
+    .filter((choice): choice is BreedChoice => Boolean(choice))
+    .slice(0, 5);
+}
+
+function validateDetails(form: FormState) {
   const errors: string[] = [];
 
   if (!form.speciesId) errors.push("Choose a species.");
   if (!form.breedChoice) errors.push("Choose a breed.");
-  if (!form.originDate) errors.push("Add a hatch or origin date.");
-  if (!form.availableDate) errors.push("Add the pickup availability date.");
+  if (!form.hatchDate) errors.push("Add a hatch date.");
+  if (!form.availableDate) errors.push("Add an available date.");
 
-  if (form.originDate && form.availableDate && form.availableDate < form.originDate) {
-    errors.push("Available date cannot be before the hatch or origin date.");
+  if (
+    form.hatchDate &&
+    form.availableDate &&
+    form.availableDate < form.hatchDate
+  ) {
+    errors.push("Available date cannot be before the hatch date.");
   }
 
-  if (!form.basePrice.trim()) {
-    errors.push("Add a base price.");
-  } else if (!isValidMoney(form.basePrice)) {
-    errors.push("Use a valid price with no more than two decimal places.");
-  }
-
-  if (form.publicDescription.trim().length > publicDescriptionMaxLength) {
+  if (form.publicDescription.length > publicDescriptionMaxLength) {
     errors.push(
-      `Public description must be ${publicDescriptionMaxLength} characters or less.`,
+      `Description must be ${publicDescriptionMaxLength} characters or less.`,
     );
   }
 
   return errors;
 }
 
-function validateInventory(rows: InventoryRow[]) {
+function validateInventory(inventory: InventoryState) {
   const errors: string[] = [];
-  const selectedTypes = rows
-    .map((row) => row.inventoryType)
-    .filter((type): type is InventoryType => Boolean(type));
-  const uniqueTypes = new Set(selectedTypes);
-  const hasHatchingEggs = selectedTypes.includes("hatching_eggs");
-  const hasLiveBirdTypes = selectedTypes.some((type) => type !== "hatching_eggs");
 
-  if (rows.length === 0) errors.push("Add at least one bird group.");
-
-  rows.forEach((row, index) => {
-    const rowLabel = `Group ${index + 1}`;
-
-    if (!row.inventoryType) errors.push(`${rowLabel}: choose a bird type.`);
-
-    if (row.inventoryType === "other" && !row.customLabel.trim()) {
-      errors.push(`${rowLabel}: name this group when using Other.`);
-    }
-
-    if (!isPositiveWholeNumber(row.quantityAvailable)) {
-      errors.push(`${rowLabel}: quantity must be a whole number of 1 or more.`);
-    }
-
-    if (row.priceOverride.trim() && !isValidMoney(row.priceOverride)) {
-      errors.push(`${rowLabel}: optional custom price must be a valid price.`);
-    }
-  });
-
-  if (selectedTypes.length !== uniqueTypes.size) {
-    errors.push("Use each bird type only once for this listing.");
+  if (!inventory.inventoryType) errors.push("Choose a type.");
+  if (inventory.inventoryType === "other" && !inventory.customLabel.trim()) {
+    errors.push("Add a type label.");
   }
-
-  if (hasHatchingEggs && hasLiveBirdTypes) {
-    errors.push("Hatching eggs need their own listing separate from live birds.");
+  if (!isPositiveWholeNumber(inventory.quantity)) {
+    errors.push("Quantity must be a whole number of 1 or more.");
+  }
+  if (!inventory.price.trim()) {
+    errors.push("Add a price.");
+  } else if (!isValidMoney(inventory.price)) {
+    errors.push("Use a valid price with no more than two decimal places.");
   }
 
   return errors;
@@ -1043,69 +1179,4 @@ async function upsertSellerBreedProfileForListing(
   return rows[0]?.seller_breed_profile_id ?? null;
 }
 
-function buildInventoryPayload(rows: InventoryRow[]) {
-  return rows.map((row, index) => ({
-    inventory_type: row.inventoryType,
-    custom_inventory_label:
-      row.inventoryType === "other" ? row.customLabel.trim() : null,
-    quantity_available: Number(row.quantityAvailable),
-    price_override: row.priceOverride.trim() || null,
-    sort_order: index,
-    visibility_status: "active",
-  }));
-}
-
-function getBatchType(rows: InventoryRow[]) {
-  return rows.some((row) => row.inventoryType === "hatching_eggs")
-    ? "hatching_eggs"
-    : "live_animals";
-}
-
-function isValidMoney(value: string) {
-  return /^\d+(\.\d{1,2})?$/.test(value.trim());
-}
-
-function isPositiveWholeNumber(value: string) {
-  return /^[1-9]\d*$/.test(value.trim());
-}
-
-function ValidationMessage({ errors }: { errors: string[] }) {
-  return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-      <h2 className="text-sm font-semibold text-amber-950">
-        A few details need attention
-      </h2>
-      <ul className="mt-2 grid gap-1 text-sm leading-6 text-amber-800">
-        {errors.map((item) => (
-          <li key={item}>- {item}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function formatInventoryType(row: InventoryRow) {
-  if (row.inventoryType === "other") {
-    return row.customLabel.trim() || "Other";
-  }
-
-  return (
-    inventoryTypeOptions.find((option) => option.value === row.inventoryType)
-      ?.label ?? "Inventory row"
-  );
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(`${value}T00:00:00`));
-}
-
-function formatCurrency(value: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(Number(value));
-}
+export { SimpleListingForm as SingleBreedBasicsForm };

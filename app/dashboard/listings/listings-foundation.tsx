@@ -238,7 +238,7 @@ export function ListingsFoundation() {
               <p className="text-sm text-stone-600">
                 {allListingSummaries.length} listing
                 {allListingSummaries.length === 1 ? "" : "s"} and{" "}
-                {rows.length} bird group{rows.length === 1 ? "" : "s"} ready
+                {rows.length} inventory row{rows.length === 1 ? "" : "s"} ready
                 to review.
               </p>
               <LifecycleFilterChips
@@ -423,9 +423,9 @@ function ListingBatchCard({ listing }: { listing: ListingBatchSummary }) {
         <div className="flex flex-wrap gap-2">
           <Link
             className="seller-small-button"
-            href={`/dashboard/listings/${listing.id}`}
+            href={getPrimaryListingHref(listing)}
           >
-            View Details
+            {lifecycleStatus === "hidden" ? "Continue Setup" : "View Details"}
           </Link>
           <Link className="seller-small-button" href="/dashboard/listings/new">
             Create similar
@@ -441,7 +441,7 @@ function ListingMetrics({ listing }: { listing: ListingBatchSummary }) {
     <dl className="grid grid-cols-3 gap-2">
       <Metric label="Available" value={listing.totalAvailable.toString()} />
       <Metric label="Breeds" value={listing.breedCount.toString()} />
-      <Metric label="Groups" value={listing.rowCount.toString()} />
+      <Metric label="Rows" value={listing.rowCount.toString()} />
     </dl>
   );
 }
@@ -483,13 +483,13 @@ function ListingBatchTable({
               <td className="px-5 py-4 align-top">
                 <Link
                   className="font-semibold text-stone-950 underline-offset-4 hover:underline"
-                  href={`/dashboard/listings/${listing.id}`}
+                  href={getPrimaryListingHref(listing)}
                 >
                   {listing.title}
                 </Link>
                 <p className="mt-1 text-stone-600">
                   {listing.breedCount} breed{listing.breedCount === 1 ? "" : "s"}{" "}
-                  - {listing.rowCount} group{listing.rowCount === 1 ? "" : "s"}
+                  - {listing.rowCount} row{listing.rowCount === 1 ? "" : "s"}
                 </p>
                 {listing.internalLabel ? (
                   <p className="mt-1 text-xs font-semibold text-stone-500">
@@ -521,9 +521,9 @@ function ListingBatchTable({
                 <div className="flex justify-end gap-2">
                   <Link
                     className="seller-small-button"
-                    href={`/dashboard/listings/${listing.id}`}
+                    href={getPrimaryListingHref(listing)}
                   >
-                    Open
+                    {lifecycleStatus === "hidden" ? "Continue Setup" : "Open"}
                   </Link>
                   <Link className="seller-small-button" href="/dashboard/listings/new">
                     Create similar
@@ -818,7 +818,7 @@ function formatStatus(value: string | null | undefined) {
 function formatLifecycleStatus(status: string) {
   if (status === "active") return "Live";
   if (status === "sold_out") return "Sold Out";
-  if (status === "hidden") return "Hidden";
+  if (status === "hidden") return "Draft";
   if (status === "archived") return "Archived";
 
   return formatStatus(status);
@@ -841,7 +841,7 @@ function getLifecycleNextStep(listing: ListingBatchSummary) {
   }
 
   if (lifecycleStatus === "hidden") {
-    return "Hidden from buyers. Finish setup, then review before publishing.";
+    return "Draft. Continue setup, then review before publishing.";
   }
 
   if (lifecycleStatus === "sold_out") {
@@ -853,6 +853,21 @@ function getLifecycleNextStep(listing: ListingBatchSummary) {
   }
 
   return "Review this listing before making changes.";
+}
+
+function getPrimaryListingHref(listing: ListingBatchSummary) {
+  const lifecycleStatus = getDerivedLifecycleStatus(listing);
+
+  if (lifecycleStatus !== "hidden") {
+    return `/dashboard/listings/${listing.id}`;
+  }
+
+  const creationPath =
+    listing.rowCount === 1 && listing.breedCount === 1
+      ? "/dashboard/listings/new/birds/single"
+      : "/dashboard/listings/new/birds/batch";
+
+  return `${creationPath}?draft=${listing.id}`;
 }
 
 function shouldShowAvailabilityBadge(listing: ListingBatchSummary) {
