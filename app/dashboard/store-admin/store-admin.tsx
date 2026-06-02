@@ -16,6 +16,9 @@ type StoreAdminForm = {
   store_name: string;
   store_slug: string;
   store_tagline: string;
+  public_city: string;
+  public_state: string;
+  public_country: string;
   about_text: string;
   website_url: string;
   npip_number: string;
@@ -66,6 +69,32 @@ type PickupOptionDraft = {
 
 type SaveState = "idle" | "saved" | "error";
 
+type LaunchReadinessItem = {
+  item_type: "required" | "warning";
+  item_key: string;
+  label: string;
+  passed: boolean;
+  message: string;
+  action: string;
+  detail_count: number | null;
+};
+
+type StoreLaunchResponse = {
+  launched?: boolean;
+  store?: {
+    store_id: string;
+    store_status: string;
+    storefront_enabled: boolean;
+    is_publicly_available: boolean;
+    launched_at: string | null;
+  } | null;
+  error?: {
+    code?: string;
+    message?: string;
+    details?: unknown;
+  };
+};
+
 const unsavedWarning =
   "You have unsaved Store Admin changes. Save or discard before leaving.";
 
@@ -73,6 +102,9 @@ const blankForm: StoreAdminForm = {
   store_name: "",
   store_slug: "",
   store_tagline: "",
+  public_city: "",
+  public_state: "",
+  public_country: "US",
   about_text: "",
   website_url: "",
   npip_number: "",
@@ -105,6 +137,12 @@ export function StoreAdmin() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [readinessItems, setReadinessItems] = useState<LaunchReadinessItem[]>(
+    [],
+  );
+  const [readinessError, setReadinessError] = useState<string | null>(null);
+  const [isReadinessLoading, setIsReadinessLoading] = useState(false);
+  const [isLaunching, setIsLaunching] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -117,23 +155,27 @@ export function StoreAdmin() {
       setSaveMessage(null);
       setSaveState("idle");
 
-      const [defaultsResult, pickupOptionsResult] = await Promise.all([
-        supabase
-          .from("seller_store_defaults")
-          .select(
-            "store_id, pickup_instructions, pickup_location_text, default_pickup_option_id, default_pickup_option_label, communication_email, order_notification_email, currency",
-          )
-          .eq("store_id", seller.store_id)
-          .maybeSingle()
-          .returns<StoreDefaults>(),
-        supabase
-          .from("store_pickup_options")
-          .select("id, store_id, label, description, sort_order, is_active")
-          .eq("store_id", seller.store_id)
-          .order("sort_order", { ascending: true })
-          .order("label", { ascending: true })
-          .returns<PickupOption[]>(),
-      ]);
+      const [defaultsResult, pickupOptionsResult, readinessResult] =
+        await Promise.all([
+          supabase
+            .from("seller_store_defaults")
+            .select(
+              "store_id, pickup_instructions, pickup_location_text, default_pickup_option_id, default_pickup_option_label, communication_email, order_notification_email, currency",
+            )
+            .eq("store_id", seller.store_id)
+            .maybeSingle()
+            .returns<StoreDefaults>(),
+          supabase
+            .from("store_pickup_options")
+            .select("id, store_id, label, description, sort_order, is_active")
+            .eq("store_id", seller.store_id)
+            .order("sort_order", { ascending: true })
+            .order("label", { ascending: true })
+            .returns<PickupOption[]>(),
+          supabase.rpc("seller_get_store_launch_readiness", {
+            p_store_id: seller.store_id,
+          }),
+        ]);
 
       if (!isMounted) return;
 
@@ -155,6 +197,12 @@ export function StoreAdmin() {
       setInitialForm(nextForm);
       setPickupOptions(nextPickupOptions);
       setInitialPickupOptions(nextPickupOptions);
+      setReadinessItems(
+        readinessResult.error
+          ? []
+          : ((readinessResult.data ?? []) as LaunchReadinessItem[]),
+      );
+      setReadinessError(readinessResult.error?.message ?? null);
       setIsLoading(false);
     }
 
@@ -226,6 +274,29 @@ export function StoreAdmin() {
     setPickupOptions(initialPickupOptions);
     setSaveState("idle");
     setSaveMessage("Changes discarded.");
+  }
+
+  async function reloadReadiness() {
+    if (!seller) return;
+
+    setIsReadinessLoading(true);
+    setReadinessError(null);
+
+    const { data, error } = await supabase.rpc(
+      "seller_get_store_launch_readiness",
+      {
+        p_store_id: seller.store_id,
+      },
+    );
+
+    if (error) {
+      setReadinessItems([]);
+      setReadinessError(error.message);
+    } else {
+      setReadinessItems((data ?? []) as LaunchReadinessItem[]);
+    }
+
+    setIsReadinessLoading(false);
   }
 
   async function saveChanges() {
@@ -300,12 +371,16 @@ export function StoreAdmin() {
       }
     }
 
-    const selectedDefaultId = idMap.get(form.default_pickup_option_id) ?? form.default_pickup_option_id;
+    const selectedDefaultId =
+      idMap.get(form.default_pickup_option_id) ?? form.default_pickup_option_id;
 
     const settingsPayload = {
       store_name: form.store_name,
       store_slug: form.store_slug,
       store_tagline: form.store_tagline,
+      public_city: form.public_city,
+      public_state: form.public_state,
+      public_country: form.public_country,
       about_text: form.about_text,
       website_url: form.website_url,
       npip_number: form.npip_number,
@@ -357,6 +432,9 @@ export function StoreAdmin() {
       store_name: form.store_name.trim(),
       store_slug: form.store_slug.trim().toLowerCase(),
       store_tagline: form.store_tagline.trim(),
+      public_city: form.public_city.trim(),
+      public_state: form.public_state.trim(),
+      public_country: form.public_country.trim().toUpperCase() || "US",
       about_text: form.about_text.trim(),
       website_url: form.website_url.trim(),
       npip_number: form.npip_number.trim(),
@@ -369,7 +447,9 @@ export function StoreAdmin() {
       pickup_policy: form.pickup_policy.trim(),
       cancellation_policy: form.cancellation_policy.trim(),
       other_policies: form.other_policies.trim(),
-      order_notification_email: form.order_notification_email.trim().toLowerCase(),
+      order_notification_email: form.order_notification_email
+        .trim()
+        .toLowerCase(),
     };
     const sortedOptions = persistedOptions.sort(
       (first, second) =>
@@ -384,6 +464,67 @@ export function StoreAdmin() {
     setIsSaving(false);
     setSaveState("saved");
     setSaveMessage("Store Admin saved.");
+    await reloadReadiness();
+    reload();
+  }
+
+  async function launchStore() {
+    if (!seller) return;
+
+    setSaveState("idle");
+    setSaveMessage(null);
+
+    if (hasUnsavedChanges) {
+      setSaveState("error");
+      setSaveMessage("Save or discard Store Admin changes before launching.");
+      return;
+    }
+
+    const missingRequired = readinessItems.filter(
+      (item) => item.item_type === "required" && !item.passed,
+    );
+
+    if (missingRequired.length > 0) {
+      setSaveState("error");
+      setSaveMessage("Complete required launch items before launching.");
+      return;
+    }
+
+    const shouldLaunch = window.confirm(
+      "Launch this store now? This changes the store lifecycle to live, but does not enable the public storefront.",
+    );
+
+    if (!shouldLaunch) return;
+
+    setIsLaunching(true);
+
+    const { data, error } = await supabase.functions.invoke<StoreLaunchResponse>(
+      "seller-store-launch",
+      {
+        body: {
+          store_id: seller.store_id,
+        },
+      },
+    );
+
+    if (error || data?.error) {
+      setIsLaunching(false);
+      setSaveState("error");
+      setSaveMessage(
+        data?.error?.message ??
+          error?.message ??
+          "The store could not be launched.",
+      );
+      await reloadReadiness();
+      return;
+    }
+
+    setIsLaunching(false);
+    setSaveState("saved");
+    setSaveMessage(
+      "Store launched. Use Storefront enabled to control public publication.",
+    );
+    await reloadReadiness();
     reload();
   }
 
@@ -416,6 +557,20 @@ export function StoreAdmin() {
 
   const statusCode = getStorefrontStatusCode(form, seller);
   const statusMessage = getStorefrontStatusMessage(form, seller);
+  const requiredReadinessItems = readinessItems.filter(
+    (item) => item.item_type === "required",
+  );
+  const warningReadinessItems = readinessItems.filter(
+    (item) => item.item_type === "warning",
+  );
+  const missingRequiredCount = requiredReadinessItems.filter(
+    (item) => !item.passed,
+  ).length;
+  const launchAllowed =
+    seller.store_status === "draft" &&
+    missingRequiredCount === 0 &&
+    !hasUnsavedChanges &&
+    !isLaunching;
 
   return (
     <>
@@ -488,6 +643,21 @@ export function StoreAdmin() {
                   label="Store tagline"
                   onChange={(value) => updateField("store_tagline", value)}
                   value={form.store_tagline}
+                />
+                <TextField
+                  label="City"
+                  onChange={(value) => updateField("public_city", value)}
+                  value={form.public_city}
+                />
+                <TextField
+                  label="State"
+                  onChange={(value) => updateField("public_state", value)}
+                  value={form.public_state}
+                />
+                <TextField
+                  label="Country"
+                  onChange={(value) => updateField("public_country", value)}
+                  value={form.public_country}
                 />
                 <TextField
                   label="Website URL"
@@ -694,6 +864,48 @@ export function StoreAdmin() {
               <div className="grid gap-4 p-5">
                 <div>
                   <h2 className="text-lg font-semibold text-stone-950">
+                    Launch Readiness
+                  </h2>
+                  <p className="mt-1 text-sm leading-6 text-stone-600">
+                    Launching makes the store lifecycle live. Storefront enabled
+                    still controls public publication.
+                  </p>
+                </div>
+                <LaunchReadinessList
+                  error={readinessError}
+                  isLoading={isReadinessLoading}
+                  items={requiredReadinessItems}
+                  title="Required"
+                />
+                <LaunchReadinessList
+                  items={warningReadinessItems}
+                  title="Warnings"
+                />
+                {seller.store_status === "draft" ? (
+                  <button
+                    className="inline-flex min-h-10 items-center justify-center rounded-md bg-stone-950 px-4 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-400"
+                    disabled={!launchAllowed}
+                    onClick={() => void launchStore()}
+                    type="button"
+                  >
+                    {isLaunching ? "Launching..." : "Launch Store"}
+                  </button>
+                ) : (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm font-semibold text-emerald-900">
+                    Store lifecycle is {seller.store_status}.
+                  </div>
+                )}
+                {hasUnsavedChanges ? (
+                  <p className="text-xs font-medium leading-5 text-amber-800">
+                    Save or discard Store Admin changes before launching.
+                  </p>
+                ) : null}
+              </div>
+            </SellerCard>
+            <SellerCard>
+              <div className="grid gap-4 p-5">
+                <div>
+                  <h2 className="text-lg font-semibold text-stone-950">
                     Store Preview
                   </h2>
                   <p className="mt-1 text-sm leading-6 text-stone-600">
@@ -761,6 +973,87 @@ function SettingsSection({
         <div className="grid gap-4">{children}</div>
       </div>
     </SellerCard>
+  );
+}
+
+function LaunchReadinessList({
+  error,
+  isLoading = false,
+  items,
+  title,
+}: {
+  error?: string | null;
+  isLoading?: boolean;
+  items: LaunchReadinessItem[];
+  title: string;
+}) {
+  if (error) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm font-semibold text-red-800">
+        {error}
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 text-sm text-stone-600">
+        Checking readiness...
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 text-sm text-stone-600">
+        No {title.toLowerCase()} items found.
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-2">
+      <h3 className="text-sm font-semibold text-stone-950">{title}</h3>
+      <div className="grid gap-2">
+        {items.map((item) => (
+          <div
+            className={`rounded-lg border px-3 py-3 ${
+              item.passed
+                ? "border-emerald-200 bg-emerald-50"
+                : item.item_type === "warning"
+                  ? "border-amber-200 bg-amber-50"
+                  : "border-red-200 bg-red-50"
+            }`}
+            key={item.item_key}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-stone-950">
+                  {item.label}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-stone-600">
+                  {item.message}
+                </p>
+                {!item.passed ? (
+                  <p className="mt-1 text-xs font-semibold leading-5 text-stone-800">
+                    {item.action}
+                  </p>
+                ) : null}
+              </div>
+              <StatusBadge
+                status={
+                  item.passed
+                    ? "ready_now"
+                    : item.item_type === "warning"
+                      ? "pending"
+                      : "unavailable"
+                }
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -855,6 +1148,9 @@ function buildInitialForm(
     store_name: seller.store_name ?? "",
     store_slug: seller.store_slug ?? "",
     store_tagline: seller.store_tagline ?? "",
+    public_city: seller.public_city ?? "",
+    public_state: seller.public_state ?? "",
+    public_country: seller.public_country ?? "US",
     about_text: seller.about_text ?? "",
     website_url: seller.website_url ?? "",
     npip_number: seller.npip_number ?? "",
@@ -903,6 +1199,13 @@ function validateForm(form: StoreAdminForm, pickupOptions: PickupOptionDraft[]) 
 
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.store_slug.trim())) {
     return "Store slug must use lowercase letters, numbers, and hyphens.";
+  }
+
+  if (
+    form.public_country.trim() &&
+    !/^[A-Za-z]{2,3}$/.test(form.public_country.trim())
+  ) {
+    return "Country should use a two or three letter code.";
   }
 
   for (const option of pickupOptions) {
