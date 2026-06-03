@@ -1,0 +1,387 @@
+import { supabase } from "@/lib/supabase";
+
+export type StorefrontHome = {
+  store_id: string;
+  store_slug: string;
+  store_name: string;
+  store_tagline: string | null;
+  public_city: string | null;
+  public_state: string | null;
+  public_country: string | null;
+  about_text: string | null;
+  pickup_policy: string | null;
+  cancellation_policy: string | null;
+  pickup_instructions: string | null;
+  public_email: string | null;
+  public_phone: string | null;
+  website_url: string | null;
+  social_url: string | null;
+  npip_number: string | null;
+  hero_image_url: string | null;
+  hero_image_alt_text: string | null;
+  logo_image_url: string | null;
+  logo_image_alt_text: string | null;
+  public_inventory_item_count: number;
+  ready_now_item_count: number;
+  reserve_now_item_count: number;
+  sold_out_item_count: number;
+  total_quantity_available: number;
+  next_available_date: string | null;
+  has_public_inventory: boolean;
+};
+
+export type StorefrontInventoryItem = {
+  store_id: string;
+  store_slug: string;
+  species_id: string;
+  species_name: string;
+  species_slug: string;
+  seller_breed_profile_id: string;
+  breed_display_name: string;
+  breed_description: string | null;
+  listing_batch_id: string;
+  listing_batch_breed_id: string;
+  inventory_item_id: string;
+  inventory_type: string;
+  custom_inventory_label: string | null;
+  quantity_available: number;
+  buyer_availability_code: "ready_now" | "reserve_now" | "sold_out" | string;
+  buyer_availability_label: string;
+  available_date: string;
+  is_available_now: boolean;
+  can_checkout: boolean;
+  unit_price: number;
+  featured_image_url: string | null;
+  featured_image_alt_text: string | null;
+  breed_sort_order: number | null;
+  inventory_sort_order: number | null;
+  batch_type: string | null;
+  age_at_availability_days: number | null;
+};
+
+export type StorefrontMedia = {
+  store_slug: string;
+  store_id: string;
+  entity_type: string;
+  entity_id: string;
+  display_context: string;
+  public_url: string;
+  alt_text: string | null;
+  caption: string | null;
+  sort_order: number;
+  is_featured: boolean;
+  width_px: number | null;
+  height_px: number | null;
+};
+
+export type StorefrontPurchaseOption = {
+  inventoryItemId: string;
+  inventoryType: string;
+  label: string;
+  ageLabel: string;
+  typeLabel: string;
+  quantityAvailable: number;
+  buyerAvailabilityCode: string;
+  buyerAvailabilityLabel: string;
+  availableDate: string;
+  canCheckout: boolean;
+  unitPrice: number;
+  fulfillmentNote: string | null;
+};
+
+export type StorefrontProduct = {
+  productId: string;
+  storeSlug: string;
+  speciesName: string;
+  name: string;
+  description: string | null;
+  imageUrl: string | null;
+  imageAlt: string | null;
+  totalQuantityAvailable: number;
+  optionsCount: number;
+  minPrice: number | null;
+  maxPrice: number | null;
+  nextAvailableDate: string | null;
+  availabilityCode: "ready_now" | "reserve_now" | "sold_out" | "mixed";
+  availabilityLabel: string;
+  pricingLabel: string | null;
+  quantityLabel: string;
+  options: StorefrontPurchaseOption[];
+};
+
+export async function loadStorefrontHome(slug: string) {
+  const { data, error } = await supabase
+    .rpc("get_public_storefront_home", {
+      p_store_slug: slug,
+    })
+    .maybeSingle();
+
+  return {
+    data: data as StorefrontHome | null,
+    error,
+  };
+}
+
+export async function loadStorefrontInventory(slug: string) {
+  const { data, error } = await supabase
+    .from("public_storefront_inventory")
+    .select("*")
+    .eq("store_slug", slug)
+    .order("breed_sort_order", { ascending: true })
+    .order("inventory_sort_order", { ascending: true })
+    .order("available_date", { ascending: true });
+
+  return {
+    data: (data ?? []) as StorefrontInventoryItem[],
+    error,
+  };
+}
+
+export async function loadStoreGallery(
+  slug: string,
+  options: {
+    entityId?: string;
+    entityType?: string;
+    limit?: number;
+  } = {},
+) {
+  let query = supabase
+    .from("public_storefront_media_gallery")
+    .select("*")
+    .eq("store_slug", slug)
+    .order("is_featured", { ascending: false })
+    .order("sort_order", { ascending: true });
+
+  if (options.entityType) {
+    query = query.eq("entity_type", options.entityType);
+  }
+
+  if (options.entityId) {
+    query = query.eq("entity_id", options.entityId);
+  }
+
+  if (options.limit) {
+    query = query.limit(options.limit);
+  }
+
+  const { data, error } = await query;
+
+  return {
+    data: (data ?? []) as StorefrontMedia[],
+    error,
+  };
+}
+
+export function groupInventoryByProduct(items: StorefrontInventoryItem[]) {
+  const groups = new Map<string, StorefrontInventoryItem[]>();
+
+  for (const item of items) {
+    const current = groups.get(item.seller_breed_profile_id) ?? [];
+    current.push(item);
+    groups.set(item.seller_breed_profile_id, current);
+  }
+
+  return Array.from(groups.values()).map(toStorefrontProduct);
+}
+
+export function toStorefrontProduct(items: StorefrontInventoryItem[]) {
+  const sorted = [...items].sort(compareOptions);
+  const first = sorted[0];
+  const availableOptions = sorted.filter((item) => item.quantity_available > 0);
+  const priceableOptions = availableOptions.length > 0 ? availableOptions : sorted;
+  const prices = priceableOptions
+    .map((item) => Number(item.unit_price))
+    .filter((value) => Number.isFinite(value));
+  const minPrice = prices.length > 0 ? Math.min(...prices) : null;
+  const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
+  const totalQuantityAvailable = sorted.reduce(
+    (total, item) => total + Math.max(0, item.quantity_available),
+    0,
+  );
+  const availabilityCode = summarizeAvailability(sorted);
+
+  return {
+    productId: first.seller_breed_profile_id,
+    storeSlug: first.store_slug,
+    speciesName: first.species_name,
+    name: first.breed_display_name,
+    description: first.breed_description,
+    imageUrl: first.featured_image_url,
+    imageAlt: first.featured_image_alt_text,
+    totalQuantityAvailable,
+    optionsCount: sorted.length,
+    minPrice,
+    maxPrice,
+    nextAvailableDate: getNextAvailableDate(sorted),
+    availabilityCode,
+    availabilityLabel: formatAvailabilitySummary(availabilityCode),
+    pricingLabel: formatPricingSummary(minPrice, maxPrice),
+    quantityLabel: formatProductQuantity(totalQuantityAvailable),
+    options: sorted.map(toPurchaseOption),
+  } satisfies StorefrontProduct;
+}
+
+export function toPurchaseOption(
+  item: StorefrontInventoryItem,
+): StorefrontPurchaseOption {
+  const ageLabel = formatAgeLabel(item);
+  const typeLabel = formatInventoryTypeLabel(item);
+
+  return {
+    inventoryItemId: item.inventory_item_id,
+    inventoryType: item.inventory_type,
+    label: [ageLabel, typeLabel].filter(Boolean).join(" - ") || typeLabel,
+    ageLabel,
+    typeLabel,
+    quantityAvailable: item.quantity_available,
+    buyerAvailabilityCode: item.buyer_availability_code,
+    buyerAvailabilityLabel: item.buyer_availability_label,
+    availableDate: item.available_date,
+    canCheckout: item.can_checkout,
+    unitPrice: item.unit_price,
+    fulfillmentNote: null,
+  };
+}
+
+export function findProduct(
+  products: StorefrontProduct[],
+  productId: string,
+) {
+  return products.find((product) => product.productId === productId) ?? null;
+}
+
+export function previewText(value: string | null, fallback: string) {
+  const trimmed = value?.trim();
+
+  if (!trimmed) return fallback;
+
+  if (trimmed.length <= 180) return trimmed;
+
+  return `${trimmed.slice(0, 177).trimEnd()}...`;
+}
+
+export function formatInventoryTypeLabel(item: {
+  custom_inventory_label: string | null;
+  inventory_type: string;
+}) {
+  if (item.custom_inventory_label) return item.custom_inventory_label;
+
+  const labels: Record<string, string> = {
+    female: "Female",
+    male: "Male",
+    straight_run: "Straight run",
+    unsexed: "Unsexed",
+    pair: "Pair",
+    trio: "Trio",
+    hatching_eggs: "Hatching eggs",
+    other: "Other",
+  };
+
+  return labels[item.inventory_type] ?? item.inventory_type.replaceAll("_", " ");
+}
+
+export function formatAgeLabel(item: {
+  age_at_availability_days: number | null;
+  batch_type: string | null;
+  inventory_type: string;
+}) {
+  if (item.batch_type === "hatching_eggs" || item.inventory_type === "hatching_eggs") {
+    return "Hatching eggs";
+  }
+
+  return formatBirdAgeLabel(item.age_at_availability_days);
+}
+
+export function formatBirdAgeLabel(days: number | null | undefined) {
+  if (days === null || days === undefined || !Number.isFinite(days)) {
+    return "Age not listed";
+  }
+
+  const wholeDays = Math.floor(days);
+
+  if (wholeDays < 0) return "Age not listed";
+  if (wholeDays === 0) return "Hatch day";
+
+  if (wholeDays < 7) {
+    return wholeDays === 1 ? "1 day old" : `${wholeDays} days old`;
+  }
+
+  const weeks = Math.floor(wholeDays / 7);
+
+  return weeks === 1 ? "1 week old" : `${weeks} weeks old`;
+}
+
+function compareOptions(
+  first: StorefrontInventoryItem,
+  second: StorefrontInventoryItem,
+) {
+  return (
+    availabilityRank(first.buyer_availability_code) -
+      availabilityRank(second.buyer_availability_code) ||
+    (first.age_at_availability_days ?? 99999) -
+      (second.age_at_availability_days ?? 99999) ||
+    first.available_date.localeCompare(second.available_date) ||
+    (first.inventory_sort_order ?? 0) - (second.inventory_sort_order ?? 0)
+  );
+}
+
+function availabilityRank(code: string) {
+  if (code === "ready_now") return 0;
+  if (code === "reserve_now") return 1;
+  return 2;
+}
+
+function summarizeAvailability(items: StorefrontInventoryItem[]) {
+  const liveItems = items.filter((item) => item.quantity_available > 0);
+  const source = liveItems.length > 0 ? liveItems : items;
+  const codes = new Set(source.map((item) => item.buyer_availability_code));
+
+  if (codes.size > 1) return "mixed";
+  if (codes.has("ready_now")) return "ready_now";
+  if (codes.has("reserve_now")) return "reserve_now";
+  return "sold_out";
+}
+
+function formatAvailabilitySummary(
+  code: StorefrontProduct["availabilityCode"],
+) {
+  if (code === "ready_now") return "Available now";
+  if (code === "reserve_now") return "Available later";
+  if (code === "mixed") return "Multiple availabilities";
+  return "Sold out";
+}
+
+function getNextAvailableDate(items: StorefrontInventoryItem[]) {
+  const availableDates = items
+    .filter((item) => item.quantity_available > 0)
+    .map((item) => item.available_date)
+    .sort();
+
+  return availableDates[0] ?? null;
+}
+
+function formatPricingSummary(
+  minPrice: number | null,
+  maxPrice: number | null,
+) {
+  if (minPrice === null || maxPrice === null) return null;
+
+  if (minPrice !== maxPrice) {
+    return `Options from ${formatCurrency(minPrice)}`;
+  }
+
+  return formatCurrency(minPrice);
+}
+
+function formatProductQuantity(quantity: number) {
+  if (quantity <= 0) return "Sold out";
+  if (quantity === 1) return "1 available";
+  return `${quantity} available`;
+}
+
+export function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    style: "currency",
+  }).format(value);
+}

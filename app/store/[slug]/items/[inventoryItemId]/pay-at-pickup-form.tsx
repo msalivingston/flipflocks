@@ -191,9 +191,9 @@ export function PayAtPickupForm({
 
   return (
     <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
-      <h2 className="font-semibold text-stone-950">Request pickup order</h2>
+      <h2 className="font-semibold text-stone-950">Checkout</h2>
       <p className="mt-2 text-sm leading-6 text-stone-600">
-        Choose how many you want, then share your contact details for pickup.
+        Choose how many you want, then share your contact details.
       </p>
 
       {confirmation ? (
@@ -306,10 +306,10 @@ export function PayAtPickupForm({
           type="submit"
         >
           {confirmation
-            ? "Request sent"
+            ? "Order placed"
             : isSubmitting
-              ? "Sending request..."
-              : "Request pickup order"}
+              ? "Placing order..."
+              : "Place order"}
         </button>
       </form>
     </section>
@@ -324,10 +324,10 @@ function ConfirmationPanel({
   return (
     <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm leading-6 text-emerald-900">
       <h3 className="font-semibold text-emerald-950">
-        Your pickup request has been sent.
+        Your order has been placed.
       </h3>
       <p className="mt-1">
-        The seller received your request and will follow up with pickup details.
+        The seller received your order and will follow up with pickup details.
         Please save this page or watch your email for confirmation.
       </p>
       <dl className="mt-3 grid gap-1">
@@ -460,5 +460,5 @@ function toBuyerOrderError(message: string | undefined) {
     return "Please check your contact details and try again.";
   }
 
-  return "We could not send this order request. Please try again.";
+  return "We could not place this order. Please try again.";
 }

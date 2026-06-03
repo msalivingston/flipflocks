@@ -1,8 +1,16 @@
 import Image from "next/image";
+import Link from "next/link";
 
 type StorefrontLocation = {
   public_city: string | null;
   public_state: string | null;
+};
+
+type StorefrontIdentity = StorefrontLocation & {
+  store_name: string;
+  store_slug: string;
+  logo_image_url: string | null;
+  logo_image_alt_text: string | null;
 };
 
 type InventoryLabelSource = {
@@ -11,7 +19,143 @@ type InventoryLabelSource = {
 };
 
 export function StorefrontShell({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-screen bg-stone-50 text-stone-950">{children}</div>;
+  return (
+    <div className="min-h-screen bg-[#f8f5ef] text-stone-950">{children}</div>
+  );
+}
+
+export function StorefrontNav({ store }: { store: StorefrontIdentity }) {
+  return (
+    <nav className="border-b border-stone-200 bg-white/95">
+      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-4 sm:px-7 md:flex-row md:items-center md:justify-between">
+        <Link
+          className="flex min-w-0 items-center gap-3 text-stone-950"
+          href={`/store/${store.store_slug}`}
+        >
+          <StoreLogo store={store} size="sm" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{store.store_name}</p>
+            <p className="text-xs font-medium text-stone-500">
+              {formatLocation(store)}
+            </p>
+          </div>
+        </Link>
+        <div className="flex flex-wrap gap-2 text-sm font-semibold text-stone-700">
+          <Link
+            className="rounded-md px-2 py-1 hover:bg-stone-100"
+            href={`/store/${store.store_slug}`}
+          >
+            Shop
+          </Link>
+          <Link
+            className="rounded-md px-2 py-1 hover:bg-stone-100"
+            href={`/store/${store.store_slug}/about`}
+          >
+            About
+          </Link>
+          <Link
+            className="rounded-md px-2 py-1 hover:bg-stone-100"
+            href={`/store/${store.store_slug}/policies`}
+          >
+            Pickup & policies
+          </Link>
+          <Link
+            className="rounded-md px-2 py-1 hover:bg-stone-100"
+            href={`/store/${store.store_slug}/cart`}
+          >
+            Cart
+          </Link>
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+export function StorefrontFooter({ store }: { store: StorefrontIdentity }) {
+  return (
+    <footer className="border-t border-stone-200 bg-white">
+      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-5 py-6 text-sm text-stone-600 sm:px-7 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3">
+          <StoreLogo store={store} size="xs" />
+          <div>
+            <p className="font-semibold text-stone-950">{store.store_name}</p>
+            <p>{formatLocation(store)}</p>
+          </div>
+        </div>
+        <p>Powered by the FlipFlocks storefront platform.</p>
+      </div>
+    </footer>
+  );
+}
+
+export function StoreLogo({
+  size = "md",
+  store,
+}: {
+  size?: "xs" | "sm" | "md";
+  store: Pick<
+    StorefrontIdentity,
+    "logo_image_alt_text" | "logo_image_url" | "store_name"
+  >;
+}) {
+  const sizeClass =
+    size === "xs" ? "h-9 w-9" : size === "sm" ? "h-12 w-12" : "h-16 w-16";
+
+  if (!store.logo_image_url) {
+    return (
+      <div
+        className={`${sizeClass} flex shrink-0 items-center justify-center rounded-md border border-emerald-100 bg-emerald-50 text-base font-bold text-emerald-900`}
+      >
+        {store.store_name.trim().slice(0, 1).toUpperCase() || "S"}
+      </div>
+    );
+  }
+
+  return (
+    <Image
+      alt={store.logo_image_alt_text || `${store.store_name} logo`}
+      className={`${sizeClass} shrink-0 rounded-md object-cover`}
+      height={96}
+      src={toPublicImageUrl(store.logo_image_url)}
+      unoptimized
+      width={96}
+    />
+  );
+}
+
+export function HeroImage({
+  alt,
+  src,
+}: {
+  alt: string;
+  src: string | null;
+}) {
+  if (!src) {
+    return (
+      <div className="flex min-h-64 items-center justify-center bg-[linear-gradient(135deg,#064e3b,#ca8a04)] px-5 text-center text-white sm:min-h-80">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.12em] text-white/80">
+            Seller storefront
+          </p>
+          <p className="mt-3 max-w-lg text-3xl font-semibold">
+            Fresh availability from a local farm.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Image
+      alt={alt}
+      className="h-full min-h-64 w-full object-cover sm:min-h-80"
+      height={720}
+      priority
+      src={toPublicImageUrl(src)}
+      unoptimized
+      width={1280}
+    />
+  );
 }
 
 export function ListingPhoto({
@@ -143,7 +287,7 @@ export function formatDate(value: string) {
   }).format(new Date(`${value}T00:00:00`));
 }
 
-function toPublicImageUrl(publicUrl: string) {
+export function toPublicImageUrl(publicUrl: string) {
   if (publicUrl.startsWith("http")) return publicUrl;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

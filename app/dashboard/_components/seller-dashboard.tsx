@@ -63,11 +63,16 @@ export function SellerDashboard() {
         supabase
           .from("seller_inventory_management")
           .select(
-            "listing_batch_id, species_name, breed_display_name, available_date, base_price, quantity_available, effective_unit_price, listing_batch_visibility_status, inventory_visibility_status, operational_availability_status, inventory_updated_at",
+            "inventory_item_id, listing_batch_id, species_name, species_slug, breed_display_name, origin_date, available_date, base_price, quantity_available, inventory_type, custom_inventory_label, effective_unit_price, listing_batch_visibility_status, listing_batch_moderation_status, inventory_visibility_status, inventory_moderation_status, operational_availability_status, inventory_updated_at",
           )
           .eq("store_id", seller.store_id)
-          .order("inventory_updated_at", { ascending: false })
-          .limit(12)
+          .neq("inventory_visibility_status", "archived")
+          .neq("listing_batch_visibility_status", "archived")
+          .eq("inventory_moderation_status", "normal")
+          .eq("listing_batch_moderation_status", "normal")
+          .order("species_name", { ascending: true })
+          .order("breed_display_name", { ascending: true })
+          .limit(100)
           .returns<SellerInventoryRow[]>(),
       ]);
 
@@ -97,8 +102,8 @@ export function SellerDashboard() {
     };
   }, [seller]);
 
-  const activeListings = useMemo(
-    () => summarizeActiveListings(data.inventory),
+  const availableInventory = useMemo(
+    () => summarizeAvailableInventory(data.inventory),
     [data.inventory],
   );
 
@@ -107,10 +112,10 @@ export function SellerDashboard() {
       <SellerPageHeader
         eyebrow={seller?.store_name}
         title="Dashboard"
-        description="A working seller home for listings, pickup orders, customers, and storefront status."
+        description="A working seller home for available birds, orders, and storefront status."
         action={
-          <PrimaryActionLink href="/dashboard/listings/new">
-            Create Listing
+          <PrimaryActionLink href="/dashboard/inventory">
+            Manage inventory
           </PrimaryActionLink>
         }
       />
@@ -133,9 +138,9 @@ export function SellerDashboard() {
           <>
             <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard
-                label="Active listings"
-                value={data.home?.active_listing_count}
-                helper={`${data.home?.total_active_inventory_quantity ?? 0} birds available`}
+                label="Available birds"
+                value={data.home?.total_active_inventory_quantity}
+                helper="Live visible inventory quantity"
               />
               <MetricCard
                 label="Pending orders"
@@ -160,8 +165,9 @@ export function SellerDashboard() {
                   <h2 className="text-lg font-semibold text-stone-950">
                     Storefront quick link
                   </h2>
-                  <p className="mt-1 text-sm text-stone-600">
-                    Buyers see saved public data at{" "}
+                  <p className="mt-1 text-sm leading-6 text-stone-600">
+                    Listings control photos, descriptions, and storefront
+                    presentation. Buyers see saved public data at{" "}
                     <span className="font-semibold text-stone-950">
                       /store/{seller?.store_slug}
                     </span>
@@ -201,21 +207,21 @@ export function SellerDashboard() {
 
               <SellerCard className="overflow-hidden">
                 <SectionHeading
-                  title="Active listings"
-                  actionHref="/dashboard/listings"
-                  actionLabel="Manage listings"
+                  title="Available inventory"
+                  actionHref="/dashboard/inventory"
+                  actionLabel="Manage inventory"
                 />
-                {activeListings.length > 0 ? (
+                {availableInventory.length > 0 ? (
                   <div className="divide-y divide-stone-200">
-                    {activeListings.map((listing) => (
-                      <ListingRow key={listing.id} listing={listing} />
+                    {availableInventory.map((summary) => (
+                      <InventorySummaryRow key={summary.id} summary={summary} />
                     ))}
                   </div>
                 ) : (
                   <div className="p-5">
                     <EmptyState
-                      title="No active listings"
-                      description="Create a bird listing to prove the seller flow end to end."
+                      title="No available birds"
+                      description="Create a listing, then update day-to-day quantities from Inventory."
                       action={
                         <PrimaryActionLink href="/dashboard/listings/new">
                           Create Listing
@@ -288,7 +294,7 @@ function OrderRow({ order }: { order: SellerOrderSummary }) {
           <StatusBadge status={order.order_status} />
         </div>
         <p className="mt-1 text-sm text-stone-600">
-          {customerName} · {order.total_item_quantity ?? 0} item(s) ·{" "}
+          {customerName} - {order.total_item_quantity ?? 0} item(s) -{" "}
           {formatCurrency(order.total_amount)}
         </p>
         <p className="mt-1 text-sm text-stone-500">
@@ -303,61 +309,113 @@ function OrderRow({ order }: { order: SellerOrderSummary }) {
   );
 }
 
-function ListingRow({
-  listing,
+function InventorySummaryRow({
+  summary,
 }: {
-  listing: ReturnType<typeof summarizeActiveListings>[number];
+  summary: ReturnType<typeof summarizeAvailableInventory>[number];
 }) {
   return (
-    <article className="px-5 py-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <Link
+      className="block px-5 py-4 transition hover:bg-stone-50"
+      href="/dashboard/inventory"
+    >
+      <article className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <div>
-          <h3 className="font-semibold text-stone-950">{listing.title}</h3>
+          <h3 className="font-semibold text-stone-950">{summary.title}</h3>
           <p className="mt-1 text-sm text-stone-600">
-            {listing.rowCount} row(s) · {listing.quantity} available · ready{" "}
-            {formatDate(listing.availableDate)}
+            {summary.quantity} available - {summary.rowCount}{" "}
+            {summary.rowCount === 1 ? "age group" : "age groups"}
           </p>
         </div>
-        <StatusBadge status={listing.status} />
-      </div>
-    </article>
+        <p className="text-sm font-semibold text-stone-600">
+          {formatReadyDateRange(summary.readyDateStart, summary.readyDateEnd)}
+        </p>
+      </article>
+    </Link>
   );
 }
 
-function summarizeActiveListings(rows: SellerInventoryRow[]) {
+function summarizeAvailableInventory(rows: SellerInventoryRow[]) {
   const summaries = new Map<
     string,
     {
       id: string;
       title: string;
-      status: string;
-      availableDate: string;
       quantity: number;
       rowCount: number;
+      readyDateStart: string | null;
+      readyDateEnd: string | null;
     }
   >();
 
-  rows.forEach((row) => {
-    const existing = summaries.get(row.listing_batch_id);
-    const quantity = row.quantity_available ?? 0;
+  getLiveInventoryRows(rows)
+    .filter((row) => (row.quantity_available ?? 0) > 0)
+    .forEach((row) => {
+      const key = `${row.species_name}:${row.breed_display_name}`;
+      const existing = summaries.get(key);
+      const quantity = row.quantity_available ?? 0;
 
-    if (existing) {
-      existing.quantity += quantity;
-      existing.rowCount += 1;
-      return;
-    }
+      if (existing) {
+        existing.quantity += quantity;
+        existing.rowCount += 1;
+        existing.readyDateStart = getEarlierDate(
+          existing.readyDateStart,
+          row.available_date,
+        );
+        existing.readyDateEnd = getLaterDate(
+          existing.readyDateEnd,
+          row.available_date,
+        );
+        return;
+      }
 
-    summaries.set(row.listing_batch_id, {
-      id: row.listing_batch_id,
-      title: `${row.breed_display_name} ${row.species_name}`,
-      status: row.operational_availability_status,
-      availableDate: row.available_date,
-      quantity,
-      rowCount: 1,
+      summaries.set(key, {
+        id: key,
+        title: `${row.breed_display_name} ${row.species_name}`,
+        quantity,
+        rowCount: 1,
+        readyDateStart: row.available_date,
+        readyDateEnd: row.available_date,
+      });
     });
-  });
 
-  return Array.from(summaries.values()).slice(0, 5);
+  return Array.from(summaries.values())
+    .sort((first, second) => second.quantity - first.quantity)
+    .slice(0, 8);
+}
+
+function getLiveInventoryRows(rows: SellerInventoryRow[]) {
+  return rows.filter(
+    (row) =>
+      row.inventory_visibility_status === "active" &&
+      row.listing_batch_visibility_status === "active",
+  );
+}
+
+function getEarlierDate(currentDate: string | null, nextDate: string | null) {
+  if (!currentDate) return nextDate;
+  if (!nextDate) return currentDate;
+
+  return nextDate < currentDate ? nextDate : currentDate;
+}
+
+function getLaterDate(currentDate: string | null, nextDate: string | null) {
+  if (!currentDate) return nextDate;
+  if (!nextDate) return currentDate;
+
+  return nextDate > currentDate ? nextDate : currentDate;
+}
+
+function formatReadyDateRange(
+  startDate: string | null | undefined,
+  endDate: string | null | undefined,
+) {
+  if (!startDate && !endDate) return "Ready date not set";
+  if (!startDate || !endDate || startDate === endDate) {
+    return `Ready ${formatDate(startDate ?? endDate)}`;
+  }
+
+  return `Ready ${formatDate(startDate)}-${formatDate(endDate)}`;
 }
 
 function formatCurrency(value: number | null | undefined) {

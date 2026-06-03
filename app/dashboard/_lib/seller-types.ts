@@ -78,15 +78,22 @@ export type SellerOrderSummary = {
 };
 
 export type SellerInventoryRow = {
+  inventory_item_id: string;
   listing_batch_id: string;
   species_name: string;
+  species_slug: string;
   breed_display_name: string;
+  origin_date: string | null;
   available_date: string;
   base_price: number | null;
   quantity_available: number | null;
+  inventory_type: string;
+  custom_inventory_label: string | null;
   effective_unit_price: number | null;
   listing_batch_visibility_status: string;
+  listing_batch_moderation_status: string;
   inventory_visibility_status: string;
+  inventory_moderation_status: string;
   operational_availability_status: string;
   inventory_updated_at: string | null;
 };

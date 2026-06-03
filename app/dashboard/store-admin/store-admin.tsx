@@ -9,7 +9,6 @@ import {
   LoadingState,
   SellerCard,
   SellerPageHeader,
-  StatusBadge,
 } from "../_components/seller-ui";
 
 type StoreAdminForm = {
@@ -93,6 +92,13 @@ type StoreLaunchResponse = {
     message?: string;
     details?: unknown;
   };
+};
+
+type SellerLaunchItem = {
+  key: string;
+  label: string;
+  passed: boolean;
+  action: string;
 };
 
 const unsavedWarning =
@@ -480,11 +486,12 @@ export function StoreAdmin() {
       return;
     }
 
-    const missingRequired = readinessItems.filter(
-      (item) => item.item_type === "required" && !item.passed,
+    const launchSummary = buildLaunchSummary(readinessItems, form);
+    const missingRequired = launchSummary.requiredItems.filter(
+      (item) => !item.passed,
     );
 
-    if (missingRequired.length > 0) {
+    if (missingRequired.length > 0 || launchSummary.platformReviewNeeded) {
       setSaveState("error");
       setSaveMessage("Complete required launch items before launching.");
       return;
@@ -522,7 +529,7 @@ export function StoreAdmin() {
     setIsLaunching(false);
     setSaveState("saved");
     setSaveMessage(
-      "Store launched. Use Storefront enabled to control public publication.",
+      "Store launched. Use storefront visibility to decide when customers can see it.",
     );
     await reloadReadiness();
     reload();
@@ -555,22 +562,21 @@ export function StoreAdmin() {
     );
   }
 
-  const statusCode = getStorefrontStatusCode(form, seller);
-  const statusMessage = getStorefrontStatusMessage(form, seller);
-  const requiredReadinessItems = readinessItems.filter(
-    (item) => item.item_type === "required",
-  );
-  const warningReadinessItems = readinessItems.filter(
-    (item) => item.item_type === "warning",
-  );
-  const missingRequiredCount = requiredReadinessItems.filter(
+  const launchSummary = buildLaunchSummary(readinessItems, form);
+  const sellerRequiredItems = launchSummary.requiredItems;
+  const sellerWarningItems = launchSummary.warningItems;
+  const platformReviewNeeded = launchSummary.platformReviewNeeded;
+  const missingRequiredCount = sellerRequiredItems.filter(
     (item) => !item.passed,
   ).length;
   const launchAllowed =
     seller.store_status === "draft" &&
     missingRequiredCount === 0 &&
+    !platformReviewNeeded &&
     !hasUnsavedChanges &&
     !isLaunching;
+  const isStoreLive = seller.store_status === "live";
+  const isVisibleToCustomers = seller.is_publicly_available;
 
   return (
     <>
@@ -619,7 +625,35 @@ export function StoreAdmin() {
           </div>
         ) : null}
 
-        <div className="grid gap-5 xl:grid-cols-[1fr_22rem]">
+        <SellerCard>
+          <div className="grid gap-5 p-5">
+            {isStoreLive ? (
+              <StoreStatusCardContent
+                form={form}
+                isVisibleToCustomers={isVisibleToCustomers}
+                onVisibilityChange={(value) =>
+                  updateField("storefront_enabled", value)
+                }
+                storeUrl={storeUrl}
+              />
+            ) : (
+              <LaunchStoreCardContent
+                hasUnsavedChanges={hasUnsavedChanges}
+                isLaunching={isLaunching}
+                isReadinessLoading={isReadinessLoading}
+                launchAllowed={launchAllowed}
+                onLaunch={() => void launchStore()}
+                platformReviewNeeded={platformReviewNeeded}
+                readinessError={readinessError}
+                requiredItems={sellerRequiredItems}
+                sellerStatus={seller.store_status}
+                warningItems={sellerWarningItems}
+              />
+            )}
+          </div>
+        </SellerCard>
+
+        <div className="grid gap-5">
           <div className="grid gap-5">
             <SettingsSection
               description="Core public identity for this seller store."
@@ -858,94 +892,6 @@ export function StoreAdmin() {
               />
             </SettingsSection>
           </div>
-
-          <aside className="grid h-fit gap-5 xl:sticky xl:top-5">
-            <SellerCard>
-              <div className="grid gap-4 p-5">
-                <div>
-                  <h2 className="text-lg font-semibold text-stone-950">
-                    Launch Readiness
-                  </h2>
-                  <p className="mt-1 text-sm leading-6 text-stone-600">
-                    Launching makes the store lifecycle live. Storefront enabled
-                    still controls public publication.
-                  </p>
-                </div>
-                <LaunchReadinessList
-                  error={readinessError}
-                  isLoading={isReadinessLoading}
-                  items={requiredReadinessItems}
-                  title="Required"
-                />
-                <LaunchReadinessList
-                  items={warningReadinessItems}
-                  title="Warnings"
-                />
-                {seller.store_status === "draft" ? (
-                  <button
-                    className="inline-flex min-h-10 items-center justify-center rounded-md bg-stone-950 px-4 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-400"
-                    disabled={!launchAllowed}
-                    onClick={() => void launchStore()}
-                    type="button"
-                  >
-                    {isLaunching ? "Launching..." : "Launch Store"}
-                  </button>
-                ) : (
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm font-semibold text-emerald-900">
-                    Store lifecycle is {seller.store_status}.
-                  </div>
-                )}
-                {hasUnsavedChanges ? (
-                  <p className="text-xs font-medium leading-5 text-amber-800">
-                    Save or discard Store Admin changes before launching.
-                  </p>
-                ) : null}
-              </div>
-            </SellerCard>
-            <SellerCard>
-              <div className="grid gap-4 p-5">
-                <div>
-                  <h2 className="text-lg font-semibold text-stone-950">
-                    Store Preview
-                  </h2>
-                  <p className="mt-1 text-sm leading-6 text-stone-600">
-                    Check publication status and open the public storefront.
-                  </p>
-                </div>
-                <ToggleField
-                  checked={form.storefront_enabled}
-                  label="Storefront enabled"
-                  onChange={(value) => updateField("storefront_enabled", value)}
-                />
-                <div className="grid gap-2 rounded-lg border border-stone-200 bg-stone-50 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold text-stone-700">
-                      Status
-                    </span>
-                    <StatusBadge status={statusCode} />
-                  </div>
-                  <p className="text-sm leading-6 text-stone-600">
-                    {statusMessage}
-                  </p>
-                </div>
-                <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                  Public store URL
-                  <input
-                    className="seller-form-field text-xs"
-                    readOnly
-                    value={storeUrl}
-                  />
-                </label>
-                <Link
-                  className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white transition hover:bg-emerald-900"
-                  href={`/store/${form.store_slug}`}
-                  target="_blank"
-                >
-                  Preview Store
-                </Link>
-              </div>
-            </SellerCard>
-          </aside>
         </div>
       </div>
     </>
@@ -976,83 +922,206 @@ function SettingsSection({
   );
 }
 
-function LaunchReadinessList({
-  error,
-  isLoading = false,
-  items,
-  title,
+function LaunchStoreCardContent({
+  hasUnsavedChanges,
+  isLaunching,
+  isReadinessLoading,
+  launchAllowed,
+  onLaunch,
+  platformReviewNeeded,
+  readinessError,
+  requiredItems,
+  sellerStatus,
+  warningItems,
 }: {
-  error?: string | null;
-  isLoading?: boolean;
-  items: LaunchReadinessItem[];
-  title: string;
+  hasUnsavedChanges: boolean;
+  isLaunching: boolean;
+  isReadinessLoading: boolean;
+  launchAllowed: boolean;
+  onLaunch: () => void;
+  platformReviewNeeded: boolean;
+  readinessError: string | null;
+  requiredItems: SellerLaunchItem[];
+  sellerStatus: string;
+  warningItems: SellerLaunchItem[];
 }) {
-  if (error) {
-    return (
-      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm font-semibold text-red-800">
-        {error}
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 text-sm text-stone-600">
-        Checking readiness...
-      </div>
-    );
-  }
-
-  if (items.length === 0) {
-    return (
-      <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-3 text-sm text-stone-600">
-        No {title.toLowerCase()} items found.
-      </div>
-    );
-  }
-
   return (
-    <div className="grid gap-2">
-      <h3 className="text-sm font-semibold text-stone-950">{title}</h3>
-      <div className="grid gap-2">
-        {items.map((item) => (
-          <div
-            className={`rounded-lg border px-3 py-3 ${
-              item.passed
-                ? "border-emerald-200 bg-emerald-50"
-                : item.item_type === "warning"
-                  ? "border-amber-200 bg-amber-50"
-                  : "border-red-200 bg-red-50"
-            }`}
-            key={item.item_key}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-stone-950">
-                  {item.label}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-stone-600">
-                  {item.message}
-                </p>
-                {!item.passed ? (
-                  <p className="mt-1 text-xs font-semibold leading-5 text-stone-800">
+    <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-start">
+      <div className="grid gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-stone-950">
+            Launch your store
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-stone-600">
+            Before customers can view your store, finish the required setup
+            items below.
+          </p>
+        </div>
+
+        {readinessError ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
+            Readiness could not be checked. Please try again.
+          </div>
+        ) : null}
+
+        {platformReviewNeeded ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+            Something needs platform review before this store can launch.
+            Contact support or an admin.
+          </div>
+        ) : null}
+
+        {sellerStatus !== "draft" ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+            This store cannot be launched from its current status.
+          </div>
+        ) : null}
+
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {requiredItems.map((item) => (
+            <SellerReadinessRow item={item} key={item.key} />
+          ))}
+        </div>
+
+        {warningItems.some((item) => !item.passed) ? (
+          <div className="grid gap-2 border-t border-stone-200 pt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+              Optional polish
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {warningItems
+                .filter((item) => !item.passed)
+                .map((item) => (
+                  <span
+                    className="rounded-md bg-stone-100 px-3 py-2 text-xs font-medium text-stone-600"
+                    key={item.key}
+                  >
                     {item.action}
-                  </p>
-                ) : null}
-              </div>
-              <StatusBadge
-                status={
-                  item.passed
-                    ? "ready_now"
-                    : item.item_type === "warning"
-                      ? "pending"
-                      : "unavailable"
-                }
-              />
+                  </span>
+                ))}
             </div>
           </div>
-        ))}
+        ) : null}
       </div>
+
+      <div className="grid gap-2 lg:min-w-52">
+        <button
+          className="inline-flex min-h-11 items-center justify-center rounded-md bg-stone-950 px-5 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-400"
+          disabled={!launchAllowed}
+          onClick={onLaunch}
+          type="button"
+        >
+          {isLaunching ? "Launching..." : "Launch Store"}
+        </button>
+        {hasUnsavedChanges ? (
+          <p className="text-xs font-medium leading-5 text-amber-800">
+            Save or discard Store Admin changes before launching.
+          </p>
+        ) : null}
+        {isReadinessLoading ? (
+          <p className="text-xs font-medium leading-5 text-stone-500">
+            Checking setup...
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function StoreStatusCardContent({
+  form,
+  isVisibleToCustomers,
+  onVisibilityChange,
+  storeUrl,
+}: {
+  form: StoreAdminForm;
+  isVisibleToCustomers: boolean;
+  onVisibilityChange: (value: boolean) => void;
+  storeUrl: string;
+}) {
+  return (
+    <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-start">
+      <div className="grid gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-stone-950">
+            Your store is live
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-stone-600">
+            {isVisibleToCustomers
+              ? "Customers can currently view your storefront."
+              : "Your store is live, but hidden from customers."}
+          </p>
+        </div>
+        <ToggleField
+          checked={form.storefront_enabled}
+          label="Make storefront visible to customers"
+          onChange={onVisibilityChange}
+        />
+        <label className="grid gap-1 text-sm font-semibold text-stone-700">
+          Public store URL
+          <input
+            className="seller-form-field text-xs"
+            readOnly
+            value={storeUrl}
+          />
+        </label>
+      </div>
+      <div className="grid gap-2 lg:min-w-44">
+        <Link
+          className="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-800 px-5 text-sm font-semibold text-white transition hover:bg-emerald-900"
+          href={`/store/${form.store_slug}`}
+          target="_blank"
+        >
+          View Store
+        </Link>
+        {form.storefront_enabled ? (
+          <button
+            className="seller-secondary-button"
+            onClick={() => onVisibilityChange(false)}
+            type="button"
+          >
+            Hide Storefront
+          </button>
+        ) : (
+          <button
+            className="seller-secondary-button"
+            onClick={() => onVisibilityChange(true)}
+            type="button"
+          >
+            Turn on Storefront
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SellerReadinessRow({ item }: { item: SellerLaunchItem }) {
+  return (
+    <div
+      className={`rounded-lg border px-3 py-3 ${
+        item.passed
+          ? "border-emerald-100 bg-emerald-50/70"
+          : "border-stone-200 bg-stone-50"
+      }`}
+    >
+      <p className="text-sm font-semibold text-stone-950">
+        <span
+          className={
+            item.passed
+              ? "mr-2 text-emerald-700"
+              : "mr-2 text-stone-400"
+          }
+        >
+          {item.passed ? "\u2713" : "\u25cb"}
+        </span>
+        {item.label}
+      </p>
+      {!item.passed ? (
+        <p className="mt-1 text-xs font-medium leading-5 text-stone-600">
+          {item.action}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -1194,6 +1263,90 @@ function normalizePickupOptionDrafts(options: PickupOptionDraft[]) {
   }));
 }
 
+function buildLaunchSummary(
+  readinessItems: LaunchReadinessItem[],
+  form: StoreAdminForm,
+) {
+  const readiness = new Map(
+    readinessItems.map((item) => [item.item_key, item]),
+  );
+  const isReady = (key: string) => readiness.get(key)?.passed === true;
+  const hasPickupDetails =
+    Boolean(form.pickup_location_text.trim()) ||
+    Boolean(form.pickup_instructions.trim());
+  const platformReviewNeeded = [
+    "store_exists",
+    "seller_owns_store",
+    "no_admin_hold",
+  ].some((key) => readiness.has(key) && !isReady(key));
+  const storeStatusBlocked =
+    readiness.has("store_status_draft") && !isReady("store_status_draft");
+  const requiredItems: SellerLaunchItem[] = [
+    {
+      key: "store-profile",
+      label: "Store profile",
+      passed: isReady("store_name_present") && isReady("store_slug_present"),
+      action: "Add your store name and store URL.",
+    },
+    {
+      key: "location",
+      label: "Location",
+      passed: isReady("location_present"),
+      action: "Add your city and state.",
+    },
+    {
+      key: "pickup-details",
+      label: "Pickup details",
+      passed: hasPickupDetails,
+      action: "Add pickup details.",
+    },
+    {
+      key: "billing-terms",
+      label: "Billing and terms",
+      passed: isReady("terms_accepted") && isReady("billing_access_active"),
+      action: "Finish billing and seller terms.",
+    },
+    {
+      key: "available-inventory",
+      label: "Available inventory",
+      passed: isReady("saleable_inventory"),
+      action: "Publish at least one listing with available quantity.",
+    },
+  ];
+  const warningItems: SellerLaunchItem[] = [
+    {
+      key: "store-image",
+      label: "Store image",
+      passed: isReady("store_image_present"),
+      action: "Add a logo or store image.",
+    },
+    {
+      key: "about-section",
+      label: "About section",
+      passed: isReady("about_text_present"),
+      action: "Add an about section.",
+    },
+    {
+      key: "public-email",
+      label: "Public email",
+      passed: isReady("public_email_present"),
+      action: "Add a public email.",
+    },
+    {
+      key: "inventory-quantity",
+      label: "Inventory quantity",
+      passed: isReady("inventory_quantity"),
+      action: "Add more available quantity when you can.",
+    },
+  ];
+
+  return {
+    platformReviewNeeded: platformReviewNeeded || storeStatusBlocked,
+    requiredItems,
+    warningItems,
+  };
+}
+
 function validateForm(form: StoreAdminForm, pickupOptions: PickupOptionDraft[]) {
   if (!form.store_name.trim()) return "Store name is required.";
 
@@ -1215,57 +1368,6 @@ function validateForm(form: StoreAdminForm, pickupOptions: PickupOptionDraft[]) 
   }
 
   return null;
-}
-
-function getStorefrontStatusCode(
-  form: StoreAdminForm,
-  seller: NonNullable<ReturnType<typeof useSellerContext>["seller"]>,
-) {
-  if (!form.storefront_enabled) return "hidden";
-  if (seller.is_publicly_available) return "live";
-  if (
-    seller.storefront_enabled === false &&
-    seller.store_status === "live" &&
-    ["hosted", "embedded"].includes(seller.storefront_mode)
-  ) {
-    return "pending";
-  }
-  if (seller.store_status !== "live") return seller.store_status;
-  if (!["hosted", "embedded"].includes(seller.storefront_mode)) {
-    return "private";
-  }
-  return "unavailable";
-}
-
-function getStorefrontStatusMessage(
-  form: StoreAdminForm,
-  seller: NonNullable<ReturnType<typeof useSellerContext>["seller"]>,
-) {
-  if (!form.storefront_enabled) {
-    return "The storefront is disabled by seller settings.";
-  }
-
-  if (seller.is_publicly_available) {
-    return "The storefront is publicly available.";
-  }
-
-  if (
-    seller.storefront_enabled === false &&
-    seller.store_status === "live" &&
-    ["hosted", "embedded"].includes(seller.storefront_mode)
-  ) {
-    return "The storefront should become public after these settings are saved.";
-  }
-
-  if (seller.store_status !== "live") {
-    return `The store status is ${seller.store_status.replaceAll("_", " ")}.`;
-  }
-
-  if (!["hosted", "embedded"].includes(seller.storefront_mode)) {
-    return "The storefront mode is private.";
-  }
-
-  return "The storefront has a platform availability blocker.";
 }
 
 function useUnsavedWarning(hasUnsavedChanges: boolean) {
