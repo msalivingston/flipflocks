@@ -36,6 +36,7 @@ import {
 import { PublishReadinessReview } from "./publish-readiness-review";
 
 type ListingDetailSummary = PublishReadinessListing;
+type DetailExperience = "listing" | "inventory";
 
 type EditBasicsState = {
   originDate: string;
@@ -119,10 +120,13 @@ const hatchingEggInventoryTypes = [
  * existing RLS and projection model without adding a detail backend layer.
  */
 export function ListingDetail({
+  experience = "listing",
   listingBatchId,
 }: {
+  experience?: DetailExperience;
   listingBatchId: string;
 }) {
+  const isInventoryExperience = experience === "inventory";
   const { seller } = useSellerContext();
   const storeId = seller?.store_id ?? "";
   const [rows, setRows] = useState<SellerInventoryManagementRow[]>([]);
@@ -643,7 +647,9 @@ export function ListingDetail({
     setIsEditing(false);
     setEditBasics(null);
     setEditRows([]);
-    setSuccessMessage("Listing changes saved.");
+    setSuccessMessage(
+      isInventoryExperience ? "Inventory changes saved." : "Listing changes saved.",
+    );
     setReloadKey((current) => current + 1);
   }
 
@@ -792,7 +798,11 @@ export function ListingDetail({
 
     setIsPublishing(false);
     setShowPublishReview(false);
-    setSuccessMessage("Listing published. Buyers can now see it on your storefront.");
+    setSuccessMessage(
+      isInventoryExperience
+        ? "Inventory published. Buyers can now see it on your storefront."
+        : "Listing published. Buyers can now see it on your storefront.",
+    );
     setReloadKey((current) => current + 1);
   }
 
@@ -830,7 +840,9 @@ export function ListingDetail({
     setIsOperationalEditing(false);
     setOperationalRows([]);
     setSuccessMessage(
-      "Listing returned to hidden. Buyers cannot see it until you publish it again.",
+      isInventoryExperience
+        ? "Inventory hidden from the storefront. Buyers cannot see it until you publish it again."
+        : "Listing returned to hidden. Buyers cannot see it until you publish it again.",
     );
     setReloadKey((current) => current + 1);
   }
@@ -868,7 +880,9 @@ export function ListingDetail({
     setIsArchiving(false);
     closeActiveEditModes();
     setSuccessMessage(
-      "Listing archived. Buyers cannot see it, and the listing is preserved for your records.",
+      isInventoryExperience
+        ? "Inventory archived. Buyers cannot see it, and historical records are preserved."
+        : "Listing archived. Buyers cannot see it, and the listing is preserved for your records.",
     );
     setReloadKey((current) => current + 1);
   }
@@ -906,7 +920,9 @@ export function ListingDetail({
     setIsRestoringArchived(false);
     closeActiveEditModes();
     setSuccessMessage(
-      "Listing restored to hidden. Review it before publishing again.",
+      isInventoryExperience
+        ? "Inventory restored as a draft. Review it before publishing again."
+        : "Listing restored to hidden. Review it before publishing again.",
     );
     setReloadKey((current) => current + 1);
   }
@@ -915,32 +931,54 @@ export function ListingDetail({
     <>
       <SellerPageHeader
         eyebrow={seller?.store_name}
-        title={listing?.title ?? "Listing Detail"}
-        description="Review listing details and bird groups before publishing or future operational updates."
+        title={listing?.title ?? (isInventoryExperience ? "Inventory" : "Listing Detail")}
+        description={
+          isInventoryExperience
+            ? "Manage availability, pricing, buyer content, photos, and storefront visibility."
+            : "Review listing details and bird groups before publishing or future operational updates."
+        }
         action={
-          <Link className="seller-secondary-button" href="/dashboard/listings">
-            Back to Listings
+          <Link
+            className="seller-secondary-button"
+            href={isInventoryExperience ? "/dashboard/inventory" : "/dashboard/listings"}
+          >
+            {isInventoryExperience ? "Back to Inventory" : "Back to Listings"}
           </Link>
         }
       />
 
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-5 py-5 sm:px-7">
-        {isLoading ? <LoadingState label="Loading listing" /> : null}
+        {isLoading ? (
+          <LoadingState
+            label={isInventoryExperience ? "Loading inventory" : "Loading listing"}
+          />
+        ) : null}
 
         {error ? (
           <ErrorState
-            title="Listing could not load"
-            message="Refresh the page and try again. If this keeps happening, the listing may need attention."
+            title={
+              isInventoryExperience
+                ? "Inventory could not load"
+                : "Listing could not load"
+            }
+            message={`Refresh the page and try again. If this keeps happening, the ${
+              isInventoryExperience ? "inventory" : "listing"
+            } may need attention.`}
           />
         ) : null}
 
         {!isLoading && !error && !listing ? (
           <EmptyState
-            title="Listing not found"
-            description="This listing may have been archived, removed, or may not belong to this seller account."
+            title={isInventoryExperience ? "Inventory not found" : "Listing not found"}
+            description={`This ${
+              isInventoryExperience ? "inventory" : "listing"
+            } may have been archived, removed, or may not belong to this seller account.`}
             action={
-              <Link className="seller-secondary-button" href="/dashboard/listings">
-                Back to Listings
+              <Link
+                className="seller-secondary-button"
+                href={isInventoryExperience ? "/dashboard/inventory" : "/dashboard/listings"}
+              >
+                {isInventoryExperience ? "Back to Inventory" : "Back to Listings"}
               </Link>
             }
           />
@@ -958,7 +996,7 @@ export function ListingDetail({
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-[0.08em] text-emerald-700">
-                    Saved Listing
+                    {isInventoryExperience ? "Inventory" : "Saved Listing"}
                   </p>
                   <h2 className="mt-2 text-2xl font-semibold text-stone-950">
                     {listing.title}
@@ -968,10 +1006,16 @@ export function ListingDetail({
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <StatusBadge status={getDisplayedListingStatus(listing)} />
-                  {shouldShowDetailAvailabilityBadge(listing) ? (
-                    <StatusBadge status={listing.availabilityStatus} />
-                  ) : null}
+                  {isInventoryExperience ? (
+                    <InventoryDetailBadges listing={listing} />
+                  ) : (
+                    <>
+                      <StatusBadge status={getDisplayedListingStatus(listing)} />
+                      {shouldShowDetailAvailabilityBadge(listing) ? (
+                        <StatusBadge status={listing.availabilityStatus} />
+                      ) : null}
+                    </>
+                  )}
                 </div>
               </div>
             </SellerCard>
@@ -980,6 +1024,7 @@ export function ListingDetail({
               <EditListingForm
                 editBasics={editBasics}
                 editRows={editRows}
+                experience={experience}
                 isSaving={isSaving}
                 listing={listing}
                 saveError={saveError}
@@ -991,6 +1036,7 @@ export function ListingDetail({
               />
             ) : isOperationalEditing ? (
               <OperationalEditForm
+                experience={experience}
                 isSaving={isOperationalSaving}
                 listing={listing}
                 rows={operationalRows}
@@ -1002,11 +1048,24 @@ export function ListingDetail({
               />
             ) : (
               <>
-                <ListingReadOnlyView listing={listing} />
+                <ListingReadOnlyView
+                  experience={experience}
+                  listing={listing}
+                />
                 <ListingPhotosSection
                   canManage={Boolean(
                     canUseSetupTools || canUsePublicContentTools,
                   )}
+                  description={
+                    isInventoryExperience
+                      ? "Add photos buyers can use to recognize this inventory. Add up to 4 photos."
+                      : undefined
+                  }
+                  emptyDescription={
+                    isInventoryExperience
+                      ? "Add up to 4 clear photos for this inventory."
+                      : undefined
+                  }
                   listingBatchId={listingBatchId}
                   mediaItems={mediaItems}
                   mode={
@@ -1017,6 +1076,7 @@ export function ListingDetail({
                         : "readonly"
                   }
                   storeId={storeId}
+                  title={isInventoryExperience ? "Buyer Photos" : "Photos"}
                   onReload={() => setReloadKey((current) => current + 1)}
                 />
                 {canUsePublicContentTools ? (
@@ -1025,6 +1085,7 @@ export function ListingDetail({
                     error={publicContentError}
                     isEditing={isPublicContentEditing}
                     isSaving={isPublicContentSaving}
+                    experience={experience}
                     listing={listing}
                     onCancel={cancelPublicContentEditing}
                     onEdit={() => startPublicContentEditing(listing)}
@@ -1041,7 +1102,8 @@ export function ListingDetail({
                         </h2>
                         <p className="mt-1 text-sm leading-6 text-stone-600">
                           Preview what looks ready and what still needs
-                          attention. This does not make the listing live.
+                          attention. This does not make the{" "}
+                          {isInventoryExperience ? "inventory" : "listing"} live.
                         </p>
                       </div>
                       <button
@@ -1072,9 +1134,9 @@ export function ListingDetail({
                   </h2>
                   {canUseSetupTools ? (
                     <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-sm leading-6 text-stone-600">
-                        This listing is hidden, so setup edits are available
-                        before it goes live.
+                    <p className="text-sm leading-6 text-stone-600">
+                      This {isInventoryExperience ? "inventory" : "listing"} is
+                      hidden, so setup edits are available before it goes live.
                       </p>
                       <button
                         className="seller-secondary-button"
@@ -1086,20 +1148,20 @@ export function ListingDetail({
                     </div>
                   ) : (
                     <p className="mt-2 text-sm leading-6 text-stone-600">
-                      Setup editing is closed here. Future live-listing tools
-                      will handle safe operational changes.
+                      Setup editing is closed here. Use operational tools for
+                      safe availability and pricing changes.
                     </p>
                   )}
                 </SellerCard>
                 <SellerCard className="p-5">
                   <h2 className="text-lg font-semibold text-stone-950">
-                    Update Availability & Pricing
+                    Availability & Pricing
                   </h2>
                   {canUseOperationalTools ? (
                     <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-sm leading-6 text-stone-600">
-                        Keep this live listing current after sales or price
-                        changes. Setup details stay read-only here.
+                        Keep this inventory current after sales or price changes.
+                        Setup details stay read-only here.
                       </p>
                       <button
                         className="seller-secondary-button"
@@ -1112,21 +1174,21 @@ export function ListingDetail({
                   ) : (
                     <p className="mt-2 text-sm leading-6 text-stone-600">
                       Availability and pricing updates are available after a
-                      listing is live.
+                      {isInventoryExperience ? " inventory" : " listing"} is live.
                     </p>
                   )}
                 </SellerCard>
                 <SellerCard className="p-5">
                   <h2 className="text-lg font-semibold text-stone-950">
-                    Listing lifecycle
+                    {isInventoryExperience ? "Visibility" : "Listing lifecycle"}
                   </h2>
                   {canUseOperationalTools ? (
                     <div className="mt-3 grid gap-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-sm leading-6 text-stone-600">
-                          Need to pause this listing? Return it to hidden to
-                          remove it from your storefront without deleting
-                          photos, bird groups, pricing, or notes.
+                          Need to pause this inventory? Hide it from the
+                          storefront without deleting photos, inventory records,
+                          pricing, or notes.
                         </p>
                         <button
                           className="seller-secondary-button"
@@ -1135,11 +1197,16 @@ export function ListingDetail({
                           type="button"
                         >
                           {isReturningToHidden
-                            ? "Hiding Listing"
-                            : "Return to Hidden"}
+                            ? isInventoryExperience
+                              ? "Hiding Inventory"
+                              : "Hiding Listing"
+                            : isInventoryExperience
+                              ? "Hide from Storefront"
+                              : "Return to Hidden"}
                         </button>
                       </div>
                       <ArchiveListingAction
+                        experience={experience}
                         isArchiving={isArchiving}
                         onArchive={() => void archiveListing()}
                       />
@@ -1147,11 +1214,12 @@ export function ListingDetail({
                   ) : canUseSetupTools ? (
                     <div className="mt-3 grid gap-4">
                       <p className="text-sm leading-6 text-stone-600">
-                        Hidden listings stay off your storefront until you
-                        publish them. Archive this listing when you want to
+                        Hidden inventory stays off your storefront until you
+                        publish it. Archive this inventory when you want to
                         retire it and keep the details for your records.
                       </p>
                       <ArchiveListingAction
+                        experience={experience}
                         isArchiving={isArchiving}
                         onArchive={() => void archiveListing()}
                       />
@@ -1160,18 +1228,18 @@ export function ListingDetail({
                     <div className="mt-3 grid gap-4">
                       <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3">
                         <p className="font-semibold text-stone-950">
-                          Archived listings are read-only.
+                          Archived {isInventoryExperience ? "inventory is" : "listings are"} read-only.
                         </p>
                         <p className="mt-1 text-sm leading-6 text-stone-600">
-                          This listing is hidden from buyers but preserved for
-                          your records. Restore it to hidden if you need to
+                          This {isInventoryExperience ? "inventory" : "listing"} is hidden from buyers but preserved for
+                          your records. Restore it as a draft if you need to
                           review, edit, or publish it again.
                         </p>
                       </div>
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-sm leading-6 text-stone-600">
-                          Restore keeps the listing private. It does not make
-                          the listing live.
+                          Restore keeps the {isInventoryExperience ? "inventory" : "listing"} private. It does not make
+                          it live.
                         </p>
                         <button
                           className="seller-secondary-button"
@@ -1180,20 +1248,29 @@ export function ListingDetail({
                           type="button"
                         >
                           {isRestoringArchived
-                            ? "Restoring Listing"
-                            : "Restore to Hidden"}
+                            ? isInventoryExperience
+                              ? "Restoring Inventory"
+                              : "Restoring Listing"
+                            : isInventoryExperience
+                              ? "Restore as Draft"
+                              : "Restore to Hidden"}
                         </button>
                       </div>
                     </div>
                   ) : (
                     <p className="mt-2 text-sm leading-6 text-stone-600">
-                      This listing is read-only in its current state.
+                      This {isInventoryExperience ? "inventory" : "listing"} is
+                      read-only in its current state.
                     </p>
                   )}
                   {lifecycleError ? (
                     <div className="mt-4">
                       <ErrorState
-                        title="Listing was not changed"
+                        title={
+                          isInventoryExperience
+                            ? "Inventory was not changed"
+                            : "Listing was not changed"
+                        }
                         message={lifecycleError}
                       />
                     </div>
@@ -1419,16 +1496,28 @@ function ValidationMessage({ errors }: { errors: string[] }) {
   );
 }
 
-function ListingReadOnlyView({ listing }: { listing: ListingDetailSummary }) {
+function ListingReadOnlyView({
+  experience,
+  listing,
+}: {
+  experience: DetailExperience;
+  listing: ListingDetailSummary;
+}) {
+  const isInventoryExperience = experience === "inventory";
+
   return (
     <section className="grid gap-5 lg:grid-cols-[1fr_1.2fr]">
       <SellerCard className="p-5">
         <h2 className="text-lg font-semibold text-stone-950">
-          Listing Basics
+          {isInventoryExperience ? "Inventory Summary" : "Listing Basics"}
         </h2>
         <dl className="mt-4 grid gap-4 text-sm">
           <DetailItem label="Species" value={listing.speciesName} />
           <DetailItem label="Breed" value={listing.breedNames.join(", ")} />
+          <DetailItem
+            label="Inventory type"
+            value={formatBatchType(listing.batchType)}
+          />
           <DetailItem
             label="Hatch/origin date"
             value={formatDate(listing.originDate)}
@@ -1454,7 +1543,7 @@ function ListingReadOnlyView({ listing }: { listing: ListingDetailSummary }) {
             value={listing.internalLabel ?? "No internal label"}
           />
           <DetailItem
-            label="Public description"
+            label={isInventoryExperience ? "Buyer description" : "Public description"}
             value={listing.publicDescription ?? "No public description"}
           />
           <DetailItem
@@ -1464,32 +1553,38 @@ function ListingReadOnlyView({ listing }: { listing: ListingDetailSummary }) {
         </dl>
       </SellerCard>
 
-      <InventoryReadOnlyCard listing={listing} />
+      <InventoryReadOnlyCard experience={experience} listing={listing} />
     </section>
   );
 }
 
 function InventoryReadOnlyCard({
+  experience,
   listing,
 }: {
+  experience: DetailExperience;
   listing: ListingDetailSummary;
 }) {
+  const isInventoryExperience = experience === "inventory";
   const isSoldOut = getDisplayedListingStatus(listing) === "sold_out";
 
   return (
     <SellerCard className="p-5">
-      <h2 className="text-lg font-semibold text-stone-950">Bird groups</h2>
+      <h2 className="text-lg font-semibold text-stone-950">
+        {isInventoryExperience ? "Inventory Records" : "Bird groups"}
+      </h2>
       {isSoldOut ? (
         <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
           <p className="font-semibold">No birds currently available.</p>
           <p className="mt-1">
-            Buyers will see this listing as Sold Out. Add quantity when more
-            are available to make it read as available again.
+            Buyers will see this inventory as Sold Out. Add quantity when more
+            are available.
           </p>
         </div>
       ) : (
         <p className="mt-1 text-sm text-stone-600">
-          {listing.totalAvailable} available across {listing.rows.length} group
+          {listing.totalAvailable} available across {listing.rows.length}{" "}
+          {isInventoryExperience ? "record" : "group"}
           {listing.rows.length === 1 ? "" : "s"}.
         </p>
       )}
@@ -1509,10 +1604,14 @@ function InventoryReadOnlyCard({
                   {row.breed_display_name}
                 </p>
               </div>
-              <StatusBadge status={row.operational_availability_status} />
+              {isInventoryExperience ? (
+                <InventoryRowBadges row={row} />
+              ) : (
+                <StatusBadge status={row.operational_availability_status} />
+              )}
             </div>
 
-            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
               <Metric
                 label="Available"
                 value={(row.quantity_available ?? 0).toString()}
@@ -1530,8 +1629,12 @@ function InventoryReadOnlyCard({
                 }
               />
               <Metric
-                label="Group status"
-                value={formatStatus(row.inventory_visibility_status)}
+                label={isInventoryExperience ? "Visibility" : "Group status"}
+                value={formatInventoryVisibility(row)}
+              />
+              <Metric
+                label="Availability"
+                value={formatInventoryAvailability(row)}
               />
             </dl>
           </div>
@@ -1544,6 +1647,7 @@ function InventoryReadOnlyCard({
 function PublicContentMaintenanceCard({
   descriptionDraft,
   error,
+  experience,
   isEditing,
   isSaving,
   listing,
@@ -1554,6 +1658,7 @@ function PublicContentMaintenanceCard({
 }: {
   descriptionDraft: string;
   error: string | null;
+  experience: DetailExperience;
   isEditing: boolean;
   isSaving: boolean;
   listing: ListingDetailSummary;
@@ -1562,16 +1667,19 @@ function PublicContentMaintenanceCard({
   onSave: () => void;
   setDescriptionDraft: Dispatch<SetStateAction<string>>;
 }) {
+  const isInventoryExperience = experience === "inventory";
+
   return (
     <SellerCard className="p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-stone-950">
-            Update Public Listing Content
+            {isInventoryExperience ? "Buyer Content" : "Update Public Listing Content"}
           </h2>
           <p className="mt-1 text-sm leading-6 text-stone-600">
-            Keep the buyer-facing description current while this listing is
-            live. Setup details stay read-only here.
+            Keep the buyer-facing description current while this{" "}
+            {isInventoryExperience ? "inventory" : "listing"} is live. Setup
+            details stay read-only here.
           </p>
         </div>
         {!isEditing ? (
@@ -1592,7 +1700,7 @@ function PublicContentMaintenanceCard({
               onChange={(event) => setDescriptionDraft(event.target.value)}
             />
             <span className="text-xs font-normal leading-5 text-stone-500">
-              This is what buyers will see on your listing.
+              This is what buyers will see on your storefront.
             </span>
           </label>
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
@@ -1605,7 +1713,7 @@ function PublicContentMaintenanceCard({
               onClick={onSave}
               type="button"
             >
-              {isSaving ? "Saving" : "Save Public Description"}
+              {isSaving ? "Saving" : "Save Buyer Description"}
             </button>
           </div>
         </div>
@@ -1632,20 +1740,27 @@ function PublicContentMaintenanceCard({
 }
 
 function ArchiveListingAction({
+  experience,
   isArchiving,
   onArchive,
 }: {
+  experience: DetailExperience;
   isArchiving: boolean;
   onArchive: () => void;
 }) {
+  const isInventoryExperience = experience === "inventory";
+
   return (
     <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="font-semibold text-stone-950">Archive listing</p>
+          <p className="font-semibold text-stone-950">
+            {isInventoryExperience ? "Archive inventory" : "Archive listing"}
+          </p>
           <p className="mt-1 text-sm leading-6 text-stone-700">
-            This removes the listing from your storefront while keeping all
-            listing information for your records.
+            {isInventoryExperience
+              ? "Archiving removes this inventory from the storefront while keeping historical records."
+              : "This removes the listing from your storefront while keeping all listing information for your records."}
           </p>
         </div>
         <button
@@ -1654,7 +1769,13 @@ function ArchiveListingAction({
           onClick={onArchive}
           type="button"
         >
-          {isArchiving ? "Archiving Listing" : "Archive Listing"}
+          {isArchiving
+            ? isInventoryExperience
+              ? "Archiving Inventory"
+              : "Archiving Listing"
+            : isInventoryExperience
+              ? "Archive Inventory"
+              : "Archive Listing"}
         </button>
       </div>
     </div>
@@ -1664,6 +1785,7 @@ function ArchiveListingAction({
 function EditListingForm({
   editBasics,
   editRows,
+  experience,
   isSaving,
   listing,
   onCancel,
@@ -1675,6 +1797,7 @@ function EditListingForm({
 }: {
   editBasics: EditBasicsState;
   editRows: EditInventoryRow[];
+  experience: DetailExperience;
   isSaving: boolean;
   listing: ListingDetailSummary;
   onCancel: () => void;
@@ -1684,6 +1807,7 @@ function EditListingForm({
   setEditRows: Dispatch<SetStateAction<EditInventoryRow[]>>;
   validationErrors: string[];
 }) {
+  const isInventoryExperience = experience === "inventory";
   const inventoryOptions =
     listing.batchType === "hatching_eggs"
       ? hatchingEggInventoryTypes
@@ -1773,7 +1897,9 @@ function EditListingForm({
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_1.2fr]">
         <section className="grid gap-4">
-          <h3 className="font-semibold text-stone-950">Listing Basics</h3>
+          <h3 className="font-semibold text-stone-950">
+            {isInventoryExperience ? "Inventory Details" : "Listing Basics"}
+          </h3>
           <label className="grid gap-1 text-sm font-semibold text-stone-700">
             Hatch/origin date
             <input
@@ -2094,6 +2220,7 @@ function EditListingForm({
 }
 
 function OperationalEditForm({
+  experience,
   isSaving,
   listing,
   onCancel,
@@ -2103,6 +2230,7 @@ function OperationalEditForm({
   setRows,
   validationErrors,
 }: {
+  experience: DetailExperience;
   isSaving: boolean;
   listing: ListingDetailSummary;
   onCancel: () => void;
@@ -2112,6 +2240,8 @@ function OperationalEditForm({
   setRows: Dispatch<SetStateAction<OperationalEditRow[]>>;
   validationErrors: string[];
 }) {
+  const isInventoryExperience = experience === "inventory";
+
   function updateRow(rowId: string, updates: Partial<OperationalEditRow>) {
     setRows((current) =>
       current.map((row) =>
@@ -2125,11 +2255,14 @@ function OperationalEditForm({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-stone-950">
-            Update Availability & Pricing
+            {isInventoryExperience
+              ? "Availability & Pricing"
+              : "Update Availability & Pricing"}
           </h2>
           <p className="mt-1 text-sm leading-6 text-stone-600">
-            Update live bird groups after sales or price changes. Breed, dates,
-            photos, and setup structure stay unchanged in this step.
+            Update available quantity and custom prices after sales or price
+            changes. Breed, dates, photos, and setup structure stay unchanged in
+            this step.
           </p>
         </div>
         <div className="flex gap-2">
@@ -2149,8 +2282,9 @@ function OperationalEditForm({
 
       <div className="mt-5 grid gap-4">
         <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
-          This listing is live. If all groups are set to 0, buyers will see it
-          as Sold Out. Add quantity when more birds are available.
+          This {isInventoryExperience ? "inventory" : "listing"} is live. If
+          all records are set to 0, buyers will see it as Sold Out. Add quantity
+          when more birds are available.
         </div>
 
         {rows.map((row) => {
@@ -2166,7 +2300,11 @@ function OperationalEditForm({
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 className="font-semibold text-stone-950">
-                    {originalRow ? formatInventoryType(originalRow) : "Bird group"}
+                    {originalRow
+                      ? formatInventoryType(originalRow)
+                      : isInventoryExperience
+                        ? "Inventory record"
+                        : "Bird group"}
                   </h3>
                   <p className="mt-1 text-sm text-stone-600">
                     {originalRow?.breed_display_name ?? listing.breedNames.join(", ")}
@@ -2237,6 +2375,42 @@ function getOperationalRowDisplayStatus(
   return originalRow?.operational_availability_status ?? row.visibilityStatus;
 }
 
+function InventoryDetailBadges({
+  listing,
+}: {
+  listing: ListingDetailSummary;
+}) {
+  const visibility = getInventoryDetailVisibility(listing);
+  const availability = formatListingAvailability(listing);
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <StatusBadge status={visibility} />
+      {availability ? (
+        <span className="inline-flex items-center rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-700">
+          {availability}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function InventoryRowBadges({ row }: { row: SellerInventoryManagementRow }) {
+  const visibility = formatInventoryVisibility(row);
+  const availability = formatInventoryAvailability(row);
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <StatusBadge status={visibility.toLowerCase().replaceAll(" ", "_")} />
+      {visibility === "Live" && availability ? (
+        <span className="inline-flex items-center rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-700">
+          {availability}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="border-b border-stone-100 pb-3 last:border-0 last:pb-0">
@@ -2263,8 +2437,66 @@ function formatInventoryType(row: SellerInventoryManagementRow) {
   return row.custom_inventory_label || formatInventoryTypeLabel(row.inventory_type);
 }
 
+function formatBatchType(value: string | null | undefined) {
+  if (value === "live_animals") return "Birds";
+  if (value === "hatching_eggs") return "Hatching eggs";
+
+  return formatStatus(value);
+}
+
 function formatStatus(value: string | null | undefined) {
   return value ? value.replaceAll("_", " ") : "Not set";
+}
+
+function getInventoryDetailVisibility(listing: ListingDetailSummary) {
+  if (listing.visibilityStatus === "active" && listing.totalAvailable <= 0) {
+    return "sold_out";
+  }
+
+  if (listing.visibilityStatus === "active") return "live";
+  if (listing.visibilityStatus === "hidden") return "draft";
+
+  return listing.visibilityStatus;
+}
+
+function formatListingAvailability(listing: ListingDetailSummary) {
+  const visibility = getInventoryDetailVisibility(listing);
+
+  if (visibility === "sold_out") return "Sold Out";
+  if (visibility !== "live") return "";
+
+  if (listing.availableDate && isFutureDate(listing.availableDate)) {
+    return `Available ${formatShortDate(listing.availableDate)}`;
+  }
+
+  return "Available Now";
+}
+
+function formatInventoryVisibility(row: SellerInventoryManagementRow) {
+  if (
+    row.listing_batch_visibility_status === "archived" ||
+    row.inventory_visibility_status === "archived"
+  ) {
+    return "Archived";
+  }
+
+  if (row.operational_availability_status === "sold_out") return "Sold Out";
+  if (row.listing_batch_visibility_status === "active") return "Live";
+  if (row.listing_batch_visibility_status === "hidden") return "Draft";
+  if (row.inventory_visibility_status === "hidden") return "Hidden";
+
+  return formatStatus(row.listing_batch_visibility_status);
+}
+
+function formatInventoryAvailability(row: SellerInventoryManagementRow) {
+  if (row.operational_availability_status === "sold_out") return "Sold Out";
+  if (formatInventoryVisibility(row) !== "Live") return "Not visible";
+
+  if (row.available_date && isFutureDate(row.available_date)) {
+    return `Available ${formatShortDate(row.available_date)}`;
+  }
+
+  return "Available Now";
 }
 
 function formatPriceAdjustmentSummary(listing: ListingDetailSummary) {
@@ -2337,6 +2569,24 @@ function formatDate(value: string | null | undefined) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatShortDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
+}
+
+function isFutureDate(value: string) {
+  const today = new Date();
+  const todayIso = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    String(today.getDate()).padStart(2, "0"),
+  ].join("-");
+
+  return value > todayIso;
 }
 
 function formatCurrency(value: number | null | undefined) {

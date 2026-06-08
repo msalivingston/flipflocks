@@ -166,8 +166,9 @@ export function SellerDashboard() {
                     Storefront quick link
                   </h2>
                   <p className="mt-1 text-sm leading-6 text-stone-600">
-                    Listings control photos, descriptions, and storefront
-                    presentation. Buyers see saved public data at{" "}
+                    Inventory controls day-to-day availability, while saved
+                    storefront content controls photos and descriptions buyers
+                    see at{" "}
                     <span className="font-semibold text-stone-950">
                       /store/{seller?.store_slug}
                     </span>
@@ -221,10 +222,10 @@ export function SellerDashboard() {
                   <div className="p-5">
                     <EmptyState
                       title="No available birds"
-                      description="Create a listing, then update day-to-day quantities from Inventory."
+                      description="Add birds, eggs, or upcoming availability to start building your storefront."
                       action={
                         <PrimaryActionLink href="/dashboard/listings/new">
-                          Create Listing
+                          Add Inventory
                         </PrimaryActionLink>
                       }
                     />
