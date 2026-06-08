@@ -84,3 +84,19 @@ body {
   background: #f5f5f4;
   color: #78716c;
 }
+
+.seller-money-field {
+  padding-left: 3rem;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}

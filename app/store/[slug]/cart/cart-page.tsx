@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   StorefrontCart,
@@ -10,7 +9,17 @@ import {
   updateStorefrontCartItemQuantity,
 } from "../_components/storefront-cart-client";
 import { StorefrontHome } from "../storefront-data";
-import { formatCurrency, formatDate } from "../storefront-ui";
+import {
+  StorefrontButton,
+  StorefrontCard,
+  StorefrontInput,
+  StorefrontLabel,
+  StorefrontPage,
+  StorefrontSummaryCard,
+  StorefrontTextButton,
+  formatCurrency,
+  formatDate,
+} from "../storefront-ui";
 
 const emptyItems: StorefrontCart["items"] = [];
 
@@ -44,8 +53,8 @@ export function CartPage({ store }: { store: StorefrontHome }) {
   }
 
   return (
-    <main className="mx-auto grid max-w-5xl gap-6 px-5 py-8 sm:px-7">
-      <div>
+    <StorefrontPage className="max-w-6xl gap-7">
+      <div className="rounded-xl border border-[#ded7c8] bg-white p-6 shadow-[0_16px_40px_rgba(46,35,20,0.07)]">
         <p className="text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
           Cart
         </p>
@@ -69,20 +78,16 @@ export function CartPage({ store }: { store: StorefrontHome }) {
           <p className="mt-2 text-sm leading-6 text-stone-600">
             Add available options from the storefront to start an order.
           </p>
-          <Link
-            className="mt-4 inline-flex min-h-10 items-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white hover:bg-emerald-900"
-            href={`/store/${store.store_slug}`}
-          >
+          <StorefrontButton className="mt-4 min-h-10" href={`/store/${store.store_slug}`}>
             Continue shopping
-          </Link>
+          </StorefrontButton>
         </CartPanel>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[1fr_20rem] lg:items-start">
-          <section className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
-            <div className="divide-y divide-stone-200">
+        <div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
+          <div className="grid gap-4">
               {items.map((item) => (
                 <article
-                  className="grid gap-4 p-4 md:grid-cols-[1fr_8rem_6rem]"
+                  className="grid gap-4 rounded-xl border border-[#ded7c8] bg-white p-4 shadow-[0_12px_35px_rgba(46,35,20,0.06)] md:grid-cols-[1fr_8rem_6rem] md:items-center"
                   key={item.inventoryItemId}
                 >
                   <div>
@@ -96,16 +101,16 @@ export function CartPage({ store }: { store: StorefrontHome }) {
                       {item.optionLabel}
                     </p>
                     <p className="mt-2 text-sm text-stone-600">
-                      {formatCartAvailability(item.availableDate)} ·{" "}
-                      {formatCurrency(item.unitPrice)} each ·{" "}
+                      {formatCartAvailability(item.availableDate)} -{" "}
+                      {formatCurrency(item.unitPrice)} each -{" "}
                       {item.quantityAvailable} available
                     </p>
                   </div>
 
-                  <label className="grid h-fit gap-1 text-sm font-semibold text-stone-800">
-                    Quantity
-                    <input
-                      className="min-h-11 rounded-md border border-stone-300 px-3 py-2 text-base font-normal text-stone-950 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                  <StorefrontLabel className="h-fit text-xs uppercase tracking-[0.1em] text-stone-500">
+                    Qty
+                    <StorefrontInput
+                      className="text-center"
                       inputMode="numeric"
                       max={item.quantityAvailable}
                       min={0}
@@ -119,28 +124,28 @@ export function CartPage({ store }: { store: StorefrontHome }) {
                       type="number"
                       value={item.quantity}
                     />
-                  </label>
+                  </StorefrontLabel>
 
                   <div className="flex items-start justify-between gap-3 md:grid md:justify-items-end">
                     <p className="font-semibold text-stone-950">
                       {formatCurrency(item.quantity * item.unitPrice)}
                     </p>
-                    <button
-                      className="text-sm font-semibold text-stone-500 hover:text-rose-700"
+                    <StorefrontTextButton
                       onClick={() => removeItem(item.inventoryItemId)}
-                      type="button"
                     >
                       Remove
-                    </button>
+                    </StorefrontTextButton>
                   </div>
                 </article>
               ))}
-            </div>
-          </section>
+          </div>
 
-          <aside className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-stone-950">
+          <StorefrontSummaryCard className="lg:sticky lg:top-28">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
               Order summary
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-stone-950">
+              Ready for checkout
             </h2>
             <dl className="mt-4 grid gap-3 text-sm">
               <SummaryRow label="Items" value={String(summary.totalQuantity)} />
@@ -149,32 +154,32 @@ export function CartPage({ store }: { store: StorefrontHome }) {
                 value={formatCurrency(summary.subtotal)}
               />
             </dl>
+            <p className="mt-4 rounded-lg bg-[#fbf7ef] p-3 text-sm leading-6 text-stone-600">
+              Final availability is checked again before your order is placed.
+            </p>
             <div className="mt-5 grid gap-2">
-              <Link
-                className="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white hover:bg-emerald-900"
-                href={`/store/${store.store_slug}/checkout`}
-              >
+              <StorefrontButton href={`/store/${store.store_slug}/checkout`}>
                 Checkout
-              </Link>
-              <Link
-                className="inline-flex min-h-11 items-center justify-center rounded-md border border-stone-300 px-4 text-sm font-semibold text-stone-800 hover:bg-stone-50"
+              </StorefrontButton>
+              <StorefrontButton
                 href={`/store/${store.store_slug}`}
+                variant="secondary"
               >
                 Continue shopping
-              </Link>
+              </StorefrontButton>
             </div>
-          </aside>
+          </StorefrontSummaryCard>
         </div>
       )}
-    </main>
+    </StorefrontPage>
   );
 }
 
 function CartPanel({ children }: { children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+    <StorefrontCard>
       {children}
-    </section>
+    </StorefrontCard>
   );
 }
 

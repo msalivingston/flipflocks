@@ -2,8 +2,11 @@ import Image from "next/image";
 import {
   EmptyStorefront,
   Fact,
+  StorefrontCard,
   StorefrontFooter,
   StorefrontNav,
+  StorefrontPage,
+  StoreLogo,
   StorefrontShell,
   formatLocation,
   toPublicImageUrl,
@@ -32,12 +35,12 @@ export default async function StorefrontAboutPage({
   if (error) {
     return (
       <StorefrontShell>
-        <main className="mx-auto max-w-3xl px-5 py-12 sm:px-7">
+        <StorefrontPage size="narrow" className="py-12">
           <EmptyStorefront
             title="This page could not load"
             description="Please refresh the page or return to the storefront."
           />
-        </main>
+        </StorefrontPage>
       </StorefrontShell>
     );
   }
@@ -47,12 +50,12 @@ export default async function StorefrontAboutPage({
   if (!store) {
     return (
       <StorefrontShell>
-        <main className="mx-auto max-w-3xl px-5 py-12 sm:px-7">
+        <StorefrontPage size="narrow" className="py-12">
           <EmptyStorefront
             title="Storefront not found"
             description="This storefront is not public right now."
           />
-        </main>
+        </StorefrontPage>
       </StorefrontShell>
     );
   }
@@ -68,26 +71,31 @@ export default async function StorefrontAboutPage({
     <StorefrontShell>
       <StorefrontNav store={store} />
 
-      <main className="mx-auto grid max-w-6xl gap-7 px-5 py-7 sm:px-7">
-        <section className="grid gap-6 rounded-lg border border-stone-200 bg-white p-5 shadow-sm lg:grid-cols-[1fr_20rem]">
+      <StorefrontPage className="gap-7">
+        <StorefrontCard className="grid gap-8 bg-[#fffdf8] p-6 lg:grid-cols-[1fr_20rem]">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
-              About the farm
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold text-stone-950">
-              {store.store_name}
-            </h1>
+            <div className="flex items-center gap-4">
+              <StoreLogo store={store} />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800">
+                  About the farm
+                </p>
+                <h1 className="mt-1 text-4xl font-semibold leading-tight text-stone-950">
+                  {store.store_name}
+                </h1>
+              </div>
+            </div>
             {store.store_tagline ? (
               <p className="mt-3 text-lg leading-8 text-stone-700">
                 {store.store_tagline}
               </p>
             ) : null}
-            <p className="mt-5 whitespace-pre-line text-sm leading-7 text-stone-700">
+            <p className="mt-6 max-w-3xl whitespace-pre-line text-base leading-8 text-stone-700">
               {aboutText}
             </p>
           </div>
 
-          <aside className="grid h-fit gap-4 rounded-lg bg-stone-50 p-4">
+          <aside className="grid h-fit gap-4 rounded-lg border border-[#e7decd] bg-white p-4">
             <Fact label="Location" value={formatLocation(store)} />
             <Fact
               label="Pickup region"
@@ -101,12 +109,12 @@ export default async function StorefrontAboutPage({
               <Fact label="NPIP" value={store.npip_number} />
             ) : null}
           </aside>
-        </section>
+        </StorefrontCard>
 
         {photos.length > 0 ? (
           <PhotoStrip photos={photos} storeName={store.store_name} />
         ) : (
-          <section className="rounded-lg border border-dashed border-stone-300 bg-white px-5 py-8 text-center">
+          <StorefrontCard className="border-dashed border-[#d8cebd] bg-[linear-gradient(135deg,#fffdf8,#eef4e8)] px-5 py-10 text-center">
             <h2 className="text-xl font-semibold text-stone-950">
               Farm photos coming soon
             </h2>
@@ -114,9 +122,9 @@ export default async function StorefrontAboutPage({
               This storefront still works without a full gallery. Product photos
               and pickup details will show where available.
             </p>
-          </section>
+          </StorefrontCard>
         )}
-      </main>
+      </StorefrontPage>
 
       <StorefrontFooter store={store} />
     </StorefrontShell>
@@ -135,11 +143,11 @@ function PhotoStrip({
       <h2 className="mb-4 text-2xl font-semibold text-stone-950">
         Around the farm
       </h2>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-3">
         {photos.slice(0, 3).map((photo) => (
           <Image
             alt={photo.alt_text || `${storeName} farm photo`}
-            className="aspect-[4/3] w-full rounded-lg object-cover shadow-sm"
+            className="aspect-[4/3] w-full rounded-xl border border-[#ded7c8] object-cover shadow-[0_12px_35px_rgba(46,35,20,0.08)]"
             height={360}
             key={`${photo.display_context}-${photo.public_url}`}
             src={toPublicImageUrl(photo.public_url)}

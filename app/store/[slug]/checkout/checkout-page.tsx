@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -12,7 +11,17 @@ import {
   summarizeStorefrontCart,
 } from "../_components/storefront-cart-client";
 import { StorefrontHome } from "../storefront-data";
-import { formatCurrency, formatDate } from "../storefront-ui";
+import {
+  StorefrontButton,
+  StorefrontCard,
+  StorefrontInput,
+  StorefrontLabel,
+  StorefrontPage,
+  StorefrontSummaryCard,
+  StorefrontTextarea,
+  formatCurrency,
+  formatDate,
+} from "../storefront-ui";
 
 type BuyerForm = {
   buyerEmail: string;
@@ -228,8 +237,8 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
 
   if (success) {
     return (
-      <main className="mx-auto max-w-3xl px-5 py-10 sm:px-7">
-        <section className="rounded-lg border border-emerald-200 bg-white p-6 shadow-sm">
+      <StorefrontPage size="narrow" className="py-10">
+        <StorefrontCard className="border-emerald-200 p-6">
           <p className="text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
             Order placed
           </p>
@@ -245,24 +254,21 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
             ) : null}
             <SummaryRow label="Estimated total" value={success.totalText} />
           </dl>
-          <Link
-            className="mt-6 inline-flex min-h-11 items-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white hover:bg-emerald-900"
-            href={`/store/${store.store_slug}`}
-          >
+          <StorefrontButton className="mt-6" href={`/store/${store.store_slug}`}>
             Continue shopping
-          </Link>
-        </section>
-      </main>
+          </StorefrontButton>
+        </StorefrontCard>
+      </StorefrontPage>
     );
   }
 
   return (
-    <main className="mx-auto grid max-w-6xl gap-6 px-5 py-8 sm:px-7">
-      <div>
+    <StorefrontPage className="gap-7">
+      <div className="rounded-xl border border-[#ded7c8] bg-white p-6 shadow-[0_16px_40px_rgba(46,35,20,0.07)]">
         <p className="text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
           Checkout
         </p>
-        <h1 className="mt-1 text-3xl font-semibold text-stone-950">
+        <h1 className="mt-1 text-4xl font-semibold text-stone-950">
           Place your order
         </h1>
         <p className="mt-2 text-sm leading-6 text-stone-600">
@@ -282,21 +288,21 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
           <p className="mt-2 text-sm leading-6 text-stone-600">
             Add available options before checkout.
           </p>
-          <Link
-            className="mt-4 inline-flex min-h-10 items-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white hover:bg-emerald-900"
-            href={`/store/${store.store_slug}`}
-          >
+          <StorefrontButton className="mt-4 min-h-10" href={`/store/${store.store_slug}`}>
             Continue shopping
-          </Link>
+          </StorefrontButton>
         </CheckoutPanel>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
           <form
-            className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm"
+            className="rounded-xl border border-[#ded7c8] bg-white p-6 shadow-[0_16px_40px_rgba(46,35,20,0.08)]"
             onSubmit={handleSubmit}
           >
-            <h2 className="text-xl font-semibold text-stone-950">
-              Contact details
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
+              Buyer details
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-stone-950">
+              Contact and pickup information
             </h2>
             <div className="mt-5 grid gap-4">
               <div className="grid gap-3 sm:grid-cols-2">
@@ -329,7 +335,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                 value={form.buyerPhone}
               />
 
-              <h2 className="pt-3 text-xl font-semibold text-stone-950">
+              <h2 className="border-t border-[#eee5d6] pt-5 text-xl font-semibold text-stone-950">
                 Pickup details
               </h2>
               <TextField
@@ -387,8 +393,8 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                 </div>
               ) : null}
 
-              <button
-                className="min-h-11 rounded-md bg-emerald-800 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-900 disabled:cursor-not-allowed disabled:bg-stone-300"
+              <StorefrontButton
+                className="mt-2"
                 disabled={
                   isSubmitting ||
                   isChecking ||
@@ -398,19 +404,22 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                 type="submit"
               >
                 {isSubmitting ? "Placing order..." : "Place order"}
-              </button>
+              </StorefrontButton>
             </div>
           </form>
 
-          <aside className="grid gap-4">
-            <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-semibold text-stone-950">
+          <aside className="grid h-fit gap-4 lg:sticky lg:top-28">
+            <StorefrontSummaryCard>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
                 Order summary
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-stone-950">
+                Your order
               </h2>
               <div className="mt-4 grid gap-3">
                 {cartItems.map((item) => (
                   <div
-                    className="border-b border-stone-100 pb-3 text-sm last:border-b-0 last:pb-0"
+                    className="rounded-lg border border-[#eee5d6] bg-[#fffdf8] p-3 text-sm"
                     key={item.inventoryItemId}
                   >
                     <div className="flex justify-between gap-3">
@@ -450,15 +459,17 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                   {toBuyerOrderError(summaryMessage)}
                 </p>
               ) : null}
-              <Link
-                className="mt-4 inline-flex min-h-10 items-center rounded-md border border-stone-300 px-4 text-sm font-semibold text-stone-800 hover:bg-stone-50"
+              <StorefrontButton
+                className="mt-4 min-h-10 w-full"
                 href={`/store/${store.store_slug}/cart`}
+                variant="secondary"
               >
                 View cart
-              </Link>
-            </section>
+              </StorefrontButton>
 
-            <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+            </StorefrontSummaryCard>
+
+            <StorefrontSummaryCard className="bg-[#fffdf8]">
               <h2 className="text-lg font-semibold text-stone-950">
                 Pickup and policies
               </h2>
@@ -469,19 +480,19 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                   <p>{store.cancellation_policy}</p>
                 ) : null}
               </div>
-            </section>
+            </StorefrontSummaryCard>
           </aside>
         </div>
       )}
-    </main>
+    </StorefrontPage>
   );
 }
 
 function CheckoutPanel({ children }: { children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+    <StorefrontCard>
       {children}
-    </section>
+    </StorefrontCard>
   );
 }
 
@@ -503,10 +514,9 @@ function TextField({
   value: string;
 }) {
   return (
-    <label className="grid gap-1 text-sm font-semibold text-stone-800">
+    <StorefrontLabel>
       {label}
-      <input
-        className="min-h-11 rounded-md border border-stone-300 px-3 py-2 text-base font-normal text-stone-950 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+      <StorefrontInput
         maxLength={maxLength}
         name={name}
         onChange={(event) => onChange(event.target.value)}
@@ -514,7 +524,7 @@ function TextField({
         type={type}
         value={value}
       />
-    </label>
+    </StorefrontLabel>
   );
 }
 
@@ -530,16 +540,15 @@ function TextArea({
   value: string;
 }) {
   return (
-    <label className="grid gap-1 text-sm font-semibold text-stone-800">
+    <StorefrontLabel>
       {label}
-      <textarea
-        className="min-h-24 rounded-md border border-stone-300 px-3 py-2 text-base font-normal text-stone-950 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+      <StorefrontTextarea
         maxLength={2000}
         name={name}
         onChange={(event) => onChange(event.target.value)}
         value={value}
       />
-    </label>
+    </StorefrontLabel>
   );
 }
 

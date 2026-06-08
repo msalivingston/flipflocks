@@ -1,8 +1,11 @@
 import {
   EmptyStorefront,
   InfoPanel,
+  StorefrontCard,
   StorefrontFooter,
   StorefrontNav,
+  StorefrontPage,
+  StoreLogo,
   StorefrontShell,
   formatLocation,
 } from "../storefront-ui";
@@ -19,12 +22,12 @@ export default async function StorefrontPoliciesPage({
   if (error) {
     return (
       <StorefrontShell>
-        <main className="mx-auto max-w-3xl px-5 py-12 sm:px-7">
+        <StorefrontPage size="narrow" className="py-12">
           <EmptyStorefront
             title="This page could not load"
             description="Please refresh the page or return to the storefront."
           />
-        </main>
+        </StorefrontPage>
       </StorefrontShell>
     );
   }
@@ -32,12 +35,12 @@ export default async function StorefrontPoliciesPage({
   if (!store) {
     return (
       <StorefrontShell>
-        <main className="mx-auto max-w-3xl px-5 py-12 sm:px-7">
+        <StorefrontPage size="narrow" className="py-12">
           <EmptyStorefront
             title="Storefront not found"
             description="This storefront is not public right now."
           />
-        </main>
+        </StorefrontPage>
       </StorefrontShell>
     );
   }
@@ -46,22 +49,26 @@ export default async function StorefrontPoliciesPage({
     <StorefrontShell>
       <StorefrontNav store={store} />
 
-      <main className="mx-auto grid max-w-6xl gap-7 px-5 py-7 sm:px-7">
-        <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
-            Pickup and policies
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold text-stone-950">
-            Buying from {store.store_name}
-          </h1>
+      <StorefrontPage className="gap-7">
+        <StorefrontCard className="bg-[#fffdf8] p-6">
+          <div className="flex items-center gap-4">
+            <StoreLogo store={store} />
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800">
+                Pickup and policies
+              </p>
+              <h1 className="mt-1 text-4xl font-semibold leading-tight text-stone-950">
+                Buying from {store.store_name}
+              </h1>
+            </div>
+          </div>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-stone-600">
-            Review pickup details and seller policies before requesting an
-            order. The seller will confirm final timing after your request is
-            sent.
+            Review pickup details and seller policies before checkout. The
+            seller will confirm final timing after your order is placed.
           </p>
-        </section>
+        </StorefrontCard>
 
-        <section className="grid gap-4 lg:grid-cols-[1fr_20rem]">
+        <section className="grid gap-5 lg:grid-cols-[1fr_21rem]">
           <div className="grid gap-4">
             <PolicySection title="Pickup instructions">
               {store.pickup_instructions || "Pickup instructions coming soon."}
@@ -88,7 +95,7 @@ export default async function StorefrontPoliciesPage({
             </InfoPanel>
           </aside>
         </section>
-      </main>
+      </StorefrontPage>
 
       <StorefrontFooter store={store} />
     </StorefrontShell>
@@ -103,11 +110,11 @@ function PolicySection({
   title: string;
 }) {
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+    <StorefrontCard className="border-l-4 border-l-[#24512f]">
       <h2 className="text-xl font-semibold text-stone-950">{title}</h2>
       <p className="mt-3 whitespace-pre-line text-sm leading-7 text-stone-700">
         {children}
       </p>
-    </section>
+    </StorefrontCard>
   );
 }

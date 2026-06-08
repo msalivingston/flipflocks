@@ -21,6 +21,10 @@ import {
   type PriceAdjustmentDirection,
 } from "../../_lib/listing-formatters";
 import {
+  formatAgeAtAvailabilityFromDates,
+  MoneyInput as SharedMoneyInput,
+} from "../new/_components/creation-wizard-shared";
+import {
   ListingPhotosSection,
   type ListingPhotoItem,
 } from "./listing-photos-section";
@@ -766,16 +770,6 @@ export function ListingDetail({
       setPublishError("Fix the required items before publishing this listing.");
       return;
     }
-
-    const warningCount = publishReadinessReport.publishGate.warnings.length;
-    const confirmationMessage =
-      warningCount > 0
-        ? `Publish this listing with ${warningCount} warning${
-            warningCount === 1 ? "" : "s"
-          } still showing? Buyers will be able to see it.`
-        : "Publish this listing now? Buyers will be able to see it.";
-
-    if (!window.confirm(confirmationMessage)) return;
 
     setIsPublishing(true);
 
@@ -1801,16 +1795,18 @@ function EditListingForm({
               }
             />
           </label>
+          <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-950">
+            <span className="font-semibold">Age at availability:</span>{" "}
+            {formatAgeAtAvailabilityFromDates(
+              editBasics.originDate,
+              editBasics.availableDate,
+            ) ?? "Set hatch and available dates"}
+          </div>
           <label className="grid gap-1 text-sm font-semibold text-stone-700">
             Base price
-            <input
-              className="seller-form-field"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              type="number"
+            <MoneyInput
               value={editBasics.basePrice}
-              onChange={(event) => updateBasics({ basePrice: event.target.value })}
+              onChange={(value) => updateBasics({ basePrice: value })}
             />
           </label>
           <fieldset className="grid gap-3 rounded-lg border border-stone-200 bg-stone-50 p-4">
@@ -2066,16 +2062,11 @@ function EditListingForm({
               ) : null}
               <label className="mt-3 grid gap-1 text-sm font-semibold text-stone-700">
                 Optional custom price
-                <input
-                  className="seller-form-field"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  type="number"
+                <MoneyInput
                   value={row.priceOverride}
-                  onChange={(event) =>
+                  onChange={(value) =>
                     updateRow(row.inventoryItemId, {
-                      priceOverride: event.target.value,
+                      priceOverride: value,
                     })
                   }
                 />
@@ -2205,16 +2196,11 @@ function OperationalEditForm({
                 </label>
                 <label className="grid gap-1 text-sm font-semibold text-stone-700">
                   Optional custom price
-                  <input
-                    className="seller-form-field"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.01"
-                    type="number"
+                  <MoneyInput
                     value={row.priceOverride}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       updateRow(row.inventoryItemId, {
-                        priceOverride: event.target.value,
+                        priceOverride: value,
                       })
                     }
                   />
@@ -2260,30 +2246,7 @@ function DetailItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MoneyInput({
-  onChange,
-  value,
-}: {
-  onChange: (value: string) => void;
-  value: string;
-}) {
-  return (
-    <div className="relative">
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-stone-500">
-        $
-      </span>
-      <input
-        className="seller-form-field pl-7"
-        inputMode="decimal"
-        min="0"
-        step="0.01"
-        type="number"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </div>
-  );
-}
+const MoneyInput = SharedMoneyInput;
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (

@@ -39,6 +39,7 @@ export const inventoryTypeOptions: { label: string; value: InventoryType }[] = [
 export type BuyerPreviewRow = {
   id: string;
   breed: string;
+  description?: string | null;
   type: string;
   quantity: string;
   price: string;
@@ -151,9 +152,7 @@ export function ListingCreationBuyerPreview({
   type?: string;
   variant: "simple" | "group";
 }) {
-  const listingPhoto = pickFeaturedPhoto(
-    mediaItems.filter((item) => item.entity_type === "listing_batch"),
-  );
+  const listingPhoto = pickFeaturedPhoto(mediaItems);
   const hasDynamicPricing = dynamicPricingSummary !== "Off";
 
   return (
@@ -241,9 +240,16 @@ export function ListingCreationBuyerPreview({
                     >
                       <RowPhoto photo={row.photo} />
                       <div className="grid gap-2 sm:grid-cols-4 sm:items-center">
-                        <p className="font-semibold text-stone-950">
-                          {row.breed}
-                        </p>
+                        <div>
+                          <p className="font-semibold text-stone-950">
+                            {row.breed}
+                          </p>
+                          {row.description?.trim() ? (
+                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-600">
+                              {row.description.trim()}
+                            </p>
+                          ) : null}
+                        </div>
                         <p className="text-stone-700">{row.type}</p>
                         <p className="text-stone-700">{row.quantity}</p>
                         <p className="font-semibold text-stone-950">
@@ -299,15 +305,13 @@ export function MoneyInput({
 }) {
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-stone-500">
+      <span className="pointer-events-none absolute left-0 top-0 flex h-full w-10 items-center justify-center rounded-l-md border-r border-stone-200 bg-stone-50 text-sm font-semibold text-stone-500">
         $
       </span>
       <input
-        className="seller-form-field pl-7"
+        className="seller-form-field seller-money-field"
         inputMode="decimal"
-        min="0"
-        step="0.01"
-        type="number"
+        type="text"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
@@ -315,31 +319,64 @@ export function MoneyInput({
   );
 }
 
+export function AgeAtAvailabilityHint({
+  availableDate,
+  hatchDate,
+}: {
+  availableDate: string;
+  hatchDate: string;
+}) {
+  const label = formatAgeAtAvailabilityFromDates(hatchDate, availableDate);
+
+  if (!label) return null;
+
+  return (
+    <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-950">
+      <span className="font-semibold">Age at availability:</span> {label}
+    </div>
+  );
+}
+
 export function ListingCreationPhotosStep({
   canManage,
+  description,
+  emptyDescription,
+  entityId,
+  entityType,
   listingBatchId,
   mediaItems,
   onBack,
   onContinue,
   onReload,
   storeId,
+  title,
 }: {
   canManage: boolean;
+  description?: string;
+  emptyDescription?: string;
+  entityId?: string;
+  entityType?: "listing_batch" | "inventory_item" | "listing_batch_breed" | "seller_breed_profile";
   listingBatchId: string;
   mediaItems: ListingPhotoItem[];
   onBack: () => void;
   onContinue: () => void;
   onReload: () => void;
   storeId: string;
+  title?: string;
 }) {
   return (
     <div className="grid gap-5">
       <ListingPhotosSection
         canManage={canManage}
+        description={description}
+        emptyDescription={emptyDescription}
+        entityId={entityId}
+        entityType={entityType}
         listingBatchId={listingBatchId}
         mediaItems={mediaItems}
         mode="setup"
         storeId={storeId}
+        title={title}
         onReload={onReload}
       />
       <div className="flex flex-col gap-3 border-t border-stone-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
@@ -476,6 +513,48 @@ export function formatDate(value: string | null | undefined) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(`${value}T00:00:00`));
+}
+
+export function calculateAgeAtAvailabilityDays(
+  hatchDate: string,
+  availableDate: string,
+) {
+  if (!hatchDate || !availableDate) return null;
+
+  const hatchTime = Date.parse(`${hatchDate}T00:00:00`);
+  const availableTime = Date.parse(`${availableDate}T00:00:00`);
+
+  if (Number.isNaN(hatchTime) || Number.isNaN(availableTime)) return null;
+
+  return Math.round((availableTime - hatchTime) / 86_400_000);
+}
+
+export function formatAgeAtAvailabilityFromDays(days: number | null) {
+  if (days === null || days < 0) return null;
+  if (days === 0) return "At hatch";
+
+  const weeks = Math.floor(days / 7);
+  const remainingDays = days % 7;
+  const parts: string[] = [];
+
+  if (weeks > 0) {
+    parts.push(`${weeks} week${weeks === 1 ? "" : "s"}`);
+  }
+
+  if (remainingDays > 0) {
+    parts.push(`${remainingDays} day${remainingDays === 1 ? "" : "s"}`);
+  }
+
+  return parts.join(" + ");
+}
+
+export function formatAgeAtAvailabilityFromDates(
+  hatchDate: string,
+  availableDate: string,
+) {
+  return formatAgeAtAvailabilityFromDays(
+    calculateAgeAtAvailabilityDays(hatchDate, availableDate),
+  );
 }
 
 export function formatCurrency(value: string | number | null | undefined) {

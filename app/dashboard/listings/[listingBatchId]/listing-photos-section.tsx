@@ -47,7 +47,11 @@ type FunctionErrorContext = {
 };
 
 type PhotoManagerMode = "setup" | "public-content" | "readonly";
-type PhotoEntityType = "listing_batch" | "inventory_item" | "listing_batch_breed";
+type PhotoEntityType =
+  | "listing_batch"
+  | "inventory_item"
+  | "listing_batch_breed"
+  | "seller_breed_profile";
 
 const acceptedImageTypes = ["image/jpeg", "image/png", "image/webp"] as const;
 const maxImageSizeBytes = 8 * 1024 * 1024;

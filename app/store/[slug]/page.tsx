@@ -1,12 +1,18 @@
 import Link from "next/link";
 import {
+  AvailabilityBadge,
   EmptyStorefront,
-  Fact,
   HeroImage,
   ListingPhoto,
   StoreLogo,
+  StorefrontButton,
+  StorefrontContainer,
+  StorefrontEyebrow,
   StorefrontFooter,
   StorefrontNav,
+  StorefrontPage,
+  StorefrontSection,
+  StorefrontSectionHeader,
   StorefrontShell,
   formatLocation,
 } from "./storefront-ui";
@@ -18,7 +24,7 @@ import {
   previewText,
 } from "./storefront-data";
 
-export default async function StorefrontPage({
+export default async function StorefrontHomePage({
   params,
 }: {
   params: Promise<{ slug: string }>;
@@ -68,85 +74,91 @@ export default async function StorefrontPage({
     store.pickup_instructions || store.pickup_policy,
     "Pickup details will be confirmed after your order is placed.",
   );
+  const heroTitle = store.store_tagline || "Available poultry and farm products";
 
   return (
     <StorefrontShell>
       <StorefrontNav store={store} />
 
-      <header className="bg-white">
-        <div className="relative">
-          <div className="absolute inset-0">
-            <HeroImage
-              alt={store.hero_image_alt_text || `${store.store_name} farm photo`}
-              src={store.hero_image_url}
-            />
-          </div>
-          <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-black/10" />
-          <div className="relative mx-auto flex min-h-72 max-w-6xl items-end px-5 py-8 sm:min-h-96 sm:px-7">
-            <div className="max-w-3xl text-white">
-              <div className="mb-5 flex items-center gap-4">
-                <StoreLogo store={store} />
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.12em] text-white/80">
-                    Seller storefront
-                  </p>
-                  <h1 className="mt-1 text-4xl font-semibold sm:text-5xl">
-                    {store.store_name}
-                  </h1>
-                </div>
-              </div>
-              {store.store_tagline ? (
-                <p className="max-w-2xl text-lg leading-8 text-white/90">
-                  {store.store_tagline}
+      <header className="overflow-hidden border-b border-[#e4dccc] bg-[#fffdf8]">
+        <StorefrontContainer className="grid min-h-[34rem] gap-8 py-10 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
+          <div className="relative z-10 grid gap-6">
+            <div className="flex items-center gap-4">
+              <StoreLogo store={store} />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#24512f]">
+                  Seller storefront
                 </p>
-              ) : null}
-              <p className="mt-3 text-sm font-semibold text-white/80">
+                <h1 className="mt-1 text-4xl font-semibold leading-tight text-stone-950 sm:text-5xl">
+                  {store.store_name}
+                </h1>
+              </div>
+            </div>
+            <div>
+              <p className="max-w-2xl text-4xl font-semibold leading-tight text-stone-950 sm:text-5xl">
+                {heroTitle}
+              </p>
+              <p className="mt-5 max-w-xl text-base leading-8 text-stone-700">
+                {aboutPreview}
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <StorefrontButton href="#available-products">
+                Shop available birds
+              </StorefrontButton>
+              <StorefrontButton
+                href={`/store/${store.store_slug}/policies`}
+                variant="secondary"
+              >
+                Pickup details
+              </StorefrontButton>
+            </div>
+            <div className="flex flex-wrap gap-3 text-sm font-semibold text-[#24512f]">
+              <span className="rounded-full bg-[#eef4e8] px-4 py-2">
                 {formatLocation(store)}
+              </span>
+              <span className="rounded-full bg-[#fff4df] px-4 py-2">
+                {products.length || 0} products
+              </span>
+              <span className="rounded-full bg-[#eef4e8] px-4 py-2">
+                {store.total_quantity_available > 0
+                  ? `${store.total_quantity_available} available`
+                  : "Availability coming soon"}
+              </span>
+            </div>
+          </div>
+
+          <div className="relative min-h-80 overflow-hidden rounded-xl border border-[#d8cebd] bg-[#f2eadb] shadow-[0_24px_70px_rgba(46,35,20,0.16)]">
+            <div className="absolute inset-0">
+              <HeroImage
+                alt={store.hero_image_alt_text || `${store.store_name} farm photo`}
+                src={store.hero_image_url}
+              />
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-r from-black/30 via-black/5 to-transparent" />
+            <div className="absolute bottom-5 left-5 right-5 rounded-lg border border-white/30 bg-white/88 p-4 shadow-lg backdrop-blur">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#24512f]">
+                Current availability
+              </p>
+              <p className="mt-1 text-lg font-semibold text-stone-950">
+                Browse breeds, ages, dates, and purchase options.
               </p>
             </div>
           </div>
-        </div>
+        </StorefrontContainer>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-8 px-5 py-8 sm:px-7">
-        <section className="grid gap-4 rounded-lg border border-stone-200 bg-white p-5 shadow-sm md:grid-cols-3">
-          <Fact
-            label="Available"
-            value={
-              store.total_quantity_available > 0
-                ? `${store.total_quantity_available} birds`
-                : "Check back soon"
-            }
-          />
-          <Fact
-            label="Products"
-            value={
-              products.length === 1
-                ? "1 breed or product"
-                : `${products.length} breeds or products`
-            }
-          />
-          <Fact
-            label="Location"
-            value={formatLocation(store)}
-          />
-        </section>
-
-        <section>
-          <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
-                Browse available birds
-              </p>
-              <h2 className="mt-1 text-2xl font-semibold text-stone-950">
-                Shop by breed or product
-              </h2>
-            </div>
-            <p className="max-w-xl text-sm leading-6 text-stone-600">
+      <StorefrontPage className="gap-10">
+        <StorefrontSection id="available-products">
+          <StorefrontSectionHeader
+            eyebrow="Browse available birds"
+            title="Shop by breed or product"
+          >
+            <p>
               Choose a breed or product to compare available ages, dates, and
               purchase options.
             </p>
-          </div>
+          </StorefrontSectionHeader>
 
           {products.length === 0 ? (
             <EmptyStorefront
@@ -154,15 +166,15 @@ export default async function StorefrontPage({
               description="This seller storefront does not have visible products right now."
             />
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {products.map((product) => (
                 <ProductCard key={product.productId} product={product} />
               ))}
             </div>
           )}
-        </section>
+        </StorefrontSection>
 
-        <section className="grid gap-5 lg:grid-cols-2">
+        <section className="overflow-hidden rounded-xl border border-[#ded7c8] bg-white shadow-[0_18px_55px_rgba(46,35,20,0.08)] lg:grid lg:grid-cols-2">
           <PreviewPanel
             actionHref={`/store/${store.store_slug}/about`}
             actionLabel="Read about the farm"
@@ -180,7 +192,7 @@ export default async function StorefrontPage({
             {pickupPreview}
           </PreviewPanel>
         </section>
-      </main>
+      </StorefrontPage>
 
       <StorefrontFooter store={store} />
     </StorefrontShell>
@@ -189,42 +201,53 @@ export default async function StorefrontPage({
 
 function ProductCard({ product }: { product: StorefrontProduct }) {
   return (
-    <article className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+    <article className="group overflow-hidden rounded-xl border border-[#ded7c8] bg-white shadow-[0_12px_35px_rgba(46,35,20,0.07)] transition hover:-translate-y-1 hover:border-[#bfcfb6] hover:shadow-[0_20px_50px_rgba(46,35,20,0.12)]">
       <Link
         className="block h-full focus:outline-none focus:ring-2 focus:ring-emerald-700"
         href={`/store/${product.storeSlug}/products/${product.productId}`}
       >
-        <ListingPhoto
-          alt={product.imageAlt || product.name}
-          src={product.imageUrl}
-        />
-        <div className="grid gap-4 p-4">
+        <div className="relative">
+          <ListingPhoto
+            alt={product.imageAlt || product.name}
+            src={product.imageUrl}
+          />
+          <div className="absolute left-3 top-3">
+            <AvailabilityBadge
+              code={product.availabilityCode}
+              label={product.availabilityLabel}
+            />
+          </div>
+        </div>
+        <div className="grid gap-4 p-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-emerald-700">
               {product.speciesName}
             </p>
-            <h3 className="mt-1 text-xl font-semibold text-stone-950">
+            <h3 className="mt-1 text-xl font-semibold leading-tight text-stone-950">
               {product.name}
             </h3>
           </div>
 
-          <p className="line-clamp-3 min-h-16 text-sm leading-6 text-stone-600">
+          <p className="line-clamp-2 min-h-12 text-sm leading-6 text-stone-600">
             {product.description || "Details and available options are listed inside."}
           </p>
 
-          <dl className="grid grid-cols-2 gap-3 text-sm">
-            <Fact label="Quantity" value={product.quantityLabel} />
-            <Fact label="Availability" value={product.availabilityLabel} />
-            <Fact
-              label="Options"
-              value={
-                product.optionsCount === 1
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-lg font-semibold text-[#24512f]">
+                {product.pricingLabel || "See options"}
+              </p>
+              <p className="mt-1 text-xs text-stone-500">
+                {product.quantityLabel} -{" "}
+                {product.optionsCount === 1
                   ? "1 option"
-                  : `${product.optionsCount} options`
-              }
-            />
-            <Fact label="Price" value={product.pricingLabel || "See options"} />
-          </dl>
+                  : `${product.optionsCount} options`}
+              </p>
+            </div>
+            <span className="rounded-md border border-[#cfc7b8] px-3 py-2 text-sm font-semibold text-stone-800 transition group-hover:border-[#24512f] group-hover:bg-[#eef4e8] group-hover:text-[#24512f]">
+              View options
+            </span>
+          </div>
         </div>
       </Link>
     </article>
@@ -245,18 +268,13 @@ function PreviewPanel({
   title: string;
 }) {
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-800">
-        {eyebrow}
-      </p>
+    <div className="grid gap-4 border-b border-[#eee5d6] p-6 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0">
+      <StorefrontEyebrow>{eyebrow}</StorefrontEyebrow>
       <h2 className="mt-2 text-xl font-semibold text-stone-950">{title}</h2>
       <p className="mt-3 text-sm leading-7 text-stone-600">{children}</p>
-      <Link
-        className="mt-4 inline-flex min-h-10 items-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white hover:bg-emerald-900"
-        href={actionHref}
-      >
+      <StorefrontButton className="mt-4 min-h-10" href={actionHref}>
         {actionLabel}
-      </Link>
-    </section>
+      </StorefrontButton>
+    </div>
   );
 }

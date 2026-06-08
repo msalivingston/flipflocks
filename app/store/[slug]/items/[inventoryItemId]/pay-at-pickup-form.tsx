@@ -422,7 +422,7 @@ async function readFunctionError(error: unknown) {
       return {
         status: context.status,
         statusText: context.statusText,
-        message: context.statusText || "Order request failed.",
+        message: context.statusText || "Order failed.",
       };
     }
   }
@@ -432,10 +432,10 @@ async function readFunctionError(error: unknown) {
         message:
           typeof (error as { message?: unknown }).message === "string"
             ? (error as { message: string }).message
-            : "Order request failed.",
+            : "Order failed.",
       }
     : {
-        message: "Order request failed.",
+        message: "Order failed.",
       };
 }
 

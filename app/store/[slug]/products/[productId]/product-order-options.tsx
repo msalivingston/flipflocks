@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   StorefrontCartItem,
@@ -9,7 +8,14 @@ import {
   summarizeStorefrontCart,
 } from "../../_components/storefront-cart-client";
 import { StorefrontProduct } from "../../storefront-data";
-import { formatCurrency, formatDate } from "../../storefront-ui";
+import {
+  StorefrontButton,
+  StorefrontCard,
+  StorefrontInput,
+  StorefrontLabel,
+  formatCurrency,
+  formatDate,
+} from "../../storefront-ui";
 
 type ProductOrderOptionsProps = {
   product: StorefrontProduct;
@@ -80,20 +86,27 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
   }
 
   return (
-    <section className="rounded-lg border border-stone-200 bg-white shadow-sm">
-      <div className="border-b border-stone-200 p-5">
-        <p className="text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
+    <StorefrontCard className="overflow-hidden p-0">
+      <div className="bg-[#fffdf8] p-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
           Purchase options
         </p>
-        <h2 className="mt-1 text-2xl font-semibold text-stone-950">
-          Choose quantities
-        </h2>
-        <p className="mt-2 text-sm leading-6 text-stone-600">
-          Select one or more available options, then add them to your cart.
-        </p>
+        <div className="mt-2 flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-semibold text-stone-950">
+              Choose your birds
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-stone-600">
+              Select quantities across available options.
+            </p>
+          </div>
+          <p className="shrink-0 text-right text-sm font-semibold text-[#24512f]">
+            {product.pricingLabel || "See prices"}
+          </p>
+        </div>
       </div>
 
-      <div className="divide-y divide-stone-200">
+      <div className="grid gap-3 border-y border-[#e7decd] bg-[#fbf7ef] p-3">
         {product.options.map((option) => {
           const isAvailable = option.canCheckout && option.quantityAvailable > 0;
           const selectedQuantity =
@@ -105,62 +118,60 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
               : 0;
 
           return (
-            <div
-              className="grid gap-4 p-4 md:grid-cols-[1.1fr_0.8fr_0.8fr_0.7fr_8rem]"
+            <article
+              className="rounded-lg border border-[#ded7c8] bg-white p-3 shadow-sm"
               key={option.inventoryItemId}
             >
-              <div>
-                <h3 className="font-semibold text-stone-950">
-                  {option.typeLabel}
-                </h3>
-                <p className="mt-1 text-sm text-stone-600">
-                  {option.ageLabel}
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold text-stone-950">
+                    {option.typeLabel}
+                  </h3>
+                  <p className="mt-1 text-sm text-stone-600">
+                    {option.ageLabel}
+                  </p>
+                </div>
+                <p className="text-right text-sm font-semibold text-[#24512f]">
+                  {formatCurrency(option.unitPrice)}
                 </p>
               </div>
 
-              <OptionDetail
-                label="Available"
-                value={formatOptionAvailability(option)}
-              />
-              <OptionDetail
-                label="Quantity"
-                value={
-                  option.quantityAvailable > 0
-                    ? `${option.quantityAvailable} available`
-                    : "Sold out"
-                }
-              />
-              <OptionDetail
-                label="Price"
-                value={`${formatCurrency(option.unitPrice)} each`}
-              />
-
-              <label className="grid gap-1 text-sm font-semibold text-stone-800">
-                Quantity
-                <input
-                  className="min-h-11 rounded-md border border-stone-300 px-3 py-2 text-base font-normal text-stone-950 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:bg-stone-100 disabled:text-stone-400"
-                  disabled={!isAvailable}
-                  inputMode="numeric"
-                  max={Math.max(0, option.quantityAvailable)}
-                  min={0}
-                  onChange={(event) =>
-                    updateQuantity(
-                      option.inventoryItemId,
-                      event.target.value,
-                      option.quantityAvailable,
-                    )
-                  }
-                  step={1}
-                  type="number"
-                  value={selectedQuantity}
-                />
-              </label>
-            </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_6rem] sm:items-end">
+                <div className="grid gap-1 text-sm text-stone-600">
+                  <p>{formatOptionAvailability(option)}</p>
+                  <p>
+                    {option.quantityAvailable > 0
+                      ? `${option.quantityAvailable} available`
+                      : "Sold out"}
+                  </p>
+                </div>
+                <StorefrontLabel className="text-xs uppercase tracking-[0.1em] text-stone-500">
+                  Qty
+                  <StorefrontInput
+                    className="text-center"
+                    disabled={!isAvailable}
+                    inputMode="numeric"
+                    max={Math.max(0, option.quantityAvailable)}
+                    min={0}
+                    onChange={(event) =>
+                      updateQuantity(
+                        option.inventoryItemId,
+                        event.target.value,
+                        option.quantityAvailable,
+                      )
+                    }
+                    step={1}
+                    type="number"
+                    value={selectedQuantity}
+                  />
+                </StorefrontLabel>
+              </div>
+            </article>
           );
         })}
       </div>
 
-      <div className="grid gap-4 border-t border-stone-200 bg-stone-50 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
+      <div className="grid gap-4 bg-white p-5">
         <div>
           <p className="text-sm font-semibold text-stone-950">Order summary</p>
           <p className="mt-1 text-sm text-stone-600">
@@ -169,14 +180,13 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
               : "Select a quantity to add options to your cart."}
           </p>
         </div>
-        <button
-          className="min-h-11 rounded-md bg-emerald-800 px-5 text-sm font-semibold text-white hover:bg-emerald-900 disabled:cursor-not-allowed disabled:bg-stone-300"
+        <StorefrontButton
+          className="w-full px-5"
           disabled={summary.totalQuantity <= 0}
           onClick={handleAddToCart}
-          type="button"
         >
           Add to cart
-        </button>
+        </StorefrontButton>
       </div>
 
       {addedItems && addedSummary ? (
@@ -204,40 +214,27 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
             </p>
             <div className="flex flex-wrap gap-2">
               <button
-                className="min-h-10 rounded-md border border-emerald-700 px-4 text-sm font-semibold text-emerald-900 hover:bg-white"
+                className="min-h-10 rounded-md border border-emerald-700 bg-white/60 px-4 text-sm font-semibold text-emerald-900 hover:bg-white"
                 onClick={() => setAddedItems(null)}
                 type="button"
               >
                 Continue shopping
               </button>
-              <Link
-                className="inline-flex min-h-10 items-center rounded-md border border-emerald-700 px-4 text-sm font-semibold text-emerald-900 hover:bg-white"
+              <StorefrontButton
+                className="min-h-10 border-emerald-700 text-emerald-900 hover:bg-white"
                 href={`/store/${product.storeSlug}/cart`}
+                variant="secondary"
               >
                 View cart
-              </Link>
-              <Link
-                className="inline-flex min-h-10 items-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white hover:bg-emerald-900"
-                href={`/store/${product.storeSlug}/checkout`}
-              >
+              </StorefrontButton>
+              <StorefrontButton href={`/store/${product.storeSlug}/checkout`}>
                 Checkout
-              </Link>
+              </StorefrontButton>
             </div>
           </div>
         </div>
       ) : null}
-    </section>
-  );
-}
-
-function OptionDetail({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
-        {label}
-      </p>
-      <p className="mt-1 text-sm font-semibold text-stone-950">{value}</p>
-    </div>
+    </StorefrontCard>
   );
 }
 

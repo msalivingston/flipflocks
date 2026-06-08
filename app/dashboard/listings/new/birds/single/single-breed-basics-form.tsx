@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -21,6 +20,7 @@ import type {
 import {
   buildMediaSummary,
   buildReadinessListing,
+  AgeAtAvailabilityHint,
   CreationStepIndicator,
   emptyPriceAdjustmentState,
   formatCurrency,
@@ -82,6 +82,16 @@ type RecentBreedUsage = {
   listing_batch_updated_at: string | null;
 };
 
+type SimpleSessionDraft = {
+  form: FormState;
+  inventory: InventoryState;
+  priceAdjustment: PriceAdjustmentState;
+  step: CreationStep;
+  listingBatchId: string;
+  sellerBreedProfileId: string;
+  draftBreedChoice: string;
+};
+
 const emptyFormState: FormState = {
   speciesId: "",
   breedChoice: "",
@@ -99,6 +109,7 @@ const emptyInventoryState: InventoryState = {
 };
 
 const publicDescriptionMaxLength = 1000;
+const simpleDraftStorageKey = "flipflocks:create-listing:simple:v1";
 const steps = [
   { label: "Details", value: "details" as const },
   { label: "Available Birds", value: "inventory" as const },
@@ -132,15 +143,23 @@ export function SimpleListingForm({
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [draftError, setDraftError] = useState<string | null>(null);
+  const [saveDraftError, setSaveDraftError] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [isPreparingDraft, setIsPreparingDraft] = useState(false);
+  const [isRestoringWorkflow, setIsRestoringWorkflow] = useState(false);
+  const [isDiscardingDraft, setIsDiscardingDraft] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [listingBatchId, setListingBatchId] = useState(
     draftListingBatchId ?? "",
   );
+  const [sellerBreedProfileId, setSellerBreedProfileId] = useState("");
   const [draftBreedChoice, setDraftBreedChoice] = useState("");
   const [draftRows, setDraftRows] = useState<SellerInventoryManagementRow[]>([]);
   const [mediaItems, setMediaItems] = useState<ListingPhotoItem[]>([]);
+  const [hasRestoredSessionDraft, setHasRestoredSessionDraft] = useState(
+    Boolean(draftListingBatchId),
+  );
 
   useEffect(() => {
     if (!storeId) return;
@@ -233,6 +252,52 @@ export function SimpleListingForm({
     };
   }, [storeId]);
 
+  useEffect(() => {
+    if (draftListingBatchId) return;
+
+    const restoreTimer = window.setTimeout(() => {
+      const restoredDraft = readSimpleSessionDraft();
+
+      if (restoredDraft) {
+        setForm(restoredDraft.form);
+        setInventory(restoredDraft.inventory);
+        setPriceAdjustment(restoredDraft.priceAdjustment);
+        setStep(restoredDraft.step);
+        setListingBatchId(restoredDraft.listingBatchId);
+        setSellerBreedProfileId(restoredDraft.sellerBreedProfileId);
+        setDraftBreedChoice(restoredDraft.draftBreedChoice);
+      }
+
+      setHasRestoredSessionDraft(true);
+    }, 0);
+
+    return () => window.clearTimeout(restoreTimer);
+  }, [draftListingBatchId]);
+
+  useEffect(() => {
+    if (!hasRestoredSessionDraft || draftListingBatchId) return;
+
+    writeSimpleSessionDraft({
+      draftBreedChoice,
+      form,
+      inventory,
+      listingBatchId,
+      priceAdjustment,
+      sellerBreedProfileId,
+      step,
+    });
+  }, [
+    draftBreedChoice,
+    draftListingBatchId,
+    form,
+    hasRestoredSessionDraft,
+    inventory,
+    listingBatchId,
+    priceAdjustment,
+    sellerBreedProfileId,
+    step,
+  ]);
+
   const breedChoices = useMemo(
     () => buildBreedChoices(form.speciesId, breeds, sellerProfiles, breedAliases),
     [breedAliases, breeds, form.speciesId, sellerProfiles],
@@ -245,9 +310,23 @@ export function SimpleListingForm({
   const selectedBreedChoice = breedChoices.find(
     (choice) => choice.value === form.breedChoice,
   );
+  const activeBreedProfileId =
+    draftRows[0]?.seller_breed_profile_id ?? sellerBreedProfileId;
+  const workflowRows =
+    draftRows.length > 0
+      ? draftRows
+      : buildSimpleWorkflowRows({
+          form,
+          inventory,
+          priceAdjustment,
+          selectedBreedChoice,
+          selectedSpecies,
+          sellerBreedProfileId,
+          storeId,
+        });
   const readinessListing = buildReadinessListing({
     publicDescription: form.publicDescription,
-    rows: draftRows,
+    rows: workflowRows,
   });
   const readinessReport =
     readinessListing && seller
@@ -265,6 +344,7 @@ export function SimpleListingForm({
     setForm((current) => ({ ...current, [key]: value }));
     setValidationErrors([]);
     setDraftError(null);
+    setSaveDraftError(null);
     setPublishError(null);
   }
 
@@ -275,6 +355,7 @@ export function SimpleListingForm({
     setInventory((current) => ({ ...current, [key]: value }));
     setValidationErrors([]);
     setDraftError(null);
+    setSaveDraftError(null);
     setPublishError(null);
   }
 
@@ -288,8 +369,12 @@ export function SimpleListingForm({
       breedChoice: value,
       publicDescription: selectedProfile?.seller_description ?? "",
     }));
+    setSellerBreedProfileId(selectedProfile?.id ?? "");
+    setDraftRows([]);
+    setMediaItems([]);
     setValidationErrors([]);
     setDraftError(null);
+    setSaveDraftError(null);
     setPublishError(null);
   }
 
@@ -315,28 +400,29 @@ export function SimpleListingForm({
     setValidationErrors(nextErrors);
 
     if (nextErrors.length === 0) {
-      void prepareDraftAndContinue();
+      void prepareWorkflowAndContinue();
     }
   }
 
-  async function prepareDraftAndContinue() {
+  async function prepareWorkflowAndContinue() {
     if (!seller) return;
 
     setIsPreparingDraft(true);
     setDraftError(null);
+    setSaveDraftError(null);
     setPublishError(null);
 
-    const preparedListingId = await ensureDraftListing();
+    const preparedBreedProfileId = await ensureWorkflowBreedProfile();
 
     setIsPreparingDraft(false);
 
-    if (!preparedListingId) return;
+    if (!preparedBreedProfileId) return;
 
     setStep("photos");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function ensureDraftListing() {
+  async function ensureWorkflowBreedProfile() {
     if (!seller || !selectedBreedChoice) return null;
 
     const shouldReplaceDraft =
@@ -344,7 +430,7 @@ export function SimpleListingForm({
 
     if (shouldReplaceDraft) {
       const shouldContinue = window.confirm(
-        "Changing the breed after photos have started requires starting a new draft. Existing photos stay with the old draft.",
+        "Changing the breed after this draft has started requires starting a new draft. Breed photos stay with their breed.",
       );
 
       if (!shouldContinue) return null;
@@ -355,7 +441,7 @@ export function SimpleListingForm({
 
       if (!updated) return null;
       await loadDraft(listingBatchId);
-      return listingBatchId;
+      return activeBreedProfileId;
     }
 
     const sellerBreedProfileId = await upsertSellerBreedProfileForListing(
@@ -371,68 +457,11 @@ export function SimpleListingForm({
       return null;
     }
 
-    const createResult = await supabase.rpc(
-      "seller_create_listing_batch_with_inventory",
-      {
-        p_store_id: seller.store_id,
-        p_species_id: form.speciesId,
-        p_batch_type: "live_animals",
-        p_origin_date: form.hatchDate,
-        p_available_date: form.availableDate,
-        p_base_price: Number(inventory.price),
-        p_breed_groups: [
-          {
-            seller_breed_profile_id: sellerBreedProfileId,
-            sort_order: 0,
-            visibility_status: "active",
-            inventory_items: [
-              {
-                inventory_type: inventory.inventoryType,
-                custom_inventory_label:
-                  inventory.inventoryType === "other"
-                    ? inventory.customLabel.trim()
-                    : null,
-                quantity_available: Number(inventory.quantity),
-                price_override: null,
-                sort_order: 0,
-                visibility_status: "active",
-              },
-            ],
-          },
-        ],
-        p_auto_price_increase_enabled: false,
-        p_auto_price_increase_amount: null,
-        p_auto_price_increase_max_price: null,
-        p_internal_batch_label: null,
-        p_seller_notes: form.sellerNotes.trim() || null,
-        p_visibility_status: "hidden",
-      },
-    );
-
-    if (createResult.error) {
-      setDraftError(createResult.error.message);
-      return null;
-    }
-
-    const rows = Array.isArray(createResult.data)
-      ? (createResult.data as CreateListingBatchResult[])
-      : [];
-    const createdListingBatchId = rows[0]?.listing_batch_id;
-
-    if (!createdListingBatchId) {
-      setDraftError("The listing draft was not prepared. Please try again.");
-      return null;
-    }
-
-    setListingBatchId(createdListingBatchId);
+    setSellerBreedProfileId(sellerBreedProfileId);
     setDraftBreedChoice(form.breedChoice);
-    const priceAdjustmentSaved = await savePriceAdjustment(createdListingBatchId);
+    await loadBreedProfileMedia(sellerBreedProfileId);
 
-    if (!priceAdjustmentSaved) return null;
-
-    await loadDraft(createdListingBatchId);
-
-    return createdListingBatchId;
+    return sellerBreedProfileId;
   }
 
   async function updateExistingDraft(currentListingBatchId: string) {
@@ -464,7 +493,6 @@ export function SimpleListingForm({
         inventory.inventoryType === "other"
           ? inventory.customLabel.trim()
           : null,
-      p_quantity_available: Number(inventory.quantity),
       p_price_override: null,
       p_sort_order: 0,
       p_seller_notes: null,
@@ -472,6 +500,18 @@ export function SimpleListingForm({
 
     if (inventoryResult.error) {
       setDraftError(inventoryResult.error.message);
+      return false;
+    }
+
+    const quantityResult = await supabase.rpc("seller_adjust_inventory_quantity", {
+      p_inventory_item_id: row.inventory_item_id,
+      p_quantity_available: Number(inventory.quantity),
+      p_quantity_delta: null,
+      p_note: "Updated from listing creation wizard.",
+    });
+
+    if (quantityResult.error) {
+      setDraftError(quantityResult.error.message);
       return false;
     }
 
@@ -492,7 +532,10 @@ export function SimpleListingForm({
     return true;
   }
 
-  async function savePriceAdjustment(currentListingBatchId: string) {
+  async function savePriceAdjustment(
+    currentListingBatchId: string,
+    onError: (message: string) => void = setDraftError,
+  ) {
     const { error: adjustmentError } = await supabase.rpc(
       "seller_set_listing_batch_price_adjustment",
       {
@@ -523,47 +566,187 @@ export function SimpleListingForm({
     );
 
     if (adjustmentError) {
-      setDraftError(adjustmentError.message);
+      onError(adjustmentError.message);
       return false;
     }
 
     return true;
   }
 
-  const loadDraft = useCallback(async (currentListingBatchId: string, hydrate = false) => {
+  async function createListingFromWorkflow({
+    publish,
+    onError,
+  }: {
+    publish: boolean;
+    onError: (message: string) => void;
+  }) {
+    if (!seller || !selectedBreedChoice) return null;
+
+    const preparedBreedProfileId =
+      activeBreedProfileId || (await ensureWorkflowBreedProfile());
+
+    if (!preparedBreedProfileId) {
+      onError("The breed could not be prepared. Please try again.");
+      return null;
+    }
+
+    if (listingBatchId) {
+      const updated = await updateExistingDraft(listingBatchId);
+
+      if (!updated) {
+        onError("The saved draft could not be updated. Please try again.");
+        return null;
+      }
+
+      if (!publish) return listingBatchId;
+
+      const published = await publishListingBatch(listingBatchId, onError);
+      return published ? listingBatchId : null;
+    }
+
+    const createResult = await supabase.rpc(
+      "seller_create_listing_batch_with_inventory",
+      {
+        p_store_id: seller.store_id,
+        p_species_id: form.speciesId,
+        p_batch_type: "live_animals",
+        p_origin_date: form.hatchDate,
+        p_available_date: form.availableDate,
+        p_base_price: Number(inventory.price),
+        p_breed_groups: [
+          {
+            seller_breed_profile_id: preparedBreedProfileId,
+            sort_order: 0,
+            visibility_status: "active",
+            inventory_items: [
+              {
+                inventory_type: inventory.inventoryType,
+                custom_inventory_label:
+                  inventory.inventoryType === "other"
+                    ? inventory.customLabel.trim()
+                    : null,
+                quantity_available: Number(inventory.quantity),
+                price_override: null,
+                sort_order: 0,
+                visibility_status: "active",
+              },
+            ],
+          },
+        ],
+        p_auto_price_increase_enabled: false,
+        p_auto_price_increase_amount: null,
+        p_auto_price_increase_max_price: null,
+        p_internal_batch_label: null,
+        p_seller_notes: form.sellerNotes.trim() || null,
+        p_visibility_status: "hidden",
+      },
+    );
+
+    if (createResult.error) {
+      onError(createResult.error.message);
+      return null;
+    }
+
+    const rows = Array.isArray(createResult.data)
+      ? (createResult.data as CreateListingBatchResult[])
+      : [];
+    const createdListingBatchId = rows[0]?.listing_batch_id;
+
+    if (!createdListingBatchId) {
+      onError("The listing could not be saved. Please try again.");
+      return null;
+    }
+
+    setListingBatchId(createdListingBatchId);
+    const priceAdjustmentSaved = await savePriceAdjustment(
+      createdListingBatchId,
+      onError,
+    );
+
+    if (!priceAdjustmentSaved) return null;
+
+    if (!publish) return createdListingBatchId;
+
+    const published = await publishListingBatch(createdListingBatchId, onError);
+    return published ? createdListingBatchId : null;
+  }
+
+  async function publishListingBatch(
+    currentListingBatchId: string,
+    onError: (message: string) => void,
+  ) {
+    const { error: visibilityError } = await supabase.rpc(
+      "seller_set_listing_batch_visibility",
+      {
+        p_listing_batch_id: currentListingBatchId,
+        p_visibility_status: "active",
+        p_note: "Published from listing creation wizard.",
+      },
+    );
+
+    if (visibilityError) {
+      onError("The listing was not published. Please try again.");
+      return false;
+    }
+
+    return true;
+  }
+
+  const loadBreedProfileMedia = useCallback(async (currentSellerBreedProfileId: string) => {
     if (!storeId) return;
 
-    const [listingResult, mediaResult] = await Promise.all([
-      supabase
-        .from("seller_inventory_management")
-        .select(listingInventorySelect)
-        .eq("store_id", storeId)
-        .eq("listing_batch_id", currentListingBatchId)
-        .order("listing_batch_breed_sort_order", { ascending: true })
-        .order("inventory_item_sort_order", { ascending: true })
-        .returns<SellerInventoryManagementRow[]>(),
-      supabase
-        .from("seller_media_management")
-        .select(sellerMediaSelect)
-        .eq("store_id", storeId)
-        .eq("entity_type", "listing_batch")
-        .eq("entity_id", currentListingBatchId)
-        .returns<ListingPhotoItem[]>(),
-    ]);
-
-    if (listingResult.error) {
-      setDraftError(listingResult.error.message);
-      return;
-    }
+    const mediaResult = await supabase
+      .from("seller_media_management")
+      .select(sellerMediaSelect)
+      .eq("store_id", storeId)
+      .eq("entity_type", "seller_breed_profile")
+      .eq("entity_id", currentSellerBreedProfileId)
+      .returns<ListingPhotoItem[]>();
 
     if (mediaResult.error) {
       setDraftError(mediaResult.error.message);
       return;
     }
 
-    const loadedRows = listingResult.data ?? [];
-    setDraftRows(loadedRows);
     setMediaItems(mediaResult.data ?? []);
+  }, [storeId]);
+
+  const loadDraft = useCallback(async (currentListingBatchId: string, hydrate = false) => {
+    if (!storeId) return;
+
+    const listingResult = await supabase
+      .from("seller_inventory_management")
+      .select(listingInventorySelect)
+      .eq("store_id", storeId)
+      .eq("listing_batch_id", currentListingBatchId)
+      .order("listing_batch_breed_sort_order", { ascending: true })
+      .order("inventory_item_sort_order", { ascending: true })
+      .returns<SellerInventoryManagementRow[]>();
+
+    if (listingResult.error) {
+      setDraftError(listingResult.error.message);
+      return;
+    }
+
+    const loadedRows = listingResult.data ?? [];
+    const sellerBreedProfileId = loadedRows[0]?.seller_breed_profile_id;
+    const mediaResult = sellerBreedProfileId
+      ? await supabase
+          .from("seller_media_management")
+          .select(sellerMediaSelect)
+          .eq("store_id", storeId)
+          .eq("entity_type", "seller_breed_profile")
+          .eq("entity_id", sellerBreedProfileId)
+          .returns<ListingPhotoItem[]>()
+      : null;
+
+    if (mediaResult?.error) {
+      setDraftError(mediaResult.error.message);
+      return;
+    }
+
+    setDraftRows(loadedRows);
+    setMediaItems(mediaResult?.data ?? []);
 
     if (hydrate && loadedRows[0]) {
       const row = loadedRows[0];
@@ -574,7 +757,10 @@ export function SimpleListingForm({
         breedChoice: profileChoice,
         hatchDate: row.origin_date ?? "",
         availableDate: row.available_date,
-        publicDescription: "",
+        publicDescription:
+          sellerProfiles.find(
+            (profile) => profile.id === row.seller_breed_profile_id,
+          )?.seller_description ?? "",
         sellerNotes: row.listing_batch_seller_notes ?? "",
       });
       setInventory({
@@ -586,7 +772,7 @@ export function SimpleListingForm({
       setPriceAdjustment(hydratePriceAdjustment(row));
       setDraftBreedChoice(profileChoice);
     }
-  }, [storeId]);
+  }, [sellerProfiles, storeId]);
 
   useEffect(() => {
     if (!listingBatchId || !storeId || isLoading || draftRows.length > 0) {
@@ -596,49 +782,232 @@ export function SimpleListingForm({
     void loadDraft(listingBatchId, true);
   }, [draftRows.length, isLoading, listingBatchId, loadDraft, storeId]);
 
+  useEffect(() => {
+    if (
+      listingBatchId ||
+      !activeBreedProfileId ||
+      !storeId ||
+      isLoading ||
+      mediaItems.length > 0
+    ) {
+      return;
+    }
+
+    void loadBreedProfileMedia(activeBreedProfileId);
+  }, [
+    activeBreedProfileId,
+    isLoading,
+    listingBatchId,
+    loadBreedProfileMedia,
+    mediaItems.length,
+    storeId,
+  ]);
+
+  useEffect(() => {
+    if (
+      draftListingBatchId ||
+      isLoading ||
+      !hasRestoredSessionDraft ||
+      !seller ||
+      (step !== "photos" && step !== "review")
+    ) {
+      return;
+    }
+
+    if (validateDetails(form).length > 0) {
+      window.setTimeout(() => setStep("details"), 0);
+      return;
+    }
+
+    if (
+      [
+        ...validateInventory(inventory),
+        ...validatePriceAdjustment(priceAdjustment),
+      ].length > 0
+    ) {
+      window.setTimeout(() => setStep("inventory"), 0);
+      return;
+    }
+
+    if (
+      !activeBreedProfileId &&
+      selectedBreedChoice &&
+      !isPreparingDraft &&
+      !isRestoringWorkflow
+    ) {
+      window.setTimeout(() => {
+        setIsRestoringWorkflow(true);
+        void ensureWorkflowBreedProfile().finally(() => {
+          setIsRestoringWorkflow(false);
+        });
+      }, 0);
+    }
+  // This one-shot recovery guard intentionally calls the current workflow
+  // preparation function without subscribing to every function identity change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeBreedProfileId,
+    draftListingBatchId,
+    form,
+    hasRestoredSessionDraft,
+    inventory,
+    isLoading,
+    isPreparingDraft,
+    isRestoringWorkflow,
+    priceAdjustment,
+    selectedBreedChoice,
+    seller,
+    step,
+  ]);
+
+  async function saveDraftListing() {
+    if (!readinessReport || isSavingDraft || isPublishing) return;
+
+    setSaveDraftError(null);
+    setPublishError(null);
+    setIsSavingDraft(true);
+
+    const savedListingBatchId = await createListingFromWorkflow({
+      publish: false,
+      onError: setSaveDraftError,
+    });
+
+    setIsSavingDraft(false);
+
+    if (!savedListingBatchId) return;
+
+    window.sessionStorage.setItem(
+      "flipflocksListingCreatedMessage",
+      "Draft saved. You can finish it from Listings when you're ready.",
+    );
+    clearSimpleSessionDraft();
+    router.push("/dashboard/listings");
+  }
+
   async function publishListing() {
-    if (!listingBatchId || !readinessReport) return;
+    if (!readinessReport || isSavingDraft || isPublishing) return;
 
     setPublishError(null);
+    setSaveDraftError(null);
 
     if (!readinessReport.publishGate.canPublish) {
       setPublishError("Fix the required items before publishing this listing.");
       return;
     }
 
-    const warningCount = readinessReport.publishGate.warnings.length;
-    const shouldPublish =
-      warningCount === 0 ||
-      window.confirm(
-        `Publish this listing with ${warningCount} warning${
-          warningCount === 1 ? "" : "s"
-        } still showing? Buyers will be able to see it.`,
-      );
-
-    if (!shouldPublish) return;
-
     setIsPublishing(true);
 
-    const { error: visibilityError } = await supabase.rpc(
-      "seller_set_listing_batch_visibility",
-      {
-        p_listing_batch_id: listingBatchId,
-        p_visibility_status: "active",
-        p_note: "Published from listing creation wizard.",
-      },
-    );
+    const publishedListingBatchId = await createListingFromWorkflow({
+      publish: true,
+      onError: setPublishError,
+    });
 
-    if (visibilityError) {
-      setPublishError("The listing was not published. Please try again.");
-      setIsPublishing(false);
-      return;
-    }
+    setIsPublishing(false);
+
+    if (!publishedListingBatchId) return;
 
     window.sessionStorage.setItem(
       "flipflocksListingCreatedMessage",
       "Listing published. Buyers can now see it on your storefront.",
     );
-    router.push(`/dashboard/listings/${listingBatchId}`);
+    clearSimpleSessionDraft();
+    router.push(`/dashboard/listings/${publishedListingBatchId}`);
+  }
+
+  function returnToListingTypes() {
+    router.push("/dashboard/listings/new/birds");
+  }
+
+  async function discardDraftAndReturnToListingTypes() {
+    if (!listingBatchId) {
+      clearSimpleSessionDraft();
+      router.push("/dashboard/listings/new/birds");
+      return;
+    }
+
+    const shouldDiscardSavedDraft = window.confirm(
+      "Discard this saved draft? This will remove it from your listings.",
+    );
+
+    if (!shouldDiscardSavedDraft) return;
+
+    setDraftError(null);
+    setSaveDraftError(null);
+    setPublishError(null);
+    setIsDiscardingDraft(true);
+
+    const discarded = await discardSavedListingDraft({
+      listingBatchId,
+      onError: setDraftError,
+      storeId,
+    });
+
+    setIsDiscardingDraft(false);
+
+    if (!discarded) return;
+
+    clearSimpleSessionDraft();
+    router.push("/dashboard/listings");
+  }
+
+  function restoreSimpleWorkflowDraft() {
+    const restoredDraft = readSimpleSessionDraft();
+
+    if (!restoredDraft) {
+      setStep(getSimpleRecoveryStep());
+      return;
+    }
+
+    setForm(restoredDraft.form);
+    setInventory(restoredDraft.inventory);
+    setPriceAdjustment(restoredDraft.priceAdjustment);
+    setListingBatchId(restoredDraft.listingBatchId);
+    setSellerBreedProfileId(restoredDraft.sellerBreedProfileId);
+    setDraftBreedChoice(restoredDraft.draftBreedChoice);
+    setStep(restoredDraft.step);
+    setValidationErrors([]);
+    setDraftError(null);
+    setSaveDraftError(null);
+    setPublishError(null);
+  }
+
+  function discardSimpleWorkflowDraft() {
+    const defaultSpecies =
+      species.find((item) => item.slug === "chicken") ?? species[0] ?? null;
+
+    clearSimpleSessionDraft();
+    setForm({
+      ...emptyFormState,
+      speciesId: defaultSpecies?.id ?? "",
+    });
+    setInventory(emptyInventoryState);
+    setPriceAdjustment(emptyPriceAdjustmentState);
+    setListingBatchId("");
+    setSellerBreedProfileId("");
+    setDraftBreedChoice("");
+    setDraftRows([]);
+    setMediaItems([]);
+    setValidationErrors([]);
+    setDraftError(null);
+    setSaveDraftError(null);
+    setPublishError(null);
+    setStep("details");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function getSimpleRecoveryStep(): CreationStep {
+    if (validateDetails(form).length > 0) return "details";
+
+    if (
+      [
+        ...validateInventory(inventory),
+        ...validatePriceAdjustment(priceAdjustment),
+      ].length > 0
+    ) {
+      return "inventory";
+    }
+
+    return "photos";
   }
 
   if (isLoading) {
@@ -752,6 +1121,11 @@ export function SimpleListingForm({
                 </label>
               </div>
 
+              <AgeAtAvailabilityHint
+                availableDate={form.availableDate}
+                hatchDate={form.hatchDate}
+              />
+
               <label className="grid gap-1 text-sm font-semibold text-stone-700">
                 Description
                 <textarea
@@ -780,12 +1154,23 @@ export function SimpleListingForm({
               <ValidationMessage errors={validationErrors} />
 
               <div className="flex flex-col gap-3 border-t border-stone-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <Link
-                  className="seller-secondary-button"
-                  href="/dashboard/listings/new/birds"
-                >
-                  Back
-                </Link>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    className="seller-secondary-button"
+                    onClick={returnToListingTypes}
+                    type="button"
+                  >
+                    Back to Listing Types
+                  </button>
+                  <button
+                    className="seller-secondary-button border-red-200 text-red-800 hover:bg-red-50"
+                    disabled={isDiscardingDraft}
+                    onClick={() => void discardDraftAndReturnToListingTypes()}
+                    type="button"
+                  >
+                    {isDiscardingDraft ? "Discarding Draft" : "Discard Draft"}
+                  </button>
+                </div>
                 <button
                   className="inline-flex min-h-11 items-center justify-center rounded-md bg-stone-950 px-5 text-sm font-semibold text-white transition hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
                   type="submit"
@@ -879,6 +1264,7 @@ export function SimpleListingForm({
                   setPriceAdjustment(nextValue);
                   setValidationErrors([]);
                   setDraftError(null);
+                  setSaveDraftError(null);
                   setPublishError(null);
                 }}
               />
@@ -905,18 +1291,23 @@ export function SimpleListingForm({
           </SellerCard>
         ) : null}
 
-        {step === "photos" && listingBatchId ? (
+        {step === "photos" && activeBreedProfileId ? (
           <ListingCreationPhotosStep
             canManage
-            listingBatchId={listingBatchId}
+            description="Add photos for this breed. These photos are reused for future listings of this breed."
+            emptyDescription="Add clear breed photos once, then reuse them whenever this breed is available again."
+            entityId={activeBreedProfileId}
+            entityType="seller_breed_profile"
+            listingBatchId={listingBatchId || activeBreedProfileId}
             mediaItems={mediaItems}
             storeId={storeId}
+            title="Breed Photos"
             onBack={() => setStep("inventory")}
             onContinue={() => {
               setStep("review");
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
-            onReload={() => void loadDraft(listingBatchId)}
+            onReload={() => void loadBreedProfileMedia(activeBreedProfileId)}
           />
         ) : null}
 
@@ -952,9 +1343,12 @@ export function SimpleListingForm({
               />
               <PublishReadinessReview
                 isPublishing={isPublishing}
+                isSavingDraft={isSavingDraft}
                 publishError={publishError}
+                saveDraftError={saveDraftError}
                 report={readinessReport}
                 onPublish={() => void publishListing()}
+                onSaveDraft={() => void saveDraftListing()}
               />
               <button
                 className="seller-secondary-button w-full"
@@ -965,9 +1359,20 @@ export function SimpleListingForm({
               </button>
             </div>
           ) : (
-            <ErrorState
-              title="Review is not ready"
-              message="Return to the previous step and try again."
+            <ReviewRecoveryActions
+              canRestore={!draftListingBatchId}
+              isRestoring={isRestoringWorkflow}
+              message="The saved workflow is missing something needed for review. You can step back, restore the session draft, or discard it and start fresh."
+              onBack={() => setStep(getSimpleRecoveryStep())}
+              onDiscard={() => {
+                if (listingBatchId) {
+                  void discardDraftAndReturnToListingTypes();
+                  return;
+                }
+
+                discardSimpleWorkflowDraft();
+              }}
+              onRestore={restoreSimpleWorkflowDraft}
             />
           )
         ) : null}
@@ -982,15 +1387,100 @@ function Header() {
       eyebrow="Create Listing"
       title="Simple Listing"
       description="One breed, one type, and one hatch date."
-      action={
-        <Link
-          className="seller-secondary-button"
-          href="/dashboard/listings/new/birds"
-        >
-          Back to Listing Types
-        </Link>
-      }
     />
+  );
+}
+
+function ReviewRecoveryActions({
+  canRestore,
+  isRestoring,
+  message,
+  onBack,
+  onDiscard,
+  onRestore,
+}: {
+  canRestore: boolean;
+  isRestoring: boolean;
+  message: string;
+  onBack: () => void;
+  onDiscard: () => void;
+  onRestore: () => void;
+}) {
+  return (
+    <SellerCard className="border-red-200 bg-red-50 p-5">
+      <h2 className="text-lg font-semibold text-red-950">
+        Review is not ready
+      </h2>
+      <p className="mt-2 text-sm leading-6 text-red-800">{message}</p>
+      <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+        <button className="seller-secondary-button" onClick={onBack} type="button">
+          Back to Previous Step
+        </button>
+        {canRestore ? (
+          <button
+            className="seller-secondary-button"
+            disabled={isRestoring}
+            onClick={onRestore}
+            type="button"
+          >
+            {isRestoring ? "Restoring Draft" : "Restore Draft"}
+          </button>
+        ) : null}
+        <button
+          className="seller-secondary-button border-red-200 text-red-800 hover:bg-red-100"
+          onClick={onDiscard}
+          type="button"
+        >
+          Discard Draft and Start Over
+        </button>
+      </div>
+    </SellerCard>
+  );
+}
+
+function readSimpleSessionDraft() {
+  try {
+    const rawValue = window.sessionStorage.getItem(simpleDraftStorageKey);
+
+    if (!rawValue) return null;
+
+    const parsed = JSON.parse(rawValue) as Partial<SimpleSessionDraft>;
+
+    if (!parsed.form || !parsed.inventory || !parsed.priceAdjustment) {
+      return null;
+    }
+
+    return {
+      form: { ...emptyFormState, ...parsed.form },
+      inventory: { ...emptyInventoryState, ...parsed.inventory },
+      priceAdjustment: {
+        ...emptyPriceAdjustmentState,
+        ...parsed.priceAdjustment,
+      },
+      step: isCreationStep(parsed.step) ? parsed.step : "details",
+      listingBatchId: parsed.listingBatchId ?? "",
+      sellerBreedProfileId: parsed.sellerBreedProfileId ?? "",
+      draftBreedChoice: parsed.draftBreedChoice ?? "",
+    } satisfies SimpleSessionDraft;
+  } catch {
+    return null;
+  }
+}
+
+function writeSimpleSessionDraft(draft: SimpleSessionDraft) {
+  window.sessionStorage.setItem(simpleDraftStorageKey, JSON.stringify(draft));
+}
+
+function clearSimpleSessionDraft() {
+  window.sessionStorage.removeItem(simpleDraftStorageKey);
+}
+
+function isCreationStep(value: unknown): value is CreationStep {
+  return (
+    value === "details" ||
+    value === "inventory" ||
+    value === "photos" ||
+    value === "review"
   );
 }
 
@@ -1177,6 +1667,169 @@ async function upsertSellerBreedProfileForListing(
     : [];
 
   return rows[0]?.seller_breed_profile_id ?? null;
+}
+
+function buildSimpleWorkflowRows({
+  form,
+  inventory,
+  priceAdjustment,
+  selectedBreedChoice,
+  selectedSpecies,
+  sellerBreedProfileId,
+  storeId,
+}: {
+  form: FormState;
+  inventory: InventoryState;
+  priceAdjustment: PriceAdjustmentState;
+  selectedBreedChoice?: BreedChoice;
+  selectedSpecies?: ReferenceSpecies;
+  sellerBreedProfileId: string;
+  storeId: string;
+}): SellerInventoryManagementRow[] {
+  if (
+    !selectedBreedChoice ||
+    !selectedSpecies ||
+    !sellerBreedProfileId ||
+    !inventory.inventoryType ||
+    !isPositiveWholeNumber(inventory.quantity) ||
+    !isValidMoney(inventory.price)
+  ) {
+    return [];
+  }
+
+  return [
+    {
+      age_at_availability_days: calculateAgeAtAvailabilityDays(
+        form.hatchDate,
+        form.availableDate,
+      ),
+      auto_price_adjustment_enabled: priceAdjustment.enabled,
+      auto_price_increase_amount: null,
+      auto_price_increase_enabled: false,
+      auto_price_increase_max_price: null,
+      available_date: form.availableDate,
+      base_price: Number(inventory.price),
+      batch_type: "live_animals",
+      breed_display_name: selectedBreedChoice.label,
+      custom_inventory_label:
+        inventory.inventoryType === "other" ? inventory.customLabel.trim() : null,
+      effective_unit_price: Number(inventory.price),
+      internal_batch_label: null,
+      inventory_item_id: "workflow-simple-inventory",
+      inventory_item_sort_order: 0,
+      inventory_moderation_status: "normal",
+      inventory_seller_notes: null,
+      inventory_type: inventory.inventoryType,
+      inventory_updated_at: null,
+      inventory_visibility_status: "active",
+      listing_batch_breed_id: "workflow-simple-breed",
+      listing_batch_breed_moderation_status: "normal",
+      listing_batch_breed_seller_notes: null,
+      listing_batch_breed_sort_order: 0,
+      listing_batch_breed_visibility_status: "active",
+      listing_batch_id: "workflow-simple",
+      listing_batch_moderation_status: "normal",
+      listing_batch_seller_notes: form.sellerNotes.trim() || null,
+      listing_batch_updated_at: null,
+      listing_batch_visibility_status: "hidden",
+      operational_availability_status: "available",
+      origin_date: form.hatchDate,
+      price_adjustment_amount: priceAdjustment.enabled
+        ? Number(priceAdjustment.amount)
+        : null,
+      price_adjustment_direction: priceAdjustment.enabled
+        ? priceAdjustment.direction
+        : null,
+      price_adjustment_interval_weeks: priceAdjustment.enabled
+        ? Number(priceAdjustment.intervalWeeks)
+        : null,
+      price_adjustment_max_price:
+        priceAdjustment.enabled &&
+        priceAdjustment.direction === "increase" &&
+        priceAdjustment.maxPrice.trim()
+          ? Number(priceAdjustment.maxPrice)
+          : null,
+      price_adjustment_min_price:
+        priceAdjustment.enabled &&
+        priceAdjustment.direction === "decrease" &&
+        priceAdjustment.minPrice.trim()
+          ? Number(priceAdjustment.minPrice)
+          : null,
+      price_override: null,
+      quantity_available: Number(inventory.quantity),
+      seller_breed_profile_id: sellerBreedProfileId,
+      species_id: selectedSpecies.id,
+      species_name: selectedSpecies.common_name,
+      species_slug: selectedSpecies.slug,
+      store_id: storeId,
+    },
+  ];
+}
+
+function calculateAgeAtAvailabilityDays(
+  hatchDate: string,
+  availableDate: string,
+) {
+  if (!hatchDate || !availableDate) return null;
+
+  const hatchTime = Date.parse(`${hatchDate}T00:00:00`);
+  const availableTime = Date.parse(`${availableDate}T00:00:00`);
+
+  if (Number.isNaN(hatchTime) || Number.isNaN(availableTime)) return null;
+
+  return Math.max(
+    Math.round((availableTime - hatchTime) / (24 * 60 * 60 * 1000)),
+    0,
+  );
+}
+
+async function discardSavedListingDraft({
+  listingBatchId,
+  onError,
+  storeId,
+}: {
+  listingBatchId: string;
+  onError: (message: string) => void;
+  storeId: string;
+}) {
+  if (!storeId) {
+    onError("Seller store context is missing. Refresh and try again.");
+    return false;
+  }
+
+  const statusResult = await supabase
+    .from("seller_inventory_management")
+    .select("listing_batch_visibility_status")
+    .eq("store_id", storeId)
+    .eq("listing_batch_id", listingBatchId)
+    .limit(1)
+    .maybeSingle<{ listing_batch_visibility_status: string }>();
+
+  if (statusResult.error) {
+    onError(statusResult.error.message);
+    return false;
+  }
+
+  if (statusResult.data?.listing_batch_visibility_status !== "hidden") {
+    onError("Only saved drafts can be discarded here. Live listings are not deleted.");
+    return false;
+  }
+
+  const { error: archiveError } = await supabase.rpc(
+    "seller_set_listing_batch_visibility",
+    {
+      p_listing_batch_id: listingBatchId,
+      p_visibility_status: "archived",
+      p_note: "Discarded saved draft from listing creation wizard.",
+    },
+  );
+
+  if (archiveError) {
+    onError("The saved draft was not discarded. Please refresh and try again.");
+    return false;
+  }
+
+  return true;
 }
 
 export { SimpleListingForm as SingleBreedBasicsForm };

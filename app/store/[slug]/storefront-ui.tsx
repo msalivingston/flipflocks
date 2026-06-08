@@ -18,72 +18,377 @@ type InventoryLabelSource = {
   custom_inventory_label: string | null;
 };
 
+export const storefrontTheme = {
+  background: "bg-[#f6f1e8]",
+  border: "border-[#ded7c8]",
+  focus: "focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2",
+  mutedText: "text-stone-600",
+  primary: "bg-[#24512f] text-white hover:bg-[#183b22]",
+  primaryText: "text-stone-950",
+  secondarySurface: "bg-[#fbf7ef]",
+  surface: "bg-white",
+  successSurface: "border-emerald-200 bg-emerald-50 text-emerald-950",
+  warningSurface: "border-amber-200 bg-amber-50 text-amber-950",
+  errorSurface: "border-rose-200 bg-rose-50 text-rose-800",
+};
+
+export function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
 export function StorefrontShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#f8f5ef] text-stone-950">{children}</div>
+    <div
+      className={cx(
+        "min-h-screen text-stone-950 antialiased",
+        storefrontTheme.background,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function StorefrontPage({
+  children,
+  className,
+  size = "default",
+}: {
+  children: React.ReactNode;
+  className?: string;
+  size?: "default" | "narrow";
+}) {
+  return (
+    <main
+      className={cx(
+        "mx-auto grid gap-8 px-5 py-8 sm:px-7",
+        size === "narrow" ? "max-w-3xl" : "max-w-6xl",
+        className,
+      )}
+    >
+      {children}
+    </main>
+  );
+}
+
+export function StorefrontContainer({
+  children,
+  className,
+  size = "default",
+}: {
+  children: React.ReactNode;
+  className?: string;
+  size?: "default" | "narrow";
+}) {
+  return (
+    <div
+      className={cx(
+        "mx-auto px-5 sm:px-7",
+        size === "narrow" ? "max-w-3xl" : "max-w-6xl",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function StorefrontSection({
+  children,
+  className,
+  id,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  id?: string;
+}) {
+  return (
+    <section className={cx("grid gap-4", className)} id={id}>
+      {children}
+    </section>
+  );
+}
+
+export function StorefrontEyebrow({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-800">
+      {children}
+    </p>
+  );
+}
+
+export function StorefrontSectionHeader({
+  children,
+  eyebrow,
+  title,
+}: {
+  children?: React.ReactNode;
+  eyebrow?: string;
+  title: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+      <div>
+        {eyebrow ? <StorefrontEyebrow>{eyebrow}</StorefrontEyebrow> : null}
+        <h2 className="mt-1 text-2xl font-semibold text-stone-950">{title}</h2>
+      </div>
+      {children ? (
+        <div className="max-w-xl text-sm leading-6 text-stone-600">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function StorefrontCard({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={cx(
+        "rounded-lg border border-[#ded7c8] bg-white p-5 shadow-[0_12px_35px_rgba(46,35,20,0.06)]",
+        className,
+      )}
+    >
+      {children}
+    </section>
+  );
+}
+
+export function StorefrontSummaryCard({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <aside
+      className={cx(
+        "rounded-lg border border-[#ded7c8] bg-white p-5 shadow-[0_16px_40px_rgba(46,35,20,0.08)]",
+        className,
+      )}
+    >
+      {children}
+    </aside>
+  );
+}
+
+export function StorefrontButton({
+  children,
+  className,
+  disabled,
+  href,
+  onClick,
+  type = "button",
+  variant = "primary",
+}: {
+  children: React.ReactNode;
+  className?: string;
+  disabled?: boolean;
+  href?: string;
+  onClick?: React.MouseEventHandler<HTMLButtonElement>;
+  type?: "button" | "submit";
+  variant?: "primary" | "secondary";
+}) {
+  const buttonClass = cx(
+    "inline-flex min-h-11 items-center justify-center rounded-md px-4 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-white",
+    storefrontTheme.focus,
+    variant === "primary"
+      ? storefrontTheme.primary
+      : "border border-[#cfc7b8] bg-white text-stone-800 shadow-none hover:bg-[#fbf7ef]",
+    className,
+  );
+
+  if (href) {
+    return (
+      <Link className={buttonClass} href={href}>
+        {children}
+      </Link>
+    );
+  }
+
+  return (
+    <button
+      className={buttonClass}
+      disabled={disabled}
+      onClick={onClick}
+      type={type}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function StorefrontTextButton({
+  children,
+  className,
+  onClick,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  onClick: React.MouseEventHandler<HTMLButtonElement>;
+}) {
+  return (
+    <button
+      className={cx(
+        "text-sm font-semibold text-stone-500 hover:text-rose-700",
+        className,
+      )}
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
+  );
+}
+
+export function StorefrontLabel({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <label className={cx("grid gap-1 text-sm font-semibold text-stone-800", className)}>
+      {children}
+    </label>
+  );
+}
+
+export const storefrontInputClass = cx(
+  "min-h-11 rounded-md border border-stone-300 bg-white px-3 py-2 text-base font-normal text-stone-950",
+  "focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200",
+  "disabled:bg-stone-100 disabled:text-stone-400",
+);
+
+export function StorefrontInput(
+  props: React.InputHTMLAttributes<HTMLInputElement>,
+) {
+  return <input {...props} className={cx(storefrontInputClass, props.className)} />;
+}
+
+export function StorefrontTextarea(
+  props: React.TextareaHTMLAttributes<HTMLTextAreaElement>,
+) {
+  return (
+    <textarea
+      {...props}
+      className={cx(
+        "min-h-24 rounded-md border border-stone-300 bg-white px-3 py-2 text-base font-normal text-stone-950 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200",
+        props.className,
+      )}
+    />
   );
 }
 
 export function StorefrontNav({ store }: { store: StorefrontIdentity }) {
   return (
-    <nav className="border-b border-stone-200 bg-white/95">
-      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-4 sm:px-7 md:flex-row md:items-center md:justify-between">
+    <nav className="sticky top-0 z-20 border-b border-[#e5decf] bg-white/95 shadow-[0_1px_0_rgba(46,35,20,0.03)] backdrop-blur">
+      <StorefrontContainer className="flex flex-col gap-4 py-4 md:flex-row md:items-center md:justify-between">
         <Link
-          className="flex min-w-0 items-center gap-3 text-stone-950"
+          className={cx(
+            "flex min-w-0 items-center gap-3 rounded-md text-stone-950",
+            storefrontTheme.focus,
+          )}
           href={`/store/${store.store_slug}`}
         >
           <StoreLogo store={store} size="sm" />
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{store.store_name}</p>
-            <p className="text-xs font-medium text-stone-500">
+            <p className="truncate text-lg font-semibold leading-tight text-[#23412a]">
+              {store.store_name}
+            </p>
+            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-stone-500">
               {formatLocation(store)}
             </p>
           </div>
         </Link>
         <div className="flex flex-wrap gap-2 text-sm font-semibold text-stone-700">
           <Link
-            className="rounded-md px-2 py-1 hover:bg-stone-100"
+            className="rounded-md px-3 py-2 hover:bg-[#f6f1e8] hover:text-[#24512f]"
             href={`/store/${store.store_slug}`}
           >
             Shop
           </Link>
           <Link
-            className="rounded-md px-2 py-1 hover:bg-stone-100"
+            className="rounded-md px-3 py-2 hover:bg-[#f6f1e8] hover:text-[#24512f]"
             href={`/store/${store.store_slug}/about`}
           >
             About
           </Link>
           <Link
-            className="rounded-md px-2 py-1 hover:bg-stone-100"
+            className="rounded-md px-3 py-2 hover:bg-[#f6f1e8] hover:text-[#24512f]"
             href={`/store/${store.store_slug}/policies`}
           >
             Pickup & policies
           </Link>
           <Link
-            className="rounded-md px-2 py-1 hover:bg-stone-100"
+            className="rounded-full border border-[#d7cfbf] bg-[#fbf7ef] px-4 py-2 text-[#24512f] hover:bg-[#eef4e8]"
             href={`/store/${store.store_slug}/cart`}
           >
             Cart
           </Link>
         </div>
-      </div>
+      </StorefrontContainer>
     </nav>
   );
 }
 
 export function StorefrontFooter({ store }: { store: StorefrontIdentity }) {
   return (
-    <footer className="border-t border-stone-200 bg-white">
-      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-5 py-6 text-sm text-stone-600 sm:px-7 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-3">
-          <StoreLogo store={store} size="xs" />
-          <div>
-            <p className="font-semibold text-stone-950">{store.store_name}</p>
-            <p>{formatLocation(store)}</p>
+    <footer className="border-t border-[#e4dccc] bg-[#fffdf8]">
+      <StorefrontContainer className="grid gap-8 py-10 text-sm text-stone-600 md:grid-cols-[1.2fr_0.7fr_0.7fr_1fr]">
+        <div className="grid gap-3">
+          <div className="flex items-center gap-3">
+            <StoreLogo store={store} size="sm" />
+            <div>
+              <p className="text-lg font-semibold leading-tight text-[#23412a]">
+                {store.store_name}
+              </p>
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-stone-500">
+                {formatLocation(store)}
+              </p>
+            </div>
+          </div>
+          <p className="max-w-xs leading-6">
+            Fresh availability from this seller storefront.
+          </p>
+        </div>
+        <div>
+          <p className="font-semibold text-stone-950">Shop</p>
+          <div className="mt-3 grid gap-2">
+            <Link href={`/store/${store.store_slug}`}>Available birds</Link>
+            <Link href={`/store/${store.store_slug}/cart`}>Cart</Link>
+            <Link href={`/store/${store.store_slug}/checkout`}>Checkout</Link>
           </div>
         </div>
-        <p>Powered by the FlipFlocks storefront platform.</p>
-      </div>
+        <div>
+          <p className="font-semibold text-stone-950">Farm</p>
+          <div className="mt-3 grid gap-2">
+            <Link href={`/store/${store.store_slug}/about`}>About</Link>
+            <Link href={`/store/${store.store_slug}/policies`}>
+              Pickup details
+            </Link>
+          </div>
+        </div>
+        <div className="rounded-lg border border-[#e4dccc] bg-white p-4">
+          <p className="font-semibold text-stone-950">Need help?</p>
+          <p className="mt-2 leading-6">
+            The seller will follow up after your order is placed.
+          </p>
+          <div>
+            <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+              Powered by FlipFlocks
+            </p>
+          </div>
+        </div>
+      </StorefrontContainer>
     </footer>
   );
 }
@@ -104,7 +409,7 @@ export function StoreLogo({
   if (!store.logo_image_url) {
     return (
       <div
-        className={`${sizeClass} flex shrink-0 items-center justify-center rounded-md border border-emerald-100 bg-emerald-50 text-base font-bold text-emerald-900`}
+        className={`${sizeClass} flex shrink-0 items-center justify-center rounded-md border border-emerald-100 bg-[#eef4e8] text-base font-bold text-[#24512f] shadow-sm`}
       >
         {store.store_name.trim().slice(0, 1).toUpperCase() || "S"}
       </div>
@@ -132,7 +437,7 @@ export function HeroImage({
 }) {
   if (!src) {
     return (
-      <div className="flex min-h-64 items-center justify-center bg-[linear-gradient(135deg,#064e3b,#ca8a04)] px-5 text-center text-white sm:min-h-80">
+      <div className="flex min-h-64 items-center justify-center bg-[radial-gradient(circle_at_15%_20%,rgba(255,255,255,0.22),transparent_30%),linear-gradient(135deg,#183b22_0%,#365314_48%,#a16207_100%)] px-5 text-center text-white sm:min-h-80">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.12em] text-white/80">
             Seller storefront
@@ -167,9 +472,7 @@ export function ListingPhoto({
 }) {
   if (!src) {
     return (
-      <div className="flex aspect-[4/3] items-center justify-center bg-emerald-50 px-4 text-center text-sm font-semibold text-emerald-900">
-        Photo coming soon
-      </div>
+      <StorefrontPlaceholderImage label="Photo coming soon" />
     );
   }
 
@@ -185,6 +488,34 @@ export function ListingPhoto({
   );
 }
 
+export function StorefrontMediaFrame({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cx("overflow-hidden rounded-md bg-stone-100", className)}>
+      {children}
+    </div>
+  );
+}
+
+export function StorefrontPlaceholderImage({
+  label = "Photo coming soon",
+}: {
+  label?: string;
+}) {
+  return (
+    <div className="flex aspect-[4/3] items-center justify-center bg-[radial-gradient(circle_at_30%_20%,#ffffff_0%,#f4ead8_32%,#e7f0df_100%)] px-4 text-center text-sm font-semibold text-emerald-900">
+      <span className="rounded-full border border-emerald-100 bg-white/85 px-3 py-1 shadow-sm">
+        {label}
+      </span>
+    </div>
+  );
+}
+
 export function InfoPanel({
   children,
   title,
@@ -193,12 +524,12 @@ export function InfoPanel({
   title: string;
 }) {
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+    <StorefrontCard className="p-4">
       <h2 className="font-semibold text-stone-950">{title}</h2>
       <div className="mt-2 grid gap-2 text-sm leading-6 text-stone-600">
         {children}
       </div>
-    </section>
+    </StorefrontCard>
   );
 }
 
@@ -253,7 +584,19 @@ export function EmptyStorefront({
   title: string;
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-stone-300 bg-white px-5 py-8 text-center">
+    <StorefrontEmptyState title={title} description={description} />
+  );
+}
+
+export function StorefrontEmptyState({
+  description,
+  title,
+}: {
+  description: string;
+  title: string;
+}) {
+  return (
+    <div className="rounded-lg border border-dashed border-stone-300 bg-white px-5 py-8 text-center shadow-sm">
       <h1 className="text-xl font-semibold text-stone-950">{title}</h1>
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">
         {description}

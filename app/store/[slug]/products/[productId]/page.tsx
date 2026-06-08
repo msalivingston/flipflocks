@@ -3,11 +3,13 @@ import Link from "next/link";
 import {
   AvailabilityBadge,
   EmptyStorefront,
-  Fact,
   InfoPanel,
   ListingPhoto,
+  StorefrontCard,
   StorefrontFooter,
+  StorefrontMediaFrame,
   StorefrontNav,
+  StorefrontPage,
   StorefrontShell,
   formatDate,
   toPublicImageUrl,
@@ -44,12 +46,12 @@ export default async function StorefrontProductPage({
   if (error) {
     return (
       <StorefrontShell>
-        <main className="mx-auto max-w-3xl px-5 py-12 sm:px-7">
+        <StorefrontPage size="narrow" className="py-12">
           <EmptyStorefront
             title="This product could not load"
             description="Please refresh the page or return to the storefront."
           />
-        </main>
+        </StorefrontPage>
       </StorefrontShell>
     );
   }
@@ -59,12 +61,12 @@ export default async function StorefrontProductPage({
   if (!store) {
     return (
       <StorefrontShell>
-        <main className="mx-auto max-w-3xl px-5 py-12 sm:px-7">
+        <StorefrontPage size="narrow" className="py-12">
           <EmptyStorefront
             title="Storefront not found"
             description="This storefront is not public right now."
           />
-        </main>
+        </StorefrontPage>
       </StorefrontShell>
     );
   }
@@ -78,12 +80,12 @@ export default async function StorefrontProductPage({
     return (
       <StorefrontShell>
         <StorefrontNav store={store} />
-        <main className="mx-auto max-w-3xl px-5 py-12 sm:px-7">
+        <StorefrontPage size="narrow" className="py-12">
           <EmptyStorefront
             title="Product not found"
             description="This breed or product may no longer be visible."
           />
-        </main>
+        </StorefrontPage>
         <StorefrontFooter store={store} />
       </StorefrontShell>
     );
@@ -95,7 +97,7 @@ export default async function StorefrontProductPage({
     <StorefrontShell>
       <StorefrontNav store={store} />
 
-      <main className="mx-auto grid max-w-6xl gap-7 px-5 py-7 sm:px-7">
+      <StorefrontPage className="gap-7">
         <Link
           className="text-sm font-semibold text-emerald-800 hover:text-emerald-950"
           href={`/store/${store.store_slug}`}
@@ -103,22 +105,28 @@ export default async function StorefrontProductPage({
           Back to {store.store_name}
         </Link>
 
-        <section className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
-          <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
-            <ProductGallery
-              fallbackAlt={product.imageAlt || product.name}
-              fallbackSrc={product.imageUrl}
-              gallery={gallery}
-            />
-            <div className="grid gap-5 p-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <section className="grid gap-7 lg:grid-cols-[minmax(0,1.06fr)_24rem] lg:items-start">
+          <div className="grid gap-5">
+            <StorefrontCard className="overflow-hidden p-0">
+              <ProductGallery
+                fallbackAlt={product.imageAlt || product.name}
+                fallbackSrc={product.imageUrl}
+                gallery={gallery}
+              />
+            </StorefrontCard>
+
+            <StorefrontCard className="grid gap-5 p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800">
                     {product.speciesName}
                   </p>
-                  <h1 className="mt-2 text-3xl font-semibold text-stone-950">
+                  <h1 className="mt-2 text-4xl font-semibold leading-tight text-stone-950">
                     {product.name}
                   </h1>
+                  <p className="mt-3 text-xl font-semibold text-[#24512f]">
+                    {product.pricingLabel || "Choose an option"}
+                  </p>
                 </div>
                 <AvailabilityBadge
                   code={product.availabilityCode}
@@ -126,38 +134,35 @@ export default async function StorefrontProductPage({
                 />
               </div>
 
-              <p className="whitespace-pre-line text-sm leading-7 text-stone-700">
+              <p className="max-w-3xl whitespace-pre-line text-base leading-8 text-stone-700">
                 {product.description ||
                   "This seller has not added a long description yet. Current purchase options are listed below."}
               </p>
 
-              <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-                <Fact label="Quantity" value={product.quantityLabel} />
-                <Fact
+              <div className="grid gap-3 rounded-lg bg-[#fbf7ef] p-4 text-sm sm:grid-cols-3">
+                <ProductSummary label="Available" value={product.quantityLabel} />
+                <ProductSummary
                   label="Options"
                   value={
                     product.optionsCount === 1
-                      ? "1 option"
-                      : `${product.optionsCount} options`
+                      ? "1 purchase option"
+                      : `${product.optionsCount} purchase options`
                   }
                 />
-                <Fact
-                  label="Price"
-                  value={product.pricingLabel || "See options"}
-                />
-                <Fact
-                  label="Next available"
+                <ProductSummary
+                  label="Next"
                   value={
                     product.nextAvailableDate
                       ? formatDate(product.nextAvailableDate)
                       : "Check back soon"
                   }
                 />
-              </dl>
-            </div>
+              </div>
+            </StorefrontCard>
           </div>
 
-          <aside className="grid h-fit gap-4">
+          <aside className="grid h-fit gap-4 lg:sticky lg:top-28">
+            <ProductOrderOptions product={product} />
             <InfoPanel title="Pickup">
               <p>{store.pickup_instructions || "Pickup details coming soon."}</p>
               {store.pickup_policy ? <p>{store.pickup_policy}</p> : null}
@@ -171,12 +176,21 @@ export default async function StorefrontProductPage({
             </InfoPanel>
           </aside>
         </section>
-
-        <ProductOrderOptions product={product} />
-      </main>
+      </StorefrontPage>
 
       <StorefrontFooter store={store} />
     </StorefrontShell>
+  );
+}
+
+function ProductSummary({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+        {label}
+      </p>
+      <p className="mt-1 font-semibold text-stone-950">{value}</p>
+    </div>
   );
 }
 
@@ -196,7 +210,7 @@ function ProductGallery({
   }
 
   return (
-    <div className="grid gap-2 bg-stone-100 p-2">
+    <StorefrontMediaFrame className="grid gap-2 rounded-none p-2">
       <Image
         alt={featured.alt_text || fallbackAlt}
         className="aspect-[4/3] w-full rounded-md object-cover"
@@ -220,7 +234,7 @@ function ProductGallery({
           ))}
         </div>
       ) : null}
-    </div>
+    </StorefrontMediaFrame>
   );
 }
 

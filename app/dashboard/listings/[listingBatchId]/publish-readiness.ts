@@ -219,7 +219,7 @@ export function buildPublishReadinessReport({
               ? `${media.activeCount} active photo${
                   media.activeCount === 1 ? "" : "s"
                 } attached.`
-              : "No active listing photos are attached yet.",
+              : "No active photos are attached yet.",
         },
       ],
     },
@@ -464,7 +464,7 @@ function buildPublishGate({
   }
 
   if (media.activeCount === 0) {
-    warnings.push("No listing photos are attached.");
+    warnings.push("No photos are attached.");
   }
 
   if (!hasText(listing.publicDescription)) {
