@@ -1,4 +1,15 @@
 import {
+  Bird,
+  Drumstick,
+  Egg,
+  Hammer,
+  House,
+  MapPin,
+  ShoppingCart,
+  Truck,
+  type LucideIcon,
+} from "lucide-react";
+import {
   EmptyStorefront,
   HeroImage,
   StoreLogo,
@@ -86,11 +97,6 @@ export default async function StorefrontHomePage({
   );
   const equipment = equipmentResult.data;
   const processedPoultry = processedPoultryResult.data;
-  const totalListings =
-    livePoultryProducts.length +
-    hatchingEggProducts.length +
-    equipment.length +
-    processedPoultry.length;
   const aboutPreview = previewText(
     store.about_text,
     `${store.store_name} shares pickup details and current products from the farm.`,
@@ -100,27 +106,19 @@ export default async function StorefrontHomePage({
     "Pickup details will be confirmed after your order is placed.",
   );
   const heroTitle = store.store_tagline || store.store_name;
-  const trustItems = [
-    hasLocation(store) ? { label: "Location", value: formatLocation(store) } : null,
-    store.pickup_instructions || store.pickup_policy
-      ? { label: "Local pickup", value: "Available" }
-      : null,
-    totalListings > 0
-      ? {
-          label: "Availability",
-          value:
-            store.ready_now_item_count > 0
-              ? `${store.ready_now_item_count} ready now`
-              : `${totalListings} listing${totalListings === 1 ? "" : "s"}`,
-        }
-      : null,
-    { label: "Storefront", value: "Open" },
-  ].filter(Boolean) as Array<{ label: string; value: string }>;
   const listingSections = buildListingSections({
     equipment,
     hatchingEggProducts,
     livePoultryProducts,
     processedPoultry,
+  });
+  const trustItems = buildTrustItems({
+    equipmentCount: equipment.length,
+    hatchingEggCount: hatchingEggProducts.length,
+    livePoultryCount: livePoultryProducts.length,
+    location: formatLocation(store),
+    processedPoultryCount: processedPoultry.length,
+    showPickup: Boolean(store.pickup_instructions || store.pickup_policy),
   });
 
   return (
@@ -219,7 +217,12 @@ function StorefrontHomeHeader({
           <a href="#shop-listings">All Listings</a>
           <a href={`/store/${store.store_slug}/about`}>About</a>
           <a href={`/store/${store.store_slug}/policies`}>Contact</a>
-          <a aria-label="Cart" className="rounded-md bg-[#073f1e] px-4 py-2 text-white" href={`/store/${store.store_slug}/cart`}>
+          <a
+            aria-label="Cart"
+            className="inline-flex items-center gap-2 rounded-md bg-[#073f1e] px-4 py-2 text-white"
+            href={`/store/${store.store_slug}/cart`}
+          >
+            <ShoppingCart aria-hidden="true" className="h-5 w-5" />
             Cart
           </a>
         </nav>
@@ -228,20 +231,26 @@ function StorefrontHomeHeader({
   );
 }
 
-function TrustStrip({ items }: { items: Array<{ label: string; value: string }> }) {
+type TrustStripItem = {
+  Icon: LucideIcon;
+  label: string;
+};
+
+function TrustStrip({ items }: { items: TrustStripItem[] }) {
   if (items.length === 0) return null;
 
   return (
     <section className="border-b border-[#e1d8c8] bg-[#f1ece3]">
       <div className="mx-auto flex max-w-[70rem] gap-4 overflow-x-auto px-5 py-3 text-sm text-[#083f1e] sm:px-7 lg:justify-center">
-        {items.slice(0, 4).map((item, index) => (
+        {items.map((item, index) => (
           <div className="flex shrink-0 items-center gap-3" key={item.label}>
-            <StorefrontSystemIcon name={trustIconName(item.label)} />
-            <span>
-              <span className="font-semibold">{item.value}</span>
-              <span className="ml-1 text-stone-700">{item.label}</span>
-            </span>
-            {index < Math.min(items.length, 4) - 1 ? (
+            <item.Icon
+              aria-hidden="true"
+              className="h-5 w-5 shrink-0 text-[#073f1e]"
+              strokeWidth={2}
+            />
+            <span className="font-semibold text-[#073f1e]">{item.label}</span>
+            {index < items.length - 1 ? (
               <span className="ml-3 h-5 w-px bg-[#cfc5b6]" />
             ) : null}
           </div>
@@ -249,6 +258,42 @@ function TrustStrip({ items }: { items: Array<{ label: string; value: string }> 
       </div>
     </section>
   );
+}
+
+function buildTrustItems({
+  equipmentCount,
+  hatchingEggCount,
+  livePoultryCount,
+  location,
+  processedPoultryCount,
+  showPickup,
+}: {
+  equipmentCount: number;
+  hatchingEggCount: number;
+  livePoultryCount: number;
+  location: string;
+  processedPoultryCount: number;
+  showPickup: boolean;
+}) {
+  const items: TrustStripItem[] = [];
+
+  if (showPickup) {
+    items.push({
+      Icon: Truck,
+      label: `Local pickup available in ${location}`,
+    });
+  }
+
+  if (livePoultryCount > 0) items.push({ Icon: Bird, label: "Live poultry" });
+  if (hatchingEggCount > 0) items.push({ Icon: Egg, label: "Hatching eggs" });
+  if (processedPoultryCount > 0) {
+    items.push({ Icon: Drumstick, label: "Processed poultry" });
+  }
+  if (equipmentCount > 0) {
+    items.push({ Icon: Hammer, label: "Equipment & Supplies" });
+  }
+
+  return items;
 }
 
 function buildListingSections({
@@ -374,10 +419,19 @@ function InfoCard({
   return (
     <article className="grid gap-3 border-b border-[#ded7c8] p-6 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0 lg:p-8">
       <div className="flex items-center gap-3">
-        <StorefrontSystemIcon
-          name={eyebrow === "Pickup Location" ? "location" : "farm"}
-          size="lg"
-        />
+        {eyebrow === "Pickup Location" ? (
+          <MapPin
+            aria-hidden="true"
+            className="h-10 w-10 shrink-0 text-[#073f1e]"
+            strokeWidth={2}
+          />
+        ) : (
+          <House
+            aria-hidden="true"
+            className="h-10 w-10 shrink-0 text-[#073f1e]"
+            strokeWidth={2}
+          />
+        )}
         <p className="font-serif text-xl font-semibold text-stone-950">
           {eyebrow}
         </p>
@@ -460,66 +514,6 @@ function formatQuantity(quantity: number) {
   if (quantity <= 0) return "Sold out";
   if (quantity === 1) return "1 available";
   return `${quantity} available`;
-}
-
-function trustIconName(label: string): StorefrontSystemIconName {
-  if (label.toLowerCase().includes("location")) return "location";
-  if (label.toLowerCase().includes("pickup")) return "pickup";
-  return "status";
-}
-
-type StorefrontSystemIconName = "farm" | "location" | "pickup" | "status";
-
-function StorefrontSystemIcon({
-  name,
-  size = "sm",
-}: {
-  name: StorefrontSystemIconName;
-  size?: "sm" | "lg";
-}) {
-  const sizeClass = size === "lg" ? "h-10 w-10" : "h-5 w-5";
-
-  return (
-    <svg
-      aria-hidden="true"
-      className={`${sizeClass} shrink-0 text-[#073f1e]`}
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-    >
-      {name === "location" ? (
-        <>
-          <path d="M12 21s6-5.4 6-11a6 6 0 0 0-12 0c0 5.6 6 11 6 11Z" />
-          <path d="M12 10.5h.01" />
-        </>
-      ) : null}
-      {name === "pickup" ? (
-        <>
-          <path d="M3 16V8h11v8" />
-          <path d="M14 12h3l3 4v4h-3" />
-          <path d="M3 20h3" />
-          <path d="M10 20h7" />
-          <path d="M8 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
-          <path d="M19 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
-        </>
-      ) : null}
-      {name === "farm" ? (
-        <>
-          <path d="M4 20V9l8-5 8 5v11" />
-          <path d="M9 20v-6h6v6" />
-          <path d="M4 12h16" />
-        </>
-      ) : null}
-      {name === "status" ? (
-        <>
-          <path d="M20 7 9 18l-5-5" />
-        </>
-      ) : null}
-    </svg>
-  );
 }
 
 function isHatchingEggItem(item: StorefrontInventoryItem) {

@@ -3,6 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
+  Bird,
+  Drumstick,
+  Egg,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
+import {
   AvailabilityBadge,
   EmptyStorefront,
   ListingPhoto,
@@ -147,6 +154,13 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
 
 type ListingTabIconName = "egg" | "equipment" | "poultry" | "processed";
 
+const listingTabIcons = {
+  egg: Egg,
+  equipment: Wrench,
+  poultry: Bird,
+  processed: Drumstick,
+} satisfies Record<ListingTabIconName, LucideIcon>;
+
 function tabIconName(label: string): ListingTabIconName {
   if (label.includes("Egg")) return "egg";
   if (label.includes("Equipment")) return "equipment";
@@ -155,42 +169,13 @@ function tabIconName(label: string): ListingTabIconName {
 }
 
 function ListingTabIcon({ name }: { name: ListingTabIconName }) {
+  const Icon = listingTabIcons[name];
+
   return (
-    <svg
+    <Icon
       aria-hidden="true"
       className="mr-2 h-5 w-5 shrink-0"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-    >
-      {name === "poultry" ? (
-        <>
-          <path d="M6 15c0-4 3-7 7-7h3l3-3 1 5h-3c0 4-3 7-7 7H6Z" />
-          <path d="M9 17v3" />
-          <path d="M13 17v3" />
-          <path d="M18 9h.01" />
-        </>
-      ) : null}
-      {name === "egg" ? (
-        <path d="M12 21c4 0 7-3 7-7 0-5-4-11-7-11s-7 6-7 11c0 4 3 7 7 7Z" />
-      ) : null}
-      {name === "equipment" ? (
-        <>
-          <path d="M14 7l3-3 3 3-3 3-3-3Z" />
-          <path d="M3 21l9-9" />
-          <path d="M14 14l7 7" />
-        </>
-      ) : null}
-      {name === "processed" ? (
-        <>
-          <path d="M8 14c-2 0-4-2-4-4s2-4 4-4c1.5 0 2.8.8 3.5 2" />
-          <path d="M10.5 12.5 18 20" />
-          <path d="M17 20c1.5 0 3-1.2 3-3s-1.5-3-3-3c-1.1 0-2 .6-2.5 1.5" />
-        </>
-      ) : null}
-    </svg>
+      strokeWidth={2}
+    />
   );
 }
