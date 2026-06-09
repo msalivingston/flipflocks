@@ -43,7 +43,7 @@ export function StorefrontListingTabs({
   if (!activeSection) return null;
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-6">
       <div
         aria-label="Storefront listing categories"
         className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 sm:mx-0 sm:px-0"
@@ -57,10 +57,10 @@ export function StorefrontListingTabs({
               aria-controls={`${section.id}-panel`}
               aria-selected={active}
               className={cx(
-                "inline-flex min-h-11 shrink-0 items-center rounded-md border px-4 text-sm font-semibold transition",
+                "inline-flex min-h-11 shrink-0 items-center rounded-full border px-5 text-sm font-semibold transition",
                 active
                   ? "border-[#24512f] bg-[#24512f] text-white"
-                  : "border-[#d8cebd] bg-white text-stone-700 hover:border-[#24512f] hover:text-[#24512f]",
+                  : "border-[#d8cebd] bg-white text-stone-700 shadow-sm hover:border-[#24512f] hover:text-[#24512f]",
               )}
               id={`${section.id}-tab`}
               key={section.id}
@@ -76,11 +76,11 @@ export function StorefrontListingTabs({
 
       <section
         aria-labelledby={`${activeSection.id}-tab`}
-        className="scroll-mt-28 rounded-lg border border-[#ded7c8] bg-[#fffdf8] p-4 sm:p-5"
+        className="scroll-mt-28"
         id={`${activeSection.id}-panel`}
         role="tabpanel"
       >
-        <div className="mb-4">
+        <div className="mb-5">
           <h3 className="text-xl font-semibold text-stone-950">
             {activeSection.label}
           </h3>
@@ -108,7 +108,7 @@ export function StorefrontListingTabs({
 
 function ListingCard({ card }: { card: StorefrontListingCard }) {
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-lg border border-[#ded7c8] bg-white shadow-[0_12px_35px_rgba(46,35,20,0.07)] transition hover:-translate-y-0.5 hover:border-[#bfcfb6] hover:shadow-[0_20px_50px_rgba(46,35,20,0.12)]">
+    <article className="group flex h-full min-h-[28rem] flex-col overflow-hidden rounded-xl border border-[#ded7c8] bg-white shadow-[0_14px_38px_rgba(46,35,20,0.08)] transition hover:-translate-y-0.5 hover:border-[#bfcfb6] hover:shadow-[0_22px_52px_rgba(46,35,20,0.13)]">
       <Link
         className="flex h-full flex-col focus:outline-none focus:ring-2 focus:ring-emerald-700"
         href={card.href}
@@ -137,7 +137,7 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
           </p>
 
           <div className="mt-auto grid gap-4">
-            <div>
+            <div className="grid gap-1">
               <p className="text-lg font-semibold text-[#24512f]">
                 {card.price}
               </p>
