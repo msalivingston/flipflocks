@@ -46,7 +46,7 @@ export function StorefrontListingTabs({
     <div className="grid gap-6">
       <div
         aria-label="Storefront listing categories"
-        className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 sm:mx-0 sm:px-0"
+        className="-mx-5 grid auto-cols-[minmax(13rem,1fr)] grid-flow-col gap-2 overflow-x-auto px-5 pb-1 sm:mx-0 sm:px-0 lg:grid-flow-row lg:grid-cols-4"
         role="tablist"
       >
         {sections.map((section) => {
@@ -57,10 +57,10 @@ export function StorefrontListingTabs({
               aria-controls={`${section.id}-panel`}
               aria-selected={active}
               className={cx(
-                "inline-flex min-h-11 shrink-0 items-center rounded-full border px-5 text-sm font-semibold transition",
+                "inline-flex min-h-14 shrink-0 items-center justify-center rounded-lg border px-5 text-sm font-semibold transition",
                 active
                   ? "border-[#24512f] bg-[#24512f] text-white"
-                  : "border-[#d8cebd] bg-white text-stone-700 shadow-sm hover:border-[#24512f] hover:text-[#24512f]",
+                  : "border-[#eee9df] bg-[#f5f1eb] text-stone-900 shadow-sm hover:border-[#24512f] hover:text-[#24512f]",
               )}
               id={`${section.id}-tab`}
               key={section.id}
@@ -80,17 +80,8 @@ export function StorefrontListingTabs({
         id={`${activeSection.id}-panel`}
         role="tabpanel"
       >
-        <div className="mb-5">
-          <h3 className="text-xl font-semibold text-stone-950">
-            {activeSection.label}
-          </h3>
-          <p className="mt-1 text-sm leading-6 text-stone-600">
-            {activeSection.description}
-          </p>
-        </div>
-
         {activeSection.cards.length > 0 ? (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {activeSection.cards.map((card) => (
               <ListingCard card={card} key={card.href} />
             ))}
@@ -108,7 +99,7 @@ export function StorefrontListingTabs({
 
 function ListingCard({ card }: { card: StorefrontListingCard }) {
   return (
-    <article className="group flex h-full min-h-[28rem] flex-col overflow-hidden rounded-xl border border-[#ded7c8] bg-white shadow-[0_14px_38px_rgba(46,35,20,0.08)] transition hover:-translate-y-0.5 hover:border-[#bfcfb6] hover:shadow-[0_22px_52px_rgba(46,35,20,0.13)]">
+    <article className="group flex h-full min-h-[25.5rem] flex-col overflow-hidden rounded-xl border border-[#ded7c8] bg-white shadow-[0_12px_28px_rgba(46,35,20,0.08)] transition hover:-translate-y-0.5 hover:border-[#bfcfb6] hover:shadow-[0_20px_46px_rgba(46,35,20,0.13)]">
       <Link
         className="flex h-full flex-col focus:outline-none focus:ring-2 focus:ring-emerald-700"
         href={card.href}
@@ -122,28 +113,28 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
             />
           </div>
         </div>
-        <div className="flex flex-1 flex-col gap-4 p-5">
+        <div className="flex flex-1 flex-col gap-3 p-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-emerald-700">
               {card.meta}
             </p>
-            <h3 className="mt-1 text-xl font-semibold leading-tight text-stone-950">
+            <h3 className="mt-1 text-lg font-semibold leading-tight text-stone-950">
               {card.title}
             </h3>
           </div>
 
-          <p className="line-clamp-2 min-h-12 text-sm leading-6 text-stone-600">
+          <p className="line-clamp-2 min-h-10 text-sm leading-5 text-stone-600">
             {card.description || "Details and pickup options are listed inside."}
           </p>
 
           <div className="mt-auto grid gap-4">
             <div className="grid gap-1">
-              <p className="text-lg font-semibold text-[#24512f]">
+              <p className="text-base font-semibold text-[#073f1e]">
                 {card.price}
               </p>
               <p className="mt-1 text-xs text-stone-500">{card.detail}</p>
             </div>
-            <span className="inline-flex min-h-11 items-center justify-center rounded-md bg-[#24512f] px-4 text-sm font-semibold text-white transition group-hover:bg-[#183b22]">
+            <span className="inline-flex min-h-11 items-center justify-center rounded-md bg-[#073f1e] px-4 text-sm font-semibold text-white transition group-hover:bg-[#0b562a]">
               View Details
             </span>
           </div>

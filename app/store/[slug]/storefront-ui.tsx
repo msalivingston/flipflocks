@@ -457,15 +457,11 @@ export function HeroImage({
 }) {
   if (!src) {
     return (
-      <div className="flex h-full min-h-80 items-end bg-[linear-gradient(135deg,#e6d3b5_0%,#f7efe0_48%,#c7d9bf_100%)] p-5 sm:min-h-[28rem]">
-        <div className="rounded-lg border border-white/70 bg-white/85 p-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#24512f]">
-            Farm photo placeholder
-          </p>
-          <p className="mt-2 max-w-sm text-2xl font-semibold leading-tight text-stone-950">
-            Fresh availability from a local farm
-          </p>
-        </div>
+      <div className="relative h-full min-h-80 overflow-hidden bg-[linear-gradient(135deg,#f6ead8_0%,#d9e6cf_45%,#8fae72_100%)] sm:min-h-[28rem]">
+        <div className="absolute inset-x-0 bottom-0 h-28 bg-[linear-gradient(180deg,transparent,#5e7d3d)] opacity-45" />
+        <div className="absolute bottom-0 left-[12%] h-24 w-44 rounded-t-lg bg-[#8d3f20] shadow-[22px_-42px_0_-18px_#7d341c,140px_-34px_0_-14px_#f4dfbf]" />
+        <div className="absolute bottom-0 right-[8%] h-32 w-20 rounded-t-full bg-[#d8c9aa] shadow-[-34px_4px_0_-8px_#c6b796]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_24%_20%,rgba(255,255,255,0.7),transparent_26%),linear-gradient(90deg,rgba(255,255,255,0.72)_0%,rgba(255,255,255,0.22)_38%,rgba(255,255,255,0)_66%)]" />
       </div>
     );
   }

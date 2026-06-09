@@ -103,7 +103,7 @@ export default async function StorefrontHomePage({
   const trustItems = [
     hasLocation(store) ? { label: "Location", value: formatLocation(store) } : null,
     store.pickup_instructions || store.pickup_policy
-      ? { label: "Local Pickup", value: "Available" }
+      ? { label: "Local pickup", value: "Available" }
       : null,
     totalListings > 0
       ? {
@@ -125,67 +125,47 @@ export default async function StorefrontHomePage({
 
   return (
     <StorefrontShell>
-      <div className="mx-auto grid max-w-[70rem] gap-8 px-5 py-5 sm:px-7 lg:gap-10 lg:py-7">
-        <StorefrontHomeHeader
-          location={formatLocation(store)}
-          store={store}
-        />
+      <StorefrontHomeHeader store={store} />
+      <TrustStrip items={trustItems} />
 
-        <TrustBar items={trustItems} />
-
-        <section className="grid overflow-hidden rounded-2xl border border-[#ded7c8] bg-white shadow-[0_24px_70px_rgba(46,35,20,0.10)] lg:grid-cols-[0.92fr_1.08fr]">
-          <div className="flex min-h-[25rem] flex-col justify-center gap-6 p-6 sm:p-8 lg:p-10">
-            <div>
-              <StorefrontEyebrow>Local farm storefront</StorefrontEyebrow>
-              <h1 className="mt-3 max-w-xl text-4xl font-semibold leading-tight text-stone-950 sm:text-5xl">
-                {heroTitle}
-              </h1>
-              <p className="mt-5 max-w-lg text-base leading-7 text-stone-600">
-                {aboutPreview}
-              </p>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <StorefrontButton href="#shop-live-poultry">
-                Shop Live Poultry
-              </StorefrontButton>
-              <StorefrontButton
-                href={`/store/${store.store_slug}/policies`}
-                variant="secondary"
-              >
-                Pickup Details
-              </StorefrontButton>
-            </div>
-          </div>
-
-          <div className="min-h-80 bg-[#efe5d4] lg:min-h-[31rem]">
+      <main className="mx-auto grid max-w-[70rem] gap-8 px-5 py-7 sm:px-7 lg:gap-9">
+        <section className="relative overflow-hidden rounded-2xl border border-[#ded7c8] bg-white shadow-[0_18px_55px_rgba(46,35,20,0.08)] lg:min-h-[30rem]">
+          <div className="lg:absolute lg:inset-y-0 lg:left-[34%] lg:right-0">
             <HeroImage
               alt={store.hero_image_alt_text || `${store.store_name} farm photo`}
               src={store.hero_image_url}
             />
           </div>
+          <div className="pointer-events-none hidden lg:absolute lg:inset-0 lg:block lg:bg-[linear-gradient(90deg,#ffffff_0%,#ffffff_34%,rgba(255,255,255,0.88)_45%,rgba(255,255,255,0)_68%)]" />
+          <div className="relative z-10 flex min-h-[19rem] max-w-[31rem] flex-col justify-center gap-6 p-6 sm:p-9 lg:min-h-[27rem] lg:p-10">
+            <div>
+              <StorefrontEyebrow>Local farm storefront</StorefrontEyebrow>
+              <h1 className="mt-3 text-4xl font-semibold leading-[1.08] text-stone-950 sm:text-5xl">
+                {heroTitle}
+              </h1>
+              <p className="mt-5 text-base leading-7 text-stone-700">
+                {aboutPreview}
+              </p>
+            </div>
+            <div>
+              <StorefrontButton href="#shop-listings">
+                Shop Live Poultry
+              </StorefrontButton>
+            </div>
+          </div>
         </section>
 
-        <section
-          className="rounded-2xl border border-[#ded7c8] bg-white p-5 shadow-[0_18px_55px_rgba(46,35,20,0.08)] sm:p-7"
-          id="shop-live-poultry"
-        >
-          <div className="mb-5 max-w-2xl">
-            <StorefrontEyebrow>Available listings</StorefrontEyebrow>
-            <h2 className="mt-2 text-3xl font-semibold text-stone-950">
-              Shop Live Poultry
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-stone-600">
-              Browse available poultry and farm products for local pickup.
-            </p>
-          </div>
-
+        <section id="shop-listings">
+          <h2 className="mb-5 text-3xl font-semibold leading-tight text-stone-950">
+            Shop Our Listings
+          </h2>
           <StorefrontListingTabs sections={listingSections} />
         </section>
 
-        <section className="grid gap-5 lg:grid-cols-2">
+        <section className="grid overflow-hidden rounded-2xl border border-[#ded7c8] bg-[#fffdf8] shadow-[0_14px_40px_rgba(46,35,20,0.06)] lg:grid-cols-2">
           <InfoCard
             actionHref={`/store/${store.store_slug}/about`}
-            actionLabel="About This Farm"
+            actionLabel="Learn more about our farm"
             eyebrow="About This Farm"
             title={store.store_name}
           >
@@ -193,25 +173,23 @@ export default async function StorefrontHomePage({
           </InfoCard>
           <InfoCard
             actionHref={`/store/${store.store_slug}/policies`}
-            actionLabel="Pickup Location"
+            actionLabel="View pickup details"
             eyebrow="Pickup Location"
             title={hasLocation(store) ? formatLocation(store) : "Pickup details"}
           >
             {pickupPreview}
           </InfoCard>
         </section>
+      </main>
 
-        <StorefrontHomeFooter store={store} />
-      </div>
+      <StorefrontHomeFooter store={store} />
     </StorefrontShell>
   );
 }
 
 function StorefrontHomeHeader({
-  location,
   store,
 }: {
-  location: string;
   store: {
     logo_image_alt_text: string | null;
     logo_image_url: string | null;
@@ -220,67 +198,55 @@ function StorefrontHomeHeader({
   };
 }) {
   return (
-    <header className="flex flex-col gap-4 rounded-2xl border border-[#e5decf] bg-white/90 px-4 py-4 shadow-[0_10px_30px_rgba(46,35,20,0.05)] sm:px-5 lg:flex-row lg:items-center lg:justify-between">
-      <a
-        className="flex min-w-0 items-center gap-3 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-        href={`/store/${store.store_slug}`}
-      >
-        <StoreLogo store={store} size="sm" />
-        <div className="min-w-0">
-          <p className="truncate text-lg font-semibold leading-tight text-[#23412a]">
-            {store.store_name}
-          </p>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
-            {location}
-          </p>
-        </div>
-      </a>
-
-      <nav className="flex flex-wrap items-center gap-2 text-sm font-semibold text-stone-700">
+    <header className="border-b border-[#e7e0d2] bg-white">
+      <div className="mx-auto flex max-w-[70rem] flex-col gap-4 px-5 py-4 sm:px-7 lg:min-h-24 lg:flex-row lg:items-center lg:justify-between">
         <a
-          className="rounded-md px-3 py-2 hover:bg-[#f7f2e8] hover:text-[#24512f]"
+          className="flex min-w-0 items-center gap-4 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
           href={`/store/${store.store_slug}`}
         >
-          Shop
+          <StoreLogo store={store} />
+          <div className="min-w-0">
+            <p className="truncate text-3xl font-semibold leading-none text-[#073f1e]">
+              {store.store_name}
+            </p>
+            <p className="mt-1 text-sm font-semibold uppercase tracking-[0.22em] text-stone-700">
+              Poultry Farm
+            </p>
+          </div>
         </a>
-        <a
-          className="rounded-md px-3 py-2 hover:bg-[#f7f2e8] hover:text-[#24512f]"
-          href={`/store/${store.store_slug}/about`}
-        >
-          About
-        </a>
-        <a
-          className="rounded-md px-3 py-2 hover:bg-[#f7f2e8] hover:text-[#24512f]"
-          href={`/store/${store.store_slug}/policies`}
-        >
-          Pickup
-        </a>
-        <a
-          className="inline-flex min-h-10 items-center rounded-md bg-[#24512f] px-4 text-white hover:bg-[#183b22]"
-          href={`/store/${store.store_slug}/cart`}
-        >
-          Cart
-        </a>
-      </nav>
+
+        <nav className="flex flex-wrap items-center gap-3 text-sm font-semibold text-stone-900 lg:gap-8">
+          <a href="#shop-listings">All Listings</a>
+          <a href={`/store/${store.store_slug}/about`}>About</a>
+          <a href={`/store/${store.store_slug}/policies`}>Contact</a>
+          <a aria-label="Cart" className="rounded-md bg-[#073f1e] px-4 py-2 text-white" href={`/store/${store.store_slug}/cart`}>
+            Cart
+          </a>
+        </nav>
+      </div>
     </header>
   );
 }
 
-function TrustBar({ items }: { items: Array<{ label: string; value: string }> }) {
+function TrustStrip({ items }: { items: Array<{ label: string; value: string }> }) {
   if (items.length === 0) return null;
 
   return (
-    <section className="grid gap-3 rounded-2xl border border-[#ded7c8] bg-white px-5 py-4 shadow-[0_12px_35px_rgba(46,35,20,0.06)] sm:grid-cols-2 lg:grid-cols-4">
-      {items.slice(0, 4).map((item) => (
-        <div className="min-w-0 border-[#eee5d6] lg:border-r lg:pr-5 lg:last:border-r-0" key={item.label}>
-          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-stone-500">
-            {item.label}
-          </p>
-          <p className="mt-1 truncate text-sm font-semibold text-stone-950">
-            {item.value}
-          </p>
-        </div>
-      ))}
+    <section className="border-b border-[#e1d8c8] bg-[#f1ece3]">
+      <div className="mx-auto flex max-w-[70rem] gap-4 overflow-x-auto px-5 py-3 text-sm text-[#083f1e] sm:px-7 lg:justify-center">
+        {items.slice(0, 4).map((item, index) => (
+          <div className="flex shrink-0 items-center gap-3" key={item.label}>
+            <span className="h-3 w-3 rounded-full bg-[#073f1e]" />
+            <span>
+              <span className="font-semibold">{item.value}</span>
+              <span className="ml-1 text-stone-700">{item.label}</span>
+            </span>
+            {index < Math.min(items.length, 4) - 1 ? (
+              <span className="ml-3 h-5 w-px bg-[#cfc5b6]" />
+            ) : null}
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
@@ -350,9 +316,9 @@ function toProcessedPoultryCard(
 ): StorefrontListingCard {
   return {
     availabilityCode: item.buyer_availability_code,
-    availabilityLabel: item.buyer_availability_label,
+    availabilityLabel: formatAvailableBadge(item.quantity_available),
     description: item.description || item.package_size,
-    detail: `${item.quantity_available} available`,
+    detail: formatQuantity(item.quantity_available),
     href: `/store/${item.store_slug}/processed-poultry/${item.processed_poultry_inventory_item_id}`,
     imageAlt: item.featured_image_alt_text || item.product_name,
     imageUrl: item.featured_image_url,
@@ -365,9 +331,9 @@ function toProcessedPoultryCard(
 function toEquipmentCard(item: StorefrontEquipmentItem): StorefrontListingCard {
   return {
     availabilityCode: item.buyer_availability_code,
-    availabilityLabel: item.buyer_availability_label,
+    availabilityLabel: formatAvailableBadge(item.quantity_available),
     description: item.description,
-    detail: `${item.quantity_available} available`,
+    detail: formatQuantity(item.quantity_available),
     href: `/store/${item.store_slug}/equipment/${item.equipment_inventory_item_id}`,
     imageAlt: item.featured_image_alt_text || item.item_name,
     imageUrl: item.featured_image_url,
@@ -380,11 +346,9 @@ function toEquipmentCard(item: StorefrontEquipmentItem): StorefrontListingCard {
 function toProductCard(product: StorefrontProduct): StorefrontListingCard {
   return {
     availabilityCode: product.availabilityCode,
-    availabilityLabel: product.availabilityLabel,
+    availabilityLabel: formatAvailableBadge(product.totalQuantityAvailable),
     description: product.description,
-    detail: `${product.quantityLabel} - ${
-      product.optionsCount === 1 ? "1 option" : `${product.optionsCount} options`
-    }`,
+    detail: product.quantityLabel,
     href: `/store/${product.storeSlug}/products/${product.productId}`,
     imageAlt: product.imageAlt || product.name,
     imageUrl: product.imageUrl,
@@ -408,13 +372,13 @@ function InfoCard({
   title: string;
 }) {
   return (
-    <article className="grid gap-4 rounded-2xl border border-[#ded7c8] bg-white p-6 shadow-[0_16px_45px_rgba(46,35,20,0.07)]">
+    <article className="grid gap-3 border-b border-[#ded7c8] p-6 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0 lg:p-8">
       <StorefrontEyebrow>{eyebrow}</StorefrontEyebrow>
-      <h2 className="text-2xl font-semibold text-stone-950">{title}</h2>
-      <p className="text-sm leading-7 text-stone-600">{children}</p>
-      <StorefrontButton className="w-full sm:w-fit" href={actionHref}>
-        {actionLabel}
-      </StorefrontButton>
+      <h2 className="text-xl font-semibold text-stone-950">{title}</h2>
+      <p className="max-w-md text-sm leading-6 text-stone-700">{children}</p>
+      <a className="text-sm font-semibold text-[#073f1e]" href={actionHref}>
+        {actionLabel} →
+      </a>
     </article>
   );
 }
@@ -430,40 +394,60 @@ function StorefrontHomeFooter({
   };
 }) {
   return (
-    <footer className="grid gap-6 rounded-2xl border border-[#ded7c8] bg-white px-5 py-7 text-sm text-stone-600 shadow-[0_12px_35px_rgba(46,35,20,0.05)] sm:grid-cols-2 lg:grid-cols-[1.3fr_0.8fr_0.8fr_0.9fr]">
-      <div>
-        <p className="text-lg font-semibold text-[#23412a]">{store.store_name}</p>
-        <p className="mt-2 max-w-xs leading-6">
-          Local poultry storefront powered by FlipFlocks.
-        </p>
-      </div>
-      <div>
-        <p className="font-semibold text-stone-950">Contact</p>
-        <div className="mt-3 grid gap-2">
-          {store.public_email ? <p>{store.public_email}</p> : null}
-          {store.public_phone ? <p>{store.public_phone}</p> : null}
-          {!store.public_email && !store.public_phone ? (
-            <p>Seller contact follows after checkout.</p>
-          ) : null}
+    <footer className="border-t border-[#e1d8c8] bg-white">
+      <div className="mx-auto grid max-w-[70rem] gap-8 px-5 py-9 text-sm text-stone-700 sm:grid-cols-2 sm:px-7 lg:grid-cols-[1.3fr_0.8fr_0.9fr_1fr]">
+        <div>
+          <p className="text-2xl font-semibold leading-none text-[#073f1e]">
+            {store.store_name}
+          </p>
+          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.22em] text-stone-700">
+            Poultry Farm
+          </p>
+          <div className="mt-5 grid gap-2">
+            {store.public_email ? <p>{store.public_email}</p> : null}
+            {store.public_phone ? <p>{store.public_phone}</p> : null}
+            {!store.public_email && !store.public_phone ? (
+              <p>Seller contact follows after checkout.</p>
+            ) : null}
+          </div>
         </div>
-      </div>
-      <div>
-        <p className="font-semibold text-stone-950">Shop</p>
-        <div className="mt-3 grid gap-2">
-          <a href={`/store/${store.store_slug}`}>Live Poultry</a>
-          <a href={`/store/${store.store_slug}/cart`}>Cart</a>
-          <a href={`/store/${store.store_slug}/checkout`}>Checkout</a>
+        <div>
+          <p className="font-semibold text-stone-950">Shop</p>
+          <div className="mt-3 grid gap-2">
+            <a href={`/store/${store.store_slug}`}>Live Poultry</a>
+            <a href="#shop-listings">Hatching Eggs</a>
+            <a href="#shop-listings">Equipment & Supplies</a>
+            <a href="#shop-listings">Processed Poultry</a>
+          </div>
         </div>
-      </div>
-      <div>
-        <p className="font-semibold text-stone-950">Quick Links</p>
-        <div className="mt-3 grid gap-2">
-          <a href={`/store/${store.store_slug}/about`}>About This Farm</a>
-          <a href={`/store/${store.store_slug}/policies`}>Pickup Location</a>
+        <div>
+          <p className="font-semibold text-stone-950">Quick Links</p>
+          <div className="mt-3 grid gap-2">
+            <a href={`/store/${store.store_slug}/about`}>About</a>
+            <a href={`/store/${store.store_slug}/policies`}>Contact</a>
+            <a href={`/store/${store.store_slug}/policies`}>Pickup & Delivery</a>
+          </div>
+        </div>
+        <div>
+          <p className="font-semibold text-stone-950">Powered by FlipFlocks</p>
+          <p className="mt-3 leading-6">
+            Independent poultry storefronts for local pickup.
+          </p>
         </div>
       </div>
     </footer>
   );
+}
+
+function formatAvailableBadge(quantity: number) {
+  if (quantity <= 0) return "Sold out";
+  return `${quantity} available`;
+}
+
+function formatQuantity(quantity: number) {
+  if (quantity <= 0) return "Sold out";
+  if (quantity === 1) return "1 available";
+  return `${quantity} available`;
 }
 
 function isHatchingEggItem(item: StorefrontInventoryItem) {
