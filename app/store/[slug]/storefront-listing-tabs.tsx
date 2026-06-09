@@ -3,18 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  Bird,
-  Drumstick,
-  Egg,
-  Wrench,
-  type LucideIcon,
-} from "lucide-react";
-import {
   AvailabilityBadge,
   EmptyStorefront,
   ListingPhoto,
   cx,
 } from "./storefront-ui";
+import {
+  StorefrontCategorySymbol,
+  type StorefrontCategorySymbolName,
+} from "./storefront-category-symbols";
 
 export type StorefrontListingCard = {
   availabilityCode: string;
@@ -66,7 +63,7 @@ export function StorefrontListingTabs({
               className={cx(
                 "inline-flex min-h-12 shrink-0 items-center justify-center rounded-lg border px-4 text-sm font-semibold transition",
                 active
-                  ? "border-[#c9ddc8] bg-[#eef6ec] text-[#073f1e] shadow-[inset_0_-3px_0_#073f1e]"
+                  ? "border-[#c9ddc8] bg-[#eef6ec] text-[#073f1e] ring-1 ring-inset ring-[#d9e8d4]"
                   : "border-[#eee9df] bg-[#faf8f4] text-stone-800 hover:border-[#c9ddc8] hover:bg-[#f4f0e8] hover:text-[#073f1e]",
               )}
               id={`${section.id}-tab`}
@@ -107,7 +104,7 @@ export function StorefrontListingTabs({
 
 function ListingCard({ card }: { card: StorefrontListingCard }) {
   return (
-    <article className="group flex h-full min-h-[25.5rem] flex-col overflow-hidden rounded-xl border border-[#ded7c8] bg-white shadow-[0_12px_28px_rgba(46,35,20,0.08)] transition hover:-translate-y-0.5 hover:border-[#bfcfb6] hover:shadow-[0_20px_46px_rgba(46,35,20,0.13)]">
+    <article className="group flex h-full min-h-[25.5rem] flex-col overflow-hidden rounded-xl border border-[#ded7c8] bg-white transition hover:border-[#bfcfb6]">
       <Link
         className="flex h-full flex-col focus:outline-none focus:ring-2 focus:ring-emerald-700"
         href={card.href}
@@ -152,30 +149,18 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
   );
 }
 
-type ListingTabIconName = "egg" | "equipment" | "poultry" | "processed";
-
-const listingTabIcons = {
-  egg: Egg,
-  equipment: Wrench,
-  poultry: Bird,
-  processed: Drumstick,
-} satisfies Record<ListingTabIconName, LucideIcon>;
-
-function tabIconName(label: string): ListingTabIconName {
+function tabIconName(label: string): StorefrontCategorySymbolName {
   if (label.includes("Egg")) return "egg";
   if (label.includes("Equipment")) return "equipment";
   if (label.includes("Processed")) return "processed";
   return "poultry";
 }
 
-function ListingTabIcon({ name }: { name: ListingTabIconName }) {
-  const Icon = listingTabIcons[name];
-
+function ListingTabIcon({ name }: { name: StorefrontCategorySymbolName }) {
   return (
-    <Icon
-      aria-hidden="true"
-      className="mr-2 h-5 w-5 shrink-0"
-      strokeWidth={2}
+    <StorefrontCategorySymbol
+      className="mr-2 h-5 w-5 text-current"
+      name={name}
     />
   );
 }

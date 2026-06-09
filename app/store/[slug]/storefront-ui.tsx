@@ -22,7 +22,7 @@ type InventoryLabelSource = {
 };
 
 export const storefrontTheme = {
-  background: "bg-[#f7f2e8]",
+  background: "bg-white",
   border: "border-[#ded7c8]",
   focus: "focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2",
   mutedText: "text-stone-600",

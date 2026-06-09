@@ -1,14 +1,15 @@
 import {
-  Bird,
-  Drumstick,
-  Egg,
-  Hammer,
   House,
   MapPin,
+  Search,
   ShoppingCart,
-  Truck,
+  User,
   type LucideIcon,
 } from "lucide-react";
+import {
+  StorefrontCategorySymbol,
+  type StorefrontCategorySymbolName,
+} from "./storefront-category-symbols";
 import {
   EmptyStorefront,
   HeroImage,
@@ -127,7 +128,7 @@ export default async function StorefrontHomePage({
       <TrustStrip items={trustItems} />
 
       <main className="mx-auto grid max-w-[70rem] gap-8 px-5 py-7 sm:px-7 lg:gap-9">
-        <section className="relative overflow-hidden rounded-2xl border border-[#ded7c8] bg-white shadow-[0_18px_55px_rgba(46,35,20,0.08)] lg:min-h-[30rem]">
+        <section className="relative overflow-hidden rounded-2xl border border-[#ded7c8] bg-white lg:min-h-[30rem]">
           <div className="lg:absolute lg:inset-y-0 lg:left-[34%] lg:right-0">
             <HeroImage
               alt={store.hero_image_alt_text || `${store.store_name} farm photo`}
@@ -160,7 +161,7 @@ export default async function StorefrontHomePage({
           <StorefrontListingTabs sections={listingSections} />
         </section>
 
-        <section className="grid overflow-hidden rounded-2xl border border-[#ded7c8] bg-[#fffdf8] shadow-[0_14px_40px_rgba(46,35,20,0.06)] lg:grid-cols-2">
+        <section className="grid overflow-hidden rounded-2xl border border-[#ded7c8] bg-[#fffdf8] lg:grid-cols-2">
           <InfoCard
             actionHref={`/store/${store.store_slug}/about`}
             actionLabel="Learn more about our farm"
@@ -197,7 +198,7 @@ function StorefrontHomeHeader({
 }) {
   return (
     <header className="border-b border-[#e7e0d2] bg-white">
-      <div className="mx-auto flex max-w-[70rem] flex-col gap-4 px-5 py-4 sm:px-7 lg:min-h-24 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mx-auto grid max-w-[70rem] gap-4 px-5 py-4 sm:px-7 lg:min-h-24 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
         <a
           className="flex min-w-0 items-center gap-4 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
           href={`/store/${store.store_slug}`}
@@ -213,45 +214,70 @@ function StorefrontHomeHeader({
           </div>
         </a>
 
-        <nav className="flex flex-wrap items-center gap-3 text-sm font-semibold text-stone-900 lg:gap-8">
+        <nav className="flex flex-wrap items-center gap-5 text-sm font-semibold text-stone-950 lg:justify-center lg:gap-12">
           <a href="#shop-listings">All Listings</a>
           <a href={`/store/${store.store_slug}/about`}>About</a>
           <a href={`/store/${store.store_slug}/policies`}>Contact</a>
+        </nav>
+
+        <div className="flex items-center gap-3 lg:justify-end">
+          <a
+            aria-label="Search listings"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+            href="#shop-listings"
+          >
+            <Search aria-hidden="true" className="h-6 w-6" strokeWidth={2} />
+          </a>
+          <a
+            aria-label="Account"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+            href="/login"
+          >
+            <User aria-hidden="true" className="h-6 w-6" strokeWidth={2} />
+          </a>
           <a
             aria-label="Cart"
-            className="inline-flex items-center gap-2 rounded-md bg-[#073f1e] px-4 py-2 text-white"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
             href={`/store/${store.store_slug}/cart`}
           >
-            <ShoppingCart aria-hidden="true" className="h-5 w-5" />
-            Cart
+            <ShoppingCart aria-hidden="true" className="h-6 w-6" strokeWidth={2} />
           </a>
-        </nav>
+        </div>
       </div>
     </header>
   );
 }
 
 type TrustStripItem = {
-  Icon: LucideIcon;
   label: string;
-};
+} & (
+  | { Icon: LucideIcon; symbol?: never }
+  | { Icon?: never; symbol: StorefrontCategorySymbolName }
+);
 
 function TrustStrip({ items }: { items: TrustStripItem[] }) {
   if (items.length === 0) return null;
 
   return (
-    <section className="border-b border-[#e1d8c8] bg-[#f1ece3]">
-      <div className="mx-auto flex max-w-[70rem] gap-4 overflow-x-auto px-5 py-3 text-sm text-[#083f1e] sm:px-7 lg:justify-center">
+    <section className="border-b border-[#e5ded0] bg-[#f4f0e8]">
+      <div className="mx-auto flex max-w-[70rem] gap-5 overflow-x-auto px-5 py-3 text-sm text-[#083f1e] sm:px-7 lg:justify-center">
         {items.map((item, index) => (
-          <div className="flex shrink-0 items-center gap-3" key={item.label}>
-            <item.Icon
-              aria-hidden="true"
-              className="h-5 w-5 shrink-0 text-[#073f1e]"
-              strokeWidth={2}
-            />
-            <span className="font-semibold text-[#073f1e]">{item.label}</span>
+          <div className="flex shrink-0 items-center gap-2.5" key={item.label}>
+            {item.Icon ? (
+              <item.Icon
+                aria-hidden="true"
+                className="h-[18px] w-[18px] shrink-0 text-[#073f1e]"
+                strokeWidth={2}
+              />
+            ) : (
+              <StorefrontCategorySymbol
+                className="h-[18px] w-[18px] text-[#073f1e]"
+                name={item.symbol}
+              />
+            )}
+            <span className="font-medium text-[#073f1e]">{item.label}</span>
             {index < items.length - 1 ? (
-              <span className="ml-3 h-5 w-px bg-[#cfc5b6]" />
+              <span className="ml-2 h-4 w-px bg-[#cfc5b6]" />
             ) : null}
           </div>
         ))}
@@ -279,18 +305,22 @@ function buildTrustItems({
 
   if (showPickup) {
     items.push({
-      Icon: Truck,
+      Icon: MapPin,
       label: `Local pickup available in ${location}`,
     });
   }
 
-  if (livePoultryCount > 0) items.push({ Icon: Bird, label: "Live poultry" });
-  if (hatchingEggCount > 0) items.push({ Icon: Egg, label: "Hatching eggs" });
+  if (livePoultryCount > 0) {
+    items.push({ label: "Live poultry", symbol: "poultry" });
+  }
+  if (hatchingEggCount > 0) {
+    items.push({ label: "Eggs", symbol: "egg" });
+  }
   if (processedPoultryCount > 0) {
-    items.push({ Icon: Drumstick, label: "Processed poultry" });
+    items.push({ label: "Meat birds", symbol: "processed" });
   }
   if (equipmentCount > 0) {
-    items.push({ Icon: Hammer, label: "Equipment & Supplies" });
+    items.push({ label: "Equipment & Supplies", symbol: "equipment" });
   }
 
   return items;
@@ -439,7 +469,7 @@ function InfoCard({
       <h2 className="text-xl font-semibold text-stone-950">{title}</h2>
       <p className="max-w-md text-sm leading-6 text-stone-700">{children}</p>
       <a className="text-sm font-semibold text-[#073f1e]" href={actionHref}>
-        {actionLabel} →
+        {actionLabel} &rarr;
       </a>
     </article>
   );
@@ -451,13 +481,16 @@ function StorefrontHomeFooter({
   store: {
     public_email: string | null;
     public_phone: string | null;
+    social_url: string | null;
     store_name: string;
     store_slug: string;
   };
 }) {
+  const socialLinks = getSocialLinks(store.social_url);
+
   return (
-    <footer className="border-t border-[#e1d8c8] bg-white">
-      <div className="mx-auto grid max-w-[70rem] gap-8 px-5 py-9 text-sm text-stone-700 sm:grid-cols-2 sm:px-7 lg:grid-cols-[1.3fr_0.8fr_0.9fr_1fr]">
+    <footer className="border-t border-[#e3e3df] bg-[#f7f7f4]">
+      <div className="mx-auto grid max-w-[70rem] gap-9 px-5 py-10 text-sm text-stone-700 sm:grid-cols-2 sm:px-7 lg:grid-cols-[1.35fr_0.8fr_0.9fr_1fr]">
         <div>
           <p className="text-2xl font-semibold leading-none text-[#073f1e]">
             {store.store_name}
@@ -472,6 +505,22 @@ function StorefrontHomeFooter({
               <p>Seller contact follows after checkout.</p>
             ) : null}
           </div>
+          {socialLinks.length > 0 ? (
+            <div className="mt-5 flex items-center gap-3">
+              {socialLinks.map((link) => (
+                <a
+                  aria-label={link.label}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d5d5cf] bg-white text-sm font-bold text-stone-800 transition hover:border-[#073f1e] hover:text-[#073f1e]"
+                  href={link.href}
+                  key={link.label}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {link.mark}
+                </a>
+              ))}
+            </div>
+          ) : null}
         </div>
         <div>
           <p className="font-serif text-lg font-semibold text-stone-950">Shop</p>
@@ -514,6 +563,22 @@ function formatQuantity(quantity: number) {
   if (quantity <= 0) return "Sold out";
   if (quantity === 1) return "1 available";
   return `${quantity} available`;
+}
+
+function getSocialLinks(socialUrl: string | null) {
+  if (!socialUrl) return [];
+
+  const normalized = socialUrl.toLowerCase();
+
+  if (normalized.includes("facebook.com")) {
+    return [{ href: socialUrl, label: "Facebook", mark: "f" }];
+  }
+
+  if (normalized.includes("instagram.com")) {
+    return [{ href: socialUrl, label: "Instagram", mark: "IG" }];
+  }
+
+  return [];
 }
 
 function isHatchingEggItem(item: StorefrontInventoryItem) {
