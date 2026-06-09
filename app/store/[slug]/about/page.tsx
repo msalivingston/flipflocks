@@ -65,7 +65,7 @@ export default async function StorefrontAboutPage({
   );
   const aboutText =
     store.about_text?.trim() ||
-    `${store.store_name} has not added a full story yet. Current availability and pickup information are available throughout this storefront.`;
+    `${store.store_name} has not added a full story yet. Products and pickup information are available throughout this storefront.`;
 
   return (
     <StorefrontShell>

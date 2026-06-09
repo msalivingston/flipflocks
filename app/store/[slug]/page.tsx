@@ -1,9 +1,6 @@
-import Link from "next/link";
 import {
-  AvailabilityBadge,
   EmptyStorefront,
   HeroImage,
-  ListingPhoto,
   StoreLogo,
   StorefrontButton,
   StorefrontContainer,
@@ -14,10 +11,14 @@ import {
   StorefrontSection,
   StorefrontSectionHeader,
   StorefrontShell,
-  cx,
   formatCurrency,
   formatLocation,
 } from "./storefront-ui";
+import {
+  StorefrontListingCard,
+  StorefrontListingSection,
+  StorefrontListingTabs,
+} from "./storefront-listing-tabs";
 import {
   StorefrontProduct,
   StorefrontEquipmentItem,
@@ -121,6 +122,12 @@ export default async function StorefrontHomePage({
       : null,
     store.npip_number ? { label: "NPIP", value: store.npip_number } : null,
   ].filter(Boolean) as Array<{ label: string; value: string }>;
+  const listingSections = buildListingSections({
+    equipment,
+    hatchingEggProducts,
+    livePoultryProducts,
+    processedPoultry,
+  });
 
   return (
     <StorefrontShell>
@@ -204,81 +211,7 @@ export default async function StorefrontHomePage({
             </p>
           </StorefrontSectionHeader>
 
-          <nav
-            aria-label="Storefront listing categories"
-            className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 sm:mx-0 sm:px-0"
-          >
-            <CategoryTab active href="#live-poultry" label="Live Poultry" />
-            {hatchingEggProducts.length > 0 ? (
-              <CategoryTab href="#hatching-eggs" label="Hatching Eggs" />
-            ) : null}
-            {equipment.length > 0 ? (
-              <CategoryTab
-                href="#equipment-supplies"
-                label="Equipment & Supplies"
-              />
-            ) : null}
-            {processedPoultry.length > 0 ? (
-              <CategoryTab
-                href="#processed-poultry"
-                label="Processed Poultry"
-              />
-            ) : null}
-          </nav>
-
-          <ListingCategory
-            description="Current live poultry listings from this farm."
-            emptyDescription="This seller does not have visible live poultry right now."
-            emptyTitle="No live poultry available"
-            id="live-poultry"
-            title="Live Poultry"
-          >
-            <ProductGrid products={livePoultryProducts} />
-          </ListingCategory>
-
-          {hatchingEggProducts.length > 0 ? (
-            <ListingCategory
-              description="Available hatching egg listings for local pickup."
-              id="hatching-eggs"
-              title="Hatching Eggs"
-            >
-              <ProductGrid products={hatchingEggProducts} />
-            </ListingCategory>
-          ) : null}
-
-          {equipment.length > 0 ? (
-            <ListingCategory
-              description="Equipment and supplies available from this seller."
-              id="equipment-supplies"
-              title="Equipment & Supplies"
-            >
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {equipment.map((item) => (
-                  <EquipmentCard
-                    item={item}
-                    key={item.equipment_inventory_item_id}
-                  />
-                ))}
-              </div>
-            </ListingCategory>
-          ) : null}
-
-          {processedPoultry.length > 0 ? (
-            <ListingCategory
-              description="Processed poultry items available for local pickup."
-              id="processed-poultry"
-              title="Processed Poultry"
-            >
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {processedPoultry.map((item) => (
-                  <ProcessedPoultryCard
-                    item={item}
-                    key={item.processed_poultry_inventory_item_id}
-                  />
-                ))}
-              </div>
-            </ListingCategory>
-          ) : null}
+          <StorefrontListingTabs sections={listingSections} />
         </StorefrontSection>
 
         <section className="grid gap-5 lg:grid-cols-2">
@@ -306,206 +239,113 @@ export default async function StorefrontHomePage({
   );
 }
 
-function CategoryTab({
-  active = false,
-  href,
-  label,
+function buildListingSections({
+  equipment,
+  hatchingEggProducts,
+  livePoultryProducts,
+  processedPoultry,
 }: {
-  active?: boolean;
-  href: string;
-  label: string;
+  equipment: StorefrontEquipmentItem[];
+  hatchingEggProducts: StorefrontProduct[];
+  livePoultryProducts: StorefrontProduct[];
+  processedPoultry: StorefrontProcessedPoultryItem[];
 }) {
-  return (
-    <a
-      className={cx(
-        "inline-flex min-h-11 shrink-0 items-center rounded-md border px-4 text-sm font-semibold transition",
-        active
-          ? "border-[#24512f] bg-[#24512f] text-white"
-          : "border-[#d8cebd] bg-white text-stone-700 hover:border-[#24512f] hover:text-[#24512f]",
-      )}
-      href={href}
-    >
-      {label}
-    </a>
-  );
-}
+  const sections: StorefrontListingSection[] = [
+    {
+      cards: livePoultryProducts.map(toProductCard),
+      description: "Current live poultry listings from this farm.",
+      emptyDescription: "This seller does not have visible live poultry right now.",
+      emptyTitle: "No live poultry available",
+      id: "live-poultry",
+      label: "Live Poultry",
+    },
+  ];
 
-function ListingCategory({
-  children,
-  description,
-  emptyDescription,
-  emptyTitle,
-  id,
-  title,
-}: {
-  children: React.ReactNode;
-  description: string;
-  emptyDescription?: string;
-  emptyTitle?: string;
-  id: string;
-  title: string;
-}) {
-  const isEmpty =
-    Array.isArray(children) && children.length === 0;
-
-  return (
-    <section className="scroll-mt-28 rounded-lg border border-[#ded7c8] bg-[#fffdf8] p-4 sm:p-5" id={id}>
-      <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h3 className="text-xl font-semibold text-stone-950">{title}</h3>
-          <p className="mt-1 text-sm leading-6 text-stone-600">{description}</p>
-        </div>
-      </div>
-      {isEmpty ? (
-        <EmptyStorefront
-          title={emptyTitle || `No ${title.toLowerCase()} available`}
-          description={emptyDescription || "This category has no visible listings right now."}
-        />
-      ) : (
-        children
-      )}
-    </section>
-  );
-}
-
-function ProductGrid({ products }: { products: StorefrontProduct[] }) {
-  if (products.length === 0) {
-    return (
-      <EmptyStorefront
-        title="No live poultry available"
-        description="This seller does not have visible live poultry right now."
-      />
-    );
+  if (hatchingEggProducts.length > 0) {
+    sections.push({
+      cards: hatchingEggProducts.map(toProductCard),
+      description: "Available hatching egg listings for local pickup.",
+      emptyDescription: "This seller does not have visible hatching eggs right now.",
+      emptyTitle: "No hatching eggs available",
+      id: "hatching-eggs",
+      label: "Hatching Eggs",
+    });
   }
 
-  return (
-    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-      {products.map((product) => (
-        <ProductCard key={product.productId} product={product} />
-      ))}
-    </div>
-  );
+  if (equipment.length > 0) {
+    sections.push({
+      cards: equipment.map(toEquipmentCard),
+      description: "Equipment and supplies available from this seller.",
+      emptyDescription:
+        "This seller does not have visible equipment or supplies right now.",
+      emptyTitle: "No equipment or supplies available",
+      id: "equipment-supplies",
+      label: "Equipment & Supplies",
+    });
+  }
+
+  if (processedPoultry.length > 0) {
+    sections.push({
+      cards: processedPoultry.map(toProcessedPoultryCard),
+      description: "Processed poultry items available for local pickup.",
+      emptyDescription:
+        "This seller does not have visible processed poultry right now.",
+      emptyTitle: "No processed poultry available",
+      id: "processed-poultry",
+      label: "Processed Poultry",
+    });
+  }
+
+  return sections;
 }
 
-function ProcessedPoultryCard({
-  item,
-}: {
-  item: StorefrontProcessedPoultryItem;
-}) {
-  return (
-    <ListingCard
-      availabilityCode={item.buyer_availability_code}
-      availabilityLabel={item.buyer_availability_label}
-      description={item.description || item.package_size}
-      detail={`${item.quantity_available} available`}
-      href={`/store/${item.store_slug}/processed-poultry/${item.processed_poultry_inventory_item_id}`}
-      imageAlt={item.featured_image_alt_text || item.product_name}
-      imageUrl={item.featured_image_url}
-      meta={[item.poultry_type, item.product_type].filter(Boolean).join(" - ")}
-      price={formatCurrency(item.unit_price)}
-      title={item.product_name}
-    />
-  );
+function toProcessedPoultryCard(
+  item: StorefrontProcessedPoultryItem,
+): StorefrontListingCard {
+  return {
+    availabilityCode: item.buyer_availability_code,
+    availabilityLabel: item.buyer_availability_label,
+    description: item.description || item.package_size,
+    detail: `${item.quantity_available} available`,
+    href: `/store/${item.store_slug}/processed-poultry/${item.processed_poultry_inventory_item_id}`,
+    imageAlt: item.featured_image_alt_text || item.product_name,
+    imageUrl: item.featured_image_url,
+    meta: [item.poultry_type, item.product_type].filter(Boolean).join(" - "),
+    price: formatCurrency(item.unit_price),
+    title: item.product_name,
+  };
 }
 
-function EquipmentCard({ item }: { item: StorefrontEquipmentItem }) {
-  return (
-    <ListingCard
-      availabilityCode={item.buyer_availability_code}
-      availabilityLabel={item.buyer_availability_label}
-      description={item.description}
-      detail={`${item.quantity_available} available`}
-      href={`/store/${item.store_slug}/equipment/${item.equipment_inventory_item_id}`}
-      imageAlt={item.featured_image_alt_text || item.item_name}
-      imageUrl={item.featured_image_url}
-      meta={item.category}
-      price={formatCurrency(item.unit_price)}
-      title={item.item_name}
-    />
-  );
+function toEquipmentCard(item: StorefrontEquipmentItem): StorefrontListingCard {
+  return {
+    availabilityCode: item.buyer_availability_code,
+    availabilityLabel: item.buyer_availability_label,
+    description: item.description,
+    detail: `${item.quantity_available} available`,
+    href: `/store/${item.store_slug}/equipment/${item.equipment_inventory_item_id}`,
+    imageAlt: item.featured_image_alt_text || item.item_name,
+    imageUrl: item.featured_image_url,
+    meta: item.category,
+    price: formatCurrency(item.unit_price),
+    title: item.item_name,
+  };
 }
 
-function ProductCard({ product }: { product: StorefrontProduct }) {
-  return (
-    <ListingCard
-      availabilityCode={product.availabilityCode}
-      availabilityLabel={product.availabilityLabel}
-      description={product.description}
-      detail={`${product.quantityLabel} - ${
+function toProductCard(product: StorefrontProduct): StorefrontListingCard {
+  return {
+    availabilityCode: product.availabilityCode,
+    availabilityLabel: product.availabilityLabel,
+    description: product.description,
+    detail: `${product.quantityLabel} - ${
         product.optionsCount === 1 ? "1 option" : `${product.optionsCount} options`
-      }`}
-      href={`/store/${product.storeSlug}/products/${product.productId}`}
-      imageAlt={product.imageAlt || product.name}
-      imageUrl={product.imageUrl}
-      meta={product.speciesName}
-      price={product.pricingLabel || "See options"}
-      title={product.name}
-    />
-  );
-}
-
-function ListingCard({
-  availabilityCode,
-  availabilityLabel,
-  description,
-  detail,
-  href,
-  imageAlt,
-  imageUrl,
-  meta,
-  price,
-  title,
-}: {
-  availabilityCode: string;
-  availabilityLabel: string;
-  description: string | null;
-  detail: string;
-  href: string;
-  imageAlt: string;
-  imageUrl: string | null;
-  meta: string;
-  price: string;
-  title: string;
-}) {
-  return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-lg border border-[#ded7c8] bg-white shadow-[0_12px_35px_rgba(46,35,20,0.07)] transition hover:-translate-y-0.5 hover:border-[#bfcfb6] hover:shadow-[0_20px_50px_rgba(46,35,20,0.12)]">
-      <Link
-        className="flex h-full flex-col focus:outline-none focus:ring-2 focus:ring-emerald-700"
-        href={href}
-      >
-        <div className="relative">
-          <ListingPhoto alt={imageAlt} src={imageUrl} />
-          <div className="absolute left-3 top-3">
-            <AvailabilityBadge code={availabilityCode} label={availabilityLabel} />
-          </div>
-        </div>
-        <div className="flex flex-1 flex-col gap-4 p-5">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-emerald-700">
-              {meta}
-            </p>
-            <h3 className="mt-1 text-xl font-semibold leading-tight text-stone-950">
-              {title}
-            </h3>
-          </div>
-
-          <p className="line-clamp-2 min-h-12 text-sm leading-6 text-stone-600">
-            {description || "Details and pickup options are listed inside."}
-          </p>
-
-          <div className="mt-auto grid gap-4">
-            <div>
-              <p className="text-lg font-semibold text-[#24512f]">{price}</p>
-              <p className="mt-1 text-xs text-stone-500">{detail}</p>
-            </div>
-            <span className="inline-flex min-h-11 items-center justify-center rounded-md bg-[#24512f] px-4 text-sm font-semibold text-white transition group-hover:bg-[#183b22]">
-              View Details
-            </span>
-          </div>
-        </div>
-      </Link>
-    </article>
-  );
+      }`,
+    href: `/store/${product.storeSlug}/products/${product.productId}`,
+    imageAlt: product.imageAlt || product.name,
+    imageUrl: product.imageUrl,
+    meta: product.speciesName,
+    price: product.pricingLabel || "See options",
+    title: product.name,
+  };
 }
 
 function InfoCard({
