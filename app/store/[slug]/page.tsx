@@ -493,16 +493,17 @@ function StorefrontSystemIcon({
       {name === "location" ? (
         <>
           <path d="M12 21s6-5.4 6-11a6 6 0 0 0-12 0c0 5.6 6 11 6 11Z" />
-          <path d="M12 10h.01" />
+          <path d="M12 10.5h.01" />
         </>
       ) : null}
       {name === "pickup" ? (
         <>
-          <path d="M4 17h10" />
-          <path d="M4 13h16l-2 4h-4" />
-          <path d="M7 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z" />
-          <path d="M17 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z" />
-          <path d="M5 13V8h8v5" />
+          <path d="M3 16V8h11v8" />
+          <path d="M14 12h3l3 4v4h-3" />
+          <path d="M3 20h3" />
+          <path d="M10 20h7" />
+          <path d="M8 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
+          <path d="M19 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
         </>
       ) : null}
       {name === "farm" ? (
@@ -514,10 +515,7 @@ function StorefrontSystemIcon({
       ) : null}
       {name === "status" ? (
         <>
-          <path d="M12 3v18" />
-          <path d="M7 8h10" />
-          <path d="M8 16h8" />
-          <path d="M12 3c4 2 6 5 6 9s-2 7-6 9c-4-2-6-5-6-9s2-7 6-9Z" />
+          <path d="M20 7 9 18l-5-5" />
         </>
       ) : null}
     </svg>

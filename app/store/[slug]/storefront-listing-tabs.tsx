@@ -46,7 +46,7 @@ export function StorefrontListingTabs({
     <div className="grid gap-6">
       <div
         aria-label="Storefront listing categories"
-        className="-mx-5 grid auto-cols-[minmax(13rem,1fr)] grid-flow-col gap-2 overflow-x-auto px-5 pb-1 sm:mx-0 sm:px-0 lg:grid-flow-row lg:grid-cols-4"
+        className="-mx-5 grid auto-cols-[minmax(12rem,1fr)] grid-flow-col gap-1.5 overflow-x-auto px-5 pb-1 sm:mx-0 sm:px-0 lg:grid-flow-row lg:grid-cols-4"
         role="tablist"
       >
         {sections.map((section) => {
@@ -57,10 +57,10 @@ export function StorefrontListingTabs({
               aria-controls={`${section.id}-panel`}
               aria-selected={active}
               className={cx(
-                "inline-flex min-h-14 shrink-0 items-center justify-center rounded-lg border px-5 text-sm font-semibold transition",
+                "inline-flex min-h-12 shrink-0 items-center justify-center rounded-lg border px-4 text-sm font-semibold transition",
                 active
-                  ? "border-[#24512f] bg-[#24512f] text-white"
-                  : "border-[#eee9df] bg-[#f5f1eb] text-stone-900 shadow-sm hover:border-[#24512f] hover:text-[#24512f]",
+                  ? "border-[#c9ddc8] bg-[#eef6ec] text-[#073f1e] shadow-[inset_0_-3px_0_#073f1e]"
+                  : "border-[#eee9df] bg-[#faf8f4] text-stone-800 hover:border-[#c9ddc8] hover:bg-[#f4f0e8] hover:text-[#073f1e]",
               )}
               id={`${section.id}-tab`}
               key={section.id}
@@ -130,7 +130,7 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
 
           <div className="mt-auto grid gap-4">
             <div className="grid gap-1">
-              <p className="text-lg font-semibold text-[#073f1e]">
+              <p className="text-xl font-bold text-[#073f1e]">
                 {card.price}
               </p>
               <p className="mt-1 text-xs text-stone-500">{card.detail}</p>
@@ -168,11 +168,10 @@ function ListingTabIcon({ name }: { name: ListingTabIconName }) {
     >
       {name === "poultry" ? (
         <>
-          <path d="M8 18c-3-1-4-3-4-6 0-4 3-7 7-7 3 0 5 2 5 5" />
-          <path d="M14 7l3-3 1 4" />
-          <path d="M15 12h5l-3 4" />
-          <path d="M9 18v3" />
-          <path d="M13 18v3" />
+          <path d="M6 15c0-4 3-7 7-7h3l3-3 1 5h-3c0 4-3 7-7 7H6Z" />
+          <path d="M9 17v3" />
+          <path d="M13 17v3" />
+          <path d="M18 9h.01" />
         </>
       ) : null}
       {name === "egg" ? (
@@ -181,16 +180,15 @@ function ListingTabIcon({ name }: { name: ListingTabIconName }) {
       {name === "equipment" ? (
         <>
           <path d="M14 7l3-3 3 3-3 3-3-3Z" />
-          <path d="M3 21l8-8" />
+          <path d="M3 21l9-9" />
           <path d="M14 14l7 7" />
-          <path d="M5 5l5 5" />
         </>
       ) : null}
       {name === "processed" ? (
         <>
-          <path d="M5 19c4-7 8-11 14-14" />
-          <path d="M7 17c3 1 7 0 10-3" />
-          <path d="M8 10c4 0 6-2 8-5" />
+          <path d="M8 14c-2 0-4-2-4-4s2-4 4-4c1.5 0 2.8.8 3.5 2" />
+          <path d="M10.5 12.5 18 20" />
+          <path d="M17 20c1.5 0 3-1.2 3-3s-1.5-3-3-3c-1.1 0-2 .6-2.5 1.5" />
         </>
       ) : null}
     </svg>

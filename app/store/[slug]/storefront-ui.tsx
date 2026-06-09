@@ -524,8 +524,8 @@ export function StorefrontPlaceholderImage({
   label?: string;
 }) {
   return (
-    <div className="flex aspect-[4/3] items-center justify-center bg-[linear-gradient(135deg,#f6ead8_0%,#fffdf8_50%,#dfead8_100%)] px-4 text-center text-sm font-semibold text-emerald-900">
-      <span className="rounded-md border border-emerald-100 bg-white/85 px-3 py-1 shadow-sm">
+    <div className="flex aspect-[4/3] items-center justify-center bg-[#f4f1ea] px-4 text-center text-sm font-semibold text-stone-500">
+      <span className="rounded-md border border-[#e1d8c8] bg-white/65 px-3 py-1">
         {label}
       </span>
     </div>
