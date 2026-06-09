@@ -9,6 +9,7 @@ import { ErrorState, LoadingState } from "./seller-ui";
 const sellerNavItems = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Inventory", href: "/dashboard/inventory" },
+  { label: "Breeds", href: "/dashboard/breeds" },
   { label: "Orders", href: "/dashboard/orders" },
   { label: "Customers", href: "/dashboard/customers" },
   { label: "Reports", href: "/dashboard/reports" },

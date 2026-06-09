@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   StorefrontCartItem,
   addItemsToStorefrontCart,
+  cartItemKey,
   normalizeQuantity,
   summarizeStorefrontCart,
 } from "../../_components/storefront-cart-client";
@@ -44,6 +45,8 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
         if (quantity <= 0) return items;
 
         items.push({
+          itemType: "listing_inventory",
+          itemId: option.inventoryItemId,
           inventoryItemId: option.inventoryItemId,
           productId: product.productId,
           productName: product.name,
@@ -196,7 +199,7 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
             {addedItems.map((item) => (
               <div
                 className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-white/70 px-3 py-2"
-                key={item.inventoryItemId}
+                key={cartItemKey(item)}
               >
                 <span>
                   {item.productName} - {item.optionLabel}

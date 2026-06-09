@@ -74,6 +74,45 @@ export type StorefrontMedia = {
   height_px: number | null;
 };
 
+export type StorefrontEquipmentItem = {
+  store_id: string;
+  store_slug: string;
+  equipment_inventory_item_id: string;
+  item_type: "equipment_inventory";
+  item_name: string;
+  category: string;
+  condition: string | null;
+  description: string | null;
+  quantity_available: number;
+  buyer_availability_code: "ready_now" | "sold_out" | string;
+  buyer_availability_label: string;
+  can_checkout: boolean;
+  unit_price: number;
+  featured_image_url: string | null;
+  featured_image_alt_text: string | null;
+  updated_at: string;
+};
+
+export type StorefrontProcessedPoultryItem = {
+  store_id: string;
+  store_slug: string;
+  processed_poultry_inventory_item_id: string;
+  item_type: "processed_poultry_inventory";
+  product_name: string;
+  poultry_type: string;
+  product_type: string;
+  package_size: string | null;
+  description: string | null;
+  quantity_available: number;
+  buyer_availability_code: "ready_now" | "sold_out" | string;
+  buyer_availability_label: string;
+  can_checkout: boolean;
+  unit_price: number;
+  featured_image_url: string | null;
+  featured_image_alt_text: string | null;
+  updated_at: string;
+};
+
 export type StorefrontPurchaseOption = {
   inventoryItemId: string;
   inventoryType: string;
@@ -133,6 +172,90 @@ export async function loadStorefrontInventory(slug: string) {
 
   return {
     data: (data ?? []) as StorefrontInventoryItem[],
+    error,
+  };
+}
+
+export async function loadStorefrontEquipment(slug: string) {
+  const { data, error } = await supabase
+    .from("public_storefront_equipment_inventory")
+    .select("*")
+    .eq("store_slug", slug)
+    .order("category", { ascending: true })
+    .order("item_name", { ascending: true });
+
+  return {
+    data: (data ?? []) as StorefrontEquipmentItem[],
+    error,
+  };
+}
+
+export async function loadStorefrontEquipmentItem(
+  slug: string,
+  equipmentItemId: string,
+) {
+  const { data, error } = await supabase
+    .from("public_storefront_equipment_inventory")
+    .select("*")
+    .eq("store_slug", slug)
+    .eq("equipment_inventory_item_id", equipmentItemId)
+    .maybeSingle();
+
+  return {
+    data: data as StorefrontEquipmentItem | null,
+    error,
+  };
+}
+
+export async function loadStorefrontProcessedPoultry(slug: string) {
+  const { data, error } = await supabase
+    .from("public_storefront_processed_poultry_inventory")
+    .select("*")
+    .eq("store_slug", slug)
+    .order("poultry_type", { ascending: true })
+    .order("product_type", { ascending: true })
+    .order("product_name", { ascending: true });
+
+  return {
+    data: (data ?? []) as StorefrontProcessedPoultryItem[],
+    error,
+  };
+}
+
+export async function loadStorefrontProcessedPoultryItem(
+  slug: string,
+  processedPoultryItemId: string,
+) {
+  const { data, error } = await supabase
+    .from("public_storefront_processed_poultry_inventory")
+    .select("*")
+    .eq("store_slug", slug)
+    .eq("processed_poultry_inventory_item_id", processedPoultryItemId)
+    .maybeSingle();
+
+  return {
+    data: data as StorefrontProcessedPoultryItem | null,
+    error,
+  };
+}
+
+export async function loadStorefrontProcessedPoultryGallery(
+  slug: string,
+  processedPoultryItemId: string,
+  limit = 8,
+) {
+  const { data, error } = await supabase
+    .from("public_storefront_processed_poultry_media_gallery")
+    .select("*")
+    .eq("store_slug", slug)
+    .eq("entity_type", "processed_poultry_inventory_item")
+    .eq("entity_id", processedPoultryItemId)
+    .order("is_featured", { ascending: false })
+    .order("sort_order", { ascending: true })
+    .limit(limit);
+
+  return {
+    data: (data ?? []) as StorefrontMedia[],
     error,
   };
 }

@@ -66,6 +66,11 @@ type SellerOrderItemRow = {
   age_at_sale_days_snapshot: number | null;
   order_item_source: string | null;
   custom_item_name_snapshot: string | null;
+  equipment_inventory_item_id: string | null;
+  processed_poultry_inventory_item_id: string | null;
+  product_type_snapshot: string | null;
+  item_name_snapshot: string | null;
+  item_category_snapshot: string | null;
   unit_price_snapshot: number | null;
   quantity: number;
   fulfilled_quantity: number;
@@ -124,7 +129,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         supabase
           .from("seller_order_item_detail")
           .select(
-            "order_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
+            "order_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, equipment_inventory_item_id, processed_poultry_inventory_item_id, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
           )
           .eq("store_id", seller.store_id)
           .eq("order_id", orderId)
@@ -254,7 +259,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       }));
 
     if (fulfillmentItems.length === 0) {
-      setActionError("There are no remaining birds to mark picked up.");
+      setActionError("There are no remaining items to mark picked up.");
       return;
     }
 
@@ -353,7 +358,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                   Request summary
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-stone-600">
-                  {customerName} requested {order.total_item_quantity ?? 0} bird
+                  {customerName} requested {order.total_item_quantity ?? 0} item
                   {(order.total_item_quantity ?? 0) === 1 ? "" : "s"}.
                 </p>
               </div>
@@ -485,7 +490,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-stone-600">
                   Use these simple steps when the order is ready, then after the
-                  buyer has picked up the birds.
+                  buyer has picked up the items.
                 </p>
                 <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
                   <DetailFact
@@ -506,7 +511,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                   />
                   <DetailFact
                     label="Still open"
-                    value={`${remainingPickupQuantity} bird${
+                    value={`${remainingPickupQuantity} item${
                       remainingPickupQuantity === 1 ? "" : "s"
                     }`}
                   />
@@ -556,7 +561,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           <SellerCard className="overflow-hidden">
             <div className="border-b border-stone-200 px-5 py-4">
               <h2 className="text-lg font-semibold text-stone-950">
-                Requested birds
+                Requested items
               </h2>
             </div>
             {data.items.length > 0 ? (
@@ -569,7 +574,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
               <div className="p-5">
                 <EmptyState
                   title="No line items found"
-                  description="This order does not currently show any requested birds."
+                  description="This order does not currently show any requested items."
                 />
               </div>
             )}
@@ -677,31 +682,57 @@ export function OrderDetail({ orderId }: { orderId: string }) {
 
 function OrderItemRow({ item }: { item: SellerOrderItemRow }) {
   const isCustomItem = item.order_item_source === "custom";
+  const isEquipmentItem = item.order_item_source === "equipment_inventory";
+  const isProcessedPoultryItem =
+    item.order_item_source === "processed_poultry_inventory";
   const label = formatInventoryLabel({
     custom_inventory_label: item.custom_inventory_label_snapshot,
     inventory_type: item.inventory_type_snapshot,
   });
-  const itemTitle =
-    item.custom_item_name_snapshot || item.breed_display_name_snapshot;
+  const itemTitle = isEquipmentItem || isProcessedPoultryItem
+    ? item.item_name_snapshot || item.breed_display_name_snapshot
+    : item.custom_item_name_snapshot || item.breed_display_name_snapshot;
+  const subtitle = isCustomItem
+    ? "Custom item"
+    : isEquipmentItem
+      ? [item.item_category_snapshot, item.custom_inventory_label_snapshot]
+          .filter(Boolean)
+          .join(" - ") || "Equipment & Supplies"
+      : isProcessedPoultryItem
+        ? [item.item_category_snapshot, item.custom_inventory_label_snapshot]
+            .filter(Boolean)
+            .join(" - ") || "Processed Poultry"
+      : item.species_name_snapshot;
 
   return (
     <article className="grid gap-3 px-5 py-4 sm:grid-cols-[1fr_auto]">
       <div>
         <h3 className="font-semibold text-stone-950">
           {itemTitle}
-          {isCustomItem ? "" : ` ${label}`}
+          {isCustomItem || isEquipmentItem || isProcessedPoultryItem
+            ? ""
+            : ` ${label}`}
         </h3>
         <p className="mt-1 text-sm text-stone-600">
-          {isCustomItem ? "Custom item" : item.species_name_snapshot}
-          {!isCustomItem && item.hatch_date_snapshot
+          {subtitle}
+          {!isCustomItem &&
+          !isEquipmentItem &&
+          !isProcessedPoultryItem &&
+          item.hatch_date_snapshot
             ? ` - hatched ${formatShortDate(item.hatch_date_snapshot)}`
             : ""}
-          {!isCustomItem && item.available_date_snapshot
-            ? ` · available ${formatShortDate(item.available_date_snapshot)}`
+          {!isCustomItem &&
+          !isEquipmentItem &&
+          !isProcessedPoultryItem &&
+          item.available_date_snapshot
+            ? ` - available ${formatShortDate(item.available_date_snapshot)}`
             : ""}
         </p>
         <p className="mt-1 text-sm text-stone-500">
-          {!isCustomItem && item.age_at_sale_days_snapshot != null
+          {!isCustomItem &&
+          !isEquipmentItem &&
+          !isProcessedPoultryItem &&
+          item.age_at_sale_days_snapshot != null
             ? `${formatAgeAtAvailability(item.age_at_sale_days_snapshot)} at sale - `
             : ""}
           {isCustomItem
@@ -717,7 +748,6 @@ function OrderItemRow({ item }: { item: SellerOrderItemRow }) {
     </article>
   );
 }
-
 function DetailFact({ label, value }: { label: string; value: string }) {
   return (
     <div>

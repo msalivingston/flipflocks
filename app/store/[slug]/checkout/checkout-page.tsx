@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import {
   StorefrontCart,
+  cartItemKey,
   StorefrontCartItem,
   clearStorefrontCart,
   readStorefrontCart,
@@ -47,8 +48,14 @@ type CheckoutSummary = {
 };
 
 type CheckoutSummaryItem = {
-  inventory_item_id: string;
-  breed_display_name: string;
+  item_type: "listing_inventory" | "equipment_inventory" | string;
+  item_id: string;
+  inventory_item_id: string | null;
+  equipment_inventory_item_id: string | null;
+  processed_poultry_inventory_item_id: string | null;
+  item_name: string;
+  item_category: string;
+  breed_display_name?: string;
   custom_inventory_label: string | null;
   inventory_type: string;
   requested_quantity: number;
@@ -420,7 +427,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                 {cartItems.map((item) => (
                   <div
                     className="rounded-lg border border-[#eee5d6] bg-[#fffdf8] p-3 text-sm"
-                    key={item.inventoryItemId}
+                    key={cartItemKey(item)}
                   >
                     <div className="flex justify-between gap-3">
                       <p className="font-semibold text-stone-950">
@@ -565,7 +572,8 @@ function toCheckoutItems(items: StorefrontCartItem[]) {
   return items
     .filter((item) => item.quantity > 0)
     .map((item) => ({
-      inventory_item_id: item.inventoryItemId,
+      item_type: item.itemType,
+      item_id: item.itemId,
       quantity: item.quantity,
     }));
 }
@@ -660,7 +668,7 @@ function toBuyerOrderError(message: string | undefined) {
 }
 
 function formatCartAvailability(availableDate: string) {
-  if (!availableDate) return "Available date coming soon";
+  if (!availableDate) return "Available now";
 
   const today = new Date();
   const normalizedToday = new Date(

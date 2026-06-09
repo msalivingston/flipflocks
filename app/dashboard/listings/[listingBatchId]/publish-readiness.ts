@@ -103,6 +103,13 @@ export function buildPublishReadinessReport({
   const zeroQuantityRows = activeInventoryRows.filter(
     (row) => (row.quantity_available ?? 0) === 0,
   );
+  const isHatchingEggListing = listing.batchType === "hatching_eggs";
+  const inventoryLabel = isHatchingEggListing
+    ? "Hatching Eggs"
+    : "Available Birds";
+  const inventoryMissingMessage = isHatchingEggListing
+    ? "No hatching eggs are ready."
+    : "No available birds are ready.";
   const hasPickupNotes =
     hasText(seller?.pickup_instructions) || hasText(seller?.pickup_policy);
   const hasPublicLocation =
@@ -170,7 +177,7 @@ export function buildPublishReadinessReport({
       items: [
         {
           id: "inventory-rows",
-          label: "Available Birds",
+          label: inventoryLabel,
           status:
             activeInventoryRows.length > 0
               ? zeroQuantityRows.length > 0
@@ -186,7 +193,7 @@ export function buildPublishReadinessReport({
                 : `${activeInventoryRows.length} available option${
                     activeInventoryRows.length === 1 ? "" : "s"
                   } ready for review.`
-              : "No available birds are ready.",
+              : inventoryMissingMessage,
         },
         {
           id: "quantity",
@@ -296,7 +303,9 @@ export function buildPublishReadinessReport({
       speciesBreed: `${listing.speciesName} - ${listing.breedNames.join(", ")}`,
       inventorySummary: `${listing.totalAvailable} available across ${
         listing.rows.length
-      } row${listing.rows.length === 1 ? "" : "s"}`,
+      } ${isHatchingEggListing ? "hatching egg row" : "row"}${
+        listing.rows.length === 1 ? "" : "s"
+      }`,
       pricingSummary:
         listing.basePrice == null
           ? "Base price missing"
@@ -337,7 +346,10 @@ function buildCompactChecklist({
     },
     {
       id: "available-birds",
-      label: "Available birds entered",
+      label:
+        listing.batchType === "hatching_eggs"
+          ? "Hatching eggs entered"
+          : "Available birds entered",
       status:
         activeInventoryRows.length > 0 && activeAvailableQuantity > 0
           ? "ready"
@@ -345,7 +357,9 @@ function buildCompactChecklist({
       message:
         activeInventoryRows.length > 0 && activeAvailableQuantity > 0
           ? `${activeAvailableQuantity} available.`
-          : "Add at least one available bird.",
+          : listing.batchType === "hatching_eggs"
+            ? "Add at least one available hatching egg row."
+            : "Add at least one available bird.",
     },
     {
       id: "pricing",
@@ -420,11 +434,19 @@ function buildPublishGate({
   }
 
   if (activeInventoryRows.length === 0) {
-    blockers.push("Add at least one available bird.");
+    blockers.push(
+      listing.batchType === "hatching_eggs"
+        ? "Add at least one available hatching egg row."
+        : "Add at least one available bird.",
+    );
   }
 
   if (activeAvailableQuantity <= 0) {
-    blockers.push("At least one available bird needs a quantity.");
+    blockers.push(
+      listing.batchType === "hatching_eggs"
+        ? "At least one hatching egg row needs a quantity."
+        : "At least one available bird needs a quantity.",
+    );
   }
 
   if (!hasText(listing.availableDate)) {

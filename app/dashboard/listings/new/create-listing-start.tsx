@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useSellerContext } from "../../_components/seller-context";
 import {
   SellerCard,
   SellerPageHeader,
@@ -17,41 +20,75 @@ type ChoiceCardProps = {
  * First step in listing creation.
  *
  * This component intentionally collects no data. It only routes sellers into
- * the approved V1 bird workflow while keeping Equipment & Supplies visible as a
- * deferred product decision.
+ * the approved V1 bird workflow while optional workflows are revealed from
+ * Store Admin module settings.
  */
 export function CreateListingStart() {
+  const { seller } = useSellerContext();
+  const hatchingEggsEnabled = Boolean(seller?.hatching_eggs_enabled);
+  const equipmentSuppliesEnabled = Boolean(
+    seller?.equipment_supplies_enabled,
+  );
+  const processedPoultryEnabled = Boolean(seller?.processed_poultry_enabled);
+
   return (
     <>
       <SellerPageHeader
         title="Create Listing"
-        description="Start with what you are selling. Bird listings are available first; Equipment & Supplies will come later."
+        description="Start with what you are selling. Live bird listings are always available."
       />
 
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-5 py-5 sm:px-7">
         <section className="grid gap-4 md:grid-cols-2">
           <ChoiceCard
             title="Birds"
-            description="List chicks, started birds, pullets, breeding pairs, trios, or hatching eggs."
+            description={
+              hatchingEggsEnabled
+                ? "List chicks, started birds, pullets, breeding pairs, trios, or hatching eggs."
+                : "List chicks, started birds, pullets, breeding pairs, or trios."
+            }
             href="/dashboard/listings/new/birds"
             badge="Ready for setup"
-            details={[
-              "Use hatch or birth dates",
-              "Show when birds are ready",
-              "Support age-based pricing later in the flow",
-            ]}
+            details={
+              hatchingEggsEnabled
+                ? [
+                    "Live birds use hatch dates",
+                    "Hatching eggs use an available date",
+                    "Create inventory before publishing listings",
+                  ]
+                : [
+                    "Live birds use hatch dates",
+                    "Simple and group listings are available",
+                    "Create inventory before publishing listings",
+                  ]
+            }
           />
-          <ChoiceCard
-            title="Equipment & Supplies"
-            description="Feeders, brooders, supplies, and non-living inventory will use a separate future workflow."
-            badge="Coming later"
-            disabled
-            details={[
-              "Deferred for V1",
-              "No product inventory setup yet",
-              "Bird listings stay the priority",
-            ]}
-          />
+          {equipmentSuppliesEnabled ? (
+            <ChoiceCard
+              title="Equipment & Supplies"
+              description={
+                "Feeders, brooders, supplies, and non-living local-pickup inventory."
+              }
+              href="/dashboard/listings/new/equipment-supplies"
+              details={[
+                "Simple quantity and price inventory",
+                "Local pickup only for V1",
+                "Creates a buyer-facing store item",
+              ]}
+            />
+          ) : null}
+          {processedPoultryEnabled ? (
+            <ChoiceCard
+              title="Processed Poultry"
+              description="Simple local-pickup poultry products by product name, type, quantity, and price."
+              href="/dashboard/listings/new/processed-poultry"
+              details={[
+                "No hatch dates or breed setup",
+                "Quantity and price are required",
+                "Creates a buyer-facing store item",
+              ]}
+            />
+          ) : null}
         </section>
       </main>
     </>
@@ -59,14 +96,73 @@ export function CreateListingStart() {
 }
 
 export function BirdsBranchSelection() {
+  const { seller } = useSellerContext();
+  const hatchingEggsEnabled = Boolean(seller?.hatching_eggs_enabled);
+
   return (
     <>
       <SellerPageHeader
         title="Bird Listing"
-        description="Every listing is organized around one hatch date. Choose Simple for one breed/type, or Group when this hatch needs multiple rows."
+        description={
+          hatchingEggsEnabled
+            ? "Choose whether you are listing live birds or hatching eggs."
+            : "Choose the live bird listing workflow."
+        }
         action={
           <Link className="seller-secondary-button" href="/dashboard/listings/new">
             Back
+          </Link>
+        }
+      />
+
+      <main className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-5 py-5 sm:px-7">
+        <section className="grid gap-4 md:grid-cols-2">
+          <ChoiceCard
+            title="Live Birds"
+            description={
+              "Chicks, started birds, pullets, pairs, trios, or other live bird inventory."
+            }
+            href="/dashboard/listings/new/birds/live"
+            details={[
+              "Uses the existing hatch-date workflow",
+              "Supports simple and group listings",
+              "Keeps age-based setup available",
+            ]}
+          />
+          {hatchingEggsEnabled ? (
+            <ChoiceCard
+              title="Hatching Eggs"
+              description={
+                "Eggs available for local pickup, organized by breed, quantity, and price per egg."
+              }
+              href="/dashboard/listings/new/birds/hatching-eggs"
+              details={[
+                "No hatch date required",
+                "Breed, available date, quantity, and price per egg",
+                "Local pickup only for V1",
+              ]}
+            />
+          ) : null}
+        </section>
+      </main>
+    </>
+  );
+}
+
+export function LiveBirdsBranchSelection() {
+  return (
+    <>
+      <SellerPageHeader
+        title="Live Bird Listing"
+        description={
+          "Every live bird listing is organized around one hatch date. Choose Simple for one breed/type, or Group when this hatch needs multiple rows."
+        }
+        action={
+          <Link
+            className="seller-secondary-button"
+            href="/dashboard/listings/new/birds"
+          >
+            Back to Bird Options
           </Link>
         }
       />
@@ -224,7 +320,10 @@ function ChoiceCard({
   if (!href || disabled) return content;
 
   return (
-    <Link className="block h-full focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2" href={href}>
+    <Link
+      className="block h-full focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+      href={href}
+    >
       {content}
     </Link>
   );

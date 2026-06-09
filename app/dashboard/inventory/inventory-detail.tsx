@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../_components/seller-context";
@@ -13,7 +14,10 @@ import {
   StatusBadge,
 } from "../_components/seller-ui";
 import type { SellerInventoryManagementRow } from "../_lib/seller-types";
-import { formatInventoryTypeLabel } from "../_lib/listing-formatters";
+import {
+  formatAgeAtAvailabilityFromDates,
+  formatInventoryTypeLabel,
+} from "../_lib/listing-formatters";
 
 type SellerBreedProfileRead = {
   id: string;
@@ -44,6 +48,13 @@ type InventorySummary = {
   visibilityStatus: string;
 };
 
+type DraftDeleteStatus = {
+  can_delete: boolean;
+  has_order_history: boolean;
+  has_published_activity: boolean;
+  is_draft: boolean;
+};
+
 const inventoryDetailSelect =
   "store_id, listing_batch_id, listing_batch_breed_id, inventory_item_id, species_id, species_name, species_slug, seller_breed_profile_id, breed_display_name, batch_type, origin_date, available_date, age_at_availability_days, base_price, internal_batch_label, listing_batch_visibility_status, listing_batch_moderation_status, listing_batch_breed_sort_order, listing_batch_breed_visibility_status, listing_batch_breed_moderation_status, inventory_type, custom_inventory_label, quantity_available, price_override, effective_unit_price, inventory_item_sort_order, inventory_visibility_status, inventory_moderation_status, operational_availability_status, inventory_seller_notes, listing_batch_breed_seller_notes, listing_batch_seller_notes, inventory_updated_at, listing_batch_updated_at";
 
@@ -67,6 +78,7 @@ const hatchingEggInventoryTypes = [
 
 export function InventoryDetail({ listingBatchId }: { listingBatchId: string }) {
   const { seller } = useSellerContext();
+  const router = useRouter();
   const storeId = seller?.store_id ?? "";
   const [rows, setRows] = useState<SellerInventoryManagementRow[]>([]);
   const [breedProfiles, setBreedProfiles] = useState<SellerBreedProfileRead[]>([]);
@@ -78,6 +90,8 @@ export function InventoryDetail({ listingBatchId }: { listingBatchId: string }) 
   const [isDescriptionSaving, setIsDescriptionSaving] = useState(false);
   const [isHiding, setIsHiding] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
+  const [isDeletingDraft, setIsDeletingDraft] = useState(false);
+  const [canDeleteDraft, setCanDeleteDraft] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [descriptionError, setDescriptionError] = useState<string | null>(null);
@@ -136,15 +150,36 @@ export function InventoryDetail({ listingBatchId }: { listingBatchId: string }) 
       const first = nextRows[0];
       const nextProfiles = profileResult.data ?? [];
       const buyerDescription = formatBuyerDescription(nextProfiles);
+      let nextCanDeleteDraft = false;
+
+      if (first) {
+        const deleteStatusResult = await supabase.rpc(
+          "seller_get_draft_listing_batch_delete_status",
+          {
+            p_listing_batch_id: listingBatchId,
+          },
+        );
+
+        if (!isMounted) return;
+
+        if (!deleteStatusResult.error) {
+          const statusRows = Array.isArray(deleteStatusResult.data)
+            ? (deleteStatusResult.data as DraftDeleteStatus[])
+            : [];
+
+          nextCanDeleteDraft = Boolean(statusRows[0]?.can_delete);
+        }
+      }
 
       setRows(nextRows);
       setBreedProfiles(nextProfiles);
+      setCanDeleteDraft(nextCanDeleteDraft);
       setDescriptionDraft(buyerDescription);
       setIsDescriptionEditing(false);
       setDetailsDraft(
         first
           ? {
-              availableDate: first.available_date,
+              availableDate: first.available_date || first.origin_date || "",
               customLabel: first.custom_inventory_label ?? "",
               inventoryType: first.inventory_type,
               originDate: first.origin_date ?? "",
@@ -167,7 +202,8 @@ export function InventoryDetail({ listingBatchId }: { listingBatchId: string }) 
   const canSaveDetails = Boolean(firstRow && detailsDraft);
   const canHide = summary?.visibilityStatus === "active";
   const canArchive =
-    summary?.visibilityStatus === "active" || summary?.visibilityStatus === "hidden";
+    summary?.visibilityStatus === "active" ||
+    (summary?.visibilityStatus === "hidden" && !canDeleteDraft);
 
   function updateDetailsDraft(updates: Partial<DetailsDraft>) {
     setDetailsDraft((current) => (current ? { ...current, ...updates } : current));
@@ -302,7 +338,7 @@ export function InventoryDetail({ listingBatchId }: { listingBatchId: string }) 
   }
 
   async function updateVisibility(nextStatus: "archived" | "hidden") {
-    if (!summary || isHiding || isArchiving) return;
+    if (!summary || isHiding || isArchiving || isDeletingDraft) return;
 
     if (nextStatus === "hidden") setIsHiding(true);
     if (nextStatus === "archived") setIsArchiving(true);
@@ -329,6 +365,30 @@ export function InventoryDetail({ listingBatchId }: { listingBatchId: string }) 
         : "Inventory hidden from the storefront.",
     );
     setReloadKey((current) => current + 1);
+  }
+
+  async function deleteDraft() {
+    if (!summary || !canDeleteDraft || isDeletingDraft) return;
+
+    const shouldDelete = window.confirm("Delete this draft? This cannot be undone.");
+
+    if (!shouldDelete) return;
+
+    setIsDeletingDraft(true);
+    setVisibilityError(null);
+    setSuccessMessage(null);
+
+    const result = await supabase.rpc("seller_delete_draft_listing_batch", {
+      p_listing_batch_id: listingBatchId,
+    });
+
+    if (result.error) {
+      setVisibilityError(result.error.message);
+      setIsDeletingDraft(false);
+      return;
+    }
+
+    router.push("/dashboard/inventory");
   }
 
   if (isLoading) return <LoadingState label="Loading inventory" />;
@@ -408,12 +468,15 @@ export function InventoryDetail({ listingBatchId }: { listingBatchId: string }) 
 
         <VisibilitySection
           canArchive={canArchive}
+          canDeleteDraft={canDeleteDraft}
           canHide={canHide}
           error={visibilityError}
           isArchiving={isArchiving}
+          isDeletingDraft={isDeletingDraft}
           isHiding={isHiding}
           summary={summary}
           onArchive={() => void updateVisibility("archived")}
+          onDeleteDraft={() => void deleteDraft()}
           onHide={() => void updateVisibility("hidden")}
         />
       </main>
@@ -461,12 +524,15 @@ function InventoryDetailsSection({
   saveError: string | null;
   summary: InventorySummary;
 }) {
+  const isHatchingEggs = firstRow.batch_type === "hatching_eggs";
   const inventoryOptions =
-    firstRow.batch_type === "hatching_eggs"
-      ? hatchingEggInventoryTypes
-      : liveAnimalInventoryTypes;
+    isHatchingEggs ? hatchingEggInventoryTypes : liveAnimalInventoryTypes;
   const canEditType = summary.inventoryTypes.length === 1;
   const customTypeSelected = draft.inventoryType === "other";
+  const ageAtAvailability = formatAgeAtAvailabilityFromDates(
+    draft.originDate || firstRow.origin_date,
+    draft.availableDate,
+  );
 
   return (
     <SellerCard className="p-5">
@@ -481,7 +547,7 @@ function InventoryDetailsSection({
         <ReadOnlyField label="Species" value={summary.speciesName} />
         <ReadOnlyField label="Breed" value={summary.breedNames.join(", ")} />
         <label className="grid gap-1 text-sm font-semibold text-stone-700">
-          Type / Sex
+          {isHatchingEggs ? "Inventory Type" : "Type / Sex"}
           <select
             className="seller-form-field"
             disabled={!canEditType}
@@ -511,25 +577,40 @@ function InventoryDetailsSection({
             />
           </label>
         ) : null}
-        <label className="grid gap-1 text-sm font-semibold text-stone-700">
-          Hatch Date
-          <input
-            className="seller-form-field"
-            disabled={firstRow.batch_type === "hatching_eggs"}
-            type="date"
-            value={draft.originDate}
-            onChange={(event) => onUpdate({ originDate: event.target.value })}
-          />
-        </label>
+        {!isHatchingEggs ? (
+          <label className="grid gap-1 text-sm font-semibold text-stone-700">
+            Hatch Date
+            <input
+              className="seller-form-field"
+              type="date"
+              value={draft.originDate}
+              onChange={(event) => {
+                const nextOriginDate = event.target.value;
+
+                onUpdate({
+                  availableDate:
+                    draft.availableDate && draft.availableDate >= nextOriginDate
+                      ? draft.availableDate
+                      : nextOriginDate,
+                  originDate: nextOriginDate,
+                });
+              }}
+            />
+          </label>
+        ) : null}
         <label className="grid gap-1 text-sm font-semibold text-stone-700">
           Available Date
           <input
             className="seller-form-field"
+            min={draft.originDate || undefined}
             type="date"
             value={draft.availableDate}
             onChange={(event) => onUpdate({ availableDate: event.target.value })}
           />
         </label>
+        {!isHatchingEggs ? (
+          <ReadOnlyField label="Age at Availability" value={ageAtAvailability} />
+        ) : null}
       </div>
 
       <div className="mt-5">
@@ -647,20 +728,26 @@ function StorefrontContentSection({
 
 function VisibilitySection({
   canArchive,
+  canDeleteDraft,
   canHide,
   error,
   isArchiving,
+  isDeletingDraft,
   isHiding,
   onArchive,
+  onDeleteDraft,
   onHide,
   summary,
 }: {
   canArchive: boolean;
+  canDeleteDraft: boolean;
   canHide: boolean;
   error: string | null;
   isArchiving: boolean;
+  isDeletingDraft: boolean;
   isHiding: boolean;
   onArchive: () => void;
+  onDeleteDraft: () => void;
   onHide: () => void;
   summary: InventorySummary;
 }) {
@@ -675,8 +762,9 @@ function VisibilitySection({
           <div>
             <StatusBadge status={formatVisibilityBadgeStatus(summary)} />
             <p className="mt-2 text-sm leading-6 text-stone-700">
-              Archiving removes inventory from the storefront while preserving
-              historical records.
+              {canDeleteDraft
+                ? "This draft has not been published or ordered, so it can be deleted."
+                : "Archiving removes inventory from the storefront while preserving historical records."}
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -688,6 +776,16 @@ function VisibilitySection({
                 type="button"
               >
                 {isHiding ? "Hiding" : "Hide from Storefront"}
+              </button>
+            ) : null}
+            {canDeleteDraft ? (
+              <button
+                className="seller-secondary-button border-red-300 bg-white text-red-700 hover:bg-red-50"
+                disabled={isDeletingDraft}
+                onClick={onDeleteDraft}
+                type="button"
+              >
+                {isDeletingDraft ? "Deleting" : "Delete Draft"}
               </button>
             ) : null}
             {canArchive ? (
@@ -705,7 +803,7 @@ function VisibilitySection({
       </div>
       {error ? (
         <div className="mt-4">
-          <ErrorState title="Visibility was not changed" message={error} />
+          <ErrorState title="Inventory action was not completed" message={error} />
         </div>
       ) : null}
     </SellerCard>

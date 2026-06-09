@@ -363,7 +363,7 @@ export function StorefrontFooter({ store }: { store: StorefrontIdentity }) {
         <div>
           <p className="font-semibold text-stone-950">Shop</p>
           <div className="mt-3 grid gap-2">
-            <Link href={`/store/${store.store_slug}`}>Available birds</Link>
+            <Link href={`/store/${store.store_slug}`}>Available products</Link>
             <Link href={`/store/${store.store_slug}/cart`}>Cart</Link>
             <Link href={`/store/${store.store_slug}/checkout`}>Checkout</Link>
           </div>

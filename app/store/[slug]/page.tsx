@@ -14,13 +14,18 @@ import {
   StorefrontSection,
   StorefrontSectionHeader,
   StorefrontShell,
+  formatCurrency,
   formatLocation,
 } from "./storefront-ui";
 import {
   StorefrontProduct,
+  StorefrontEquipmentItem,
+  StorefrontProcessedPoultryItem,
   groupInventoryByProduct,
+  loadStorefrontEquipment,
   loadStorefrontHome,
   loadStorefrontInventory,
+  loadStorefrontProcessedPoultry,
   previewText,
 } from "./storefront-data";
 
@@ -31,11 +36,22 @@ export default async function StorefrontHomePage({
 }) {
   const { slug } = await params;
 
-  const [homeResult, inventoryResult] = await Promise.all([
+  const [
+    homeResult,
+    inventoryResult,
+    equipmentResult,
+    processedPoultryResult,
+  ] = await Promise.all([
     loadStorefrontHome(slug),
     loadStorefrontInventory(slug),
+    loadStorefrontEquipment(slug),
+    loadStorefrontProcessedPoultry(slug),
   ]);
-  const error = homeResult.error ?? inventoryResult.error;
+  const error =
+    homeResult.error ??
+    inventoryResult.error ??
+    equipmentResult.error ??
+    processedPoultryResult.error;
 
   if (error) {
     return (
@@ -66,6 +82,8 @@ export default async function StorefrontHomePage({
   }
 
   const products = groupInventoryByProduct(inventoryResult.data);
+  const equipment = equipmentResult.data;
+  const processedPoultry = processedPoultryResult.data;
   const aboutPreview = previewText(
     store.about_text,
     `${store.store_name} shares current availability, pickup details, and farm updates here.`,
@@ -104,7 +122,7 @@ export default async function StorefrontHomePage({
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
               <StorefrontButton href="#available-products">
-                Shop available birds
+                Shop available products
               </StorefrontButton>
               <StorefrontButton
                 href={`/store/${store.store_slug}/policies`}
@@ -118,12 +136,10 @@ export default async function StorefrontHomePage({
                 {formatLocation(store)}
               </span>
               <span className="rounded-full bg-[#fff4df] px-4 py-2">
-                {products.length || 0} products
+                {products.length + equipment.length + processedPoultry.length || 0} products
               </span>
               <span className="rounded-full bg-[#eef4e8] px-4 py-2">
-                {store.total_quantity_available > 0
-                  ? `${store.total_quantity_available} available`
-                  : "Availability coming soon"}
+                Local pickup
               </span>
             </div>
           </div>
@@ -174,6 +190,50 @@ export default async function StorefrontHomePage({
           )}
         </StorefrontSection>
 
+        {equipment.length > 0 ? (
+          <StorefrontSection>
+            <StorefrontSectionHeader
+              eyebrow="Equipment & Supplies"
+              title="Shop farm equipment and supplies"
+            >
+              <p>
+                Browse local-pickup equipment and supply items from this seller.
+              </p>
+            </StorefrontSectionHeader>
+
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {equipment.map((item) => (
+                <EquipmentCard
+                  item={item}
+                  key={item.equipment_inventory_item_id}
+                />
+              ))}
+            </div>
+          </StorefrontSection>
+        ) : null}
+
+        {processedPoultry.length > 0 ? (
+          <StorefrontSection>
+            <StorefrontSectionHeader
+              eyebrow="Processed Poultry"
+              title="Shop local-pickup poultry products"
+            >
+              <p>
+                Browse processed poultry products available from this seller.
+              </p>
+            </StorefrontSectionHeader>
+
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {processedPoultry.map((item) => (
+                <ProcessedPoultryCard
+                  item={item}
+                  key={item.processed_poultry_inventory_item_id}
+                />
+              ))}
+            </div>
+          </StorefrontSection>
+        ) : null}
+
         <section className="overflow-hidden rounded-xl border border-[#ded7c8] bg-white shadow-[0_18px_55px_rgba(46,35,20,0.08)] lg:grid lg:grid-cols-2">
           <PreviewPanel
             actionHref={`/store/${store.store_slug}/about`}
@@ -196,6 +256,118 @@ export default async function StorefrontHomePage({
 
       <StorefrontFooter store={store} />
     </StorefrontShell>
+  );
+}
+
+function ProcessedPoultryCard({
+  item,
+}: {
+  item: StorefrontProcessedPoultryItem;
+}) {
+  return (
+    <article className="group overflow-hidden rounded-xl border border-[#ded7c8] bg-white shadow-[0_12px_35px_rgba(46,35,20,0.07)] transition hover:-translate-y-1 hover:border-[#bfcfb6] hover:shadow-[0_20px_50px_rgba(46,35,20,0.12)]">
+      <Link
+        className="block h-full focus:outline-none focus:ring-2 focus:ring-emerald-700"
+        href={`/store/${item.store_slug}/processed-poultry/${item.processed_poultry_inventory_item_id}`}
+      >
+        <div className="relative">
+          <ListingPhoto
+            alt={item.featured_image_alt_text || item.product_name}
+            src={item.featured_image_url}
+          />
+          <div className="absolute left-3 top-3">
+            <AvailabilityBadge
+              code={item.buyer_availability_code}
+              label={item.buyer_availability_label}
+            />
+          </div>
+        </div>
+        <div className="grid gap-4 p-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-emerald-700">
+              {[item.poultry_type, item.product_type].filter(Boolean).join(" - ")}
+            </p>
+            <h3 className="mt-1 text-xl font-semibold leading-tight text-stone-950">
+              {item.product_name}
+            </h3>
+          </div>
+
+          <p className="line-clamp-2 min-h-12 text-sm leading-6 text-stone-600">
+            {item.description || item.package_size || "Details and pickup options are listed inside."}
+          </p>
+
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-lg font-semibold text-[#24512f]">
+                {formatCurrency(item.unit_price)}
+              </p>
+              <p className="mt-1 text-xs text-stone-500">
+                {item.quantity_available === 1
+                  ? "1 available"
+                  : `${item.quantity_available} available`}
+              </p>
+            </div>
+            <span className="rounded-md border border-[#cfc7b8] px-3 py-2 text-sm font-semibold text-stone-800 transition group-hover:border-[#24512f] group-hover:bg-[#eef4e8] group-hover:text-[#24512f]">
+              View item
+            </span>
+          </div>
+        </div>
+      </Link>
+    </article>
+  );
+}
+
+function EquipmentCard({ item }: { item: StorefrontEquipmentItem }) {
+  return (
+    <article className="group overflow-hidden rounded-xl border border-[#ded7c8] bg-white shadow-[0_12px_35px_rgba(46,35,20,0.07)] transition hover:-translate-y-1 hover:border-[#bfcfb6] hover:shadow-[0_20px_50px_rgba(46,35,20,0.12)]">
+      <Link
+        className="block h-full focus:outline-none focus:ring-2 focus:ring-emerald-700"
+        href={`/store/${item.store_slug}/equipment/${item.equipment_inventory_item_id}`}
+      >
+        <div className="relative">
+          <ListingPhoto
+            alt={item.featured_image_alt_text || item.item_name}
+            src={item.featured_image_url}
+          />
+          <div className="absolute left-3 top-3">
+            <AvailabilityBadge
+              code={item.buyer_availability_code}
+              label={item.buyer_availability_label}
+            />
+          </div>
+        </div>
+        <div className="grid gap-4 p-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-emerald-700">
+              {item.category}
+            </p>
+            <h3 className="mt-1 text-xl font-semibold leading-tight text-stone-950">
+              {item.item_name}
+            </h3>
+          </div>
+
+          <p className="line-clamp-2 min-h-12 text-sm leading-6 text-stone-600">
+            {item.description || "Details and pickup options are listed inside."}
+          </p>
+
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-lg font-semibold text-[#24512f]">
+                {formatCurrency(item.unit_price)}
+              </p>
+              <p className="mt-1 text-xs text-stone-500">
+                {item.quantity_available === 1
+                  ? "1 available"
+                  : `${item.quantity_available} available`}
+              </p>
+            </div>
+            <span className="rounded-md border border-[#cfc7b8] px-3 py-2 text-sm font-semibold text-stone-800 transition group-hover:border-[#24512f] group-hover:bg-[#eef4e8] group-hover:text-[#24512f]">
+              View item
+            </span>
+          </div>
+        </div>
+      </Link>
+    </article>
   );
 }
 

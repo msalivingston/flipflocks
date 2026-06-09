@@ -4,8 +4,8 @@ export function calculateAgeAtAvailabilityDays(
 ) {
   if (!originDate || !availableDate) return null;
 
-  const originTime = Date.parse(`${originDate}T00:00:00Z`);
-  const availableTime = Date.parse(`${availableDate}T00:00:00Z`);
+  const originTime = Date.parse(`${originDate}T00:00:00`);
+  const availableTime = Date.parse(`${availableDate}T00:00:00`);
 
   if (Number.isNaN(originTime) || Number.isNaN(availableTime)) return null;
 
@@ -14,17 +14,33 @@ export function calculateAgeAtAvailabilityDays(
 
 export function formatAgeAtAvailability(days: number | null | undefined) {
   if (days == null) return "Not set";
-  if (days < 0) return "Available date is before hatch date";
-  if (days < 7) return `${days} day${days === 1 ? "" : "s"}`;
+  if (days < 0) return "Not set";
+  if (days === 0) return "At hatch";
 
   const weeks = Math.floor(days / 7);
-  const remainder = days % 7;
+  const remainingDays = days % 7;
+  const parts: string[] = [];
 
-  if (remainder === 0) return `${weeks} week${weeks === 1 ? "" : "s"}`;
+  if (weeks > 0) {
+    parts.push(`${weeks} week${weeks === 1 ? "" : "s"}`);
+  }
 
-  return `${weeks} week${weeks === 1 ? "" : "s"}, ${remainder} day${
-    remainder === 1 ? "" : "s"
-  }`;
+  if (remainingDays > 0) {
+    parts.push(`${remainingDays} day${remainingDays === 1 ? "" : "s"}`);
+  }
+
+  return parts.join(" + ");
+}
+
+export function formatAgeAtAvailabilityFromDates(
+  originDate: string | null | undefined,
+  availableDate: string | null | undefined,
+) {
+  if (!originDate || !availableDate) return "Not set";
+
+  return formatAgeAtAvailability(
+    calculateAgeAtAvailabilityDays(originDate, availableDate),
+  );
 }
 
 export function formatInventoryTypeLabel(value: string | null | undefined) {

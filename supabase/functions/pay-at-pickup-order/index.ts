@@ -1,9 +1,16 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.0";
 
 type CheckoutItem = {
-  inventory_item_id: string;
+  item_type:
+    | "listing_inventory"
+    | "equipment_inventory"
+    | "processed_poultry_inventory";
+  item_id: string;
+  inventory_item_id?: string;
   quantity: number;
 };
+
+type CheckoutItemType = CheckoutItem["item_type"];
 
 type OrderRequest = {
   store_slug: string;
@@ -191,11 +198,25 @@ function normalizeItems(value: unknown): CheckoutItem[] {
     }
 
     const record = item as Record<string, unknown>;
-    const inventoryItemId = record.inventory_item_id;
+    const legacyInventoryItemId = record.inventory_item_id;
+    const itemType = legacyInventoryItemId ? "listing_inventory" : record.item_type;
+    const itemId = legacyInventoryItemId ?? record.item_id;
     const quantity = record.quantity;
 
-    if (typeof inventoryItemId !== "string" || !uuidPattern.test(inventoryItemId)) {
-      throw new Error("Each checkout item needs a valid inventory item ID.");
+    if (
+      itemType !== "listing_inventory" &&
+      itemType !== "equipment_inventory" &&
+      itemType !== "processed_poultry_inventory"
+    ) {
+      throw new Error(
+        "Each checkout item must include a valid item type, item ID, and positive quantity.",
+      );
+    }
+
+    if (typeof itemId !== "string" || !uuidPattern.test(itemId)) {
+      throw new Error(
+        "Each checkout item must include a valid item type, item ID, and positive quantity.",
+      );
     }
 
     if (
@@ -207,7 +228,9 @@ function normalizeItems(value: unknown): CheckoutItem[] {
     }
 
     return {
-      inventory_item_id: inventoryItemId,
+      item_type: itemType as CheckoutItemType,
+      item_id: itemId,
+      ...(legacyInventoryItemId ? { inventory_item_id: itemId } : {}),
       quantity,
     };
   });
@@ -455,6 +478,14 @@ Deno.serve(async (request: Request) => {
 
   if (orderError) {
     const message = orderError.message || "Unable to create order.";
+    console.error(
+      "create_pay_at_pickup_order failed",
+      JSON.stringify({
+        rpc_error: serializeRpcError(orderError),
+        normalized_items: orderRequest.items,
+        store_id: storeId,
+      }),
+    );
     const conflictMessages = [
       "Idempotency key was already used with a different request.",
       "Store is not available for checkout.",
@@ -479,6 +510,7 @@ Deno.serve(async (request: Request) => {
       "Buyer postal code is required.",
       "At least one order item is required.",
       "Each order item must include a valid inventory item ID and positive quantity.",
+      "Each order item must include a valid item type, item ID, and positive quantity.",
       "At least one valid order item is required.",
       "Invalid inventory relationship for checkout.",
       "pickup_option_id must be a valid ID.",
@@ -487,13 +519,6 @@ Deno.serve(async (request: Request) => {
     const safeMessage = safeValidationMessages.includes(message)
       ? message
       : "Unable to place order. Please review your cart and try again.";
-
-    if (!safeValidationMessages.includes(message)) {
-      console.error(
-        "create_pay_at_pickup_order failed",
-        JSON.stringify(serializeRpcError(orderError)),
-      );
-    }
 
     return jsonResponse(conflictMessages.includes(message) ? 409 : 400, {
       error: "order_creation_failed",

@@ -1,10 +1,15 @@
 "use client";
 
 export type StorefrontCartItem = {
+  itemType:
+    | "listing_inventory"
+    | "equipment_inventory"
+    | "processed_poultry_inventory";
+  itemId: string;
   inventoryItemId: string;
   productId: string;
   productName: string;
-  speciesName: string;
+  speciesName: string | null;
   optionLabel: string;
   ageLabel: string | null;
   typeLabel: string;
@@ -87,7 +92,7 @@ export function addItemsToStorefrontCart(
   const byItemId = new Map<string, StorefrontCartItem>();
 
   for (const item of cart.items) {
-    byItemId.set(item.inventoryItemId, item);
+    byItemId.set(cartItemKey(item), item);
   }
 
   for (const item of incomingItems) {
@@ -95,13 +100,13 @@ export function addItemsToStorefrontCart(
 
     if (!normalized) continue;
 
-    const existing = byItemId.get(normalized.inventoryItemId);
+    const existing = byItemId.get(cartItemKey(normalized));
     const nextQuantity = normalizeQuantity(
       (existing?.quantity ?? 0) + normalized.quantity,
       normalized.quantityAvailable,
     );
 
-    byItemId.set(normalized.inventoryItemId, {
+    byItemId.set(cartItemKey(normalized), {
       ...normalized,
       quantity: nextQuantity,
     });
@@ -112,13 +117,13 @@ export function addItemsToStorefrontCart(
 
 export function updateStorefrontCartItemQuantity(
   storeSlug: string,
-  inventoryItemId: string,
+  itemKey: string,
   quantity: number,
 ) {
   const cart = readStorefrontCart(storeSlug);
   const items = cart.items
     .map((item) =>
-      item.inventoryItemId === inventoryItemId
+      cartItemKey(item) === itemKey
         ? {
             ...item,
             quantity: normalizeQuantity(quantity, item.quantityAvailable),
@@ -132,13 +137,13 @@ export function updateStorefrontCartItemQuantity(
 
 export function removeStorefrontCartItem(
   storeSlug: string,
-  inventoryItemId: string,
+  itemKey: string,
 ) {
   const cart = readStorefrontCart(storeSlug);
 
   return writeStorefrontCart(
     storeSlug,
-    cart.items.filter((item) => item.inventoryItemId !== inventoryItemId),
+    cart.items.filter((item) => cartItemKey(item) !== itemKey),
   );
 }
 
@@ -170,7 +175,22 @@ function emptyCart(storeSlug: string): StorefrontCart {
 function normalizeCartItem(
   item: Partial<StorefrontCartItem> | null | undefined,
 ): StorefrontCartItem | null {
-  if (!item || typeof item.inventoryItemId !== "string") return null;
+  if (!item) return null;
+
+  const legacyInventoryItemId =
+    typeof item.inventoryItemId === "string" ? item.inventoryItemId : null;
+  const itemType =
+    item.itemType === "equipment_inventory"
+      ? "equipment_inventory"
+      : item.itemType === "processed_poultry_inventory"
+        ? "processed_poultry_inventory"
+        : "listing_inventory";
+  const itemId =
+    typeof item.itemId === "string"
+      ? item.itemId
+      : legacyInventoryItemId;
+
+  if (!itemId) return null;
 
   const quantityAvailable = normalizeQuantity(
     Number(item.quantityAvailable),
@@ -182,12 +202,16 @@ function normalizeCartItem(
   if (quantity <= 0 || !Number.isFinite(unitPrice) || unitPrice < 0) return null;
 
   return {
-    inventoryItemId: item.inventoryItemId,
+    itemType,
+    itemId,
+    inventoryItemId:
+      itemType === "listing_inventory"
+        ? itemId
+        : legacyInventoryItemId ?? itemId,
     productId: typeof item.productId === "string" ? item.productId : "",
     productName:
       typeof item.productName === "string" ? item.productName : "Product",
-    speciesName:
-      typeof item.speciesName === "string" ? item.speciesName : "Birds",
+    speciesName: typeof item.speciesName === "string" ? item.speciesName : null,
     optionLabel:
       typeof item.optionLabel === "string" ? item.optionLabel : "Option",
     ageLabel: typeof item.ageLabel === "string" ? item.ageLabel : null,
@@ -205,4 +229,8 @@ function isCartItem(
   item: StorefrontCartItem | null,
 ): item is StorefrontCartItem {
   return item !== null;
+}
+
+export function cartItemKey(item: Pick<StorefrontCartItem, "itemId" | "itemType">) {
+  return `${item.itemType}:${item.itemId}`;
 }

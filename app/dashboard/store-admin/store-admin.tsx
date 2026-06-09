@@ -35,6 +35,9 @@ type StoreAdminForm = {
   other_policies: string;
   order_notification_email: string;
   storefront_enabled: boolean;
+  hatching_eggs_enabled: boolean;
+  equipment_supplies_enabled: boolean;
+  processed_poultry_enabled: boolean;
 };
 
 type StoreDefaults = {
@@ -128,6 +131,9 @@ const blankForm: StoreAdminForm = {
   other_policies: "",
   order_notification_email: "",
   storefront_enabled: false,
+  hatching_eggs_enabled: false,
+  equipment_supplies_enabled: false,
+  processed_poultry_enabled: false,
 };
 
 export function StoreAdmin() {
@@ -399,6 +405,9 @@ export function StoreAdmin() {
       cancellation_policy: form.cancellation_policy,
       other_policies: form.other_policies,
       storefront_enabled: form.storefront_enabled,
+      hatching_eggs_enabled: form.hatching_eggs_enabled,
+      equipment_supplies_enabled: form.equipment_supplies_enabled,
+      processed_poultry_enabled: form.processed_poultry_enabled,
     };
 
     const defaultsPayload = {
@@ -456,6 +465,9 @@ export function StoreAdmin() {
       order_notification_email: form.order_notification_email
         .trim()
         .toLowerCase(),
+      hatching_eggs_enabled: form.hatching_eggs_enabled,
+      equipment_supplies_enabled: form.equipment_supplies_enabled,
+      processed_poultry_enabled: form.processed_poultry_enabled,
     };
     const sortedOptions = persistedOptions.sort(
       (first, second) =>
@@ -720,6 +732,83 @@ export function StoreAdmin() {
             </SettingsSection>
 
             <SettingsSection
+              description="Turn on only the selling options you use. You can change these later."
+              title="What You Sell"
+            >
+              <div className="grid gap-3 md:grid-cols-2">
+                <ModuleCard
+                  badge="Always Enabled"
+                  description="This is the core inventory workflow for chicks, started birds, pullets, pairs, trios, and other live bird inventory."
+                  title="Live Birds"
+                />
+                <ModuleCard
+                  action={
+                    <ToggleField
+                      checked={form.hatching_eggs_enabled}
+                      label={
+                        form.hatching_eggs_enabled ? "Enabled" : "Disabled"
+                      }
+                      onChange={(value) =>
+                        updateField("hatching_eggs_enabled", value)
+                      }
+                    />
+                  }
+                  description="Sell breed-based hatching egg inventory without hatch dates."
+                  status={
+                    form.hatching_eggs_enabled
+                      ? "Available in Create Listing."
+                      : "Hidden from Create Listing."
+                  }
+                  title="Hatching Eggs"
+                />
+                <ModuleCard
+                  action={
+                    <ToggleField
+                      checked={form.processed_poultry_enabled}
+                      label={
+                        form.processed_poultry_enabled
+                          ? "Enabled"
+                          : "Disabled"
+                      }
+                      onChange={(value) =>
+                        updateField("processed_poultry_enabled", value)
+                      }
+                    />
+                  }
+                  description="Sell simple local-pickup poultry products by product name, type, quantity, and price."
+                  status={
+                    form.processed_poultry_enabled
+                      ? "Available in Create Listing."
+                      : "Hidden from Create Listing."
+                  }
+                  title="Processed Poultry"
+                />
+                <ModuleCard
+                  action={
+                    <ToggleField
+                      checked={form.equipment_supplies_enabled}
+                      label={
+                        form.equipment_supplies_enabled
+                          ? "Enabled"
+                          : "Disabled"
+                      }
+                      onChange={(value) =>
+                        updateField("equipment_supplies_enabled", value)
+                      }
+                    />
+                  }
+                  description="Sell basic farm equipment and supplies with simple quantity and price inventory."
+                  status={
+                    form.equipment_supplies_enabled
+                      ? "Available in Create Listing."
+                      : "Hidden from Create Listing."
+                  }
+                  title="Equipment & Supplies"
+                />
+              </div>
+            </SettingsSection>
+
+            <SettingsSection
               description="Choose which contact details are public and which email is used inside seller workflows."
               title="Contact Information"
             >
@@ -919,6 +1008,56 @@ function SettingsSection({
         <div className="grid gap-4">{children}</div>
       </div>
     </SellerCard>
+  );
+}
+
+function ModuleCard({
+  action,
+  badge,
+  description,
+  muted = false,
+  status,
+  title,
+}: {
+  action?: React.ReactNode;
+  badge?: string;
+  description: string;
+  muted?: boolean;
+  status?: string;
+  title: string;
+}) {
+  return (
+    <div
+      className={`rounded-lg border border-stone-200 p-4 ${
+        muted ? "bg-stone-50" : "bg-white"
+      }`}
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-stone-950">{title}</h3>
+          <p className="mt-1 text-sm leading-6 text-stone-600">
+            {description}
+          </p>
+          {status ? (
+            <p className="mt-3 text-xs font-semibold text-stone-500">
+              {status}
+            </p>
+          ) : null}
+        </div>
+        {badge ? (
+          <span
+            className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+              muted
+                ? "bg-stone-200 text-stone-700"
+                : "bg-emerald-100 text-emerald-800"
+            }`}
+          >
+            {badge}
+          </span>
+        ) : null}
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+    </div>
   );
 }
 
@@ -1199,7 +1338,7 @@ function ToggleField({
   return (
     <label className="inline-flex min-h-11 items-center gap-3 rounded-md border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-700 shadow-sm">
       <input
-        checked={checked}
+        checked={Boolean(checked)}
         className="h-4 w-4 accent-emerald-800"
         onChange={(event) => onChange(event.target.checked)}
         type="checkbox"
@@ -1238,7 +1377,10 @@ function buildInitialForm(
     other_policies: seller.other_policies ?? "",
     order_notification_email:
       defaults?.order_notification_email ?? seller.order_notification_email ?? "",
-    storefront_enabled: seller.storefront_enabled,
+    storefront_enabled: Boolean(seller.storefront_enabled),
+    hatching_eggs_enabled: Boolean(seller.hatching_eggs_enabled),
+    equipment_supplies_enabled: Boolean(seller.equipment_supplies_enabled),
+    processed_poultry_enabled: Boolean(seller.processed_poultry_enabled),
   };
 }
 

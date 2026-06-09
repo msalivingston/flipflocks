@@ -6,6 +6,9 @@ export type SellerContext = {
   store_status: string;
   storefront_mode: string;
   storefront_enabled: boolean;
+  hatching_eggs_enabled: boolean;
+  equipment_supplies_enabled: boolean;
+  processed_poultry_enabled: boolean;
   is_publicly_available: boolean;
   public_city: string | null;
   public_state: string | null;

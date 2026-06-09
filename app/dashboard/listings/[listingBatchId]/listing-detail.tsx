@@ -675,7 +675,9 @@ export function ListingDetail({
 
       if (!originalRow || originalRow.inventory_visibility_status !== "active") {
         setOperationalSaveError(
-          "One bird group could not be updated. Refresh the listing and try again.",
+          currentListing.batchType === "hatching_eggs"
+            ? "One hatching egg row could not be updated. Refresh the listing and try again."
+            : "One bird group could not be updated. Refresh the listing and try again.",
         );
         setIsOperationalSaving(false);
         return;
@@ -851,7 +853,9 @@ export function ListingDetail({
     if (!canArchiveListing) return;
 
     const shouldArchive = window.confirm(
-      "Archive this listing? It will be hidden from buyers and kept for your records. No photos, bird groups, pricing, notes, or descriptions will be deleted.",
+      listing?.batchType === "hatching_eggs"
+        ? "Archive this listing? It will be hidden from buyers and kept for your records. No photos, hatching egg inventory, pricing, notes, or descriptions will be deleted."
+        : "Archive this listing? It will be hidden from buyers and kept for your records. No photos, bird groups, pricing, notes, or descriptions will be deleted.",
     );
 
     if (!shouldArchive) return;
@@ -935,7 +939,9 @@ export function ListingDetail({
         description={
           isInventoryExperience
             ? "Manage availability, pricing, buyer content, photos, and storefront visibility."
-            : "Review listing details and bird groups before publishing or future operational updates."
+            : listing?.batchType === "hatching_eggs"
+              ? "Review hatching egg details before publishing or future availability updates."
+              : "Review listing details and bird groups before publishing or future operational updates."
         }
         action={
           <Link
@@ -1347,19 +1353,25 @@ function validateEditForm(
   const activeRows = inventoryRows.filter((row) => !row.isRemoved);
   const inventoryTypes = activeRows.map((row) => row.inventoryType);
   const uniqueInventoryTypes = new Set(inventoryTypes);
+  const isHatchingEggListing = listing.batchType === "hatching_eggs";
+  const rowLabelPrefix = isHatchingEggListing ? "Hatching egg row" : "Group";
 
   if (activeRows.length === 0) {
-    errors.push("Keep at least one bird group on this listing.");
+    errors.push(
+      isHatchingEggListing
+        ? "Keep hatching egg inventory on this listing."
+        : "Keep at least one bird group on this listing.",
+    );
   }
 
   if (!basics.availableDate) errors.push("Add an available date.");
 
-  if (listing.batchType !== "hatching_eggs" && !basics.originDate) {
+  if (!isHatchingEggListing && !basics.originDate) {
     errors.push("Add a hatch or origin date.");
   }
 
   if (
-    listing.batchType !== "hatching_eggs" &&
+    !isHatchingEggListing &&
     basics.originDate &&
     basics.availableDate &&
     basics.availableDate < basics.originDate
@@ -1380,13 +1392,23 @@ function validateEditForm(
   }
 
   if (inventoryTypes.length !== uniqueInventoryTypes.size) {
-    errors.push("Use each bird type only once for this listing.");
+    errors.push(
+      isHatchingEggListing
+        ? "Use one hatching egg inventory row for this listing."
+        : "Use each bird type only once for this listing.",
+    );
   }
 
   activeRows.forEach((row, index) => {
-    const rowLabel = `Group ${index + 1}`;
+    const rowLabel = `${rowLabelPrefix} ${index + 1}`;
 
-    if (!row.inventoryType) errors.push(`${rowLabel}: choose a bird type.`);
+    if (!row.inventoryType) {
+      errors.push(
+        `${rowLabel}: choose ${
+          isHatchingEggListing ? "an inventory type" : "a bird type"
+        }.`,
+      );
+    }
 
     if (listing.batchType === "hatching_eggs") {
       if (row.inventoryType !== "hatching_eggs") {
@@ -1417,13 +1439,19 @@ function validateOperationalEditRows(
   listing: ListingDetailSummary,
 ) {
   const errors: string[] = [];
+  const isHatchingEggListing = listing.batchType === "hatching_eggs";
+  const rowLabelPrefix = isHatchingEggListing ? "Hatching egg row" : "Group";
 
   if (rows.length === 0) {
-    errors.push("There are no active bird groups to update.");
+    errors.push(
+      isHatchingEggListing
+        ? "There are no active hatching egg rows to update."
+        : "There are no active bird groups to update.",
+    );
   }
 
   rows.forEach((row, index) => {
-    const rowLabel = `Group ${index + 1}`;
+    const rowLabel = `${rowLabelPrefix} ${index + 1}`;
 
     if (listing.batchType === "hatching_eggs") {
       if (row.inventoryType !== "hatching_eggs") {
@@ -1504,6 +1532,7 @@ function ListingReadOnlyView({
   listing: ListingDetailSummary;
 }) {
   const isInventoryExperience = experience === "inventory";
+  const isHatchingEggListing = listing.batchType === "hatching_eggs";
 
   return (
     <section className="grid gap-5 lg:grid-cols-[1fr_1.2fr]">
@@ -1518,26 +1547,32 @@ function ListingReadOnlyView({
             label="Inventory type"
             value={formatBatchType(listing.batchType)}
           />
+          {!isHatchingEggListing ? (
+            <DetailItem
+              label="Hatch/origin date"
+              value={formatDate(listing.originDate)}
+            />
+          ) : null}
           <DetailItem
-            label="Hatch/origin date"
-            value={formatDate(listing.originDate)}
-          />
-          <DetailItem
-            label="Available date"
+            label={isHatchingEggListing ? "Available Date" : "Available date"}
             value={formatDate(listing.availableDate)}
           />
+          {!isHatchingEggListing ? (
+            <DetailItem
+              label="Age at availability"
+              value={formatAgeAtAvailability(listing.ageAtAvailabilityDays)}
+            />
+          ) : null}
           <DetailItem
-            label="Age at availability"
-            value={formatAgeAtAvailability(listing.ageAtAvailabilityDays)}
-          />
-          <DetailItem
-            label="Base price"
+            label={isHatchingEggListing ? "Price per Egg" : "Base price"}
             value={formatCurrency(listing.basePrice)}
           />
-          <DetailItem
-            label="Price adjustment"
-            value={formatPriceAdjustmentSummary(listing)}
-          />
+          {!isHatchingEggListing ? (
+            <DetailItem
+              label="Price adjustment"
+              value={formatPriceAdjustmentSummary(listing)}
+            />
+          ) : null}
           <DetailItem
             label="Internal label"
             value={listing.internalLabel ?? "No internal label"}
@@ -1566,25 +1601,38 @@ function InventoryReadOnlyCard({
   listing: ListingDetailSummary;
 }) {
   const isInventoryExperience = experience === "inventory";
+  const isHatchingEggListing = listing.batchType === "hatching_eggs";
   const isSoldOut = getDisplayedListingStatus(listing) === "sold_out";
 
   return (
     <SellerCard className="p-5">
       <h2 className="text-lg font-semibold text-stone-950">
-        {isInventoryExperience ? "Inventory Records" : "Bird groups"}
+        {isHatchingEggListing
+          ? "Hatching Eggs"
+          : isInventoryExperience
+            ? "Inventory Records"
+            : "Bird groups"}
       </h2>
       {isSoldOut ? (
         <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-          <p className="font-semibold">No birds currently available.</p>
+          <p className="font-semibold">
+            {isHatchingEggListing
+              ? "No hatching eggs currently available."
+              : "No birds currently available."}
+          </p>
           <p className="mt-1">
-            Buyers will see this inventory as Sold Out. Add quantity when more
-            are available.
+            Buyers will see this inventory as Sold Out. Add quantity when more{" "}
+            {isHatchingEggListing ? "eggs" : "birds"} are available.
           </p>
         </div>
       ) : (
         <p className="mt-1 text-sm text-stone-600">
           {listing.totalAvailable} available across {listing.rows.length}{" "}
-          {isInventoryExperience ? "record" : "group"}
+          {isHatchingEggListing
+            ? "hatching egg row"
+            : isInventoryExperience
+              ? "record"
+              : "group"}
           {listing.rows.length === 1 ? "" : "s"}.
         </p>
       )}
@@ -1808,8 +1856,9 @@ function EditListingForm({
   validationErrors: string[];
 }) {
   const isInventoryExperience = experience === "inventory";
+  const isHatchingEggListing = listing.batchType === "hatching_eggs";
   const inventoryOptions =
-    listing.batchType === "hatching_eggs"
+    isHatchingEggListing
       ? hatchingEggInventoryTypes
       : liveAnimalInventoryTypes;
   const visibleRows = editRows.filter((row) => !row.isRemoved);
@@ -1855,7 +1904,9 @@ function EditListingForm({
     if (visibleRows.length <= 1) return;
 
     const shouldRemove = window.confirm(
-      "Remove this bird group from the hidden listing? It will be removed when you save changes.",
+      isHatchingEggListing
+        ? "Remove this hatching egg row from the hidden listing? It will be removed when you save changes."
+        : "Remove this bird group from the hidden listing? It will be removed when you save changes.",
     );
 
     if (!shouldRemove) return;
@@ -1900,18 +1951,19 @@ function EditListingForm({
           <h3 className="font-semibold text-stone-950">
             {isInventoryExperience ? "Inventory Details" : "Listing Basics"}
           </h3>
+          {!isHatchingEggListing ? (
+            <label className="grid gap-1 text-sm font-semibold text-stone-700">
+              Hatch/origin date
+              <input
+                className="seller-form-field"
+                type="date"
+                value={editBasics.originDate}
+                onChange={(event) => updateBasics({ originDate: event.target.value })}
+              />
+            </label>
+          ) : null}
           <label className="grid gap-1 text-sm font-semibold text-stone-700">
-            Hatch/origin date
-            <input
-              className="seller-form-field"
-              type="date"
-              value={editBasics.originDate}
-              onChange={(event) => updateBasics({ originDate: event.target.value })}
-              disabled={listing.batchType === "hatching_eggs"}
-            />
-          </label>
-          <label className="grid gap-1 text-sm font-semibold text-stone-700">
-            Available date
+            {isHatchingEggListing ? "Available Date" : "Available date"}
             <input
               className="seller-form-field"
               type="date"
@@ -1921,20 +1973,23 @@ function EditListingForm({
               }
             />
           </label>
-          <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-950">
-            <span className="font-semibold">Age at availability:</span>{" "}
-            {formatAgeAtAvailabilityFromDates(
-              editBasics.originDate,
-              editBasics.availableDate,
-            ) ?? "Set hatch and available dates"}
-          </div>
+          {!isHatchingEggListing ? (
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-950">
+              <span className="font-semibold">Age at availability:</span>{" "}
+              {formatAgeAtAvailabilityFromDates(
+                editBasics.originDate,
+                editBasics.availableDate,
+              ) ?? "Set hatch and available dates"}
+            </div>
+          ) : null}
           <label className="grid gap-1 text-sm font-semibold text-stone-700">
-            Base price
+            {isHatchingEggListing ? "Price per Egg" : "Base price"}
             <MoneyInput
               value={editBasics.basePrice}
               onChange={(value) => updateBasics({ basePrice: value })}
             />
           </label>
+          {!isHatchingEggListing ? (
           <fieldset className="grid gap-3 rounded-lg border border-stone-200 bg-stone-50 p-4">
             <label className="flex items-start gap-3 text-sm font-semibold text-stone-800">
               <input
@@ -2056,6 +2111,7 @@ function EditListingForm({
               </div>
             ) : null}
           </fieldset>
+          ) : null}
           <label className="grid gap-1 text-sm font-semibold text-stone-700">
             Internal label
             <input
@@ -2093,19 +2149,24 @@ function EditListingForm({
         <section className="grid gap-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="font-semibold text-stone-950">Bird groups</h3>
+              <h3 className="font-semibold text-stone-950">
+                {isHatchingEggListing ? "Hatching Eggs" : "Bird groups"}
+              </h3>
               <p className="mt-1 text-sm leading-6 text-stone-600">
-                Use groups when pullets, cockerels, straight run chicks, or
-                hatching eggs need different counts or prices.
+                {isHatchingEggListing
+                  ? "Update the hatching egg quantity and price per egg."
+                  : "Use groups when pullets, cockerels, straight run chicks, or hatching eggs need different counts or prices."}
               </p>
             </div>
-            <button
-              className="seller-secondary-button"
-              onClick={addInventoryRow}
-              type="button"
-            >
-              Add Bird Group
-            </button>
+            {!isHatchingEggListing ? (
+              <button
+                className="seller-secondary-button"
+                onClick={addInventoryRow}
+                type="button"
+              >
+                Add Bird Group
+              </button>
+            ) : null}
           </div>
 
           {visibleRows.map((row, index) => (
@@ -2115,7 +2176,8 @@ function EditListingForm({
             >
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="font-semibold text-stone-950">
-                  Group {index + 1}
+                  {isHatchingEggListing ? "Hatching egg row" : "Group"}{" "}
+                  {index + 1}
                   {row.isNew ? (
                     <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">
                       New
@@ -2133,7 +2195,7 @@ function EditListingForm({
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                  Bird type
+                  {isHatchingEggListing ? "Inventory type" : "Bird type"}
                   <select
                     className="seller-form-field"
                     value={row.inventoryType}
@@ -2153,7 +2215,9 @@ function EditListingForm({
                   </select>
                 </label>
                 <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                  How many are available?
+                  {isHatchingEggListing
+                    ? "Quantity Available"
+                    : "How many are available?"}
                   <input
                     className="seller-form-field"
                     inputMode="numeric"
@@ -2187,7 +2251,9 @@ function EditListingForm({
                 </label>
               ) : null}
               <label className="mt-3 grid gap-1 text-sm font-semibold text-stone-700">
-                Optional custom price
+                {isHatchingEggListing
+                  ? "Optional custom price per egg"
+                  : "Optional custom price"}
                 <MoneyInput
                   value={row.priceOverride}
                   onChange={(value) =>
@@ -2197,7 +2263,9 @@ function EditListingForm({
                   }
                 />
                 <span className="text-xs font-normal leading-5 text-stone-500">
-                  Leave blank if this group uses the listing base price.
+                  Leave blank if this{" "}
+                  {isHatchingEggListing ? "row" : "group"} uses the listing{" "}
+                  {isHatchingEggListing ? "price per egg" : "base price"}.
                 </span>
               </label>
             </div>
@@ -2241,6 +2309,7 @@ function OperationalEditForm({
   validationErrors: string[];
 }) {
   const isInventoryExperience = experience === "inventory";
+  const isHatchingEggListing = listing.batchType === "hatching_eggs";
 
   function updateRow(rowId: string, updates: Partial<OperationalEditRow>) {
     setRows((current) =>
@@ -2284,7 +2353,7 @@ function OperationalEditForm({
         <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
           This {isInventoryExperience ? "inventory" : "listing"} is live. If
           all records are set to 0, buyers will see it as Sold Out. Add quantity
-          when more birds are available.
+          when more {isHatchingEggListing ? "eggs" : "birds"} are available.
         </div>
 
         {rows.map((row) => {
@@ -2304,7 +2373,9 @@ function OperationalEditForm({
                       ? formatInventoryType(originalRow)
                       : isInventoryExperience
                         ? "Inventory record"
-                        : "Bird group"}
+                        : isHatchingEggListing
+                          ? "Hatching eggs"
+                          : "Bird group"}
                   </h3>
                   <p className="mt-1 text-sm text-stone-600">
                     {originalRow?.breed_display_name ?? listing.breedNames.join(", ")}
@@ -2317,7 +2388,9 @@ function OperationalEditForm({
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                  How many are available?
+                  {isHatchingEggListing
+                    ? "Quantity Available"
+                    : "How many are available?"}
                   <input
                     className="seller-form-field"
                     inputMode="numeric"
@@ -2333,7 +2406,9 @@ function OperationalEditForm({
                   />
                 </label>
                 <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                  Optional custom price
+                  {isHatchingEggListing
+                    ? "Optional custom price per egg"
+                    : "Optional custom price"}
                   <MoneyInput
                     value={row.priceOverride}
                     onChange={(value) =>
@@ -2343,7 +2418,9 @@ function OperationalEditForm({
                     }
                   />
                   <span className="text-xs font-normal leading-5 text-stone-500">
-                    Leave blank if this group should use the listing base price.
+                    Leave blank if this{" "}
+                    {isHatchingEggListing ? "row" : "group"} should use the
+                    listing {isHatchingEggListing ? "price per egg" : "base price"}.
                   </span>
                 </label>
               </div>

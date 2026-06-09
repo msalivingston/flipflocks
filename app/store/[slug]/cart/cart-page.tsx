@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   StorefrontCart,
+  cartItemKey,
   readStorefrontCart,
   removeStorefrontCartItem,
   summarizeStorefrontCart,
@@ -37,19 +38,19 @@ export function CartPage({ store }: { store: StorefrontHome }) {
   const items = cart?.items ?? emptyItems;
   const summary = useMemo(() => summarizeStorefrontCart(items), [items]);
 
-  function updateQuantity(inventoryItemId: string, rawValue: string) {
+  function updateQuantity(itemKey: string, rawValue: string) {
     const parsed = Number.parseInt(rawValue, 10);
     const nextCart = updateStorefrontCartItemQuantity(
       store.store_slug,
-      inventoryItemId,
+      itemKey,
       Number.isNaN(parsed) ? 0 : parsed,
     );
 
     setCart(nextCart);
   }
 
-  function removeItem(inventoryItemId: string) {
-    setCart(removeStorefrontCartItem(store.store_slug, inventoryItemId));
+  function removeItem(itemKey: string) {
+    setCart(removeStorefrontCartItem(store.store_slug, itemKey));
   }
 
   return (
@@ -62,7 +63,7 @@ export function CartPage({ store }: { store: StorefrontHome }) {
           Your cart
         </h1>
         <p className="mt-2 text-sm leading-6 text-stone-600">
-          Review your selected birds before checkout.
+          Review your selected items before checkout.
         </p>
       </div>
 
@@ -85,15 +86,20 @@ export function CartPage({ store }: { store: StorefrontHome }) {
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
           <div className="grid gap-4">
-              {items.map((item) => (
+            {items.map((item) => {
+              const key = cartItemKey(item);
+
+              return (
                 <article
                   className="grid gap-4 rounded-xl border border-[#ded7c8] bg-white p-4 shadow-[0_12px_35px_rgba(46,35,20,0.06)] md:grid-cols-[1fr_8rem_6rem] md:items-center"
-                  key={item.inventoryItemId}
+                  key={key}
                 >
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-emerald-700">
-                      {item.speciesName}
-                    </p>
+                    {item.speciesName ? (
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-emerald-700">
+                        {item.speciesName}
+                      </p>
+                    ) : null}
                     <h2 className="mt-1 text-lg font-semibold text-stone-950">
                       {item.productName}
                     </h2>
@@ -116,7 +122,7 @@ export function CartPage({ store }: { store: StorefrontHome }) {
                       min={0}
                       onChange={(event) =>
                         updateQuantity(
-                          item.inventoryItemId,
+                          key,
                           event.target.value,
                         )
                       }
@@ -131,13 +137,14 @@ export function CartPage({ store }: { store: StorefrontHome }) {
                       {formatCurrency(item.quantity * item.unitPrice)}
                     </p>
                     <StorefrontTextButton
-                      onClick={() => removeItem(item.inventoryItemId)}
+                      onClick={() => removeItem(key)}
                     >
                       Remove
                     </StorefrontTextButton>
                   </div>
                 </article>
-              ))}
+              );
+            })}
           </div>
 
           <StorefrontSummaryCard className="lg:sticky lg:top-28">
@@ -193,7 +200,7 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 }
 
 function formatCartAvailability(availableDate: string) {
-  if (!availableDate) return "Available date coming soon";
+  if (!availableDate) return "Available now";
 
   const today = new Date();
   const normalizedToday = new Date(
