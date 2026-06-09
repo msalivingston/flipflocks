@@ -68,6 +68,7 @@ export function StorefrontListingTabs({
               role="tab"
               type="button"
             >
+              <ListingTabIcon name={tabIconName(section.label)} />
               {section.label}
             </button>
           );
@@ -104,7 +105,7 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
         className="flex h-full flex-col focus:outline-none focus:ring-2 focus:ring-emerald-700"
         href={card.href}
       >
-        <div className="relative">
+        <div className="relative [&>div]:aspect-[5/4] [&>img]:aspect-[5/4]">
           <ListingPhoto alt={card.imageAlt} src={card.imageUrl} />
           <div className="absolute left-3 top-3">
             <AvailabilityBadge
@@ -129,7 +130,7 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
 
           <div className="mt-auto grid gap-4">
             <div className="grid gap-1">
-              <p className="text-base font-semibold text-[#073f1e]">
+              <p className="text-lg font-semibold text-[#073f1e]">
                 {card.price}
               </p>
               <p className="mt-1 text-xs text-stone-500">{card.detail}</p>
@@ -141,5 +142,57 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
         </div>
       </Link>
     </article>
+  );
+}
+
+type ListingTabIconName = "egg" | "equipment" | "poultry" | "processed";
+
+function tabIconName(label: string): ListingTabIconName {
+  if (label.includes("Egg")) return "egg";
+  if (label.includes("Equipment")) return "equipment";
+  if (label.includes("Processed")) return "processed";
+  return "poultry";
+}
+
+function ListingTabIcon({ name }: { name: ListingTabIconName }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className="mr-2 h-5 w-5 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      {name === "poultry" ? (
+        <>
+          <path d="M8 18c-3-1-4-3-4-6 0-4 3-7 7-7 3 0 5 2 5 5" />
+          <path d="M14 7l3-3 1 4" />
+          <path d="M15 12h5l-3 4" />
+          <path d="M9 18v3" />
+          <path d="M13 18v3" />
+        </>
+      ) : null}
+      {name === "egg" ? (
+        <path d="M12 21c4 0 7-3 7-7 0-5-4-11-7-11s-7 6-7 11c0 4 3 7 7 7Z" />
+      ) : null}
+      {name === "equipment" ? (
+        <>
+          <path d="M14 7l3-3 3 3-3 3-3-3Z" />
+          <path d="M3 21l8-8" />
+          <path d="M14 14l7 7" />
+          <path d="M5 5l5 5" />
+        </>
+      ) : null}
+      {name === "processed" ? (
+        <>
+          <path d="M5 19c4-7 8-11 14-14" />
+          <path d="M7 17c3 1 7 0 10-3" />
+          <path d="M8 10c4 0 6-2 8-5" />
+        </>
+      ) : null}
+    </svg>
   );
 }

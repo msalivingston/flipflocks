@@ -140,7 +140,7 @@ export default async function StorefrontHomePage({
           <div className="relative z-10 flex min-h-[19rem] max-w-[31rem] flex-col justify-center gap-6 p-6 sm:p-9 lg:min-h-[27rem] lg:p-10">
             <div>
               <StorefrontEyebrow>Local farm storefront</StorefrontEyebrow>
-              <h1 className="mt-3 text-4xl font-semibold leading-[1.08] text-stone-950 sm:text-5xl">
+              <h1 className="mt-3 font-serif text-4xl font-semibold leading-[1.08] text-stone-950 sm:text-5xl">
                 {heroTitle}
               </h1>
               <p className="mt-5 text-base leading-7 text-stone-700">
@@ -156,7 +156,7 @@ export default async function StorefrontHomePage({
         </section>
 
         <section id="shop-listings">
-          <h2 className="mb-5 text-3xl font-semibold leading-tight text-stone-950">
+          <h2 className="mb-5 font-serif text-3xl font-semibold leading-tight text-stone-950">
             Shop Our Listings
           </h2>
           <StorefrontListingTabs sections={listingSections} />
@@ -236,7 +236,7 @@ function TrustStrip({ items }: { items: Array<{ label: string; value: string }> 
       <div className="mx-auto flex max-w-[70rem] gap-4 overflow-x-auto px-5 py-3 text-sm text-[#083f1e] sm:px-7 lg:justify-center">
         {items.slice(0, 4).map((item, index) => (
           <div className="flex shrink-0 items-center gap-3" key={item.label}>
-            <span className="h-3 w-3 rounded-full bg-[#073f1e]" />
+            <StorefrontSystemIcon name={trustIconName(item.label)} />
             <span>
               <span className="font-semibold">{item.value}</span>
               <span className="ml-1 text-stone-700">{item.label}</span>
@@ -373,7 +373,15 @@ function InfoCard({
 }) {
   return (
     <article className="grid gap-3 border-b border-[#ded7c8] p-6 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0 lg:p-8">
-      <StorefrontEyebrow>{eyebrow}</StorefrontEyebrow>
+      <div className="flex items-center gap-3">
+        <StorefrontSystemIcon
+          name={eyebrow === "Pickup Location" ? "location" : "farm"}
+          size="lg"
+        />
+        <p className="font-serif text-xl font-semibold text-stone-950">
+          {eyebrow}
+        </p>
+      </div>
       <h2 className="text-xl font-semibold text-stone-950">{title}</h2>
       <p className="max-w-md text-sm leading-6 text-stone-700">{children}</p>
       <a className="text-sm font-semibold text-[#073f1e]" href={actionHref}>
@@ -412,7 +420,7 @@ function StorefrontHomeFooter({
           </div>
         </div>
         <div>
-          <p className="font-semibold text-stone-950">Shop</p>
+          <p className="font-serif text-lg font-semibold text-stone-950">Shop</p>
           <div className="mt-3 grid gap-2">
             <a href={`/store/${store.store_slug}`}>Live Poultry</a>
             <a href="#shop-listings">Hatching Eggs</a>
@@ -421,7 +429,9 @@ function StorefrontHomeFooter({
           </div>
         </div>
         <div>
-          <p className="font-semibold text-stone-950">Quick Links</p>
+          <p className="font-serif text-lg font-semibold text-stone-950">
+            Quick Links
+          </p>
           <div className="mt-3 grid gap-2">
             <a href={`/store/${store.store_slug}/about`}>About</a>
             <a href={`/store/${store.store_slug}/policies`}>Contact</a>
@@ -429,7 +439,9 @@ function StorefrontHomeFooter({
           </div>
         </div>
         <div>
-          <p className="font-semibold text-stone-950">Powered by FlipFlocks</p>
+          <p className="font-serif text-lg font-semibold text-stone-950">
+            Powered by FlipFlocks
+          </p>
           <p className="mt-3 leading-6">
             Independent poultry storefronts for local pickup.
           </p>
@@ -448,6 +460,68 @@ function formatQuantity(quantity: number) {
   if (quantity <= 0) return "Sold out";
   if (quantity === 1) return "1 available";
   return `${quantity} available`;
+}
+
+function trustIconName(label: string): StorefrontSystemIconName {
+  if (label.toLowerCase().includes("location")) return "location";
+  if (label.toLowerCase().includes("pickup")) return "pickup";
+  return "status";
+}
+
+type StorefrontSystemIconName = "farm" | "location" | "pickup" | "status";
+
+function StorefrontSystemIcon({
+  name,
+  size = "sm",
+}: {
+  name: StorefrontSystemIconName;
+  size?: "sm" | "lg";
+}) {
+  const sizeClass = size === "lg" ? "h-10 w-10" : "h-5 w-5";
+
+  return (
+    <svg
+      aria-hidden="true"
+      className={`${sizeClass} shrink-0 text-[#073f1e]`}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      {name === "location" ? (
+        <>
+          <path d="M12 21s6-5.4 6-11a6 6 0 0 0-12 0c0 5.6 6 11 6 11Z" />
+          <path d="M12 10h.01" />
+        </>
+      ) : null}
+      {name === "pickup" ? (
+        <>
+          <path d="M4 17h10" />
+          <path d="M4 13h16l-2 4h-4" />
+          <path d="M7 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z" />
+          <path d="M17 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z" />
+          <path d="M5 13V8h8v5" />
+        </>
+      ) : null}
+      {name === "farm" ? (
+        <>
+          <path d="M4 20V9l8-5 8 5v11" />
+          <path d="M9 20v-6h6v6" />
+          <path d="M4 12h16" />
+        </>
+      ) : null}
+      {name === "status" ? (
+        <>
+          <path d="M12 3v18" />
+          <path d="M7 8h10" />
+          <path d="M8 16h8" />
+          <path d="M12 3c4 2 6 5 6 9s-2 7-6 9c-4-2-6-5-6-9s2-7 6-9Z" />
+        </>
+      ) : null}
+    </svg>
+  );
 }
 
 function isHatchingEggItem(item: StorefrontInventoryItem) {
