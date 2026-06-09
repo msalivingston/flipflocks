@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { publicSupabase } from "@/lib/public-supabase";
 import {
   StorefrontCart,
   cartItemKey,
@@ -142,7 +142,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
       setIsChecking(true);
       setSummaryMessage(null);
 
-      const { data, error } = await supabase.rpc("get_public_checkout_summary", {
+      const { data, error } = await publicSupabase.rpc("get_public_checkout_summary", {
         p_store_slug: store.store_slug,
         p_items: checkoutItems,
       });
@@ -215,7 +215,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
     };
 
     try {
-      const { data, error } = await supabase.functions.invoke<OrderResponse>(
+      const { data, error } = await publicSupabase.functions.invoke<OrderResponse>(
         "pay-at-pickup-order",
         {
           body: payload,

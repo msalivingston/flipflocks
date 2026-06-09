@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { publicSupabase } from "@/lib/public-supabase";
 import { formatCurrency } from "../../storefront-ui";
 
 type PayAtPickupFormProps = {
@@ -135,7 +135,7 @@ export function PayAtPickupForm({
     };
 
     try {
-      const { data, error } = await supabase.functions.invoke<OrderResponse>(
+      const { data, error } = await publicSupabase.functions.invoke<OrderResponse>(
         "pay-at-pickup-order",
         {
           body: payload,

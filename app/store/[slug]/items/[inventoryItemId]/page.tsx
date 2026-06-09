@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { publicSupabase } from "@/lib/public-supabase";
 import { EmptyStorefront, StorefrontShell } from "../../storefront-ui";
 
 type StorefrontItemRedirect = {
@@ -13,7 +13,7 @@ export default async function StorefrontItemPage({
 }) {
   const { inventoryItemId, slug } = await params;
 
-  const { data, error } = await supabase
+  const { data, error } = await publicSupabase
     .from("public_storefront_item_detail")
     .select("seller_breed_profile_id")
     .eq("store_slug", slug)

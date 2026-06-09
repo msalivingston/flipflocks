@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { publicSupabase } from "@/lib/public-supabase";
 
 export type StorefrontHome = {
   store_id: string;
@@ -149,7 +149,7 @@ export type StorefrontProduct = {
 };
 
 export async function loadStorefrontHome(slug: string) {
-  const { data, error } = await supabase
+  const { data, error } = await publicSupabase
     .rpc("get_public_storefront_home", {
       p_store_slug: slug,
     })
@@ -162,7 +162,7 @@ export async function loadStorefrontHome(slug: string) {
 }
 
 export async function loadStorefrontInventory(slug: string) {
-  const { data, error } = await supabase
+  const { data, error } = await publicSupabase
     .from("public_storefront_inventory")
     .select("*")
     .eq("store_slug", slug)
@@ -177,7 +177,7 @@ export async function loadStorefrontInventory(slug: string) {
 }
 
 export async function loadStorefrontEquipment(slug: string) {
-  const { data, error } = await supabase
+  const { data, error } = await publicSupabase
     .from("public_storefront_equipment_inventory")
     .select("*")
     .eq("store_slug", slug)
@@ -194,7 +194,7 @@ export async function loadStorefrontEquipmentItem(
   slug: string,
   equipmentItemId: string,
 ) {
-  const { data, error } = await supabase
+  const { data, error } = await publicSupabase
     .from("public_storefront_equipment_inventory")
     .select("*")
     .eq("store_slug", slug)
@@ -208,7 +208,7 @@ export async function loadStorefrontEquipmentItem(
 }
 
 export async function loadStorefrontProcessedPoultry(slug: string) {
-  const { data, error } = await supabase
+  const { data, error } = await publicSupabase
     .from("public_storefront_processed_poultry_inventory")
     .select("*")
     .eq("store_slug", slug)
@@ -226,7 +226,7 @@ export async function loadStorefrontProcessedPoultryItem(
   slug: string,
   processedPoultryItemId: string,
 ) {
-  const { data, error } = await supabase
+  const { data, error } = await publicSupabase
     .from("public_storefront_processed_poultry_inventory")
     .select("*")
     .eq("store_slug", slug)
@@ -244,7 +244,7 @@ export async function loadStorefrontProcessedPoultryGallery(
   processedPoultryItemId: string,
   limit = 8,
 ) {
-  const { data, error } = await supabase
+  const { data, error } = await publicSupabase
     .from("public_storefront_processed_poultry_media_gallery")
     .select("*")
     .eq("store_slug", slug)
@@ -268,7 +268,7 @@ export async function loadStoreGallery(
     limit?: number;
   } = {},
 ) {
-  let query = supabase
+  let query = publicSupabase
     .from("public_storefront_media_gallery")
     .select("*")
     .eq("store_slug", slug)

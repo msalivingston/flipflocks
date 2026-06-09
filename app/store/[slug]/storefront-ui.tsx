@@ -11,6 +11,9 @@ type StorefrontIdentity = StorefrontLocation & {
   store_slug: string;
   logo_image_url: string | null;
   logo_image_alt_text: string | null;
+  public_email?: string | null;
+  public_phone?: string | null;
+  website_url?: string | null;
 };
 
 type InventoryLabelSource = {
@@ -19,7 +22,7 @@ type InventoryLabelSource = {
 };
 
 export const storefrontTheme = {
-  background: "bg-[#f6f1e8]",
+  background: "bg-[#f7f2e8]",
   border: "border-[#ded7c8]",
   focus: "focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2",
   mutedText: "text-stone-600",
@@ -291,7 +294,7 @@ export function StorefrontTextarea(
 export function StorefrontNav({ store }: { store: StorefrontIdentity }) {
   return (
     <nav className="sticky top-0 z-20 border-b border-[#e5decf] bg-white/95 shadow-[0_1px_0_rgba(46,35,20,0.03)] backdrop-blur">
-      <StorefrontContainer className="flex flex-col gap-4 py-4 md:flex-row md:items-center md:justify-between">
+      <StorefrontContainer className="flex flex-col gap-4 py-4 lg:flex-row lg:items-center lg:justify-between">
         <Link
           className={cx(
             "flex min-w-0 items-center gap-3 rounded-md text-stone-950",
@@ -309,7 +312,7 @@ export function StorefrontNav({ store }: { store: StorefrontIdentity }) {
             </p>
           </div>
         </Link>
-        <div className="flex flex-wrap gap-2 text-sm font-semibold text-stone-700">
+        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-stone-700">
           <Link
             className="rounded-md px-3 py-2 hover:bg-[#f6f1e8] hover:text-[#24512f]"
             href={`/store/${store.store_slug}`}
@@ -329,7 +332,7 @@ export function StorefrontNav({ store }: { store: StorefrontIdentity }) {
             Pickup & policies
           </Link>
           <Link
-            className="rounded-full border border-[#d7cfbf] bg-[#fbf7ef] px-4 py-2 text-[#24512f] hover:bg-[#eef4e8]"
+            className="inline-flex min-h-10 items-center rounded-md border border-[#24512f] bg-[#24512f] px-4 text-white hover:bg-[#183b22]"
             href={`/store/${store.store_slug}/cart`}
           >
             Cart
@@ -341,9 +344,15 @@ export function StorefrontNav({ store }: { store: StorefrontIdentity }) {
 }
 
 export function StorefrontFooter({ store }: { store: StorefrontIdentity }) {
+  const contactItems = [
+    store.public_email ? { label: "Email", value: store.public_email } : null,
+    store.public_phone ? { label: "Phone", value: store.public_phone } : null,
+    store.website_url ? { label: "Website", value: store.website_url } : null,
+  ].filter(Boolean) as Array<{ label: string; value: string }>;
+
   return (
     <footer className="border-t border-[#e4dccc] bg-[#fffdf8]">
-      <StorefrontContainer className="grid gap-8 py-10 text-sm text-stone-600 md:grid-cols-[1.2fr_0.7fr_0.7fr_1fr]">
+      <StorefrontContainer className="grid gap-8 py-10 text-sm text-stone-600 md:grid-cols-2 lg:grid-cols-[1.25fr_0.9fr_0.75fr_0.75fr]">
         <div className="grid gap-3">
           <div className="flex items-center gap-3">
             <StoreLogo store={store} size="sm" />
@@ -359,33 +368,44 @@ export function StorefrontFooter({ store }: { store: StorefrontIdentity }) {
           <p className="max-w-xs leading-6">
             Fresh availability from this seller storefront.
           </p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+            Powered by FlipFlocks
+          </p>
+        </div>
+        <div>
+          <p className="font-semibold text-stone-950">Contact</p>
+          <div className="mt-3 grid gap-2">
+            {contactItems.length > 0 ? (
+              contactItems.map((item) => (
+                <p key={item.label}>
+                  <span className="font-semibold text-stone-800">
+                    {item.label}:
+                  </span>{" "}
+                  {item.value}
+                </p>
+              ))
+            ) : (
+              <p>The seller will follow up after your order is placed.</p>
+            )}
+          </div>
         </div>
         <div>
           <p className="font-semibold text-stone-950">Shop</p>
           <div className="mt-3 grid gap-2">
-            <Link href={`/store/${store.store_slug}`}>Available products</Link>
+            <Link href={`/store/${store.store_slug}`}>Live Poultry</Link>
             <Link href={`/store/${store.store_slug}/cart`}>Cart</Link>
             <Link href={`/store/${store.store_slug}/checkout`}>Checkout</Link>
           </div>
         </div>
         <div>
-          <p className="font-semibold text-stone-950">Farm</p>
+          <p className="font-semibold text-stone-950">Quick Links</p>
           <div className="mt-3 grid gap-2">
-            <Link href={`/store/${store.store_slug}/about`}>About</Link>
-            <Link href={`/store/${store.store_slug}/policies`}>
-              Pickup details
+            <Link href={`/store/${store.store_slug}/about`}>
+              About This Farm
             </Link>
-          </div>
-        </div>
-        <div className="rounded-lg border border-[#e4dccc] bg-white p-4">
-          <p className="font-semibold text-stone-950">Need help?</p>
-          <p className="mt-2 leading-6">
-            The seller will follow up after your order is placed.
-          </p>
-          <div>
-            <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
-              Powered by FlipFlocks
-            </p>
+            <Link href={`/store/${store.store_slug}/policies`}>
+              Pickup Location
+            </Link>
           </div>
         </div>
       </StorefrontContainer>
@@ -437,13 +457,13 @@ export function HeroImage({
 }) {
   if (!src) {
     return (
-      <div className="flex min-h-64 items-center justify-center bg-[radial-gradient(circle_at_15%_20%,rgba(255,255,255,0.22),transparent_30%),linear-gradient(135deg,#183b22_0%,#365314_48%,#a16207_100%)] px-5 text-center text-white sm:min-h-80">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.12em] text-white/80">
-            Seller storefront
+      <div className="flex h-full min-h-80 items-end bg-[linear-gradient(135deg,#e6d3b5_0%,#f7efe0_48%,#c7d9bf_100%)] p-5 sm:min-h-[28rem]">
+        <div className="rounded-lg border border-white/70 bg-white/85 p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#24512f]">
+            Farm photo placeholder
           </p>
-          <p className="mt-3 max-w-lg text-3xl font-semibold">
-            Fresh availability from a local farm.
+          <p className="mt-2 max-w-sm text-2xl font-semibold leading-tight text-stone-950">
+            Fresh availability from a local farm
           </p>
         </div>
       </div>
@@ -453,7 +473,7 @@ export function HeroImage({
   return (
     <Image
       alt={alt}
-      className="h-full min-h-64 w-full object-cover sm:min-h-80"
+      className="h-full min-h-80 w-full object-cover sm:min-h-[28rem]"
       height={720}
       priority
       src={toPublicImageUrl(src)}
@@ -508,8 +528,8 @@ export function StorefrontPlaceholderImage({
   label?: string;
 }) {
   return (
-    <div className="flex aspect-[4/3] items-center justify-center bg-[radial-gradient(circle_at_30%_20%,#ffffff_0%,#f4ead8_32%,#e7f0df_100%)] px-4 text-center text-sm font-semibold text-emerald-900">
-      <span className="rounded-full border border-emerald-100 bg-white/85 px-3 py-1 shadow-sm">
+    <div className="flex aspect-[4/3] items-center justify-center bg-[linear-gradient(135deg,#f6ead8_0%,#fffdf8_50%,#dfead8_100%)] px-4 text-center text-sm font-semibold text-emerald-900">
+      <span className="rounded-md border border-emerald-100 bg-white/85 px-3 py-1 shadow-sm">
         {label}
       </span>
     </div>
