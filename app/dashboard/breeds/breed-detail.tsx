@@ -31,11 +31,52 @@ import {
 } from "./breed-data";
 
 type BreedDraft = {
+  annualEggProduction: string;
+  birdType: string;
   displayName: string;
+  eggColor: string;
   sellerDescription: string;
 };
 
+type RestoreDefaultPhotoResponse = {
+  already_present?: boolean;
+  media?: ListingPhotoItem | null;
+  message?: string;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+};
+
+type FunctionErrorContext = {
+  context?: Response;
+  message?: string;
+  name?: string;
+};
+
 const buyerDescriptionMaxLength = 1000;
+const birdTypeOptions = [
+  { label: "Layer", value: "layer" },
+  { label: "Meat", value: "meat" },
+  { label: "Dual Purpose", value: "dual_purpose" },
+];
+const eggColorOptions = [
+  { label: "White", value: "white" },
+  { label: "Light Brown", value: "light_brown" },
+  { label: "Brown", value: "brown" },
+  { label: "Dark Brown", value: "dark_brown" },
+  { label: "Blue", value: "blue" },
+  { label: "Blue-Green", value: "blue_green" },
+  { label: "Green", value: "green" },
+  { label: "Olive", value: "olive" },
+];
+const annualEggProductionOptions = [
+  { label: "Less than 150 eggs/year", value: "under_150" },
+  { label: "150–200 eggs/year", value: "150_200" },
+  { label: "200–250 eggs/year", value: "200_250" },
+  { label: "250–300 eggs/year", value: "250_300" },
+  { label: "More than 300 eggs/year", value: "over_300" },
+];
 
 export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
   const { seller } = useSellerContext();
@@ -49,9 +90,12 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
-  const [isResettingDescription, setIsResettingDescription] = useState(false);
+  const [isRestoringCatalogDefaults, setIsRestoringCatalogDefaults] =
+    useState(false);
+  const [isRestoringDefaultPhoto, setIsRestoringDefaultPhoto] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
+  const [photoActionError, setPhotoActionError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -65,6 +109,7 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
       setIsLoading(true);
       setLoadError(null);
       setMediaError(null);
+      setPhotoActionError(null);
 
       const [speciesResult, breedResult, profileResult] = await Promise.all([
         supabase
@@ -108,7 +153,10 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
       setDraft(
         nextProfile
           ? {
+              annualEggProduction: nextProfile.annual_egg_production ?? "",
+              birdType: nextProfile.bird_type ?? "",
               displayName: nextProfile.display_name,
+              eggColor: nextProfile.egg_color ?? "",
               sellerDescription: nextProfile.seller_description ?? "",
             }
           : null,
@@ -150,10 +198,39 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
   const speciesName = profile
     ? speciesById.get(profile.species_id) ?? "Species"
     : "Species";
+  const speciesSlug = profile
+    ? species.find((item) => item.id === profile.species_id)?.slug ?? ""
+    : "";
+  const isChickenBreed = speciesSlug === "chicken";
   const catalogBreed =
     profile?.breed_id ? libraryByBreedId.get(profile.breed_id) ?? null : null;
-  const defaultDescription = catalogBreed?.description?.trim() ?? "";
   const defaultPhotoUrl = catalogBreed?.image_url?.trim() ?? "";
+  const activeBreedPhotos = useMemo(
+    () =>
+      mediaItems.filter(
+        (item) =>
+          item.visibility_status === "active" &&
+          item.asset_status === "active" &&
+          item.moderation_status === "approved",
+      ),
+    [mediaItems],
+  );
+  const activeBreedPhotoCount = activeBreedPhotos.length;
+  const hasActiveCatalogDefaultPhoto = Boolean(
+    catalogBreed &&
+      defaultPhotoUrl &&
+      activeBreedPhotos.some(
+        (item) =>
+          item.source_type === "catalog_breed_image" &&
+          item.source_breed_id === catalogBreed.id &&
+          item.source_image_url === defaultPhotoUrl,
+      ),
+  );
+  const canManagePhotos = profile?.visibility_status !== "archived";
+  const canShowRestoreDefaultPhoto =
+    Boolean(catalogBreed && defaultPhotoUrl && !hasActiveCatalogDefaultPhoto) &&
+    !mediaError;
+  const isBreedPhotoLimitReached = activeBreedPhotoCount >= 4;
   const descriptionPreview = profile
     ? getProfileDescription(profile, libraryByBreedId)
     : "";
@@ -187,6 +264,11 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
       p_breed_id: profile.breed_id,
       p_custom_breed_name: profile.custom_breed_name,
       p_display_name: draft.displayName.trim(),
+      p_annual_egg_production: isChickenBreed
+        ? draft.annualEggProduction || null
+        : null,
+      p_bird_type: isChickenBreed ? draft.birdType || null : null,
+      p_egg_color: isChickenBreed ? draft.eggColor || null : null,
       p_seller_breed_profile_id: profile.id,
       p_seller_description: draft.sellerDescription.trim() || null,
       p_seller_notes: profile.seller_notes,
@@ -206,27 +288,52 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
     setReloadKey((current) => current + 1);
   }
 
-  async function resetDescription() {
-    if (!profile || !draft || !defaultDescription || isResettingDescription) {
+  async function restoreCatalogDefaults() {
+    if (!profile || !draft || !catalogBreed || isRestoringCatalogDefaults) {
       return;
     }
 
-    const shouldReset = window.confirm(
-      "Replace your custom buyer description with the FlipFlocks default description for this breed?",
+    const restoreItems = [
+      "Description",
+      ...(isChickenBreed
+        ? ["Bird Type", "Egg Color", "Annual Egg Production"]
+        : []),
+    ];
+    const shouldRestore = window.confirm(
+      [
+        "Restore Catalog Defaults?",
+        "",
+        "Restore this breed's information from the FlipFlocks breed library?",
+        "",
+        "This will replace your customized:",
+        ...restoreItems.map((item) => `* ${item}`),
+        "",
+        "Photos, listings, inventory, and other records will not be changed.",
+      ].join("\n"),
     );
 
-    if (!shouldReset) return;
+    if (!shouldRestore) return;
 
-    setIsResettingDescription(true);
+    setIsRestoringCatalogDefaults(true);
     setSaveError(null);
     setSuccessMessage(null);
+
+    const restoredDescription = catalogBreed.description?.trim() ?? "";
+    const restoredBirdType = isChickenBreed ? catalogBreed.bird_type ?? null : null;
+    const restoredEggColor = isChickenBreed ? catalogBreed.egg_color ?? null : null;
+    const restoredAnnualEggProduction = isChickenBreed
+      ? catalogBreed.annual_egg_production ?? null
+      : null;
 
     const { error } = await supabase.rpc("seller_upsert_breed_profile", {
       p_breed_id: profile.breed_id,
       p_custom_breed_name: profile.custom_breed_name,
       p_display_name: draft.displayName.trim() || profile.display_name,
+      p_annual_egg_production: restoredAnnualEggProduction,
+      p_bird_type: restoredBirdType,
+      p_egg_color: restoredEggColor,
       p_seller_breed_profile_id: profile.id,
-      p_seller_description: defaultDescription,
+      p_seller_description: restoredDescription || null,
       p_seller_notes: profile.seller_notes,
       p_species_id: profile.species_id,
       p_store_id: storeId,
@@ -235,15 +342,106 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
 
     if (error) {
       setSaveError(error.message);
-      setIsResettingDescription(false);
+      setIsRestoringCatalogDefaults(false);
+      return;
+    }
+
+    const { error: metadataError } = await supabase
+      .from("seller_breed_profiles")
+      .update({
+        annual_egg_production: restoredAnnualEggProduction,
+        bird_type: restoredBirdType,
+        egg_color: restoredEggColor,
+      })
+      .eq("store_id", storeId)
+      .eq("id", profile.id);
+
+    if (metadataError) {
+      setSaveError(metadataError.message);
+      setIsRestoringCatalogDefaults(false);
       return;
     }
 
     setDraft((current) =>
-      current ? { ...current, sellerDescription: defaultDescription } : current,
+      current
+        ? {
+            ...current,
+            annualEggProduction: restoredAnnualEggProduction ?? "",
+            birdType: restoredBirdType ?? "",
+            eggColor: restoredEggColor ?? "",
+            sellerDescription: restoredDescription,
+          }
+        : current,
     );
-    setSuccessMessage("Buyer description reset to the default.");
-    setIsResettingDescription(false);
+    setSuccessMessage("Breed restored from the FlipFlocks breed library.");
+    setIsRestoringCatalogDefaults(false);
+    setReloadKey((current) => current + 1);
+  }
+
+  async function restoreDefaultPhoto() {
+    if (
+      !profile ||
+      !catalogBreed ||
+      !defaultPhotoUrl ||
+      isRestoringDefaultPhoto ||
+      hasActiveCatalogDefaultPhoto
+    ) {
+      return;
+    }
+
+    setPhotoActionError(null);
+    setSaveError(null);
+    setSuccessMessage(null);
+
+    if (isBreedPhotoLimitReached) {
+      setPhotoActionError(
+        "You already have 4 breed photos. Remove a photo before restoring the default photo.",
+      );
+      return;
+    }
+
+    setIsRestoringDefaultPhoto(true);
+
+    const { data: sessionData, error: sessionError } =
+      await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (sessionError || !accessToken) {
+      setPhotoActionError("Please sign in again and try restoring the default photo.");
+      setIsRestoringDefaultPhoto(false);
+      return;
+    }
+
+    const { data, error } =
+      await supabase.functions.invoke<RestoreDefaultPhotoResponse>(
+        "seller-restore-catalog-breed-photo",
+        {
+          body: {
+            seller_breed_profile_id: profile.id,
+          },
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+
+    if (error || data?.error) {
+      const functionError = await readRestoreDefaultPhotoError(error);
+      setPhotoActionError(
+        data?.error?.message ??
+          functionError?.message ??
+          "Default photo could not be restored. Please try again.",
+      );
+      setIsRestoringDefaultPhoto(false);
+      return;
+    }
+
+    setSuccessMessage(
+      data?.already_present
+        ? "Default photo is already included."
+        : data?.message ?? "Default photo restored.",
+    );
+    setIsRestoringDefaultPhoto(false);
     setReloadKey((current) => current + 1);
   }
 
@@ -360,7 +558,8 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
             <StatusBadge status={speciesName} />
           </div>
           <p className="mt-1 text-sm leading-6 text-stone-600">
-            Edit the breed-level content buyers see on your storefront.
+            Edit the breed-level content buyers see on your storefront. Catalog
+            breeds can be restored from the FlipFlocks breed library.
           </p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -378,17 +577,78 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
                 }
               />
             </label>
+
+            {isChickenBreed ? (
+              <>
+                <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                  Bird type
+                  <select
+                    className="seller-form-field"
+                    value={draft.birdType}
+                    onChange={(event) =>
+                      updateDraft({ birdType: event.target.value })
+                    }
+                  >
+                    <option value="">Choose bird type</option>
+                    {birdTypeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                  Egg color
+                  <select
+                    className="seller-form-field"
+                    value={draft.eggColor}
+                    onChange={(event) =>
+                      updateDraft({ eggColor: event.target.value })
+                    }
+                  >
+                    <option value="">Choose egg color</option>
+                    {eggColorOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="grid gap-1 text-sm font-semibold text-stone-700 md:col-span-2">
+                  Annual egg production
+                  <select
+                    className="seller-form-field"
+                    value={draft.annualEggProduction}
+                    onChange={(event) =>
+                      updateDraft({ annualEggProduction: event.target.value })
+                    }
+                  >
+                    <option value="">Choose annual egg production</option>
+                    {annualEggProductionOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            ) : null}
+
             <label className="grid gap-1 text-sm font-semibold text-stone-700 md:col-span-2">
               <span className="flex flex-wrap items-center justify-between gap-2">
                 <span>Buyer description</span>
-                {defaultDescription ? (
+                {catalogBreed ? (
                   <button
                     className="seller-small-button"
-                    disabled={isResettingDescription}
-                    onClick={() => void resetDescription()}
+                    disabled={isRestoringCatalogDefaults}
+                    onClick={() => void restoreCatalogDefaults()}
                     type="button"
                   >
-                    {isResettingDescription ? "Resetting" : "Reset Description"}
+                    {isRestoringCatalogDefaults
+                      ? "Restoring"
+                      : "Restore Catalog Defaults"}
                   </button>
                 ) : null}
               </span>
@@ -421,20 +681,40 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
           ) : null}
         </SellerCard>
 
-        {defaultPhotoUrl ? (
+        {canShowRestoreDefaultPhoto ? (
           <SellerCard className="p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-stone-950">
-                  Default Breed Photos
+                  Default Breed Photo
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-stone-600">
-                  Resetting custom photos to catalog defaults needs a safe media
-                  copy flow before it can be enabled.
+                  Restore the FlipFlocks breed library image as one of your
+                  normal breed photos.
                 </p>
+                {isBreedPhotoLimitReached ? (
+                  <p className="mt-2 text-sm font-semibold text-amber-800">
+                    You already have 4 breed photos. Remove a photo before
+                    restoring the default photo.
+                  </p>
+                ) : null}
+                {photoActionError ? (
+                  <p className="mt-2 text-sm font-semibold text-red-700">
+                    {photoActionError}
+                  </p>
+                ) : null}
               </div>
-              <button className="seller-secondary-button" disabled type="button">
-                Reset Photos
+              <button
+                className="seller-secondary-button"
+                disabled={
+                  !canManagePhotos ||
+                  isBreedPhotoLimitReached ||
+                  isRestoringDefaultPhoto
+                }
+                onClick={() => void restoreDefaultPhoto()}
+                type="button"
+              >
+                {isRestoringDefaultPhoto ? "Restoring" : "Restore Default Photo"}
               </button>
             </div>
           </SellerCard>
@@ -484,4 +764,32 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
       </main>
     </>
   );
+}
+
+async function readRestoreDefaultPhotoError(error: unknown) {
+  const response = toFunctionErrorContext(error)?.context;
+
+  if (!response) return null;
+
+  try {
+    const body = (await response.clone().json()) as RestoreDefaultPhotoResponse;
+
+    return {
+      code: body.error?.code,
+      message: body.error?.message,
+    };
+  } catch (readError) {
+    console.error("default photo restore error body could not be read", {
+      error: readError,
+      status: response.status,
+    });
+
+    return null;
+  }
+}
+
+function toFunctionErrorContext(error: unknown): FunctionErrorContext | null {
+  if (!error || typeof error !== "object") return null;
+
+  return error as FunctionErrorContext;
 }

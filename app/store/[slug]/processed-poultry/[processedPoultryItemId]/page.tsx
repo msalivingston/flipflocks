@@ -7,9 +7,7 @@ import {
   InfoPanel,
   ListingPhoto,
   StorefrontCard,
-  StorefrontFooter,
   StorefrontMediaFrame,
-  StorefrontNav,
   StorefrontPage,
   StorefrontShell,
   formatCurrency,
@@ -17,10 +15,18 @@ import {
 } from "../../storefront-ui";
 import {
   StorefrontMedia,
+  groupInventoryByProduct,
+  loadStorefrontEquipment,
   loadStorefrontHome,
+  loadStorefrontInventory,
   loadStorefrontProcessedPoultryGallery,
   loadStorefrontProcessedPoultryItem,
+  loadStorefrontProcessedPoultry,
 } from "../../storefront-data";
+import {
+  StorefrontChrome,
+  getStorefrontCategoryAvailability,
+} from "../../storefront-shell-components";
 import { ProcessedPoultryOrderOptions } from "./processed-poultry-order-options";
 
 export default async function StorefrontProcessedPoultryPage({
@@ -30,12 +36,28 @@ export default async function StorefrontProcessedPoultryPage({
 }) {
   const { processedPoultryItemId, slug } = await params;
 
-  const [homeResult, itemResult, galleryResult] = await Promise.all([
+  const [
+    homeResult,
+    itemResult,
+    galleryResult,
+    inventoryResult,
+    equipmentResult,
+    processedPoultryResult,
+  ] = await Promise.all([
     loadStorefrontHome(slug),
     loadStorefrontProcessedPoultryItem(slug, processedPoultryItemId),
     loadStorefrontProcessedPoultryGallery(slug, processedPoultryItemId),
+    loadStorefrontInventory(slug),
+    loadStorefrontEquipment(slug),
+    loadStorefrontProcessedPoultry(slug),
   ]);
-  const error = homeResult.error ?? itemResult.error ?? galleryResult.error;
+  const error =
+    homeResult.error ??
+    itemResult.error ??
+    galleryResult.error ??
+    inventoryResult.error ??
+    equipmentResult.error ??
+    processedPoultryResult.error;
 
   if (error) {
     return (
@@ -66,28 +88,34 @@ export default async function StorefrontProcessedPoultryPage({
   }
 
   const item = itemResult.data;
+  const categories = getStorefrontCategoryAvailability({
+    equipmentCount: equipmentResult.data.length,
+    hatchingEggCount: groupInventoryByProduct(
+      inventoryResult.data.filter(isHatchingEggItem),
+    ).length,
+    livePoultryCount: groupInventoryByProduct(
+      inventoryResult.data.filter(isLivePoultryItem),
+    ).length,
+    processedPoultryCount: processedPoultryResult.data.length,
+  });
 
   if (!item) {
     return (
-      <StorefrontShell>
-        <StorefrontNav store={store} />
+      <StorefrontChrome categories={categories} store={store}>
         <StorefrontPage size="narrow" className="py-12">
           <EmptyStorefront
             title="Item not found"
             description="This processed poultry item may no longer be visible."
           />
         </StorefrontPage>
-        <StorefrontFooter store={store} />
-      </StorefrontShell>
+      </StorefrontChrome>
     );
   }
 
   const gallery = buildProcessedPoultryGallery(item, galleryResult.data);
 
   return (
-    <StorefrontShell>
-      <StorefrontNav store={store} />
-
+    <StorefrontChrome categories={categories} store={store}>
       <StorefrontPage className="gap-7">
         <Link
           className="text-sm font-semibold text-emerald-800 hover:text-emerald-950"
@@ -170,9 +198,7 @@ export default async function StorefrontProcessedPoultryPage({
           </aside>
         </section>
       </StorefrontPage>
-
-      <StorefrontFooter store={store} />
-    </StorefrontShell>
+    </StorefrontChrome>
   );
 }
 
@@ -249,4 +275,12 @@ function buildProcessedPoultryGallery(
       width_px: null,
     },
   ];
+}
+
+function isHatchingEggItem(item: { batch_type: string | null; inventory_type: string }) {
+  return item.batch_type === "hatching_eggs" || item.inventory_type === "hatching_eggs";
+}
+
+function isLivePoultryItem(item: { batch_type: string | null; inventory_type: string }) {
+  return !isHatchingEggItem(item);
 }

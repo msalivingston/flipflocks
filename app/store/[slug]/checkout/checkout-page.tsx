@@ -271,7 +271,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
 
   return (
     <StorefrontPage className="gap-7">
-      <div className="rounded-xl border border-[#ded7c8] bg-white p-6 shadow-[0_16px_40px_rgba(46,35,20,0.07)]">
+      <div className="rounded-xl border border-[#ded7c8] bg-white p-6">
         <p className="text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
           Checkout
         </p>
@@ -302,7 +302,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
           <form
-            className="rounded-xl border border-[#ded7c8] bg-white p-6 shadow-[0_16px_40px_rgba(46,35,20,0.08)]"
+            className="rounded-xl border border-[#ded7c8] bg-white p-6"
             onSubmit={handleSubmit}
           >
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">

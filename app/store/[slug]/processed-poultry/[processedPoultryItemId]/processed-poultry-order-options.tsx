@@ -60,7 +60,7 @@ export function ProcessedPoultryOrderOptions({
       </div>
 
       <div className="grid gap-4 border-y border-[#e7decd] bg-[#fbf7ef] p-5">
-        <div className="rounded-lg border border-[#ded7c8] bg-white p-4 shadow-sm">
+        <div className="rounded-lg border border-[#ded7c8] bg-white p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h3 className="font-semibold text-stone-950">

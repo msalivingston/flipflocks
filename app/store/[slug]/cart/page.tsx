@@ -1,10 +1,9 @@
 import {
   EmptyStorefront,
-  StorefrontFooter,
-  StorefrontNav,
   StorefrontShell,
 } from "../storefront-ui";
-import { loadStorefrontHome } from "../storefront-data";
+import { loadStorefrontChrome } from "../storefront-chrome-data";
+import { StorefrontChrome } from "../storefront-shell-components";
 import { CartPage } from "./cart-page";
 
 export default async function StorefrontCartRoute({
@@ -13,7 +12,7 @@ export default async function StorefrontCartRoute({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const { data: store, error } = await loadStorefrontHome(slug);
+  const { categories, error, store } = await loadStorefrontChrome(slug);
 
   if (error) {
     return (
@@ -42,10 +41,8 @@ export default async function StorefrontCartRoute({
   }
 
   return (
-    <StorefrontShell>
-      <StorefrontNav store={store} />
+    <StorefrontChrome categories={categories} store={store}>
       <CartPage store={store} />
-      <StorefrontFooter store={store} />
-    </StorefrontShell>
+    </StorefrontChrome>
   );
 }

@@ -154,7 +154,7 @@ export function StorefrontCard({
   return (
     <section
       className={cx(
-        "rounded-lg border border-[#ded7c8] bg-white p-5 shadow-[0_12px_35px_rgba(46,35,20,0.06)]",
+        "rounded-lg border border-[#ded7c8] bg-white p-5",
         className,
       )}
     >
@@ -173,7 +173,7 @@ export function StorefrontSummaryCard({
   return (
     <aside
       className={cx(
-        "rounded-lg border border-[#ded7c8] bg-white p-5 shadow-[0_16px_40px_rgba(46,35,20,0.08)]",
+        "rounded-lg border border-[#ded7c8] bg-white p-5",
         className,
       )}
     >
@@ -200,11 +200,11 @@ export function StorefrontButton({
   variant?: "primary" | "secondary";
 }) {
   const buttonClass = cx(
-    "inline-flex min-h-11 items-center justify-center rounded-md px-4 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-white",
+    "inline-flex min-h-11 items-center justify-center rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-white",
     storefrontTheme.focus,
     variant === "primary"
       ? storefrontTheme.primary
-      : "border border-[#cfc7b8] bg-white text-stone-800 shadow-none hover:bg-[#fbf7ef]",
+      : "border border-[#cfc7b8] bg-white text-stone-800 hover:bg-[#fbf7ef]",
     className,
   );
 
@@ -293,7 +293,7 @@ export function StorefrontTextarea(
 
 export function StorefrontNav({ store }: { store: StorefrontIdentity }) {
   return (
-    <nav className="sticky top-0 z-20 border-b border-[#e5decf] bg-white/95 shadow-[0_1px_0_rgba(46,35,20,0.03)] backdrop-blur">
+    <nav className="sticky top-0 z-20 border-b border-[#e5decf] bg-white/95 backdrop-blur">
       <StorefrontContainer className="flex flex-col gap-4 py-4 lg:flex-row lg:items-center lg:justify-between">
         <Link
           className={cx(
@@ -429,7 +429,7 @@ export function StoreLogo({
   if (!store.logo_image_url) {
     return (
       <div
-        className={`${sizeClass} flex shrink-0 items-center justify-center rounded-md border border-emerald-100 bg-[#eef4e8] text-base font-bold text-[#24512f] shadow-sm`}
+        className={`${sizeClass} flex shrink-0 items-center justify-center rounded-md border border-emerald-100 bg-[#eef4e8] text-base font-bold text-[#24512f]`}
       >
         {store.store_name.trim().slice(0, 1).toUpperCase() || "S"}
       </div>
@@ -612,7 +612,7 @@ export function StorefrontEmptyState({
   title: string;
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-stone-300 bg-white px-5 py-8 text-center shadow-sm">
+    <div className="rounded-lg border border-dashed border-stone-300 bg-white px-5 py-8 text-center">
       <h1 className="text-xl font-semibold text-stone-950">{title}</h1>
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">
         {description}

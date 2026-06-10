@@ -7,9 +7,7 @@ import {
   InfoPanel,
   ListingPhoto,
   StorefrontCard,
-  StorefrontFooter,
   StorefrontMediaFrame,
-  StorefrontNav,
   StorefrontPage,
   StorefrontShell,
   formatCurrency,
@@ -18,9 +16,17 @@ import {
 import {
   StorefrontMedia,
   loadStoreGallery,
+  loadStorefrontEquipment,
   loadStorefrontEquipmentItem,
   loadStorefrontHome,
+  loadStorefrontInventory,
+  loadStorefrontProcessedPoultry,
+  groupInventoryByProduct,
 } from "../../storefront-data";
+import {
+  StorefrontChrome,
+  getStorefrontCategoryAvailability,
+} from "../../storefront-shell-components";
 import { EquipmentOrderOptions } from "./equipment-order-options";
 
 export default async function StorefrontEquipmentPage({
@@ -30,7 +36,14 @@ export default async function StorefrontEquipmentPage({
 }) {
   const { equipmentItemId, slug } = await params;
 
-  const [homeResult, equipmentResult, galleryResult] = await Promise.all([
+  const [
+    homeResult,
+    equipmentResult,
+    galleryResult,
+    inventoryResult,
+    equipmentListResult,
+    processedPoultryResult,
+  ] = await Promise.all([
     loadStorefrontHome(slug),
     loadStorefrontEquipmentItem(slug, equipmentItemId),
     loadStoreGallery(slug, {
@@ -38,8 +51,17 @@ export default async function StorefrontEquipmentPage({
       entityType: "equipment_inventory_item",
       limit: 8,
     }),
+    loadStorefrontInventory(slug),
+    loadStorefrontEquipment(slug),
+    loadStorefrontProcessedPoultry(slug),
   ]);
-  const error = homeResult.error ?? equipmentResult.error ?? galleryResult.error;
+  const error =
+    homeResult.error ??
+    equipmentResult.error ??
+    galleryResult.error ??
+    inventoryResult.error ??
+    equipmentListResult.error ??
+    processedPoultryResult.error;
 
   if (error) {
     return (
@@ -70,28 +92,34 @@ export default async function StorefrontEquipmentPage({
   }
 
   const item = equipmentResult.data;
+  const categories = getStorefrontCategoryAvailability({
+    equipmentCount: equipmentListResult.data.length,
+    hatchingEggCount: groupInventoryByProduct(
+      inventoryResult.data.filter(isHatchingEggItem),
+    ).length,
+    livePoultryCount: groupInventoryByProduct(
+      inventoryResult.data.filter(isLivePoultryItem),
+    ).length,
+    processedPoultryCount: processedPoultryResult.data.length,
+  });
 
   if (!item) {
     return (
-      <StorefrontShell>
-        <StorefrontNav store={store} />
+      <StorefrontChrome categories={categories} store={store}>
         <StorefrontPage size="narrow" className="py-12">
           <EmptyStorefront
             title="Item not found"
             description="This equipment or supply item may no longer be visible."
           />
         </StorefrontPage>
-        <StorefrontFooter store={store} />
-      </StorefrontShell>
+      </StorefrontChrome>
     );
   }
 
   const gallery = buildEquipmentGallery(item, galleryResult.data);
 
   return (
-    <StorefrontShell>
-      <StorefrontNav store={store} />
-
+    <StorefrontChrome categories={categories} store={store}>
       <StorefrontPage className="gap-7">
         <Link
           className="text-sm font-semibold text-emerald-800 hover:text-emerald-950"
@@ -165,9 +193,7 @@ export default async function StorefrontEquipmentPage({
           </aside>
         </section>
       </StorefrontPage>
-
-      <StorefrontFooter store={store} />
-    </StorefrontShell>
+    </StorefrontChrome>
   );
 }
 
@@ -244,4 +270,12 @@ function buildEquipmentGallery(
       width_px: null,
     },
   ];
+}
+
+function isHatchingEggItem(item: { batch_type: string | null; inventory_type: string }) {
+  return item.batch_type === "hatching_eggs" || item.inventory_type === "hatching_eggs";
+}
+
+function isLivePoultryItem(item: { batch_type: string | null; inventory_type: string }) {
+  return !isHatchingEggItem(item);
 }

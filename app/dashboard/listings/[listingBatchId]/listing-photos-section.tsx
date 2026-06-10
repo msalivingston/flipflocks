@@ -25,6 +25,9 @@ export type ListingPhotoItem = {
   file_size_bytes: number;
   width_px: number | null;
   height_px: number | null;
+  source_type?: string | null;
+  source_breed_id?: string | null;
+  source_image_url?: string | null;
 };
 
 type UploadResponse = {

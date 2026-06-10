@@ -15,6 +15,9 @@ export type BreedLibraryItem = {
   breed_name: string;
   breed_slug: string;
   description: string | null;
+  bird_type: string | null;
+  egg_color: string | null;
+  annual_egg_production: string | null;
   image_url: string | null;
   sort_order: number | null;
 };
@@ -30,15 +33,18 @@ export type SellerBreedProfile = {
   seller_notes: string | null;
   visibility_status: string;
   moderation_status: string;
+  bird_type: string | null;
+  egg_color: string | null;
+  annual_egg_production: string | null;
 };
 
 export const speciesSelect = "id, common_name, slug, sort_order";
 export const breedLibrarySelect =
-  "id, species_id, breed_name, breed_slug, description, image_url, sort_order";
+  "id, species_id, breed_name, breed_slug, description, bird_type, egg_color, annual_egg_production, image_url, sort_order";
 export const sellerBreedProfileSelect =
-  "id, store_id, species_id, breed_id, custom_breed_name, display_name, seller_description, seller_notes, visibility_status, moderation_status";
+  "id, store_id, species_id, breed_id, custom_breed_name, display_name, seller_description, seller_notes, visibility_status, moderation_status, bird_type, egg_color, annual_egg_production";
 export const sellerMediaSelect =
-  "media_asset_id, media_link_id, store_id, entity_type, entity_id, display_context, public_url, alt_text, caption, sort_order, is_featured, moderation_status, asset_status, visibility_status, original_filename, content_type, file_size_bytes, width_px, height_px";
+  "media_asset_id, media_link_id, store_id, entity_type, entity_id, display_context, public_url, alt_text, caption, sort_order, is_featured, moderation_status, asset_status, visibility_status, original_filename, content_type, file_size_bytes, width_px, height_px, source_type, source_breed_id, source_image_url";
 
 export function buildSpeciesNameById(species: BreedSpecies[]) {
   return new Map(species.map((item) => [item.id, item.common_name]));

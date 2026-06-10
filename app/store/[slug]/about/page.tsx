@@ -3,8 +3,6 @@ import {
   EmptyStorefront,
   Fact,
   StorefrontCard,
-  StorefrontFooter,
-  StorefrontNav,
   StorefrontPage,
   StoreLogo,
   StorefrontShell,
@@ -14,8 +12,9 @@ import {
 import {
   StorefrontMedia,
   loadStoreGallery,
-  loadStorefrontHome,
 } from "../storefront-data";
+import { loadStorefrontChrome } from "../storefront-chrome-data";
+import { StorefrontChrome } from "../storefront-shell-components";
 
 export default async function StorefrontAboutPage({
   params,
@@ -23,14 +22,14 @@ export default async function StorefrontAboutPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [homeResult, galleryResult] = await Promise.all([
-    loadStorefrontHome(slug),
+  const [chromeResult, galleryResult] = await Promise.all([
+    loadStorefrontChrome(slug),
     loadStoreGallery(slug, {
       entityType: "store",
       limit: 8,
     }),
   ]);
-  const error = homeResult.error ?? galleryResult.error;
+  const error = chromeResult.error ?? galleryResult.error;
 
   if (error) {
     return (
@@ -45,7 +44,7 @@ export default async function StorefrontAboutPage({
     );
   }
 
-  const store = homeResult.data;
+  const store = chromeResult.store;
 
   if (!store) {
     return (
@@ -68,9 +67,7 @@ export default async function StorefrontAboutPage({
     `${store.store_name} has not added a full story yet. Products and pickup information are available throughout this storefront.`;
 
   return (
-    <StorefrontShell>
-      <StorefrontNav store={store} />
-
+    <StorefrontChrome categories={chromeResult.categories} store={store}>
       <StorefrontPage className="gap-7">
         <StorefrontCard className="grid gap-8 bg-[#fffdf8] p-6 lg:grid-cols-[1fr_20rem]">
           <div>
@@ -125,9 +122,7 @@ export default async function StorefrontAboutPage({
           </StorefrontCard>
         )}
       </StorefrontPage>
-
-      <StorefrontFooter store={store} />
-    </StorefrontShell>
+    </StorefrontChrome>
   );
 }
 
@@ -147,7 +142,7 @@ function PhotoStrip({
         {photos.slice(0, 3).map((photo) => (
           <Image
             alt={photo.alt_text || `${storeName} farm photo`}
-            className="aspect-[4/3] w-full rounded-xl border border-[#ded7c8] object-cover shadow-[0_12px_35px_rgba(46,35,20,0.08)]"
+            className="aspect-[4/3] w-full rounded-xl border border-[#ded7c8] object-cover"
             height={360}
             key={`${photo.display_context}-${photo.public_url}`}
             src={toPublicImageUrl(photo.public_url)}

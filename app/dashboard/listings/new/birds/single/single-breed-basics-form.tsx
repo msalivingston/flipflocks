@@ -44,6 +44,10 @@ import {
   ValidationMessage,
 } from "../../_components/creation-wizard-shared";
 import { BreedCombobox } from "../../_components/breed-combobox";
+import {
+  CustomBreedDialog,
+  type CustomBreedDraft,
+} from "../../_components/custom-breed-dialog";
 import { buildPublishReadinessReport } from "../../../[listingBatchId]/publish-readiness";
 import { PublishReadinessReview } from "../../../[listingBatchId]/publish-readiness-review";
 
@@ -74,6 +78,20 @@ type InventoryState = {
 
 type CreateListingBatchResult = {
   listing_batch_id: string;
+};
+
+type CustomBreedProfileResult = {
+  annual_egg_production: string | null;
+  bird_type: string | null;
+  breed_id: string | null;
+  custom_breed_name: string | null;
+  display_name: string;
+  egg_color: string | null;
+  seller_breed_profile_id: string;
+  seller_description: string | null;
+  seller_notes: string | null;
+  species_id: string;
+  visibility_status: string;
 };
 
 type RecentBreedUsage = {
@@ -150,6 +168,10 @@ export function SimpleListingForm({
   const [isDiscardingDraft, setIsDiscardingDraft] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isCustomBreedDialogOpen, setIsCustomBreedDialogOpen] = useState(false);
+  const [customBreedInitialName, setCustomBreedInitialName] = useState("");
+  const [customBreedError, setCustomBreedError] = useState<string | null>(null);
+  const [isSavingCustomBreed, setIsSavingCustomBreed] = useState(false);
   const [listingBatchId, setListingBatchId] = useState(
     draftListingBatchId ?? "",
   );
@@ -193,7 +215,7 @@ export function SimpleListingForm({
         supabase
           .from("seller_breed_profiles")
           .select(
-            "id, species_id, breed_id, custom_breed_name, display_name, seller_description, seller_notes, visibility_status",
+            "id, species_id, breed_id, custom_breed_name, display_name, seller_description, seller_notes, visibility_status, bird_type, egg_color, annual_egg_production",
           )
           .eq("store_id", storeId)
           .eq("visibility_status", "active")
@@ -376,6 +398,80 @@ export function SimpleListingForm({
     setDraftError(null);
     setSaveDraftError(null);
     setPublishError(null);
+  }
+
+  function openCustomBreedDialog(query: string) {
+    setCustomBreedInitialName(query);
+    setCustomBreedError(null);
+    setIsCustomBreedDialogOpen(true);
+  }
+
+  async function saveCustomBreed(draft: CustomBreedDraft) {
+    if (!seller || !selectedSpecies) {
+      setCustomBreedError("Seller or species information is missing. Refresh and try again.");
+      return;
+    }
+
+    const isChicken = selectedSpecies.slug === "chicken";
+
+    setIsSavingCustomBreed(true);
+    setCustomBreedError(null);
+
+    const { data, error: saveError } = await supabase.rpc(
+      "seller_upsert_breed_profile",
+      {
+        p_annual_egg_production: isChicken
+          ? draft.annualEggProduction
+          : null,
+        p_bird_type: isChicken ? draft.birdType : null,
+        p_breed_id: null,
+        p_custom_breed_name: draft.name,
+        p_display_name: draft.name,
+        p_egg_color: isChicken ? draft.eggColor : null,
+        p_seller_breed_profile_id: null,
+        p_seller_description: draft.description,
+        p_seller_notes: null,
+        p_species_id: selectedSpecies.id,
+        p_store_id: seller.store_id,
+        p_visibility_status: "active",
+      },
+    );
+
+    if (saveError) {
+      setCustomBreedError(saveError.message);
+      setIsSavingCustomBreed(false);
+      return;
+    }
+
+    const rows = Array.isArray(data)
+      ? (data as CustomBreedProfileResult[])
+      : [];
+    const profile = rows[0];
+
+    if (!profile?.seller_breed_profile_id) {
+      setCustomBreedError("The breed was saved, but it could not be selected.");
+      setIsSavingCustomBreed(false);
+      return;
+    }
+
+    const nextProfile = buildSellerBreedProfileOption(profile);
+    const nextValue = `profile:${nextProfile.id}`;
+
+    setSellerProfiles((current) => upsertSellerProfileOption(current, nextProfile));
+    setForm((current) => ({
+      ...current,
+      breedChoice: nextValue,
+      publicDescription: nextProfile.seller_description ?? "",
+    }));
+    setSellerBreedProfileId(nextProfile.id);
+    setDraftRows([]);
+    setMediaItems([]);
+    setValidationErrors([]);
+    setDraftError(null);
+    setSaveDraftError(null);
+    setPublishError(null);
+    setIsSavingCustomBreed(false);
+    setIsCustomBreedDialogOpen(false);
   }
 
   function handleDetailsSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1090,6 +1186,7 @@ export function SimpleListingForm({
                     disabled={!form.speciesId}
                     recentChoices={recentBreedChoices}
                     value={form.breedChoice}
+                    onAddCustomBreed={openCustomBreedDialog}
                     onChange={handleBreedChoiceChange}
                   />
                 </label>
@@ -1377,6 +1474,23 @@ export function SimpleListingForm({
           )
         ) : null}
       </main>
+
+      {isCustomBreedDialogOpen && selectedSpecies ? (
+        <CustomBreedDialog
+          duplicateNames={breedChoices.map((choice) => choice.label)}
+          error={customBreedError}
+          initialName={customBreedInitialName}
+          isChicken={selectedSpecies.slug === "chicken"}
+          isSaving={isSavingCustomBreed}
+          speciesName={selectedSpecies.common_name}
+          onClose={() => {
+            if (isSavingCustomBreed) return;
+            setIsCustomBreedDialogOpen(false);
+            setCustomBreedError(null);
+          }}
+          onSave={saveCustomBreed}
+        />
+      ) : null}
     </>
   );
 }
@@ -1522,6 +1636,43 @@ function buildBreedChoices(
       breedId: breed.id,
     })),
   ];
+}
+
+function buildSellerBreedProfileOption(
+  profile: CustomBreedProfileResult,
+): SellerBreedProfileOption {
+  return {
+    annual_egg_production: profile.annual_egg_production,
+    bird_type: profile.bird_type,
+    breed_id: profile.breed_id,
+    custom_breed_name: profile.custom_breed_name,
+    display_name: profile.display_name,
+    egg_color: profile.egg_color,
+    id: profile.seller_breed_profile_id,
+    seller_description: profile.seller_description,
+    seller_notes: profile.seller_notes,
+    species_id: profile.species_id,
+    visibility_status: profile.visibility_status,
+  };
+}
+
+function upsertSellerProfileOption(
+  profiles: SellerBreedProfileOption[],
+  nextProfile: SellerBreedProfileOption,
+) {
+  const existingIndex = profiles.findIndex(
+    (profile) => profile.id === nextProfile.id,
+  );
+
+  if (existingIndex === -1) {
+    return [...profiles, nextProfile].sort((first, second) =>
+      first.display_name.localeCompare(second.display_name),
+    );
+  }
+
+  return profiles.map((profile) =>
+    profile.id === nextProfile.id ? nextProfile : profile,
+  );
 }
 
 function buildAliasesByBreedId(breedAliases: ReferenceBreedAlias[]) {

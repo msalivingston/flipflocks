@@ -9,11 +9,9 @@ import {
   summarizeStorefrontCart,
 } from "../../_components/storefront-cart-client";
 import { StorefrontProduct } from "../../storefront-data";
+import { ShoppingCart } from "lucide-react";
 import {
   StorefrontButton,
-  StorefrontCard,
-  StorefrontInput,
-  StorefrontLabel,
   formatCurrency,
   formatDate,
 } from "../../storefront-ui";
@@ -89,23 +87,20 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
   }
 
   return (
-    <StorefrontCard className="overflow-hidden p-0">
-      <div className="bg-[#fffdf8] p-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
-          Purchase options
-        </p>
-        <div className="mt-2 flex items-end justify-between gap-4">
+    <section className="overflow-hidden rounded-xl border border-[#ded7c8] bg-[#fffdf8]">
+      <div className="p-5">
+        <div className="flex items-start gap-3">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#073f1e] text-sm font-bold text-white">
+            1
+          </span>
           <div>
-            <h2 className="text-2xl font-semibold text-stone-950">
+            <h2 className="text-xl font-semibold text-stone-950">
               Choose your birds
             </h2>
             <p className="mt-1 text-sm leading-6 text-stone-600">
               Select quantities across available options.
             </p>
           </div>
-          <p className="shrink-0 text-right text-sm font-semibold text-[#24512f]">
-            {product.pricingLabel || "See prices"}
-          </p>
         </div>
       </div>
 
@@ -122,25 +117,26 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
 
           return (
             <article
-              className="rounded-lg border border-[#ded7c8] bg-white p-3 shadow-sm"
+              className="rounded-lg border border-[#ded7c8] bg-white p-4"
               key={option.inventoryItemId}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-semibold text-stone-950">
-                    {option.typeLabel}
-                  </h3>
-                  <p className="mt-1 text-sm text-stone-600">
+                    {option.typeLabel} <span className="mx-1">-</span>{" "}
                     {option.ageLabel}
-                  </p>
+                  </h3>
                 </div>
-                <p className="text-right text-sm font-semibold text-[#24512f]">
+                <p className="text-right font-semibold text-[#073f1e]">
                   {formatCurrency(option.unitPrice)}
+                  <span className="block text-xs font-normal text-stone-500">
+                    each
+                  </span>
                 </p>
               </div>
 
-              <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_6rem] sm:items-end">
-                <div className="grid gap-1 text-sm text-stone-600">
+              <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+                <div className="grid gap-1 text-sm text-stone-700">
                   <p>{formatOptionAvailability(option)}</p>
                   <p>
                     {option.quantityAvailable > 0
@@ -148,10 +144,24 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
                       : "Sold out"}
                   </p>
                 </div>
-                <StorefrontLabel className="text-xs uppercase tracking-[0.1em] text-stone-500">
-                  Qty
-                  <StorefrontInput
-                    className="text-center"
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-stone-950">Qty</span>
+                  <button
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#ded7c8] bg-white text-lg disabled:text-stone-300"
+                    disabled={!isAvailable || selectedQuantity <= 0}
+                    onClick={() =>
+                      updateQuantity(
+                        option.inventoryItemId,
+                        String(selectedQuantity - 1),
+                        option.quantityAvailable,
+                      )
+                    }
+                    type="button"
+                  >
+                    -
+                  </button>
+                  <input
+                    className="h-9 w-12 rounded-md border border-[#ded7c8] bg-white text-center text-sm"
                     disabled={!isAvailable}
                     inputMode="numeric"
                     max={Math.max(0, option.quantityAvailable)}
@@ -167,7 +177,21 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
                     type="number"
                     value={selectedQuantity}
                   />
-                </StorefrontLabel>
+                  <button
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#ded7c8] bg-white text-lg disabled:text-stone-300"
+                    disabled={!isAvailable || selectedQuantity >= option.quantityAvailable}
+                    onClick={() =>
+                      updateQuantity(
+                        option.inventoryItemId,
+                        String(selectedQuantity + 1),
+                        option.quantityAvailable,
+                      )
+                    }
+                    type="button"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             </article>
           );
@@ -175,21 +199,36 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
       </div>
 
       <div className="grid gap-4 bg-white p-5">
-        <div>
-          <p className="text-sm font-semibold text-stone-950">Order summary</p>
-          <p className="mt-1 text-sm text-stone-600">
-            {summary.totalQuantity > 0
-              ? `${summary.totalQuantity} selected - Estimated total ${formatCurrency(summary.subtotal)}`
-              : "Select a quantity to add options to your cart."}
-          </p>
+        <div className="flex items-start gap-3">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#073f1e] text-sm font-bold text-white">
+            2
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-stone-950">Order summary</p>
+            <p className="mt-1 text-sm text-stone-600">
+              {summary.totalQuantity > 0
+                ? `${summary.totalQuantity} selected`
+                : "Add quantities above to see your total."}
+            </p>
+          </div>
+          <div className="rounded-lg border border-[#eee5d6] bg-[#fffdf8] px-4 py-3 text-right">
+            <p className="text-xs text-stone-500">Estimated total</p>
+            <p className="text-xl font-bold text-[#073f1e]">
+              {formatCurrency(summary.subtotal)}
+            </p>
+          </div>
         </div>
         <StorefrontButton
-          className="w-full px-5"
+          className="w-full gap-2 px-5"
           disabled={summary.totalQuantity <= 0}
           onClick={handleAddToCart}
         >
+          <ShoppingCart aria-hidden="true" className="h-5 w-5" />
           Add to cart
         </StorefrontButton>
+        <p className="text-center text-xs text-stone-500">
+          Secure and safe checkout
+        </p>
       </div>
 
       {addedItems && addedSummary ? (
@@ -237,7 +276,7 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
           </div>
         </div>
       ) : null}
-    </StorefrontCard>
+    </section>
   );
 }
 

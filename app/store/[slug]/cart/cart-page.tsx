@@ -55,7 +55,7 @@ export function CartPage({ store }: { store: StorefrontHome }) {
 
   return (
     <StorefrontPage className="max-w-6xl gap-7">
-      <div className="rounded-xl border border-[#ded7c8] bg-white p-6 shadow-[0_16px_40px_rgba(46,35,20,0.07)]">
+      <div className="rounded-xl border border-[#ded7c8] bg-white p-6">
         <p className="text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
           Cart
         </p>
@@ -91,7 +91,7 @@ export function CartPage({ store }: { store: StorefrontHome }) {
 
               return (
                 <article
-                  className="grid gap-4 rounded-xl border border-[#ded7c8] bg-white p-4 shadow-[0_12px_35px_rgba(46,35,20,0.06)] md:grid-cols-[1fr_8rem_6rem] md:items-center"
+                  className="grid gap-4 rounded-xl border border-[#ded7c8] bg-white p-4 md:grid-cols-[1fr_8rem_6rem] md:items-center"
                   key={key}
                 >
                   <div>

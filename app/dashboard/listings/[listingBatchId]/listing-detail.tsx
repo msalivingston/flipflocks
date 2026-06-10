@@ -86,6 +86,9 @@ type SellerBreedProfileRead = {
   seller_description: string | null;
   seller_notes: string | null;
   visibility_status: string;
+  bird_type: string | null;
+  egg_color: string | null;
+  annual_egg_production: string | null;
 };
 
 const listingDetailSelect =
@@ -95,7 +98,7 @@ const sellerMediaSelect =
   "media_asset_id, media_link_id, store_id, entity_type, entity_id, display_context, public_url, alt_text, caption, sort_order, is_featured, moderation_status, asset_status, visibility_status, original_filename, content_type, file_size_bytes, width_px, height_px";
 
 const sellerBreedProfileSelect =
-  "id, species_id, breed_id, custom_breed_name, display_name, seller_description, seller_notes, visibility_status";
+  "id, species_id, breed_id, custom_breed_name, display_name, seller_description, seller_notes, visibility_status, bird_type, egg_color, annual_egg_production";
 
 const publicDescriptionMaxLength = 1000;
 

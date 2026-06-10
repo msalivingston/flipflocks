@@ -1,10 +1,9 @@
 import {
   EmptyStorefront,
-  StorefrontFooter,
-  StorefrontNav,
   StorefrontShell,
 } from "../storefront-ui";
-import { loadStorefrontHome } from "../storefront-data";
+import { loadStorefrontChrome } from "../storefront-chrome-data";
+import { StorefrontChrome } from "../storefront-shell-components";
 import { CheckoutPage } from "./checkout-page";
 
 export default async function StorefrontCheckoutRoute({
@@ -13,7 +12,7 @@ export default async function StorefrontCheckoutRoute({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const { data: store, error } = await loadStorefrontHome(slug);
+  const { categories, error, store } = await loadStorefrontChrome(slug);
 
   if (error) {
     return (
@@ -42,10 +41,8 @@ export default async function StorefrontCheckoutRoute({
   }
 
   return (
-    <StorefrontShell>
-      <StorefrontNav store={store} />
+    <StorefrontChrome categories={categories} store={store}>
       <CheckoutPage store={store} />
-      <StorefrontFooter store={store} />
-    </StorefrontShell>
+    </StorefrontChrome>
   );
 }

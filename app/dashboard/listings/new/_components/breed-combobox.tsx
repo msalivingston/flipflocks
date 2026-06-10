@@ -12,6 +12,7 @@ export function BreedCombobox({
   aliasSearchError,
   choices,
   disabled = false,
+  onAddCustomBreed,
   onChange,
   recentChoices,
   value,
@@ -19,6 +20,7 @@ export function BreedCombobox({
   aliasSearchError?: string | null;
   choices: BreedComboboxChoice[];
   disabled?: boolean;
+  onAddCustomBreed?: (query: string) => void;
   onChange: (value: string) => void;
   recentChoices: BreedComboboxChoice[];
   value: string;
@@ -102,7 +104,7 @@ export function BreedCombobox({
 
           {!shouldShowRecent && !shouldShowSearchResults ? (
             <p className="px-3 py-3 text-sm leading-6 text-stone-600">
-              Start typing to search breeds.
+              Search breeds first.
             </p>
           ) : null}
 
@@ -126,6 +128,26 @@ export function BreedCombobox({
               ) : null}
             </button>
           ))}
+
+          {onAddCustomBreed ? (
+            <div className="mt-2 border-t border-stone-100 pt-2">
+              <button
+                className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-emerald-800 transition hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  onAddCustomBreed(query);
+                  setQuery("");
+                  setIsOpen(false);
+                }}
+                type="button"
+              >
+                Can&apos;t find it? Add a new breed
+              </button>
+              <p className="px-3 pb-1 text-xs leading-5 text-stone-500">
+                Custom breeds are saved to your breed library so you can use them again.
+              </p>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

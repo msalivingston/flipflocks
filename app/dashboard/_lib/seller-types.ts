@@ -165,4 +165,7 @@ export type SellerBreedProfileOption = {
   seller_description: string | null;
   seller_notes: string | null;
   visibility_status: string;
+  bird_type: string | null;
+  egg_color: string | null;
+  annual_egg_production: string | null;
 };

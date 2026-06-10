@@ -1,19 +1,7 @@
-import {
-  House,
-  MapPin,
-  Search,
-  ShoppingCart,
-  User,
-  type LucideIcon,
-} from "lucide-react";
-import {
-  StorefrontCategorySymbol,
-  type StorefrontCategorySymbolName,
-} from "./storefront-category-symbols";
+import { House, MapPin } from "lucide-react";
 import {
   EmptyStorefront,
   HeroImage,
-  StoreLogo,
   StorefrontButton,
   StorefrontEyebrow,
   StorefrontShell,
@@ -37,6 +25,10 @@ import {
   loadStorefrontProcessedPoultry,
   previewText,
 } from "./storefront-data";
+import {
+  StorefrontChrome,
+  getStorefrontCategoryAvailability,
+} from "./storefront-shell-components";
 
 export default async function StorefrontHomePage({
   params,
@@ -113,20 +105,15 @@ export default async function StorefrontHomePage({
     livePoultryProducts,
     processedPoultry,
   });
-  const trustItems = buildTrustItems({
+  const categories = getStorefrontCategoryAvailability({
     equipmentCount: equipment.length,
     hatchingEggCount: hatchingEggProducts.length,
     livePoultryCount: livePoultryProducts.length,
-    location: formatLocation(store),
     processedPoultryCount: processedPoultry.length,
-    showPickup: Boolean(store.pickup_instructions || store.pickup_policy),
   });
 
   return (
-    <StorefrontShell>
-      <StorefrontHomeHeader store={store} />
-      <TrustStrip items={trustItems} />
-
+    <StorefrontChrome categories={categories} store={store}>
       <main className="mx-auto grid max-w-[70rem] gap-8 px-5 py-7 sm:px-7 lg:gap-9">
         <section className="relative overflow-hidden rounded-2xl border border-[#ded7c8] bg-white lg:min-h-[30rem]">
           <div className="lg:absolute lg:inset-y-0 lg:left-[34%] lg:right-0">
@@ -180,150 +167,8 @@ export default async function StorefrontHomePage({
           </InfoCard>
         </section>
       </main>
-
-      <StorefrontHomeFooter store={store} />
-    </StorefrontShell>
+    </StorefrontChrome>
   );
-}
-
-function StorefrontHomeHeader({
-  store,
-}: {
-  store: {
-    logo_image_alt_text: string | null;
-    logo_image_url: string | null;
-    store_name: string;
-    store_slug: string;
-  };
-}) {
-  return (
-    <header className="border-b border-[#e7e0d2] bg-white">
-      <div className="mx-auto grid max-w-[70rem] gap-4 px-5 py-4 sm:px-7 lg:min-h-24 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
-        <a
-          className="flex min-w-0 items-center gap-4 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-          href={`/store/${store.store_slug}`}
-        >
-          <StoreLogo store={store} />
-          <div className="min-w-0">
-            <p className="truncate text-3xl font-semibold leading-none text-[#073f1e]">
-              {store.store_name}
-            </p>
-            <p className="mt-1 text-sm font-semibold uppercase tracking-[0.22em] text-stone-700">
-              Poultry Farm
-            </p>
-          </div>
-        </a>
-
-        <nav className="flex flex-wrap items-center gap-5 text-sm font-semibold text-stone-950 lg:justify-center lg:gap-12">
-          <a href="#shop-listings">All Listings</a>
-          <a href={`/store/${store.store_slug}/about`}>About</a>
-          <a href={`/store/${store.store_slug}/policies`}>Contact</a>
-        </nav>
-
-        <div className="flex items-center gap-3 lg:justify-end">
-          <a
-            aria-label="Search listings"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-            href="#shop-listings"
-          >
-            <Search aria-hidden="true" className="h-6 w-6" strokeWidth={2} />
-          </a>
-          <a
-            aria-label="Account"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-            href="/login"
-          >
-            <User aria-hidden="true" className="h-6 w-6" strokeWidth={2} />
-          </a>
-          <a
-            aria-label="Cart"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-            href={`/store/${store.store_slug}/cart`}
-          >
-            <ShoppingCart aria-hidden="true" className="h-6 w-6" strokeWidth={2} />
-          </a>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-type TrustStripItem = {
-  label: string;
-} & (
-  | { Icon: LucideIcon; symbol?: never }
-  | { Icon?: never; symbol: StorefrontCategorySymbolName }
-);
-
-function TrustStrip({ items }: { items: TrustStripItem[] }) {
-  if (items.length === 0) return null;
-
-  return (
-    <section className="border-b border-[#e5ded0] bg-[#f4f0e8]">
-      <div className="mx-auto flex max-w-[70rem] gap-5 overflow-x-auto px-5 py-3 text-sm text-[#083f1e] sm:px-7 lg:justify-center">
-        {items.map((item, index) => (
-          <div className="flex shrink-0 items-center gap-2.5" key={item.label}>
-            {item.Icon ? (
-              <item.Icon
-                aria-hidden="true"
-                className="h-[18px] w-[18px] shrink-0 text-[#073f1e]"
-                strokeWidth={2}
-              />
-            ) : (
-              <StorefrontCategorySymbol
-                className="h-[18px] w-[18px] text-[#073f1e]"
-                name={item.symbol}
-              />
-            )}
-            <span className="font-medium text-[#073f1e]">{item.label}</span>
-            {index < items.length - 1 ? (
-              <span className="ml-2 h-4 w-px bg-[#cfc5b6]" />
-            ) : null}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function buildTrustItems({
-  equipmentCount,
-  hatchingEggCount,
-  livePoultryCount,
-  location,
-  processedPoultryCount,
-  showPickup,
-}: {
-  equipmentCount: number;
-  hatchingEggCount: number;
-  livePoultryCount: number;
-  location: string;
-  processedPoultryCount: number;
-  showPickup: boolean;
-}) {
-  const items: TrustStripItem[] = [];
-
-  if (showPickup) {
-    items.push({
-      Icon: MapPin,
-      label: `Local pickup available in ${location}`,
-    });
-  }
-
-  if (livePoultryCount > 0) {
-    items.push({ label: "Live poultry", symbol: "poultry" });
-  }
-  if (hatchingEggCount > 0) {
-    items.push({ label: "Eggs", symbol: "egg" });
-  }
-  if (processedPoultryCount > 0) {
-    items.push({ label: "Meat birds", symbol: "processed" });
-  }
-  if (equipmentCount > 0) {
-    items.push({ label: "Equipment & Supplies", symbol: "equipment" });
-  }
-
-  return items;
 }
 
 function buildListingSections({
@@ -475,85 +320,6 @@ function InfoCard({
   );
 }
 
-function StorefrontHomeFooter({
-  store,
-}: {
-  store: {
-    public_email: string | null;
-    public_phone: string | null;
-    social_url: string | null;
-    store_name: string;
-    store_slug: string;
-  };
-}) {
-  const socialLinks = getSocialLinks(store.social_url);
-
-  return (
-    <footer className="border-t border-[#e3e3df] bg-[#f7f7f4]">
-      <div className="mx-auto grid max-w-[70rem] gap-9 px-5 py-10 text-sm text-stone-700 sm:grid-cols-2 sm:px-7 lg:grid-cols-[1.35fr_0.8fr_0.9fr_1fr]">
-        <div>
-          <p className="text-2xl font-semibold leading-none text-[#073f1e]">
-            {store.store_name}
-          </p>
-          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.22em] text-stone-700">
-            Poultry Farm
-          </p>
-          <div className="mt-5 grid gap-2">
-            {store.public_email ? <p>{store.public_email}</p> : null}
-            {store.public_phone ? <p>{store.public_phone}</p> : null}
-            {!store.public_email && !store.public_phone ? (
-              <p>Seller contact follows after checkout.</p>
-            ) : null}
-          </div>
-          {socialLinks.length > 0 ? (
-            <div className="mt-5 flex items-center gap-3">
-              {socialLinks.map((link) => (
-                <a
-                  aria-label={link.label}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d5d5cf] bg-white text-sm font-bold text-stone-800 transition hover:border-[#073f1e] hover:text-[#073f1e]"
-                  href={link.href}
-                  key={link.label}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  {link.mark}
-                </a>
-              ))}
-            </div>
-          ) : null}
-        </div>
-        <div>
-          <p className="font-serif text-lg font-semibold text-stone-950">Shop</p>
-          <div className="mt-3 grid gap-2">
-            <a href={`/store/${store.store_slug}`}>Live Poultry</a>
-            <a href="#shop-listings">Hatching Eggs</a>
-            <a href="#shop-listings">Equipment & Supplies</a>
-            <a href="#shop-listings">Processed Poultry</a>
-          </div>
-        </div>
-        <div>
-          <p className="font-serif text-lg font-semibold text-stone-950">
-            Quick Links
-          </p>
-          <div className="mt-3 grid gap-2">
-            <a href={`/store/${store.store_slug}/about`}>About</a>
-            <a href={`/store/${store.store_slug}/policies`}>Contact</a>
-            <a href={`/store/${store.store_slug}/policies`}>Pickup & Delivery</a>
-          </div>
-        </div>
-        <div>
-          <p className="font-serif text-lg font-semibold text-stone-950">
-            Powered by FlipFlocks
-          </p>
-          <p className="mt-3 leading-6">
-            Independent poultry storefronts for local pickup.
-          </p>
-        </div>
-      </div>
-    </footer>
-  );
-}
-
 function formatAvailableBadge(quantity: number) {
   if (quantity <= 0) return "Sold out";
   return `${quantity} available`;
@@ -563,22 +329,6 @@ function formatQuantity(quantity: number) {
   if (quantity <= 0) return "Sold out";
   if (quantity === 1) return "1 available";
   return `${quantity} available`;
-}
-
-function getSocialLinks(socialUrl: string | null) {
-  if (!socialUrl) return [];
-
-  const normalized = socialUrl.toLowerCase();
-
-  if (normalized.includes("facebook.com")) {
-    return [{ href: socialUrl, label: "Facebook", mark: "f" }];
-  }
-
-  if (normalized.includes("instagram.com")) {
-    return [{ href: socialUrl, label: "Instagram", mark: "IG" }];
-  }
-
-  return [];
 }
 
 function isHatchingEggItem(item: StorefrontInventoryItem) {

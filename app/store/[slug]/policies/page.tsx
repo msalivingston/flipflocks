@@ -2,14 +2,13 @@ import {
   EmptyStorefront,
   InfoPanel,
   StorefrontCard,
-  StorefrontFooter,
-  StorefrontNav,
   StorefrontPage,
   StoreLogo,
   StorefrontShell,
   formatLocation,
 } from "../storefront-ui";
-import { loadStorefrontHome } from "../storefront-data";
+import { loadStorefrontChrome } from "../storefront-chrome-data";
+import { StorefrontChrome } from "../storefront-shell-components";
 
 export default async function StorefrontPoliciesPage({
   params,
@@ -17,7 +16,7 @@ export default async function StorefrontPoliciesPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const { data: store, error } = await loadStorefrontHome(slug);
+  const { categories, error, store } = await loadStorefrontChrome(slug);
 
   if (error) {
     return (
@@ -46,9 +45,7 @@ export default async function StorefrontPoliciesPage({
   }
 
   return (
-    <StorefrontShell>
-      <StorefrontNav store={store} />
-
+    <StorefrontChrome categories={categories} store={store}>
       <StorefrontPage className="gap-7">
         <StorefrontCard className="bg-[#fffdf8] p-6">
           <div className="flex items-center gap-4">
@@ -96,9 +93,7 @@ export default async function StorefrontPoliciesPage({
           </aside>
         </section>
       </StorefrontPage>
-
-      <StorefrontFooter store={store} />
-    </StorefrontShell>
+    </StorefrontChrome>
   );
 }
 

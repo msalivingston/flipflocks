@@ -28,6 +28,9 @@ type SellerBreedProfileRead = {
   seller_description: string | null;
   seller_notes: string | null;
   visibility_status: string;
+  bird_type: string | null;
+  egg_color: string | null;
+  annual_egg_production: string | null;
 };
 
 type DetailsDraft = {
@@ -59,7 +62,7 @@ const inventoryDetailSelect =
   "store_id, listing_batch_id, listing_batch_breed_id, inventory_item_id, species_id, species_name, species_slug, seller_breed_profile_id, breed_display_name, batch_type, origin_date, available_date, age_at_availability_days, base_price, internal_batch_label, listing_batch_visibility_status, listing_batch_moderation_status, listing_batch_breed_sort_order, listing_batch_breed_visibility_status, listing_batch_breed_moderation_status, inventory_type, custom_inventory_label, quantity_available, price_override, effective_unit_price, inventory_item_sort_order, inventory_visibility_status, inventory_moderation_status, operational_availability_status, inventory_seller_notes, listing_batch_breed_seller_notes, listing_batch_seller_notes, inventory_updated_at, listing_batch_updated_at";
 
 const sellerBreedProfileSelect =
-  "id, species_id, breed_id, custom_breed_name, display_name, seller_description, seller_notes, visibility_status";
+  "id, species_id, breed_id, custom_breed_name, display_name, seller_description, seller_notes, visibility_status, bird_type, egg_color, annual_egg_production";
 
 const buyerDescriptionMaxLength = 1000;
 
