@@ -1,5 +1,6 @@
 "use client";
 
+import { supabase } from "@/lib/supabase";
 import type { ListingPhotoItem } from "../listings/[listingBatchId]/listing-photos-section";
 
 export type BreedSpecies = {
@@ -37,6 +38,26 @@ export type SellerBreedProfile = {
   egg_color: string | null;
   annual_egg_production: string | null;
 };
+
+type RestoreCatalogDefaultPhotoResponse = {
+  already_present?: boolean;
+  error?: {
+    code?: string;
+    details?: Record<string, unknown> | null;
+    message?: string;
+  };
+  message?: string;
+};
+
+type FunctionErrorContext = {
+  context?: Response;
+  message?: string;
+  name?: string;
+};
+
+export type RestoreCatalogDefaultPhotoBestEffortResult =
+  | { ok: true }
+  | { ok: false; message: string };
 
 export const speciesSelect = "id, common_name, slug, sort_order";
 export const breedLibrarySelect =
@@ -171,4 +192,141 @@ export function truncateText(value: string, maxLength: number) {
   if (value.length <= maxLength) return value;
 
   return `${value.slice(0, maxLength - 1).trim()}...`;
+}
+
+export async function restoreCatalogDefaultPhotoBestEffort(
+  sellerBreedProfileId: string,
+): Promise<RestoreCatalogDefaultPhotoBestEffortResult> {
+  if (!sellerBreedProfileId) {
+    return { ok: false, message: "Breed profile was missing." };
+  }
+
+  try {
+    const { data: sessionData, error: sessionError } =
+      await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (sessionError || !accessToken) {
+      console.warn("default breed photo restore skipped: missing session", {
+        message: sessionError?.message,
+        sellerBreedProfileId,
+      });
+
+      return {
+        ok: false,
+        message: "Default photo could not be added automatically.",
+      };
+    }
+
+    const { data, error } =
+      await supabase.functions.invoke<RestoreCatalogDefaultPhotoResponse>(
+        "seller-restore-catalog-breed-photo",
+        {
+          body: {
+            seller_breed_profile_id: sellerBreedProfileId,
+          },
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+
+    if (data?.already_present) {
+      return { ok: true };
+    }
+
+    if (data?.error) {
+      const noOpCodes = new Set([
+        "already_present",
+        "invalid_request",
+        "not_found",
+        "photo_limit_reached",
+      ]);
+
+      console.warn("default breed photo restore returned an expected result", {
+        code: data.error.code,
+        details: data.error.details,
+        message: data.error.message,
+        sellerBreedProfileId,
+      });
+
+      if (data.error.code && noOpCodes.has(data.error.code)) {
+        return { ok: true };
+      }
+
+      return {
+        ok: false,
+        message: data.error.message ?? "Default photo could not be added automatically.",
+      };
+    }
+
+    if (error) {
+      const functionError = await readRestoreCatalogDefaultPhotoError(error);
+
+      console.warn("default breed photo restore failed", {
+        code: functionError?.code,
+        details: functionError?.details,
+        message: functionError?.message,
+        sellerBreedProfileId,
+        supabaseMessage: toFunctionErrorContext(error)?.message,
+      });
+
+      if (
+        functionError?.code &&
+        ["already_present", "invalid_request", "not_found", "photo_limit_reached"].includes(
+          functionError.code,
+        )
+      ) {
+        return { ok: true };
+      }
+
+      return {
+        ok: false,
+        message:
+          functionError?.message ??
+          "Default photo could not be added automatically.",
+      };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    console.warn("default breed photo restore failed unexpectedly", {
+      error,
+      sellerBreedProfileId,
+    });
+
+    return {
+      ok: false,
+      message: "Default photo could not be added automatically.",
+    };
+  }
+}
+
+async function readRestoreCatalogDefaultPhotoError(error: unknown) {
+  const response = toFunctionErrorContext(error)?.context;
+
+  if (!response) return null;
+
+  try {
+    const body = (await response.clone().json()) as RestoreCatalogDefaultPhotoResponse;
+
+    return {
+      code: body.error?.code,
+      details: body.error?.details,
+      message: body.error?.message,
+    };
+  } catch (readError) {
+    console.warn("default breed photo restore error body could not be read", {
+      error: readError,
+      status: response.status,
+    });
+
+    return null;
+  }
+}
+
+function toFunctionErrorContext(error: unknown): FunctionErrorContext | null {
+  if (!error || typeof error !== "object") return null;
+
+  return error as FunctionErrorContext;
 }

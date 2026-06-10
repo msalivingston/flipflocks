@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { restoreCatalogDefaultPhotoBestEffort } from "../../../../breeds/breed-data";
 import { useSellerContext } from "../../../../_components/seller-context";
 import {
   ErrorState,
@@ -1151,7 +1152,27 @@ async function upsertSellerBreedProfileForEggs({
     ? (data as { seller_breed_profile_id: string }[])
     : [];
 
-  return rows[0]?.seller_breed_profile_id ?? null;
+  const profileId = rows[0]?.seller_breed_profile_id ?? null;
+
+  if (
+    profileId &&
+    (breedChoice.kind === "breed" || Boolean(existingProfile?.breed_id))
+  ) {
+    const photoResult = await restoreCatalogDefaultPhotoBestEffort(profileId);
+
+    if (!photoResult.ok) {
+      console.warn("default breed photo was not added automatically", {
+        breedId:
+          breedChoice.kind === "breed"
+            ? breedChoice.breedId
+            : existingProfile?.breed_id,
+        message: photoResult.message,
+        sellerBreedProfileId: profileId,
+      });
+    }
+  }
+
+  return profileId;
 }
 
 function buildWorkflowRows({

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Dispatch, SetStateAction } from "react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { restoreCatalogDefaultPhotoBestEffort } from "../../../../breeds/breed-data";
 import { useSellerContext } from "../../../../_components/seller-context";
 import {
   ErrorState,
@@ -2463,6 +2464,19 @@ async function resolveSellerBreedProfileForListing(
       };
     }
 
+    if (existingProfile.breed_id) {
+      const photoResult = await restoreCatalogDefaultPhotoBestEffort(
+        existingProfile.id,
+      );
+
+      if (!photoResult.ok) {
+        console.warn("default breed photo was not added automatically", {
+          message: photoResult.message,
+          sellerBreedProfileId: existingProfile.id,
+        });
+      }
+    }
+
     return { ok: true, profileId: existingProfile.id };
   }
 
@@ -2480,7 +2494,26 @@ async function resolveSellerBreedProfileForListing(
   );
 
   if (existingCatalogProfile) {
-    return ensureSellerBreedProfileActive(storeId, existingCatalogProfile);
+    const activeResult = await ensureSellerBreedProfileActive(
+      storeId,
+      existingCatalogProfile,
+    );
+
+    if (activeResult.ok) {
+      const photoResult = await restoreCatalogDefaultPhotoBestEffort(
+        activeResult.profileId,
+      );
+
+      if (!photoResult.ok) {
+        console.warn("default breed photo was not added automatically", {
+          breedId: breedChoice.breedId,
+          message: photoResult.message,
+          sellerBreedProfileId: activeResult.profileId,
+        });
+      }
+    }
+
+    return activeResult;
   }
 
   const { data, error } = await supabase.rpc("seller_upsert_breed_profile", {
@@ -2504,6 +2537,16 @@ async function resolveSellerBreedProfileForListing(
 
   if (!profileId) {
     return { ok: false, message: "Breed profile RPC returned no profile id." };
+  }
+
+  const photoResult = await restoreCatalogDefaultPhotoBestEffort(profileId);
+
+  if (!photoResult.ok) {
+    console.warn("default breed photo was not added automatically", {
+      breedId: breedChoice.breedId,
+      message: photoResult.message,
+      sellerBreedProfileId: profileId,
+    });
   }
 
   return { ok: true, profileId };

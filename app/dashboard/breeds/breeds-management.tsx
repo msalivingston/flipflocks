@@ -22,6 +22,7 @@ import {
   getProfileDescription,
   groupProfilesBySpecies,
   pickFeaturedMedia,
+  restoreCatalogDefaultPhotoBestEffort,
   sellerBreedProfileSelect,
   sellerMediaSelect,
   sortBreedLibrary,
@@ -472,6 +473,19 @@ function AddBreedModal({
       setError("Breed was added, but the new breed profile could not be opened.");
       setAddingBreedId(null);
       return;
+    }
+
+    if (breed.image_url) {
+      const photoResult =
+        await restoreCatalogDefaultPhotoBestEffort(breedProfileId);
+
+      if (!photoResult.ok) {
+        console.warn("default breed photo was not added automatically", {
+          breedId: breed.id,
+          message: photoResult.message,
+          sellerBreedProfileId: breedProfileId,
+        });
+      }
     }
 
     setAddingBreedId(null);
