@@ -15,6 +15,7 @@ const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 type PublicErrorCode =
   | "already_present"
+  | "catalog_origin_missing"
   | "invalid_request"
   | "unauthorized"
   | "not_found"
@@ -34,6 +35,8 @@ type ImageDimensions = {
 type RestoreRequest = {
   seller_breed_profile_id?: string;
 };
+
+type ErrorDetails = Record<string, unknown>;
 
 type SellerBreedProfileRow = {
   id: string;
@@ -120,8 +123,34 @@ function errorResponse(
   message: string,
   status = 400,
   headers: Record<string, string> = corsHeaders,
+  details?: ErrorDetails,
 ): Response {
-  return jsonResponse({ error: { code, message } }, status, headers);
+  return jsonResponse({ error: { code, message, details: details ?? null } }, status, headers);
+}
+
+function publicErrorDetails(step: string, details: ErrorDetails = {}): ErrorDetails {
+  return {
+    step,
+    ...details,
+  };
+}
+
+function serializeSupabaseError(error: unknown): ErrorDetails {
+  if (!error || typeof error !== "object") {
+    return {
+      message: String(error ?? "Unknown error"),
+    };
+  }
+
+  const record = error as Record<string, unknown>;
+
+  return {
+    code: typeof record.code === "string" ? record.code : null,
+    details: typeof record.details === "string" ? record.details : null,
+    hint: typeof record.hint === "string" ? record.hint : null,
+    message: typeof record.message === "string" ? record.message : null,
+    name: typeof record.name === "string" ? record.name : null,
+  };
 }
 
 function getRequiredEnv(name: string): string {
@@ -326,6 +355,13 @@ function buildStoragePath(storeId: string, mimeType: string): string {
   return `stores/${storeId}/images/${year}/${month}/${crypto.randomUUID()}-${toHex(randomBytes)}.${extensionForMimeType(mimeType)}`;
 }
 
+function isLocalhostOrigin(value: string | null): boolean {
+  return Boolean(
+    value?.startsWith("http://localhost:") ||
+      value?.startsWith("http://127.0.0.1:"),
+  );
+}
+
 function buildCatalogImageFetchUrl(
   supabaseUrl: string,
   imageUrl: string,
@@ -338,10 +374,20 @@ function buildCatalogImageFetchUrl(
   if (imageUrl.startsWith("/")) {
     const appOrigin =
       Deno.env.get("FLIPFLOCKS_PUBLIC_APP_ORIGIN") ??
-      requestOrigin ??
+      Deno.env.get("FLIPFLOCKS_PUBLIC_SITE_URL") ??
+      Deno.env.get("NEXT_PUBLIC_SITE_URL") ??
+      (isLocalhostOrigin(requestOrigin) ? null : requestOrigin) ??
       Deno.env.get("FLIPFLOCKS_PUBLIC_API_ORIGIN");
 
-    return `${appOrigin ?? supabaseUrl}${imageUrl}`;
+    if (!appOrigin || appOrigin.includes(".supabase.co")) {
+      throw new PublicSafeError(
+        "catalog_origin_missing",
+        "Catalog image origin is not configured.",
+        500,
+      );
+    }
+
+    return `${appOrigin.replace(/\/$/, "")}${imageUrl}`;
   }
 
   return `${supabaseUrl}/storage/v1/object/public/${imageUrl}`;
@@ -353,6 +399,7 @@ function normalizeStoredImageUrl(imageUrl: string): string {
 
 Deno.serve(async (req) => {
   const responseHeaders = getCorsHeaders(req);
+  let step = "start";
 
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -368,15 +415,17 @@ Deno.serve(async (req) => {
   let storagePath: string | null = null;
 
   try {
+    step = "load_environment";
     const supabaseUrl = getRequiredEnv("SUPABASE_URL");
     const anonKey = getRequiredEnv("SUPABASE_ANON_KEY");
     const serviceRoleKey = getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
     const authorization = req.headers.get("Authorization");
 
     if (!authorization) {
-      return errorResponse("unauthorized", "Authentication required", 401, responseHeaders);
+      return errorResponse("unauthorized", "Authentication required", 401, responseHeaders, publicErrorDetails(step));
     }
 
+    step = "verify_session";
     const userClient = createClient(supabaseUrl, anonKey, {
       global: {
         headers: {
@@ -391,15 +440,25 @@ Deno.serve(async (req) => {
     } = await userClient.auth.getUser();
 
     if (userError || !user) {
-      return errorResponse("unauthorized", "Authentication required", 401, responseHeaders);
+      return errorResponse(
+        "unauthorized",
+        "Authentication required",
+        401,
+        responseHeaders,
+        publicErrorDetails(step, {
+          supabase_error: userError ? serializeSupabaseError(userError) : null,
+        }),
+      );
     }
 
+    step = "parse_request";
     const body = (await req.json().catch(() => null)) as RestoreRequest | null;
     const sellerBreedProfileId = normalizeRequiredText(
       body?.seller_breed_profile_id,
       "seller_breed_profile_id",
     );
 
+    step = "load_seller_breed_profile";
     const { data: profile, error: profileError } = await serviceClient
       .from("seller_breed_profiles")
       .select("id, store_id, breed_id, display_name, visibility_status")
@@ -407,17 +466,26 @@ Deno.serve(async (req) => {
       .maybeSingle<SellerBreedProfileRow>();
 
     if (profileError) {
-      throw profileError;
+      return errorResponse(
+        "server_error",
+        "Breed profile could not be loaded.",
+        500,
+        responseHeaders,
+        publicErrorDetails(step, {
+          database_error: serializeSupabaseError(profileError),
+        }),
+      );
     }
 
     if (!profile) {
-      return errorResponse("not_found", "Breed was not found.", 404, responseHeaders);
+      return errorResponse("not_found", "Breed was not found.", 404, responseHeaders, publicErrorDetails(step));
     }
 
     if (profile.visibility_status === "archived") {
-      return errorResponse("invalid_request", "Archived breeds cannot be updated.", 400, responseHeaders);
+      return errorResponse("invalid_request", "Archived breeds cannot be updated.", 400, responseHeaders, publicErrorDetails(step));
     }
 
+    step = "authorize_store";
     const { data: isAuthorized, error: authCheckError } = await serviceClient.rpc(
       "is_media_actor_store_authorized",
       {
@@ -427,17 +495,26 @@ Deno.serve(async (req) => {
     );
 
     if (authCheckError) {
-      throw authCheckError;
+      return errorResponse(
+        "server_error",
+        "Store access could not be verified.",
+        500,
+        responseHeaders,
+        publicErrorDetails(step, {
+          database_error: serializeSupabaseError(authCheckError),
+        }),
+      );
     }
 
     if (!isAuthorized) {
-      return errorResponse("unauthorized", "You do not have access to this breed.", 403, responseHeaders);
+      return errorResponse("unauthorized", "You do not have access to this breed.", 403, responseHeaders, publicErrorDetails(step));
     }
 
     if (!profile.breed_id) {
-      return errorResponse("invalid_request", "Custom breeds do not have a default catalog photo.", 400, responseHeaders);
+      return errorResponse("invalid_request", "Custom breeds do not have a default catalog photo.", 400, responseHeaders, publicErrorDetails(step));
     }
 
+    step = "load_catalog_breed";
     const { data: breed, error: breedError } = await serviceClient
       .from("breeds")
       .select("id, breed_name, image_url")
@@ -445,15 +522,24 @@ Deno.serve(async (req) => {
       .maybeSingle<BreedRow>();
 
     if (breedError) {
-      throw breedError;
+      return errorResponse(
+        "server_error",
+        "Catalog breed could not be loaded.",
+        500,
+        responseHeaders,
+        publicErrorDetails(step, {
+          database_error: serializeSupabaseError(breedError),
+        }),
+      );
     }
 
     const sourceImageUrl = normalizeStoredImageUrl(breed?.image_url ?? "");
 
     if (!breed || !sourceImageUrl) {
-      return errorResponse("not_found", "This breed does not have a default catalog photo.", 404, responseHeaders);
+      return errorResponse("not_found", "This breed does not have a default catalog photo.", 404, responseHeaders, publicErrorDetails(step));
     }
 
+    step = "load_active_photo_links";
     const { data: mediaLinks, error: mediaLinksError } = await serviceClient
       .from("media_links")
       .select("id, media_asset_id, sort_order")
@@ -465,11 +551,20 @@ Deno.serve(async (req) => {
       .returns<MediaLinkRow[]>();
 
     if (mediaLinksError) {
-      throw mediaLinksError;
+      return errorResponse(
+        "server_error",
+        "Breed photos could not be loaded.",
+        500,
+        responseHeaders,
+        publicErrorDetails(step, {
+          database_error: serializeSupabaseError(mediaLinksError),
+        }),
+      );
     }
 
     const activeLinks = mediaLinks ?? [];
     const assetIds = activeLinks.map((link) => link.media_asset_id);
+    step = "load_active_photo_assets";
     const { data: mediaAssets, error: mediaAssetsError } = assetIds.length > 0
       ? await serviceClient
           .from("media_assets")
@@ -479,7 +574,15 @@ Deno.serve(async (req) => {
       : { data: [] as MediaAssetRow[], error: null };
 
     if (mediaAssetsError) {
-      throw mediaAssetsError;
+      return errorResponse(
+        "server_error",
+        "Breed photo details could not be loaded.",
+        500,
+        responseHeaders,
+        publicErrorDetails(step, {
+          database_error: serializeSupabaseError(mediaAssetsError),
+        }),
+      );
     }
 
     const assetsById = new Map((mediaAssets ?? []).map((asset) => [asset.id, asset]));
@@ -501,6 +604,7 @@ Deno.serve(async (req) => {
     if (existingDefaultPhoto) {
       return jsonResponse({
         already_present: true,
+        details: publicErrorDetails("check_existing_default_photo"),
         message: "The default photo is already included.",
       }, 200, responseHeaders);
     }
@@ -511,41 +615,93 @@ Deno.serve(async (req) => {
         "You already have 4 breed photos. Remove a photo before restoring the default photo.",
         400,
         responseHeaders,
+        publicErrorDetails("check_photo_limit", {
+          active_photo_count: visiblePhotoLinks.length,
+        }),
       );
     }
 
-    const imageResponse = await fetch(
-      buildCatalogImageFetchUrl(
+    step = "resolve_catalog_image_url";
+    const resolvedCatalogImageUrl = buildCatalogImageFetchUrl(
         supabaseUrl,
         sourceImageUrl,
         req.headers.get("Origin"),
-      ),
+      );
+
+    step = "fetch_catalog_image";
+    const imageResponse = await fetch(
+      resolvedCatalogImageUrl,
     );
 
     if (!imageResponse.ok) {
-      return errorResponse("not_found", "The default catalog photo could not be loaded.", 404, responseHeaders);
+      return errorResponse(
+        "not_found",
+        "The default catalog photo could not be loaded.",
+        404,
+        responseHeaders,
+        publicErrorDetails(step, {
+          catalog_fetch_status: imageResponse.status,
+          catalog_image_url: resolvedCatalogImageUrl,
+        }),
+      );
     }
 
     const bytes = new Uint8Array(await imageResponse.arrayBuffer());
 
     if (bytes.length <= 0) {
-      return errorResponse("invalid_image", "The default catalog photo could not be loaded.", 400, responseHeaders);
+      return errorResponse(
+        "invalid_image",
+        "The default catalog photo could not be loaded.",
+        400,
+        responseHeaders,
+        publicErrorDetails(step, {
+          catalog_fetch_status: imageResponse.status,
+          catalog_image_url: resolvedCatalogImageUrl,
+        }),
+      );
     }
 
     if (bytes.length > MAX_FILE_SIZE_BYTES) {
-      return errorResponse("file_too_large", "The default catalog photo is too large to restore.", 400, responseHeaders);
+      return errorResponse(
+        "file_too_large",
+        "The default catalog photo is too large to restore.",
+        400,
+        responseHeaders,
+        publicErrorDetails(step, {
+          catalog_fetch_status: imageResponse.status,
+          catalog_image_url: resolvedCatalogImageUrl,
+          file_size_bytes: bytes.length,
+        }),
+      );
     }
 
+    step = "validate_catalog_image";
     const detectedMimeType = sniffMimeType(bytes);
 
     if (!detectedMimeType || !ALLOWED_TYPES.has(detectedMimeType)) {
-      return errorResponse("unsupported_media_type", "The default catalog photo type is not supported.", 400, responseHeaders);
+      return errorResponse(
+        "unsupported_media_type",
+        "The default catalog photo type is not supported.",
+        400,
+        responseHeaders,
+        publicErrorDetails(step, {
+          catalog_image_url: resolvedCatalogImageUrl,
+        }),
+      );
     }
 
     const dimensions = getImageDimensions(bytes, detectedMimeType);
 
     if (!dimensions || dimensions.width <= 0 || dimensions.height <= 0) {
-      return errorResponse("invalid_image", "The default catalog photo could not be validated.", 400, responseHeaders);
+      return errorResponse(
+        "invalid_image",
+        "The default catalog photo could not be validated.",
+        400,
+        responseHeaders,
+        publicErrorDetails(step, {
+          catalog_image_url: resolvedCatalogImageUrl,
+        }),
+      );
     }
 
     const nextSortOrder =
@@ -555,6 +711,7 @@ Deno.serve(async (req) => {
     const shouldFeature = visiblePhotoLinks.length === 0;
     storagePath = buildStoragePath(profile.store_id, detectedMimeType);
 
+    step = "upload_to_seller_media";
     const { error: uploadError } = await serviceClient.storage
       .from(BUCKET_NAME)
       .upload(storagePath, bytes, {
@@ -565,9 +722,20 @@ Deno.serve(async (req) => {
 
     if (uploadError) {
       console.error("seller-restore-catalog-breed-photo storage upload failed", uploadError);
-      return errorResponse("upload_failed", "Unable to restore the default photo. Please try again.", 500, responseHeaders);
+      return errorResponse(
+        "upload_failed",
+        "Unable to restore the default photo. Please try again.",
+        500,
+        responseHeaders,
+        publicErrorDetails(step, {
+          catalog_image_url: resolvedCatalogImageUrl,
+          storage_error: serializeSupabaseError(uploadError),
+          storage_path: storagePath,
+        }),
+      );
     }
 
+    step = "create_seller_media";
     const { data: mediaRows, error: createMediaError } = await serviceClient.rpc(
       "seller_create_uploaded_media",
       {
@@ -592,7 +760,17 @@ Deno.serve(async (req) => {
     if (createMediaError) {
       await serviceClient.storage.from(BUCKET_NAME).remove([storagePath]);
       console.error("seller-restore-catalog-breed-photo metadata save failed", createMediaError);
-      return errorResponse("save_failed", "Unable to save the default photo. Please try again.", 500, responseHeaders);
+      return errorResponse(
+        "save_failed",
+        "Unable to save the default photo. Please try again.",
+        500,
+        responseHeaders,
+        publicErrorDetails(step, {
+          catalog_image_url: resolvedCatalogImageUrl,
+          database_error: serializeSupabaseError(createMediaError),
+          storage_path: storagePath,
+        }),
+      );
     }
 
     const createdMedia = Array.isArray(mediaRows)
@@ -601,11 +779,21 @@ Deno.serve(async (req) => {
 
     if (!createdMedia?.media_asset_id || !createdMedia.media_link_id) {
       await serviceClient.storage.from(BUCKET_NAME).remove([storagePath]);
-      return errorResponse("save_failed", "Unable to save the default photo. Please try again.", 500, responseHeaders);
+      return errorResponse(
+        "save_failed",
+        "Unable to save the default photo. Please try again.",
+        500,
+        responseHeaders,
+        publicErrorDetails(step, {
+          catalog_image_url: resolvedCatalogImageUrl,
+          storage_path: storagePath,
+        }),
+      );
     }
 
     storagePath = null;
 
+    step = "mark_catalog_source";
     const { error: sourceUpdateError } = await serviceClient
       .from("media_assets")
       .update({
@@ -618,9 +806,19 @@ Deno.serve(async (req) => {
 
     if (sourceUpdateError) {
       console.error("seller-restore-catalog-breed-photo source marker update failed", sourceUpdateError);
-      return errorResponse("save_failed", "Unable to save the default photo. Please try again.", 500, responseHeaders);
+      return errorResponse(
+        "save_failed",
+        "Unable to save the default photo. Please try again.",
+        500,
+        responseHeaders,
+        publicErrorDetails(step, {
+          catalog_image_url: resolvedCatalogImageUrl,
+          database_error: serializeSupabaseError(sourceUpdateError),
+        }),
+      );
     }
 
+    step = "load_created_media";
     const { data: refreshedMediaRows, error: refreshError } = await serviceClient.rpc(
       "media_management_response_for_links",
       {
@@ -629,11 +827,22 @@ Deno.serve(async (req) => {
     );
 
     if (refreshError) {
-      throw refreshError;
+      return errorResponse(
+        "save_failed",
+        "Default photo was restored, but the updated photo could not be loaded.",
+        500,
+        responseHeaders,
+        publicErrorDetails(step, {
+          database_error: serializeSupabaseError(refreshError),
+        }),
+      );
     }
 
     return jsonResponse({
       already_present: false,
+      details: publicErrorDetails("complete", {
+        catalog_image_url: resolvedCatalogImageUrl,
+      }),
       media: Array.isArray(refreshedMediaRows) ? refreshedMediaRows[0] ?? null : refreshedMediaRows,
       message: "Default photo restored.",
     }, 200, responseHeaders);
@@ -651,7 +860,7 @@ Deno.serve(async (req) => {
     }
 
     if (error instanceof PublicSafeError) {
-      return errorResponse(error.code, error.publicMessage, error.status, responseHeaders);
+      return errorResponse(error.code, error.publicMessage, error.status, responseHeaders, publicErrorDetails(step));
     }
 
     console.error("seller-restore-catalog-breed-photo unexpected failure", error);
@@ -660,6 +869,9 @@ Deno.serve(async (req) => {
       "Default photo restore is temporarily unavailable. Please try again later.",
       500,
       responseHeaders,
+      publicErrorDetails(step, {
+        error: serializeSupabaseError(error),
+      }),
     );
   }
 });
