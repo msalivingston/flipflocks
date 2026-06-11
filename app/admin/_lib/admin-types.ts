@@ -61,3 +61,26 @@ export type AdminRecentOrderRow = {
   created_at: string;
   updated_at: string | null;
 };
+
+export type AdminCatalogBreedListRow = {
+  breed_id: string;
+  species_id: string;
+  species_name: string;
+  species_slug: string;
+  breed_name: string;
+  breed_slug: string;
+  image_url: string | null;
+  has_image: boolean;
+  category: string | null;
+  bird_type: string | null;
+  egg_color: string | null;
+  annual_egg_production: string | null;
+  image_prompt: string | null;
+  is_active: boolean;
+  sort_order: number;
+  updated_at: string | null;
+};
+
+export type AdminCatalogBreedDetailRow = AdminCatalogBreedListRow & {
+  description: string | null;
+};

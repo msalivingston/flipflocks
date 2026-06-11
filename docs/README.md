@@ -40,6 +40,7 @@ Group implementation notes:
 - `group-32b-media-foundation-design-review.md`
 - `group-32b-media-foundation-implementation.md`
 - `group-71-lightweight-platform-admin-dashboard.md`
+- `group-72-admin-breed-catalog-image-manager.md`
 
 Core instruction for Codex:
 

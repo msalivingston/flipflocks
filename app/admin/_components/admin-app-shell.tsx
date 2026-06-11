@@ -5,7 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-const adminNavItems = [{ label: "Stores", href: "/admin/stores" }];
+const adminNavItems = [
+  { label: "Stores", href: "/admin/stores" },
+  { label: "Breeds", href: "/admin/breeds" },
+];
 
 export function AdminAppShell({ children }: { children: React.ReactNode }) {
   const [email, setEmail] = useState<string | null>(null);
