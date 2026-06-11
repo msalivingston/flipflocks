@@ -1,6 +1,12 @@
 -- Development utility only. Do not add this file to Supabase migrations.
 -- Replace target_store_id before running.
 -- Run the PREVIEW section first and confirm the counts before running the CLEANUP section.
+--
+-- WARNING:
+-- The cleanup section deletes seller-generated development data for the target
+-- store across live bird/hatching egg listings, Equipment & Supplies,
+-- Processed Poultry, related media database rows, related orders, and safe
+-- orphaned development customers. Do not run this against production data.
 
 -- ============================================================
 -- PREVIEW COUNTS
@@ -26,6 +32,16 @@ target_inventory_items AS (
   WHERE ii.store_id = params.target_store_id
     AND ii.listing_batch_id IN (SELECT id FROM target_listing_batches)
 ),
+target_equipment_inventory_items AS (
+  SELECT ei.id
+  FROM public.equipment_inventory_items ei, params
+  WHERE ei.store_id = params.target_store_id
+),
+target_processed_poultry_inventory_items AS (
+  SELECT ppi.id
+  FROM public.processed_poultry_inventory_items ppi, params
+  WHERE ppi.store_id = params.target_store_id
+),
 blocking_order_items AS (
   SELECT oi.id, oi.order_id
   FROM public.order_items oi, params
@@ -34,6 +50,8 @@ blocking_order_items AS (
       oi.inventory_item_id IN (SELECT id FROM target_inventory_items)
       OR oi.listing_batch_id IN (SELECT id FROM target_listing_batches)
       OR oi.listing_batch_breed_id IN (SELECT id FROM target_listing_batch_breeds)
+      OR oi.equipment_inventory_item_id IN (SELECT id FROM target_equipment_inventory_items)
+      OR oi.processed_poultry_inventory_item_id IN (SELECT id FROM target_processed_poultry_inventory_items)
     )
 ),
 blocking_orders AS (
@@ -59,6 +77,8 @@ detached_canceled_orders AS (
           oi.inventory_item_id IS NOT NULL
           OR oi.listing_batch_id IS NOT NULL
           OR oi.listing_batch_breed_id IS NOT NULL
+          OR oi.equipment_inventory_item_id IS NOT NULL
+          OR oi.processed_poultry_inventory_item_id IS NOT NULL
         )
     )
 ),
@@ -100,6 +120,8 @@ target_media_links AS (
       (ml.entity_type = 'listing_batch' AND ml.entity_id IN (SELECT id FROM target_listing_batches))
       OR (ml.entity_type = 'listing_batch_breed' AND ml.entity_id IN (SELECT id FROM target_listing_batch_breeds))
       OR (ml.entity_type = 'inventory_item' AND ml.entity_id IN (SELECT id FROM target_inventory_items))
+      OR (ml.entity_type = 'equipment_inventory_item' AND ml.entity_id IN (SELECT id FROM target_equipment_inventory_items))
+      OR (ml.entity_type = 'processed_poultry_inventory_item' AND ml.entity_id IN (SELECT id FROM target_processed_poultry_inventory_items))
     )
 ),
 removable_media_assets AS (
@@ -133,6 +155,10 @@ UNION ALL
 SELECT 'listing_batch_breeds', COUNT(*) FROM target_listing_batch_breeds
 UNION ALL
 SELECT 'inventory_items', COUNT(*) FROM target_inventory_items
+UNION ALL
+SELECT 'equipment_inventory_items', COUNT(*) FROM target_equipment_inventory_items
+UNION ALL
+SELECT 'processed_poultry_inventory_items', COUNT(*) FROM target_processed_poultry_inventory_items
 UNION ALL
 SELECT 'inventory_activity_events', COUNT(*) FROM target_inventory_activity_events
 UNION ALL
@@ -193,13 +219,25 @@ FROM public.inventory_items ii
 JOIN cleanup_params p ON p.target_store_id = ii.store_id
 WHERE ii.listing_batch_id IN (SELECT id FROM cleanup_listing_batches);
 
+CREATE TEMP TABLE cleanup_equipment_inventory_items ON COMMIT DROP AS
+SELECT ei.id
+FROM public.equipment_inventory_items ei
+JOIN cleanup_params p ON p.target_store_id = ei.store_id;
+
+CREATE TEMP TABLE cleanup_processed_poultry_inventory_items ON COMMIT DROP AS
+SELECT ppi.id
+FROM public.processed_poultry_inventory_items ppi
+JOIN cleanup_params p ON p.target_store_id = ppi.store_id;
+
 CREATE TEMP TABLE cleanup_order_items ON COMMIT DROP AS
 SELECT oi.id, oi.order_id
 FROM public.order_items oi
 JOIN cleanup_params p ON p.target_store_id = oi.store_id
 WHERE oi.inventory_item_id IN (SELECT id FROM cleanup_inventory_items)
    OR oi.listing_batch_id IN (SELECT id FROM cleanup_listing_batches)
-   OR oi.listing_batch_breed_id IN (SELECT id FROM cleanup_listing_batch_breeds);
+   OR oi.listing_batch_breed_id IN (SELECT id FROM cleanup_listing_batch_breeds)
+   OR oi.equipment_inventory_item_id IN (SELECT id FROM cleanup_equipment_inventory_items)
+   OR oi.processed_poultry_inventory_item_id IN (SELECT id FROM cleanup_processed_poultry_inventory_items);
 
 CREATE TEMP TABLE cleanup_blocking_orders ON COMMIT DROP AS
 SELECT DISTINCT o.id, o.customer_id
@@ -225,6 +263,8 @@ WHERE o.order_status = 'canceled'
         oi.inventory_item_id IS NOT NULL
         OR oi.listing_batch_id IS NOT NULL
         OR oi.listing_batch_breed_id IS NOT NULL
+        OR oi.equipment_inventory_item_id IS NOT NULL
+        OR oi.processed_poultry_inventory_item_id IS NOT NULL
       )
   );
 
@@ -254,7 +294,9 @@ FROM public.media_links ml
 JOIN cleanup_params p ON p.target_store_id = ml.store_id
 WHERE (ml.entity_type = 'listing_batch' AND ml.entity_id IN (SELECT id FROM cleanup_listing_batches))
    OR (ml.entity_type = 'listing_batch_breed' AND ml.entity_id IN (SELECT id FROM cleanup_listing_batch_breeds))
-   OR (ml.entity_type = 'inventory_item' AND ml.entity_id IN (SELECT id FROM cleanup_inventory_items));
+   OR (ml.entity_type = 'inventory_item' AND ml.entity_id IN (SELECT id FROM cleanup_inventory_items))
+   OR (ml.entity_type = 'equipment_inventory_item' AND ml.entity_id IN (SELECT id FROM cleanup_equipment_inventory_items))
+   OR (ml.entity_type = 'processed_poultry_inventory_item' AND ml.entity_id IN (SELECT id FROM cleanup_processed_poultry_inventory_items));
 
 CREATE TEMP TABLE cleanup_media_assets ON COMMIT DROP AS
 SELECT ma.id
@@ -319,6 +361,12 @@ WHERE id IN (SELECT id FROM cleanup_inventory_activity_events);
 
 DELETE FROM public.inventory_items
 WHERE id IN (SELECT id FROM cleanup_inventory_items);
+
+DELETE FROM public.equipment_inventory_items
+WHERE id IN (SELECT id FROM cleanup_equipment_inventory_items);
+
+DELETE FROM public.processed_poultry_inventory_items
+WHERE id IN (SELECT id FROM cleanup_processed_poultry_inventory_items);
 
 DELETE FROM public.listing_batch_breeds
 WHERE id IN (SELECT id FROM cleanup_listing_batch_breeds);

@@ -56,6 +56,26 @@ WHERE ml.entity_type = 'inventory_item'
 UNION ALL
 
 SELECT
+  'media_links_missing_equipment_inventory_item',
+  COUNT(*)
+FROM public.media_links ml
+LEFT JOIN public.equipment_inventory_items ei ON ei.id = ml.entity_id
+WHERE ml.entity_type = 'equipment_inventory_item'
+  AND ei.id IS NULL
+
+UNION ALL
+
+SELECT
+  'media_links_missing_processed_poultry_inventory_item',
+  COUNT(*)
+FROM public.media_links ml
+LEFT JOIN public.processed_poultry_inventory_items ppi ON ppi.id = ml.entity_id
+WHERE ml.entity_type = 'processed_poultry_inventory_item'
+  AND ppi.id IS NULL
+
+UNION ALL
+
+SELECT
   'media_assets_with_no_remaining_media_links',
   COUNT(*)
 FROM public.media_assets ma
@@ -121,5 +141,25 @@ FROM public.order_items oi
 LEFT JOIN public.listing_batch_breeds lbb ON lbb.id = oi.listing_batch_breed_id
 WHERE oi.listing_batch_breed_id IS NOT NULL
   AND lbb.id IS NULL
+
+UNION ALL
+
+SELECT
+  'order_items_missing_equipment_inventory_item',
+  COUNT(*)
+FROM public.order_items oi
+LEFT JOIN public.equipment_inventory_items ei ON ei.id = oi.equipment_inventory_item_id
+WHERE oi.equipment_inventory_item_id IS NOT NULL
+  AND ei.id IS NULL
+
+UNION ALL
+
+SELECT
+  'order_items_missing_processed_poultry_inventory_item',
+  COUNT(*)
+FROM public.order_items oi
+LEFT JOIN public.processed_poultry_inventory_items ppi ON ppi.id = oi.processed_poultry_inventory_item_id
+WHERE oi.processed_poultry_inventory_item_id IS NOT NULL
+  AND ppi.id IS NULL
 
 ORDER BY orphan_check;

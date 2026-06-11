@@ -39,6 +39,7 @@ Group implementation notes:
 - `group-32a-seller-ui-support-gaps.md`
 - `group-32b-media-foundation-design-review.md`
 - `group-32b-media-foundation-implementation.md`
+- `group-71-lightweight-platform-admin-dashboard.md`
 
 Core instruction for Codex:
 
