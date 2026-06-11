@@ -90,7 +90,7 @@ export function AdminStoreDetail({ storeId }: { storeId: string }) {
       <AdminPageHeader
         eyebrow="Platform Admin"
         title={store?.store_name ?? "Store Detail"}
-        description="Read-only operational context for platform support. Seller dashboard links are references only and do not impersonate the seller."
+        description="Read-only support details for this seller store. This page does not allow editing or impersonation."
         action={
           <Link className="seller-secondary-button" href="/admin/stores">
             Back to Stores
@@ -149,7 +149,7 @@ export function AdminStoreDetail({ storeId }: { storeId: string }) {
                     value={store.owner_email ?? "Not available"}
                     copy={Boolean(store.owner_email)}
                   />
-                  <DetailField label="Store Slug" value={store.store_slug} />
+                  <DetailField label="Store Slug" value={store.store_slug} copy />
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -182,58 +182,57 @@ export function AdminStoreDetail({ storeId }: { storeId: string }) {
               </div>
             </AdminCard>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-              <AdminMetric label="Listings" value={store.listing_batch_count} />
-              <AdminMetric label="Bird Rows" value={store.inventory_item_count} />
-              <AdminMetric
-                label="Bird Qty"
-                value={store.total_inventory_quantity}
-              />
-              <AdminMetric label="Customers" value={store.customer_count} />
-              <AdminMetric label="Equipment" value={store.equipment_item_count} />
-              <AdminMetric
-                label="Processed"
-                value={store.processed_poultry_item_count}
-              />
+            <div className="grid gap-3">
+              <p className="text-sm leading-6 text-stone-600">
+                These counts summarize what this seller has entered in their
+                store. They are for support and troubleshooting only.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                <AdminMetric
+                  label="Sale groups"
+                  value={store.listing_batch_count}
+                />
+                <AdminMetric
+                  label="Inventory rows"
+                  value={store.inventory_item_count}
+                />
+                <AdminMetric
+                  label="Available birds"
+                  value={store.total_inventory_quantity}
+                />
+                <AdminMetric label="Customers" value={store.customer_count} />
+                <AdminMetric
+                  label="Equipment items"
+                  value={store.equipment_item_count}
+                />
+                <AdminMetric
+                  label="Processed poultry"
+                  value={store.processed_poultry_item_count}
+                />
+              </div>
             </div>
 
             <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
               <AdminCard>
                 <SectionHeader
                   title="Order Summary"
-                  description={`${store.open_order_count} open, ${store.fulfilled_order_count} fulfilled, ${store.canceled_order_count} canceled.`}
+                  description="Recent support-safe order summaries for this store."
                 />
+                <p className="px-5 pb-4 text-sm font-semibold text-stone-700">
+                  {store.open_order_count} open, {store.fulfilled_order_count}{" "}
+                  fulfilled, {store.canceled_order_count} canceled.
+                </p>
                 <RecentOrdersTable orders={orders} />
               </AdminCard>
 
               <AdminCard>
                 <SectionHeader
                   title="Admin Activity"
-                  description="Recent audited platform admin events for this store."
+                  description="Recent platform-admin actions for this store, such as suspension, reactivation, or notification actions."
                 />
                 <RecentActivityList activity={activity} />
               </AdminCard>
             </div>
-
-            <AdminCard>
-              <SectionHeader
-                title="Reference Links"
-                description="These links open normal seller-facing routes as your current account. They are not impersonation and may not show seller data unless your account is authorized by existing checks."
-              />
-              <div className="flex flex-wrap gap-2 p-5 pt-0">
-                <ReferenceLink href="/dashboard" label="Seller Dashboard Home" />
-                <ReferenceLink
-                  href="/dashboard/store-admin"
-                  label="Seller Store Admin"
-                />
-                <ReferenceLink href="/dashboard/orders" label="Seller Orders" />
-                <ReferenceLink
-                  href="/dashboard/inventory"
-                  label="Seller Inventory"
-                />
-                <ReferenceLink href="/dashboard/breeds" label="Seller Breeds" />
-              </div>
-            </AdminCard>
           </>
         ) : null}
       </div>
@@ -392,13 +391,5 @@ function RecentActivityList({ activity }: { activity: AdminActivityRow[] }) {
         </div>
       ))}
     </div>
-  );
-}
-
-function ReferenceLink({ href, label }: { href: string; label: string }) {
-  return (
-    <Link className="seller-small-button" href={href} target="_blank">
-      {label}
-    </Link>
   );
 }
