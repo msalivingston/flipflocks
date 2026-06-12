@@ -138,13 +138,14 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen flex-col">
         <header className="sticky top-0 z-30 border-b border-stone-200/80 bg-white lg:hidden">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
-            <div className="flex min-w-0 items-center gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-2.5">
               <Link className="shrink-0" href="/dashboard">
                 <Image
                   src="/branding/flockfront-logo.png"
                   alt="FlockFront"
                   width={132}
                   height={44}
+                  className="h-auto w-[132px] max-[360px]:w-28"
                   priority
                 />
               </Link>
@@ -154,16 +155,34 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
                 </p>
               </div>
             </div>
-            <Link className="seller-small-button" href={storefrontHref}>
+            <Link
+              className="seller-small-button shrink-0"
+              href={storefrontHref}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
               Storefront
             </Link>
           </div>
         </header>
 
-        <main className="flex-1 pb-24 lg:pb-0">{children}</main>
+        <main className="flex-1 overflow-x-hidden pb-[calc(5.75rem+env(safe-area-inset-bottom))] lg:pb-0">
+          {children}
+        </main>
 
-        <nav className="fixed inset-x-0 bottom-0 z-30 flex gap-1 overflow-x-auto border-t border-stone-200/80 bg-white px-2 py-2 shadow-[0_-8px_20px_rgba(67,55,38,0.08)] lg:hidden">
-          <MobileSellerNavLinks />
+        <nav
+          aria-label="Seller navigation"
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-200/80 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_20px_rgba(67,55,38,0.08)] lg:hidden"
+        >
+          <div className="overflow-x-auto px-2 py-1.5 pr-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex gap-1">
+              <MobileSellerNavLinks />
+            </div>
+          </div>
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-0 w-9 bg-gradient-to-l from-white via-white/90 to-white/0"
+          />
         </nav>
       </div>
     </div>
@@ -209,7 +228,7 @@ function MobileSellerNavLinks() {
       <Link
         key={item.href}
         href={item.href}
-        className={`flex min-w-24 flex-col items-center gap-1 rounded-xl px-2 py-2 text-center text-xs font-semibold ${
+        className={`flex min-h-14 min-w-[4.75rem] flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-1.5 text-center text-[0.7rem] font-semibold leading-tight ${
           isActive ? "bg-emerald-100 text-emerald-950" : "text-stone-600"
         }`}
       >

@@ -144,15 +144,15 @@ export function SellerDashboard() {
 
   return (
     <div className="min-h-screen bg-[#fbfaf6]">
-      <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-5 px-5 py-5 sm:px-8 lg:px-10 lg:py-6">
-        <section className="flex flex-col gap-3 rounded-xl border border-emerald-950/5 bg-[#f4f8ef] px-4 py-3 shadow-[0_12px_32px_rgba(46,39,25,0.04)] sm:px-5 lg:min-h-14 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4 px-4 py-4 sm:gap-5 sm:px-8 sm:py-5 lg:px-10 lg:py-6">
+        <section className="flex flex-col gap-2.5 rounded-xl border border-emerald-950/5 bg-[#f4f8ef] px-3 py-2.5 shadow-[0_12px_32px_rgba(46,39,25,0.04)] sm:gap-3 sm:px-5 sm:py-3 lg:min-h-14 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-900/10">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-900/10 sm:size-10">
               <Image
                 src="/glyphs/checkmark.png"
                 alt=""
-                width={22}
-                height={22}
+                width={20}
+                height={20}
               />
             </span>
             <p className="text-sm font-medium text-stone-950 sm:text-base">
@@ -166,7 +166,12 @@ export function SellerDashboard() {
               </span>
               Add Listing
             </PrimaryActionLink>
-            <Link className="seller-secondary-button gap-2" href={storefrontHref}>
+            <Link
+              className="seller-secondary-button gap-2"
+              href={storefrontHref}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
               <Image src="/glyphs/storefront.png" alt="" width={20} height={20} />
               View Storefront
             </Link>
@@ -194,7 +199,7 @@ export function SellerDashboard() {
 
         {!isLoading && !error ? (
           <>
-            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
               <MetricCard
                 label="New orders"
                 value={data.home?.pending_open_order_count}
@@ -277,19 +282,29 @@ function MetricCard({
   const valueTone = tone === "amber" ? "text-orange-600" : "text-emerald-900";
 
   return (
-    <SellerCard className="min-h-32 rounded-2xl p-4 shadow-[0_12px_28px_rgba(46,39,25,0.04)]">
-      <div className="flex h-full items-center gap-4">
+    <SellerCard className="min-h-28 rounded-2xl p-3 shadow-[0_12px_28px_rgba(46,39,25,0.04)] sm:min-h-32 sm:p-4">
+      <div className="flex h-full min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-4">
         <span
-          className={`flex size-12 shrink-0 items-center justify-center rounded-full ${iconTone}`}
+          className={`flex size-10 shrink-0 items-center justify-center rounded-full sm:size-12 ${iconTone}`}
         >
-          <Image src={glyph} alt={glyphAlt} width={28} height={28} />
+          <Image
+            src={glyph}
+            alt={glyphAlt}
+            width={24}
+            height={24}
+            className="sm:h-7 sm:w-7"
+          />
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-medium text-stone-600">{label}</p>
-          <p className={`mt-1 font-serif text-3xl font-bold ${valueTone}`}>
+          <p className="text-xs font-medium leading-snug text-stone-600 sm:text-sm">
+            {label}
+          </p>
+          <p className={`mt-0.5 font-serif text-2xl font-bold sm:mt-1 sm:text-3xl ${valueTone}`}>
             {value ?? 0}
           </p>
-          <p className="mt-1 text-xs text-stone-500 sm:text-sm">{helper}</p>
+          <p className="mt-0.5 text-[0.7rem] leading-4 text-stone-500 sm:mt-1 sm:text-sm">
+            {helper}
+          </p>
         </div>
       </div>
     </SellerCard>
@@ -343,36 +358,44 @@ function OrderRow({
       <button
         aria-controls={detailsId}
         aria-expanded={isExpanded}
-        className="grid w-full gap-2 rounded-xl px-4 py-3 text-left transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,0.8fr)_auto] sm:items-center"
+        className="grid w-full gap-1.5 rounded-xl px-3.5 py-2.5 text-left transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 sm:gap-2 sm:px-4 sm:py-3 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,0.8fr)_auto] sm:items-center"
         onClick={onToggle}
         type="button"
       >
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="font-semibold text-stone-950">
-            {order.order_number}
-          </span>
-          <span className="shrink-0">
-            <StatusBadge status={getOrderStatusLabel(order.order_status)} />
-          </span>
+        <div className="flex min-w-0 items-center justify-between gap-3 sm:justify-start">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="font-semibold text-stone-950">
+              {order.order_number}
+            </span>
+            <span className="shrink-0">
+              <StatusBadge status={getOrderStatusLabel(order.order_status)} />
+            </span>
+          </div>
+          <ChevronRight
+            aria-hidden="true"
+            className={`size-5 shrink-0 text-stone-500 transition-transform duration-200 sm:hidden ${
+              isExpanded ? "rotate-90" : ""
+            }`}
+          />
         </div>
 
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-stone-950">
             {customerName}
           </p>
-          <p className="mt-0.5 text-sm text-stone-600">
+          <p className="text-sm text-stone-600 sm:mt-0.5">
             {itemCount} {itemCount === 1 ? "item" : "items"} &bull;{" "}
             {formatCurrency(order.total_amount)}
           </p>
         </div>
 
-        <span className="text-sm text-stone-500 sm:text-right">
+        <span className="text-sm leading-tight text-stone-500 sm:text-right">
           {formatDateTime(order.created_at)}
         </span>
 
         <ChevronRight
           aria-hidden="true"
-          className={`size-5 text-stone-500 transition-transform duration-200 ${
+          className={`hidden size-5 text-stone-500 transition-transform duration-200 sm:block ${
             isExpanded ? "rotate-90" : ""
           }`}
         />
@@ -385,37 +408,50 @@ function OrderRow({
         id={detailsId}
       >
         <div className="overflow-hidden">
-          <div className="flex flex-col gap-3 border-t border-stone-200/80 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-stone-600">
+          <div className="grid gap-2.5 border-t border-stone-200/80 px-4 py-2.5">
+            <div className="grid min-w-0 gap-2 text-sm text-stone-600">
               {order.buyer_email_snapshot ? (
                 <a
-                  className="inline-flex items-center gap-2 text-stone-950 underline-offset-4 hover:underline"
+                  aria-label={`Email ${order.buyer_email_snapshot}`}
+                  className="inline-flex min-w-0 max-w-full items-center gap-2 text-stone-950 underline-offset-4 hover:underline lg:max-w-2xl"
                   href={`mailto:${order.buyer_email_snapshot}`}
+                  title={order.buyer_email_snapshot}
                 >
                   <Image
+                    className="shrink-0"
                     src="/glyphs/envelope.png"
                     alt=""
                     width={17}
                     height={17}
                   />
-                  {order.buyer_email_snapshot}
+                  <span className="min-w-0 truncate">
+                    {order.buyer_email_snapshot}
+                  </span>
                 </a>
               ) : null}
-              {order.buyer_phone_snapshot ? (
-                <a
-                  className="inline-flex items-center gap-2 text-stone-950 underline-offset-4 hover:underline"
-                  href={`tel:${order.buyer_phone_snapshot}`}
-                >
-                  <Image src="/glyphs/phone.png" alt="" width={17} height={17} />
-                  {order.buyer_phone_snapshot}
-                </a>
-              ) : null}
-              <span>
-                Pickup: {order.pickup_option_label_snapshot ?? "Not selected"}
-              </span>
+              <div className="flex min-w-0 flex-wrap items-start gap-x-4 gap-y-1.5">
+                {order.buyer_phone_snapshot ? (
+                  <a
+                    className="inline-flex items-center gap-2 whitespace-nowrap text-stone-950 underline-offset-4 hover:underline"
+                    href={`tel:${order.buyer_phone_snapshot}`}
+                  >
+                    <Image
+                      className="shrink-0"
+                      src="/glyphs/phone.png"
+                      alt=""
+                      width={17}
+                      height={17}
+                    />
+                    {order.buyer_phone_snapshot}
+                  </a>
+                ) : null}
+                <span className="min-w-0 max-w-full leading-5 sm:max-w-xl">
+                  Pickup: {order.pickup_option_label_snapshot ?? "Not selected"}
+                </span>
+              </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 pt-0.5">
               {order.buyer_phone_snapshot ? (
                 <a
                   className="seller-small-button gap-2"
