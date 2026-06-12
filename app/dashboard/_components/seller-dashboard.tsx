@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "./seller-context";
 import {
@@ -43,6 +44,9 @@ export function SellerDashboard() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -124,21 +128,34 @@ export function SellerDashboard() {
   const welcomeMessage = storefrontIsLive
     ? `Good morning${sellerDisplayName ? `, ${sellerDisplayName}` : ""} - your storefront is live.`
     : "Your storefront is ready for setup.";
+  const toggleOrder = (orderId: string) => {
+    setExpandedOrderIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+
+      return next;
+    });
+  };
 
   return (
     <div className="min-h-screen bg-[#fbfaf6]">
-      <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-8 px-5 py-7 sm:px-8 lg:px-10 lg:py-10">
-        <section className="flex flex-col gap-4 rounded-xl border border-emerald-950/5 bg-[#f4f8ef] px-5 py-4 shadow-[0_12px_32px_rgba(46,39,25,0.04)] sm:px-6 lg:min-h-20 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-5 px-5 py-5 sm:px-8 lg:px-10 lg:py-6">
+        <section className="flex flex-col gap-3 rounded-xl border border-emerald-950/5 bg-[#f4f8ef] px-4 py-3 shadow-[0_12px_32px_rgba(46,39,25,0.04)] sm:px-5 lg:min-h-14 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-emerald-900/10">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-900/10">
               <Image
                 src="/glyphs/checkmark.png"
                 alt=""
-                width={25}
-                height={25}
+                width={22}
+                height={22}
               />
             </span>
-            <p className="text-base font-medium text-stone-950">
+            <p className="text-sm font-medium text-stone-950 sm:text-base">
               {welcomeMessage}
             </p>
           </div>
@@ -157,7 +174,7 @@ export function SellerDashboard() {
         </section>
 
         <header>
-          <h1 className="font-serif text-4xl font-bold tracking-normal text-stone-950 sm:text-5xl">
+          <h1 className="font-serif text-3xl font-bold tracking-normal text-stone-950 sm:text-4xl">
             Dashboard
           </h1>
         </header>
@@ -177,7 +194,7 @@ export function SellerDashboard() {
 
         {!isLoading && !error ? (
           <>
-            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard
                 label="New orders"
                 value={data.home?.pending_open_order_count}
@@ -221,7 +238,12 @@ export function SellerDashboard() {
               {data.orders.length > 0 ? (
                 <div className="divide-y divide-stone-200/80">
                   {data.orders.map((order) => (
-                    <OrderRow key={order.order_id} order={order} />
+                    <OrderRow
+                      key={order.order_id}
+                      isExpanded={expandedOrderIds.has(order.order_id)}
+                      onToggle={() => toggleOrder(order.order_id)}
+                      order={order}
+                    />
                   ))}
                 </div>
               ) : (
@@ -255,19 +277,19 @@ function MetricCard({
   const valueTone = tone === "amber" ? "text-orange-600" : "text-emerald-900";
 
   return (
-    <SellerCard className="min-h-44 rounded-2xl p-5 shadow-[0_12px_28px_rgba(46,39,25,0.04)] sm:p-6">
-      <div className="flex h-full items-center gap-5">
+    <SellerCard className="min-h-32 rounded-2xl p-4 shadow-[0_12px_28px_rgba(46,39,25,0.04)]">
+      <div className="flex h-full items-center gap-4">
         <span
-          className={`flex size-16 shrink-0 items-center justify-center rounded-full ${iconTone}`}
+          className={`flex size-12 shrink-0 items-center justify-center rounded-full ${iconTone}`}
         >
-          <Image src={glyph} alt={glyphAlt} width={34} height={34} />
+          <Image src={glyph} alt={glyphAlt} width={28} height={28} />
         </span>
         <div className="min-w-0">
           <p className="text-sm font-medium text-stone-600">{label}</p>
-          <p className={`mt-3 font-serif text-4xl font-bold ${valueTone}`}>
+          <p className={`mt-1 font-serif text-3xl font-bold ${valueTone}`}>
             {value ?? 0}
           </p>
-          <p className="mt-2 text-sm text-stone-500">{helper}</p>
+          <p className="mt-1 text-xs text-stone-500 sm:text-sm">{helper}</p>
         </div>
       </div>
     </SellerCard>
@@ -284,12 +306,14 @@ function SectionHeading({
   actionLabel: string;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 bg-white px-5 py-5 sm:px-6">
+    <div className="flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-3 sm:px-5">
       <div className="flex items-center gap-3">
-        <span className="flex size-11 items-center justify-center rounded-full bg-emerald-900/10">
-          <Image src="/glyphs/clipboard.png" alt="" width={23} height={23} />
+        <span className="flex size-9 items-center justify-center rounded-full bg-emerald-900/10">
+          <Image src="/glyphs/clipboard.png" alt="" width={21} height={21} />
         </span>
-        <h2 className="font-serif text-2xl font-bold text-stone-950">{title}</h2>
+        <h2 className="font-serif text-xl font-bold text-stone-950 sm:text-2xl">
+          {title}
+        </h2>
       </div>
       <Link className="text-sm font-semibold text-emerald-800" href={actionHref}>
         {actionLabel}
@@ -298,42 +322,71 @@ function SectionHeading({
   );
 }
 
-function OrderRow({ order }: { order: SellerOrderSummary }) {
+function OrderRow({
+  order,
+  isExpanded,
+  onToggle,
+}: {
+  order: SellerOrderSummary;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
   const customerName =
     [order.buyer_first_name_snapshot, order.buyer_last_name_snapshot]
       .filter(Boolean)
       .join(" ") || "Customer";
-  const initials = getCustomerInitials(
-    order.buyer_first_name_snapshot,
-    order.buyer_last_name_snapshot,
-    customerName,
-  );
+  const itemCount = order.total_item_quantity ?? order.item_count ?? 0;
+  const detailsId = `order-details-${order.order_id}`;
 
   return (
-    <article className="mx-5 mb-5 rounded-xl border border-stone-200/90 px-5 py-5 last:mb-5 sm:mx-6 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-5">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold text-stone-950">
-              {order.order_number}
-            </h3>
+    <article className="mx-4 mb-2 rounded-xl border border-stone-200/90 bg-white last:mb-4 sm:mx-5">
+      <button
+        aria-controls={detailsId}
+        aria-expanded={isExpanded}
+        className="grid w-full gap-2 rounded-xl px-4 py-3 text-left transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,0.8fr)_auto] sm:items-center"
+        onClick={onToggle}
+        type="button"
+      >
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="font-semibold text-stone-950">
+            {order.order_number}
+          </span>
+          <span className="shrink-0">
             <StatusBadge status={getOrderStatusLabel(order.order_status)} />
-          </div>
-          <span className="text-sm text-stone-500 lg:hidden">
-            {formatDateTime(order.created_at)}
           </span>
         </div>
-        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start">
-          <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-emerald-900/10 text-base font-bold text-emerald-900">
-            {initials}
-          </span>
-          <div className="min-w-0 flex-1">
+
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-stone-950">
+            {customerName}
+          </p>
+          <p className="mt-0.5 text-sm text-stone-600">
+            {itemCount} {itemCount === 1 ? "item" : "items"} &bull;{" "}
+            {formatCurrency(order.total_amount)}
+          </p>
+        </div>
+
+        <span className="text-sm text-stone-500 sm:text-right">
+          {formatDateTime(order.created_at)}
+        </span>
+
+        <ChevronRight
+          aria-hidden="true"
+          className={`size-5 text-stone-500 transition-transform duration-200 ${
+            isExpanded ? "rotate-90" : ""
+          }`}
+        />
+      </button>
+
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+          isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+        id={detailsId}
+      >
+        <div className="overflow-hidden">
+          <div className="flex flex-col gap-3 border-t border-stone-200/80 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-stone-600">
-              <span className="font-semibold text-stone-950">{customerName}</span>
-              <span>
-                {order.total_item_quantity ?? order.item_count ?? 0} item(s) -{" "}
-                {formatCurrency(order.total_amount)}
-              </span>
               {order.buyer_email_snapshot ? (
                 <a
                   className="inline-flex items-center gap-2 text-stone-950 underline-offset-4 hover:underline"
@@ -357,42 +410,45 @@ function OrderRow({ order }: { order: SellerOrderSummary }) {
                   {order.buyer_phone_snapshot}
                 </a>
               ) : null}
+              <span>
+                Pickup: {order.pickup_option_label_snapshot ?? "Not selected"}
+              </span>
             </div>
-            <p className="mt-3 text-sm text-stone-600">
-              Pickup: {order.pickup_option_label_snapshot ?? "Not selected"}
-            </p>
+
+            <div className="flex flex-wrap gap-2">
+              {order.buyer_phone_snapshot ? (
+                <a
+                  className="seller-small-button gap-2"
+                  href={`sms:${order.buyer_phone_snapshot}`}
+                >
+                  <Image src="/glyphs/chat.png" alt="" width={18} height={18} />
+                  Text
+                </a>
+              ) : null}
+              {order.buyer_email_snapshot ? (
+                <a
+                  className="seller-small-button gap-2"
+                  href={`mailto:${order.buyer_email_snapshot}`}
+                >
+                  <Image
+                    src="/glyphs/envelope.png"
+                    alt=""
+                    width={18}
+                    height={18}
+                  />
+                  Email
+                </a>
+              ) : null}
+              <Link
+                className="seller-small-button min-h-9 gap-2 bg-emerald-800 px-4 text-white hover:bg-emerald-900"
+                href={`/dashboard/orders/${order.order_id}`}
+              >
+                View order
+                <span aria-hidden="true">&gt;</span>
+              </Link>
+            </div>
           </div>
         </div>
-      </div>
-      <div className="mt-5 flex flex-wrap items-center gap-2 lg:mt-0 lg:justify-end">
-        <span className="hidden min-w-24 text-right text-sm text-stone-500 lg:block">
-          {formatDateTime(order.created_at)}
-        </span>
-        {order.buyer_phone_snapshot ? (
-          <a
-            className="seller-small-button gap-2"
-            href={`sms:${order.buyer_phone_snapshot}`}
-          >
-            <Image src="/glyphs/chat.png" alt="" width={18} height={18} />
-            Text
-          </a>
-        ) : null}
-        {order.buyer_email_snapshot ? (
-          <a
-            className="seller-small-button gap-2"
-            href={`mailto:${order.buyer_email_snapshot}`}
-          >
-            <Image src="/glyphs/envelope.png" alt="" width={18} height={18} />
-            Email
-          </a>
-        ) : null}
-        <Link
-          className="seller-small-button min-h-11 gap-3 bg-emerald-800 px-5 text-white hover:bg-emerald-900"
-          href={`/dashboard/orders/${order.order_id}`}
-        >
-          View order
-          <span aria-hidden="true">›</span>
-        </Link>
       </div>
     </article>
   );
@@ -402,27 +458,6 @@ function getOrderStatusLabel(status: string | null | undefined) {
   if (!status || status === "pending") return "open";
 
   return status;
-}
-
-function getCustomerInitials(
-  firstName: string | null,
-  lastName: string | null,
-  fallback: string,
-) {
-  const initials = [firstName, lastName]
-    .filter(Boolean)
-    .map((part) => part?.trim().charAt(0))
-    .join("");
-
-  if (initials) return initials.toUpperCase();
-
-  return fallback
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.charAt(0))
-    .join("")
-    .toUpperCase();
 }
 
 function getSellerDisplayName(storeName: string | null | undefined) {
