@@ -36,12 +36,16 @@ Production glyphs are exported as 128x128 PNG files with transparent backgrounds
 - `camera.png`
 - `chat.png`
 - `checkmark.png`
+- `clipboard.png`
+- `customers.png`
 - `envelope.png`
 - `heart.png`
 - `looking-glass.png`
 - `map-pin.png`
 - `pencil.png`
+- `person.png`
 - `phone.png`
+- `reports.png`
 - `shield.png`
 - `trashcan.png`
 
@@ -49,6 +53,8 @@ Production glyphs are exported as 128x128 PNG files with transparent backgrounds
 
 - `cart.png`
 - `chicken-leg.png`
+- `shopping-bag.png`
+- `storefront.png`
 
 ## Duplicate Review
 
@@ -59,3 +65,4 @@ Near-duplicate review:
 - `hen.png` and `rooster.png` are related chicken silhouettes but distinct.
 - `duck.png` and `goose.png` share a waterfowl style but are distinct.
 - `egg.png` and `egg-carton.png` are related subject matter but distinct glyphs.
+- `person.png` and `customers.png` are related account/audience concepts but distinct UI glyphs.
