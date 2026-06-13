@@ -1,6 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
+import { ArrowLeft, ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../../_components/seller-context";
@@ -17,9 +19,7 @@ import {
   formatDateTime,
   formatInventoryLabel,
   formatOrderLifecycle,
-  formatOrderSource,
   formatPaymentMethod,
-  formatPlainLabel,
   getOrderLifecycleState,
 } from "../order-formatters";
 
@@ -57,6 +57,10 @@ type SellerOrderDetailRow = {
 
 type SellerOrderItemRow = {
   order_item_id: string;
+  inventory_item_id: string | null;
+  listing_batch_id: string | null;
+  listing_batch_breed_id: string | null;
+  seller_breed_profile_id: string | null;
   species_name_snapshot: string;
   breed_display_name_snapshot: string;
   inventory_type_snapshot: string;
@@ -78,10 +82,30 @@ type SellerOrderItemRow = {
   line_subtotal: number | null;
 };
 
+type SellerMediaRow = {
+  entity_type: string;
+  entity_id: string;
+  public_url: string;
+  alt_text: string | null;
+  sort_order: number | null;
+  is_featured: boolean;
+  moderation_status: string;
+  asset_status: string;
+  visibility_status: string;
+};
+
 type OrderDetailState = {
   items: SellerOrderItemRow[];
+  mediaByItemId: Record<string, SellerMediaRow | null>;
   order: SellerOrderDetailRow | null;
 };
+
+const orderDetailButtonClass =
+  "inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-emerald-700 bg-white px-3.5 text-sm font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/30";
+const orderDetailBackButtonClass =
+  "inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-stone-300 bg-white px-3.5 text-sm font-bold text-stone-950 shadow-sm transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-700/30";
+const requestedItemsGridClass =
+  "grid grid-cols-[minmax(0,1fr)_3.25rem_5.75rem_6.5rem] gap-3";
 
 /**
  * Read-only seller order detail for the first public order intake workflow.
@@ -91,6 +115,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const { seller } = useSellerContext();
   const [data, setData] = useState<OrderDetailState>({
     items: [],
+    mediaByItemId: {},
     order: null,
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -102,10 +127,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [cancelReason, setCancelReason] = useState("");
   const [restoreInventoryOnCancel, setRestoreInventoryOnCancel] = useState(false);
   const [showCancelPanel, setShowCancelPanel] = useState(false);
-  const [copiedContact, setCopiedContact] = useState<"email" | "phone" | null>(
-    null,
-  );
-  const [contactCopyError, setContactCopyError] = useState<string | null>(null);
+  const [showFulfillmentDialog, setShowFulfillmentDialog] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -129,7 +151,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         supabase
           .from("seller_order_item_detail")
           .select(
-            "order_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, equipment_inventory_item_id, processed_poultry_inventory_item_id, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
+            "order_item_id, inventory_item_id, listing_batch_id, listing_batch_breed_id, seller_breed_profile_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, equipment_inventory_item_id, processed_poultry_inventory_item_id, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
           )
           .eq("store_id", seller.store_id)
           .eq("order_id", orderId)
@@ -147,9 +169,15 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         return;
       }
 
+      const items = itemResult.data ?? [];
+      const mediaByItemId = await loadOrderItemMedia(items, seller.store_id);
+
+      if (!isMounted) return;
+
       setData({
         order: orderResult.data,
-        items: itemResult.data ?? [],
+        items,
+        mediaByItemId,
       });
       setIsLoading(false);
     }
@@ -244,11 +272,12 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     }
 
     setActionMessage("Order marked ready for pickup.");
+    setShowCancelPanel(false);
     setRefreshKey((current) => current + 1);
     setIsSaving(false);
   }
 
-  async function markPickedUpComplete() {
+  async function markOrderFulfilled({ markPaid }: { markPaid: boolean }) {
     if (!order) return;
 
     const fulfillmentItems = data.items
@@ -259,7 +288,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       }));
 
     if (fulfillmentItems.length === 0) {
-      setActionError("There are no remaining items to mark picked up.");
+      setActionError("There are no remaining items to mark fulfilled.");
       return;
     }
 
@@ -282,7 +311,26 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       return;
     }
 
-    setActionMessage("Order marked picked up and complete.");
+    if (markPaid && order.payment_status !== "paid") {
+      const { error: paymentError } = await supabase.rpc("mark_order_paid", {
+        p_order_id: order.order_id,
+        p_note: "Payment received at pickup.",
+      });
+
+      if (paymentError) {
+        setActionError(toSellerOrderPaymentError(paymentError.message));
+        setIsSaving(false);
+        return;
+      }
+    }
+
+    setActionMessage(
+      markPaid
+        ? "Order marked fulfilled and paid."
+        : "Order marked fulfilled.",
+    );
+    setShowCancelPanel(false);
+    setShowFulfillmentDialog(false);
     setRefreshKey((current) => current + 1);
     setIsSaving(false);
   }
@@ -325,251 +373,168 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setIsCanceling(false);
   }
 
-  async function copyContactValue(kind: "email" | "phone", value: string | null) {
-    if (!value) return;
+  function printOrder() {
+    window.print();
+  }
 
-    try {
-      await navigator.clipboard.writeText(value);
-      setContactCopyError(null);
-      setCopiedContact(kind);
-      window.setTimeout(() => {
-        setCopiedContact((current) => (current === kind ? null : current));
-      }, 2000);
-    } catch {
-      setContactCopyError("That contact detail could not be copied.");
-    }
+  function openCancelPanel() {
+    setActionError(null);
+    setActionMessage(null);
+    setRestoreInventoryOnCancel(false);
+    setShowFulfillmentDialog(false);
+    setShowCancelPanel(true);
   }
 
   return (
-    <>
-      <SellerPageHeader
-        eyebrow={formatOrderSource(order)}
-        title={`Order ${order.order_number}`}
-        description="Read-only order details for pickup coordination."
-        action={<BackToOrdersLink />}
-      />
+    <div className="mx-auto flex w-full max-w-[1260px] flex-col gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-7">
+      <header className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[0.7rem] font-bold uppercase text-emerald-800">
+            Storefront order
+          </span>
+          <h1 className="mt-2 text-3xl font-bold text-stone-950 sm:text-[2.1rem]">
+            Order {order.order_number}
+          </h1>
+          <p className="mt-0.5 text-sm font-medium text-stone-600 sm:text-base">
+            {formatDateTime(order.created_at)}
+          </p>
+        </div>
+        <div className="flex flex-col gap-5 lg:items-end">
+          <BackToOrdersLink />
+          <div className="flex flex-wrap gap-2.5 lg:justify-end">
+            <button
+              className={orderDetailButtonClass}
+              type="button"
+              onClick={printOrder}
+            >
+              <Image src="/glyphs/clipboard.png" alt="" width={18} height={18} />
+              Print order
+            </button>
+            <QuickActionsMenu
+              canCancel={canCancelOrder(order)}
+              canMarkComplete={canMarkComplete(order, remainingPickupQuantity)}
+              canMarkReady={canMarkReady(order)}
+              isBusy={isSaving || isCanceling}
+              onCancel={openCancelPanel}
+              onMarkComplete={() => {
+                setShowCancelPanel(false);
+                setShowFulfillmentDialog(true);
+              }}
+              onMarkReady={() => void markReadyForPickup()}
+              onPrint={printOrder}
+            />
+          </div>
+        </div>
+      </header>
 
-      <div className="mx-auto grid w-full max-w-7xl gap-5 px-5 py-5 sm:px-7 xl:grid-cols-[1fr_22rem]">
-        <main className="grid gap-5">
-          <SellerCard className="p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-stone-950">
-                  Request summary
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-stone-600">
-                  {customerName} requested {order.total_item_quantity ?? 0} item
-                  {(order.total_item_quantity ?? 0) === 1 ? "" : "s"}.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <span
-                  className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getOrderLifecycleTone(order)}`}
-                >
-                  {formatOrderLifecycle(order)}
-                </span>
-                <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
-                  {formatPaymentMethod(order.payment_method)}
-                </span>
-              </div>
-            </div>
-
-            <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <DetailFact label="Received" value={formatDateTime(order.created_at)} />
-              <DetailFact
-                label="Pickup"
-                value={formatPickupStatus(order)}
-              />
-              <DetailFact
-                label="Payment status"
-                value={formatPlainLabel(order.payment_status)}
-              />
-              <DetailFact label="Total" value={formatCurrency(order.total_amount)} />
-            </dl>
-          </SellerCard>
-
-          {canCancelOrder(order) ? (
-            <SellerCard className="p-5">
-              <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
-                <div>
-                  <h2 className="text-lg font-semibold text-stone-950">
-                    Cancel order
-                  </h2>
-                  <p className="mt-1 text-sm leading-6 text-stone-600">
-                    Canceling removes this pickup request from your open orders.
-                    You can choose whether inventory-backed items should be
-                    returned to available inventory.
-                  </p>
-                </div>
-                {!showCancelPanel ? (
-                  <button
-                    className="seller-secondary-button"
-                    disabled={isSaving || isCanceling}
-                    type="button"
-                    onClick={() => {
-                      setActionError(null);
-                      setActionMessage(null);
-                      setRestoreInventoryOnCancel(false);
-                      setShowCancelPanel(true);
-                    }}
-                  >
-                    Cancel order
-                  </button>
-                ) : null}
-              </div>
-
-              {showCancelPanel ? (
-                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4">
-                  <label className="grid gap-2 text-sm font-semibold text-red-950">
-                    Reason for cancellation
-                    <textarea
-                      className="min-h-24 rounded-md border border-red-200 bg-white px-3 py-2 text-base font-normal text-stone-950 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200"
-                      maxLength={500}
-                      onChange={(event) => setCancelReason(event.target.value)}
-                      value={cancelReason}
-                    />
-                    <span className="text-xs font-normal text-red-800">
-                      This is saved with the order history and may be used in the
-                      buyer cancellation notice.
-                    </span>
-                  </label>
-
-                  <label className="mt-4 flex gap-3 rounded-md border border-red-200 bg-white p-3 text-sm text-stone-700">
-                    <input
-                      className="mt-1 h-4 w-4 rounded border-stone-300 text-red-700 focus:ring-red-500"
-                      checked={restoreInventoryOnCancel}
-                      onChange={(event) =>
-                        setRestoreInventoryOnCancel(event.target.checked)
-                      }
-                      type="checkbox"
-                    />
-                    <span>
-                      <span className="block font-semibold text-stone-950">
-                        Restore inventory?
-                      </span>
-                      <span className="mt-1 block leading-6 text-stone-600">
-                        If checked, inventory-backed items will be returned to
-                        available inventory. Leave unchecked if you want to
-                        review inventory manually.
-                      </span>
-                    </span>
-                  </label>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      className="min-h-10 rounded-md bg-red-700 px-4 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-stone-300"
-                      disabled={isCanceling}
-                      type="button"
-                      onClick={cancelOrder}
-                    >
-                      {isCanceling ? "Canceling..." : "Confirm cancellation"}
-                    </button>
-                    <button
-                      className="seller-secondary-button"
-                      disabled={isCanceling}
-                      type="button"
-                      onClick={() => {
-                        setCancelReason("");
-                        setRestoreInventoryOnCancel(false);
-                        setShowCancelPanel(false);
-                      }}
-                    >
-                      Keep order
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </SellerCard>
-          ) : null}
-
-          <SellerCard className="p-5">
-            <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
-              <div>
-                <h2 className="text-lg font-semibold text-stone-950">
-                  Pickup progress
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-stone-600">
-                  Use these simple steps when the order is ready, then after the
-                  buyer has picked up the items.
-                </p>
-                <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-                  <DetailFact
-                    label="Ready"
-                    value={
-                      order.ready_for_pickup_at
-                        ? formatDateTime(order.ready_for_pickup_at)
-                        : "Not marked ready"
-                    }
-                  />
-                  <DetailFact
-                    label="Complete"
-                    value={
-                      order.fulfilled_at
-                        ? formatDateTime(order.fulfilled_at)
-                        : "Not complete"
-                    }
-                  />
-                  <DetailFact
-                    label="Still open"
-                    value={`${remainingPickupQuantity} item${
-                      remainingPickupQuantity === 1 ? "" : "s"
-                    }`}
-                  />
-                </dl>
-                {actionMessage ? (
-                  <p className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
-                    {actionMessage}
-                  </p>
-                ) : null}
-                {actionError ? (
-                  <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
-                    {actionError}
-                  </p>
-                ) : null}
-              </div>
-              <div className="grid gap-2 sm:flex lg:grid">
-                {canMarkReady(order) ? (
-                  <button
-                    className="seller-secondary-button"
-                    disabled={isSaving}
-                    type="button"
-                    onClick={markReadyForPickup}
-                  >
-                    {isSaving ? "Saving..." : "Mark ready for pickup"}
-                  </button>
-                ) : null}
-                {canMarkComplete(order, remainingPickupQuantity) ? (
-                  <button
-                    className="seller-secondary-button"
-                    disabled={isSaving}
-                    type="button"
-                    onClick={markPickedUpComplete}
-                  >
-                    {isSaving ? "Saving..." : "Mark picked up"}
-                  </button>
-                ) : null}
-                {!canMarkReady(order) &&
-                !canMarkComplete(order, remainingPickupQuantity) ? (
-                  <p className="text-sm leading-6 text-stone-500">
-                    No pickup actions are available for this order.
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          </SellerCard>
-
-          <SellerCard className="overflow-hidden">
-            <div className="border-b border-stone-200 px-5 py-4">
-              <h2 className="text-lg font-semibold text-stone-950">
-                Requested items
+      <SellerCard className="p-3.5 shadow-[0_12px_30px_rgba(46,39,25,0.045)] sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3.5">
+            <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-lg font-bold text-emerald-900">
+              {getCustomerInitials(customerName)}
+            </span>
+            <div className="min-w-0">
+              <h2 className="truncate text-lg font-bold text-stone-950">
+                {customerName}
               </h2>
+              <p className="mt-0.5 text-sm font-semibold text-stone-700">
+                {order.total_item_quantity ?? 0} item
+                {(order.total_item_quantity ?? 0) === 1 ? "" : "s"}{" "}
+                <span aria-hidden="true" className="mx-2 text-stone-400">
+                  -
+                </span>
+                {formatCurrency(order.total_amount)}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <StatusPill tone={getOrderLifecycleTone(order)}>
+              {formatOrderLifecycle(order)}
+            </StatusPill>
+            <StatusPill tone="bg-emerald-100 text-emerald-800">
+              {formatPaymentMethod(order.payment_method)}
+            </StatusPill>
+          </div>
+        </div>
+      </SellerCard>
+
+      {actionMessage ? (
+        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+          {actionMessage}
+        </p>
+      ) : null}
+      {actionError ? (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
+          {actionError}
+        </p>
+      ) : null}
+
+      {showCancelPanel ? (
+        <CancellationPanel
+          cancelReason={cancelReason}
+          isCanceling={isCanceling}
+          restoreInventoryOnCancel={restoreInventoryOnCancel}
+          onCancel={cancelOrder}
+          onClose={() => {
+            setCancelReason("");
+            setRestoreInventoryOnCancel(false);
+            setShowCancelPanel(false);
+          }}
+          onReasonChange={setCancelReason}
+          onRestoreInventoryChange={setRestoreInventoryOnCancel}
+        />
+      ) : null}
+
+      {showFulfillmentDialog ? (
+        <FulfillmentDialog
+          canMarkPaid={canMarkPaymentPaid(order)}
+          isSaving={isSaving}
+          onClose={() => setShowFulfillmentDialog(false)}
+          onFulfillOnly={() => void markOrderFulfilled({ markPaid: false })}
+          onFulfillPaid={() => void markOrderFulfilled({ markPaid: true })}
+        />
+      ) : null}
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_19.5rem]">
+        <main className="grid gap-3">
+          <SellerCard className="overflow-hidden shadow-[0_12px_30px_rgba(46,39,25,0.045)]">
+            <div className={`${requestedItemsGridClass} border-b border-stone-200/80 bg-white px-4 py-3 text-xs font-bold uppercase text-stone-600`}>
+              <h2 className="text-lg font-bold normal-case text-stone-950">
+                Items
+              </h2>
+              <span className="hidden text-right sm:block">Qty</span>
+              <span className="hidden text-right sm:block">Each</span>
+              <span className="hidden text-right sm:block">Line total</span>
             </div>
             {data.items.length > 0 ? (
-              <div className="divide-y divide-stone-200">
-                {data.items.map((item) => (
-                  <OrderItemRow key={item.order_item_id} item={item} />
-                ))}
-              </div>
+              <>
+                <div className="divide-y divide-stone-200/80">
+                  {data.items.map((item) => (
+                    <OrderItemRow
+                      key={item.order_item_id}
+                      item={item}
+                      media={data.mediaByItemId[item.order_item_id] ?? null}
+                    />
+                  ))}
+                </div>
+                <dl className="border-t border-stone-200/80 bg-[#fffdf8] px-4 py-2.5 text-sm">
+                  <RequestedTotalRow
+                    label="Subtotal"
+                    value={formatCurrency(order.subtotal_amount)}
+                  />
+                  {order.tax_fee_amount ? (
+                    <RequestedTotalRow
+                      label={order.tax_fee_label_snapshot ?? "Tax/fee"}
+                      value={formatCurrency(order.tax_fee_amount)}
+                    />
+                  ) : null}
+                  <RequestedTotalRow
+                    isStrong
+                    label="Total"
+                    value={formatCurrency(order.total_amount)}
+                  />
+                </dl>
+              </>
             ) : (
               <div className="p-5">
                 <EmptyState
@@ -580,11 +545,11 @@ export function OrderDetail({ orderId }: { orderId: string }) {
             )}
           </SellerCard>
 
-          <SellerCard className="p-5">
-            <h2 className="text-lg font-semibold text-stone-950">
+          <SellerCard className="p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)]">
+            <h2 className="text-lg font-bold text-stone-950">
               Pickup / order notes
             </h2>
-            <div className="mt-3 grid gap-3 text-sm leading-6 text-stone-700">
+            <div className="mt-3 grid gap-3 text-sm leading-6 text-stone-700 md:grid-cols-2">
               <NoteBlock
                 label="Note from buyer"
                 value={order.buyer_notes}
@@ -599,88 +564,44 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           </SellerCard>
         </main>
 
-        <aside className="grid h-fit gap-5">
-          <SellerCard className="p-5">
-            <h2 className="text-lg font-semibold text-stone-950">
-              Buyer contact
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-stone-600">
-              Use these details to coordinate pickup directly with the buyer.
-            </p>
-            {contactCopyError ? (
-              <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
-                {contactCopyError}
-              </p>
-            ) : null}
-            <div className="mt-4 grid gap-3">
-              <ContactDetailRow
-                label="Name"
+        <aside className="grid h-fit gap-4">
+          <SellerCard className="p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)]">
+            <h2 className="text-lg font-bold text-stone-950">Buyer contact</h2>
+            <div className="mt-4 grid gap-3.5">
+              <ContactLine
+                glyph="/glyphs/person.png"
                 value={customerName}
               />
-              <ContactDetailRow
-                actionLabel="Email buyer"
-                copiedLabel={copiedContact === "email" ? "Email copied" : null}
+              <ContactEmailLine
                 emptyValue="No email provided"
-                href={
-                  order.buyer_email_snapshot
-                    ? `mailto:${order.buyer_email_snapshot}`
-                    : null
-                }
-                label="Email"
-                onCopy={() => copyContactValue("email", order.buyer_email_snapshot)}
+                glyph="/glyphs/envelope.png"
                 value={order.buyer_email_snapshot}
               />
-              <ContactDetailRow
-                actionLabel="Call buyer"
-                copiedLabel={copiedContact === "phone" ? "Phone copied" : null}
+              <ContactPhoneLine
                 emptyValue="No phone provided"
-                href={
-                  order.buyer_phone_snapshot
-                    ? `tel:${formatPhoneHref(order.buyer_phone_snapshot)}`
-                    : null
-                }
-                label="Phone"
-                onCopy={() => copyContactValue("phone", order.buyer_phone_snapshot)}
+                glyph="/glyphs/phone.png"
                 value={order.buyer_phone_snapshot}
+              />
+              <ContactLine
+                emptyValue="No billing address provided"
+                glyph="/glyphs/map-pin.png"
+                value={formatBuyerAddress(order)}
               />
             </div>
           </SellerCard>
-
-          <SellerCard className="p-5">
-            <h2 className="text-lg font-semibold text-stone-950">
-              Pickup contact info
-            </h2>
-            <p className="mt-3 whitespace-pre-line text-sm leading-6 text-stone-700">
-              {formatBuyerAddress(order)}
-            </p>
-          </SellerCard>
-
-          <SellerCard className="p-5">
-            <h2 className="text-lg font-semibold text-stone-950">
-              Order totals
-            </h2>
-            <dl className="mt-3 grid gap-2 text-sm">
-              <TotalRow label="Subtotal" value={formatCurrency(order.subtotal_amount)} />
-              {order.tax_fee_amount ? (
-                <TotalRow
-                  label={order.tax_fee_label_snapshot ?? "Tax/fee"}
-                  value={formatCurrency(order.tax_fee_amount)}
-                />
-              ) : null}
-              <TotalRow
-                isStrong
-                label="Total"
-                value={formatCurrency(order.total_amount)}
-              />
-            </dl>
-          </SellerCard>
         </aside>
       </div>
-    </>
+    </div>
   );
 }
 
-function OrderItemRow({ item }: { item: SellerOrderItemRow }) {
+function OrderItemRow({
+  item,
+  media,
+}: {
+  item: SellerOrderItemRow;
+  media: SellerMediaRow | null;
+}) {
   const isCustomItem = item.order_item_source === "custom";
   const isEquipmentItem = item.order_item_source === "equipment_inventory";
   const isProcessedPoultryItem =
@@ -704,58 +625,58 @@ function OrderItemRow({ item }: { item: SellerOrderItemRow }) {
             .join(" - ") || "Processed Poultry"
       : item.species_name_snapshot;
 
+  const details = [
+    subtitle,
+    !isCustomItem && !isEquipmentItem && !isProcessedPoultryItem
+      ? formatSellerItemDetail(label)
+      : null,
+    !isCustomItem &&
+    !isEquipmentItem &&
+    !isProcessedPoultryItem &&
+    item.age_at_sale_days_snapshot != null
+      ? formatAgeAtAvailability(item.age_at_sale_days_snapshot)
+      : null,
+  ].filter(Boolean);
+
   return (
-    <article className="grid gap-3 px-5 py-4 sm:grid-cols-[1fr_auto]">
-      <div>
-        <h3 className="font-semibold text-stone-950">
-          {itemTitle}
-          {isCustomItem || isEquipmentItem || isProcessedPoultryItem
-            ? ""
-            : ` ${label}`}
-        </h3>
-        <p className="mt-1 text-sm text-stone-600">
-          {subtitle}
-          {!isCustomItem &&
-          !isEquipmentItem &&
-          !isProcessedPoultryItem &&
-          item.hatch_date_snapshot
-            ? ` - hatched ${formatShortDate(item.hatch_date_snapshot)}`
-            : ""}
-          {!isCustomItem &&
-          !isEquipmentItem &&
-          !isProcessedPoultryItem &&
-          item.available_date_snapshot
-            ? ` - available ${formatShortDate(item.available_date_snapshot)}`
-            : ""}
-        </p>
-        <p className="mt-1 text-sm text-stone-500">
-          {!isCustomItem &&
-          !isEquipmentItem &&
-          !isProcessedPoultryItem &&
-          item.age_at_sale_days_snapshot != null
-            ? `${formatAgeAtAvailability(item.age_at_sale_days_snapshot)} at sale - `
-            : ""}
-          {isCustomItem
-            ? `${item.remaining_unfulfilled_quantity} remaining on order`
-            : `${item.remaining_unfulfilled_quantity} still needing pickup`}
-        </p>
+    <article className={`${requestedItemsGridClass} gap-y-3 px-4 py-3 sm:items-center`}>
+      <div className="flex min-w-0 gap-3">
+        <ItemThumbnail
+          alt={media?.alt_text || itemTitle}
+          fallbackGlyph={getItemFallbackGlyph(item)}
+          src={media?.public_url}
+        />
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-bold text-stone-950">
+            {itemTitle}
+          </h3>
+          <p className="mt-0.5 truncate text-sm text-stone-600">
+            {details.join(" - ")}
+          </p>
+          <p className="mt-0.5 text-xs font-medium leading-5 text-stone-500">
+            {item.available_date_snapshot
+              ? `Available ${formatShortDate(item.available_date_snapshot)}`
+              : null}
+            {item.hatch_date_snapshot
+              ? `${item.available_date_snapshot ? " - " : ""}Hatched ${formatShortDate(
+                  item.hatch_date_snapshot,
+                )}`
+              : null}
+          </p>
+        </div>
       </div>
-      <dl className="grid grid-cols-3 gap-3 text-right text-sm sm:min-w-64">
-        <DetailFact label="Qty" value={`${item.quantity}`} />
-        <DetailFact label="Each" value={formatCurrency(item.unit_price_snapshot)} />
-        <DetailFact label="Line" value={formatCurrency(item.line_subtotal)} />
-      </dl>
+      <div className="grid grid-cols-3 gap-2 text-sm sm:contents">
+        <MobileAmount label="Qty" value={`${item.quantity}`} />
+        <MobileAmount
+          label="Each"
+          value={formatCurrency(item.unit_price_snapshot)}
+        />
+        <MobileAmount
+          label="Line total"
+          value={formatCurrency(item.line_subtotal)}
+        />
+      </div>
     </article>
-  );
-}
-function DetailFact({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
-        {label}
-      </dt>
-      <dd className="mt-1 font-semibold text-stone-950">{value}</dd>
-    </div>
   );
 }
 
@@ -769,63 +690,111 @@ function NoteBlock({
   value: string | null;
 }) {
   return (
-    <section className="rounded-md bg-stone-50 px-3 py-2">
-      <h3 className="font-semibold text-stone-950">{label}</h3>
-      <p className="mt-1 whitespace-pre-line">{value || empty}</p>
+    <section className="min-h-20 rounded-lg border border-stone-200 bg-[#fffdf8] px-3.5 py-2.5">
+      <h3 className="text-sm font-semibold text-stone-950">{label}</h3>
+      <p className="mt-1 whitespace-pre-line text-sm leading-5 text-stone-700">
+        {value || empty}
+      </p>
     </section>
   );
 }
 
-function ContactDetailRow({
-  actionLabel,
-  copiedLabel,
+function ContactLine({
   emptyValue = "Not provided",
-  href,
-  label,
-  onCopy,
+  glyph,
   value,
 }: {
-  actionLabel?: string;
-  copiedLabel?: string | null;
   emptyValue?: string;
-  href?: string | null;
-  label: string;
-  onCopy?: () => void;
+  glyph: string;
   value: string | null;
 }) {
-  const hasValue = Boolean(value);
-
   return (
-    <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
-        {label}
-      </p>
-      <p className="mt-1 break-words text-sm font-semibold text-stone-950">
+    <div className="flex min-w-0 items-start gap-3 text-sm font-normal text-stone-700">
+      <Image className="shrink-0" src={glyph} alt="" width={18} height={18} />
+      <span className="min-w-0 whitespace-pre-line break-words leading-5">
         {value || emptyValue}
-      </p>
-      {hasValue && (href || onCopy) ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {href && actionLabel ? (
-            <a className="seller-small-button" href={href}>
-              {actionLabel}
-            </a>
-          ) : null}
-          {onCopy ? (
-            <button
-              className="seller-small-button"
-              type="button"
-              onClick={onCopy}
-            >
-              {copiedLabel ?? `Copy ${label.toLowerCase()}`}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      </span>
     </div>
   );
 }
 
-function TotalRow({
+function ContactEmailLine({
+  emptyValue,
+  glyph,
+  value,
+}: {
+  emptyValue: string;
+  glyph: string;
+  value: string | null;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-3 text-sm font-normal text-stone-700">
+      <Image className="shrink-0" src={glyph} alt="" width={18} height={18} />
+      {value ? (
+        <a
+          className="min-w-0 truncate text-stone-700 underline-offset-4 hover:text-emerald-800 hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+          href={`mailto:${value}`}
+          title={value}
+        >
+          {value}
+        </a>
+      ) : (
+        <span className="min-w-0 truncate text-stone-500">{emptyValue}</span>
+      )}
+    </div>
+  );
+}
+
+function ContactPhoneLine({
+  emptyValue,
+  glyph,
+  value,
+}: {
+  emptyValue: string;
+  glyph: string;
+  value: string | null;
+}) {
+  if (!value) {
+    return <ContactLine emptyValue={emptyValue} glyph={glyph} value={null} />;
+  }
+
+  const phoneHref = formatPhoneHref(value);
+
+  return (
+    <>
+      <details className="relative min-w-0 md:hidden">
+        <summary className="flex min-w-0 cursor-pointer list-none items-center gap-3 text-sm font-normal text-stone-700 transition hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-700/30">
+          <Image className="shrink-0" src={glyph} alt="" width={18} height={18} />
+          <span className="min-w-0 truncate">{value}</span>
+          <ChevronDown aria-hidden="true" className="ml-auto size-3.5 shrink-0" />
+        </summary>
+        <div className="absolute left-7 z-20 mt-2 grid min-w-32 gap-1 rounded-lg border border-stone-200 bg-white p-1.5 text-sm font-semibold shadow-[0_12px_30px_rgba(46,39,25,0.12)]">
+          <a
+            className="rounded-md px-3 py-2 text-stone-950 hover:bg-[#fbfaf6] hover:text-emerald-800"
+            href={`tel:${phoneHref}`}
+          >
+            Call
+          </a>
+          <a
+            className="rounded-md px-3 py-2 text-stone-950 hover:bg-[#fbfaf6] hover:text-emerald-800"
+            href={`sms:${phoneHref}`}
+          >
+            Text
+          </a>
+        </div>
+      </details>
+      <a
+        className="hidden min-w-0 items-center gap-3 text-sm font-normal text-stone-700 underline-offset-4 hover:text-emerald-800 hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-700/30 md:flex"
+        href={`tel:${phoneHref}`}
+      >
+        <Image className="shrink-0" src={glyph} alt="" width={18} height={18} />
+        <span className="min-w-0 truncate">{value}</span>
+      </a>
+    </>
+  );
+}
+
+function RequestedTotalRow({
   isStrong = false,
   label,
   value,
@@ -835,20 +804,33 @@ function TotalRow({
   value: string;
 }) {
   return (
-    <div
-      className={`flex justify-between gap-3 ${
-        isStrong ? "border-t border-stone-200 pt-2 font-semibold text-stone-950" : ""
-      }`}
-    >
-      <dt>{label}</dt>
-      <dd>{value}</dd>
+    <div className={`${requestedItemsGridClass} py-0.5`}>
+      <dt
+        className={`col-span-3 ${
+          isStrong
+            ? "border-t border-stone-200 pt-2 text-base font-bold text-stone-950"
+            : "text-stone-700"
+        }`}
+      >
+        {label}
+      </dt>
+      <dd
+        className={`text-right ${
+          isStrong
+            ? "border-t border-stone-200 pt-2 text-base font-bold text-stone-950"
+            : "text-stone-700"
+        }`}
+      >
+        {value}
+      </dd>
     </div>
   );
 }
 
 function BackToOrdersLink() {
   return (
-    <Link className="seller-secondary-button" href="/dashboard/orders">
+    <Link className={orderDetailBackButtonClass} href="/dashboard/orders">
+      <ArrowLeft aria-hidden="true" className="size-4" />
       Back to Orders
     </Link>
   );
@@ -877,7 +859,22 @@ function formatBuyerAddress(order: SellerOrderDetailRow) {
     order.buyer_country_snapshot,
   ].filter(Boolean);
 
-  return lines.length > 0 ? lines.join("\n") : "No pickup contact address.";
+  return lines.length > 0 ? lines.join("\n") : null;
+}
+
+function formatSellerItemDetail(value: string | null) {
+  const normalized = value?.trim();
+
+  if (!normalized) return null;
+
+  const lower = normalized.toLowerCase();
+
+  if (lower === "female") return "Female";
+  if (lower === "male") return "Male";
+  if (lower === "straight run") return "Straight run";
+  if (lower === "unknown") return "Unknown";
+
+  return normalized;
 }
 
 function formatPhoneHref(value: string) {
@@ -908,12 +905,12 @@ function canMarkComplete(
   );
 }
 
-function formatPickupStatus(order: SellerOrderDetailRow) {
-  if (order.order_status === "fulfilled") return "Picked up / complete";
-  if (order.order_status === "canceled") return "Canceled";
-  if (order.ready_for_pickup_at) return "Ready for pickup";
-
-  return order.pickup_option_label_snapshot ?? "Needs coordination";
+function canMarkPaymentPaid(order: SellerOrderDetailRow) {
+  return (
+    order.payment_method === "pay_at_pickup" &&
+    order.payment_status === "pay_at_pickup" &&
+    ["pending", "open", "fulfilled"].includes(order.order_status)
+  );
 }
 
 function getOrderLifecycleTone(order: SellerOrderDetailRow) {
@@ -936,10 +933,26 @@ function toSellerOrderActionError(message: string | undefined) {
   }
 
   if (message?.includes("fulfilled") || message?.includes("fulfillment")) {
-    return "This order cannot be marked picked up right now.";
+    return "This order cannot be marked fulfilled right now.";
   }
 
   return "The order could not be updated. Please try again.";
+}
+
+function toSellerOrderPaymentError(message: string | undefined) {
+  if (message?.includes("pay-at-pickup")) {
+    return "Payment can only be marked paid for pay-at-pickup orders.";
+  }
+
+  if (message?.includes("marked paid")) {
+    return "This order cannot be marked paid right now.";
+  }
+
+  if (message === "Order not found." || message?.includes("authorized")) {
+    return "This order is no longer available. Please refresh Orders.";
+  }
+
+  return "The order was fulfilled, but payment could not be marked paid. Please refresh and review payment status.";
 }
 
 function toSellerOrderCancellationError(message: string | undefined) {
@@ -964,4 +977,445 @@ function formatShortDate(value: string) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(`${value}T00:00:00`));
+}
+
+function StatusPill({
+  children,
+  tone,
+}: {
+  children: React.ReactNode;
+  tone: string;
+}) {
+  return (
+    <span
+      className={`inline-flex rounded-full px-3 py-1 text-sm font-bold ${tone}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function QuickActionsMenu({
+  canCancel,
+  canMarkComplete,
+  canMarkReady,
+  isBusy,
+  onCancel,
+  onMarkComplete,
+  onMarkReady,
+  onPrint,
+}: {
+  canCancel: boolean;
+  canMarkComplete: boolean;
+  canMarkReady: boolean;
+  isBusy: boolean;
+  onCancel: () => void;
+  onMarkComplete: () => void;
+  onMarkReady: () => void;
+  onPrint: () => void;
+}) {
+  return (
+    <details className="relative">
+      <summary className={`${orderDetailButtonClass} cursor-pointer list-none`}>
+        Quick actions
+        <ChevronDown aria-hidden="true" className="size-4" />
+      </summary>
+      <div className="absolute right-0 z-20 mt-2 w-60 rounded-xl border border-stone-200 bg-white p-2 shadow-[0_18px_40px_rgba(46,39,25,0.14)]">
+        <QuickActionButton
+          disabled={!canMarkReady || isBusy}
+          glyph="/glyphs/checkmark.png"
+          label="Mark ready for pickup"
+          title={
+            canMarkReady
+              ? "Manual override for current workflow."
+              : "This order cannot be marked ready right now."
+          }
+          onClick={onMarkReady}
+        />
+        <QuickActionButton
+          disabled={!canMarkComplete || isBusy}
+          glyph="/glyphs/checkmark.png"
+          label="Mark order fulfilled"
+          title={
+            canMarkComplete
+              ? undefined
+              : "This order cannot be marked fulfilled right now."
+          }
+          onClick={onMarkComplete}
+        />
+        <QuickActionButton
+          disabled
+          glyph="/glyphs/pencil.png"
+          label="Edit order"
+          title="Order editing is not wired for this workflow yet."
+        />
+        <QuickActionButton
+          glyph="/glyphs/clipboard.png"
+          label="Print order"
+          onClick={onPrint}
+        />
+        <QuickActionButton
+          disabled={!canCancel || isBusy}
+          glyph="/glyphs/trashcan.png"
+          label="Cancel order"
+          title={
+            canCancel
+              ? undefined
+              : "This order cannot be canceled from this screen."
+          }
+          onClick={onCancel}
+        />
+        <QuickActionButton
+          disabled
+          glyph="/glyphs/clipboard.png"
+          label="Refund"
+          title="Refunds are not wired for pay-at-pickup orders yet."
+        />
+        <QuickActionButton
+          disabled
+          glyph="/glyphs/shopping-bag.png"
+          label="Archive"
+          title="Order archiving is not wired yet."
+        />
+      </div>
+    </details>
+  );
+}
+
+function QuickActionButton({
+  disabled = false,
+  glyph,
+  label,
+  onClick,
+  title,
+}: {
+  disabled?: boolean;
+  glyph: string;
+  label: string;
+  onClick?: () => void;
+  title?: string;
+}) {
+  return (
+    <button
+      className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold text-stone-950 transition hover:bg-emerald-50 hover:text-emerald-900 focus:bg-emerald-50 focus:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/25 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-stone-950"
+      disabled={disabled}
+      title={title}
+      type="button"
+      onClick={onClick}
+    >
+      <Image src={glyph} alt="" width={18} height={18} />
+      {label}
+    </button>
+  );
+}
+
+function FulfillmentDialog({
+  canMarkPaid,
+  isSaving,
+  onClose,
+  onFulfillOnly,
+  onFulfillPaid,
+}: {
+  canMarkPaid: boolean;
+  isSaving: boolean;
+  onClose: () => void;
+  onFulfillOnly: () => void;
+  onFulfillPaid: () => void;
+}) {
+  return (
+    <div
+      aria-labelledby="fulfillment-dialog-title"
+      aria-modal="true"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-stone-950/30 px-4 py-6"
+      role="dialog"
+    >
+      <section className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-5 shadow-[0_22px_60px_rgba(46,39,25,0.2)]">
+        <h2
+          className="text-lg font-bold text-stone-950"
+          id="fulfillment-dialog-title"
+        >
+          Mark order fulfilled?
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-stone-700">
+          This means the buyer has received the birds and the order is complete.
+        </p>
+        <p className="mt-4 text-sm font-bold text-stone-950">
+          Was this order paid at pickup?
+        </p>
+        {!canMarkPaid ? (
+          <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Payment can only be marked paid when this is an unpaid
+            pay-at-pickup order. You can still mark the order fulfilled.
+          </p>
+        ) : null}
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <button
+            className={`${orderDetailButtonClass} min-h-10 disabled:cursor-not-allowed disabled:opacity-60`}
+            disabled={!canMarkPaid || isSaving}
+            type="button"
+            onClick={onFulfillPaid}
+          >
+            {isSaving ? "Saving..." : "Mark fulfilled and paid"}
+          </button>
+          <button
+            className={`${orderDetailBackButtonClass} min-h-10`}
+            disabled={isSaving}
+            type="button"
+            onClick={onFulfillOnly}
+          >
+            {isSaving ? "Saving..." : "Mark fulfilled only"}
+          </button>
+          <button
+            className="min-h-10 rounded-md px-3.5 text-sm font-bold text-stone-700 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:col-span-2"
+            disabled={isSaving}
+            type="button"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CancellationPanel({
+  cancelReason,
+  isCanceling,
+  restoreInventoryOnCancel,
+  onCancel,
+  onClose,
+  onReasonChange,
+  onRestoreInventoryChange,
+}: {
+  cancelReason: string;
+  isCanceling: boolean;
+  restoreInventoryOnCancel: boolean;
+  onCancel: () => void;
+  onClose: () => void;
+  onReasonChange: (value: string) => void;
+  onRestoreInventoryChange: (value: boolean) => void;
+}) {
+  return (
+    <section className="rounded-xl border border-red-200 bg-red-50 p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-base font-bold text-red-950">Cancel order</h2>
+          <p className="mt-1 text-sm leading-6 text-red-800">
+            Add a reason before canceling. Inventory restore uses the existing
+            safe cancellation workflow.
+          </p>
+        </div>
+        <button
+          className="seller-small-button border-red-200 text-red-800 hover:bg-red-100"
+          disabled={isCanceling}
+          type="button"
+          onClick={onClose}
+        >
+          Keep order
+        </button>
+      </div>
+      <label className="mt-4 grid gap-2 text-sm font-semibold text-red-950">
+        Reason for cancellation
+        <textarea
+          className="min-h-24 rounded-md border border-red-200 bg-white px-3 py-2 text-base font-normal text-stone-950 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200"
+          maxLength={500}
+          onChange={(event) => onReasonChange(event.target.value)}
+          value={cancelReason}
+        />
+      </label>
+      <label className="mt-4 flex gap-3 rounded-md border border-red-200 bg-white p-3 text-sm text-stone-700">
+        <input
+          className="mt-1 h-4 w-4 rounded border-stone-300 text-red-700 focus:ring-red-500"
+          checked={restoreInventoryOnCancel}
+          type="checkbox"
+          onChange={(event) => onRestoreInventoryChange(event.target.checked)}
+        />
+        <span>
+          <span className="block font-semibold text-stone-950">
+            Restore inventory?
+          </span>
+          <span className="mt-1 block leading-6 text-stone-600">
+            If checked, inventory-backed items will be returned to available
+            inventory.
+          </span>
+        </span>
+      </label>
+      <button
+        className="mt-4 min-h-10 rounded-md bg-red-700 px-4 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-stone-300"
+        disabled={isCanceling}
+        type="button"
+        onClick={onCancel}
+      >
+        {isCanceling ? "Canceling..." : "Confirm cancellation"}
+      </button>
+    </section>
+  );
+}
+
+function MobileAmount({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-[#fbfaf6] px-3 py-2 text-right sm:rounded-none sm:bg-transparent sm:p-0 sm:tabular-nums">
+      <span className="block text-[0.65rem] font-bold uppercase text-stone-500 sm:hidden">
+        {label}
+      </span>
+      <span className="font-bold text-stone-950">{value}</span>
+    </div>
+  );
+}
+
+function ItemThumbnail({
+  alt,
+  fallbackGlyph,
+  src,
+}: {
+  alt: string;
+  fallbackGlyph: string;
+  src?: string | null;
+}) {
+  const [hasImageError, setHasImageError] = useState(false);
+  const displayUrl = toDisplayImageUrl(src);
+  const shouldShowImage = Boolean(displayUrl) && !hasImageError;
+
+  return (
+    <span className="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-[#f4f8ef]">
+      {shouldShowImage ? (
+        <Image
+          className="object-cover"
+          src={displayUrl}
+          alt={alt}
+          fill
+          sizes="56px"
+          onError={() => setHasImageError(true)}
+        />
+      ) : (
+        <Image src={fallbackGlyph} alt="" width={30} height={30} />
+      )}
+    </span>
+  );
+}
+
+async function loadOrderItemMedia(
+  items: SellerOrderItemRow[],
+  storeId: string,
+): Promise<Record<string, SellerMediaRow | null>> {
+  const entityIds = Array.from(
+    new Set(
+      items
+        .flatMap((item) => getItemMediaEntityKeys(item).map((key) => key.id))
+        .filter(Boolean),
+    ),
+  );
+
+  if (entityIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from("seller_media_management")
+    .select(
+      "entity_type, entity_id, public_url, alt_text, sort_order, is_featured, moderation_status, asset_status, visibility_status",
+    )
+    .eq("store_id", storeId)
+    .in("entity_id", entityIds)
+    .in("entity_type", [
+      "inventory_item",
+      "listing_batch",
+      "listing_batch_breed",
+      "seller_breed_profile",
+      "equipment_inventory_item",
+      "processed_poultry_inventory_item",
+    ])
+    .order("is_featured", { ascending: false })
+    .order("sort_order", { ascending: true })
+    .returns<SellerMediaRow[]>();
+
+  if (error) return {};
+
+  const mediaByEntity = new Map<string, SellerMediaRow[]>();
+
+  for (const media of data ?? []) {
+    if (
+      media.visibility_status !== "active" ||
+      media.asset_status !== "active" ||
+      media.moderation_status !== "approved"
+    ) {
+      continue;
+    }
+
+    const key = `${media.entity_type}:${media.entity_id}`;
+    mediaByEntity.set(key, [...(mediaByEntity.get(key) ?? []), media]);
+  }
+
+  return Object.fromEntries(
+    items.map((item) => [
+      item.order_item_id,
+      pickMediaForItem(item, mediaByEntity),
+    ]),
+  );
+}
+
+function pickMediaForItem(
+  item: SellerOrderItemRow,
+  mediaByEntity: Map<string, SellerMediaRow[]>,
+) {
+  for (const key of getItemMediaEntityKeys(item)) {
+    const media = mediaByEntity.get(`${key.type}:${key.id}`)?.[0];
+    if (media) return media;
+  }
+
+  return null;
+}
+
+function getItemMediaEntityKeys(item: SellerOrderItemRow) {
+  if (item.order_item_source === "equipment_inventory") {
+    return [
+      {
+        type: "equipment_inventory_item",
+        id: item.equipment_inventory_item_id,
+      },
+    ];
+  }
+
+  if (item.order_item_source === "processed_poultry_inventory") {
+    return [
+      {
+        type: "processed_poultry_inventory_item",
+        id: item.processed_poultry_inventory_item_id,
+      },
+    ];
+  }
+
+  return [
+    { type: "inventory_item", id: item.inventory_item_id },
+    { type: "listing_batch_breed", id: item.listing_batch_breed_id },
+    { type: "listing_batch", id: item.listing_batch_id },
+    { type: "seller_breed_profile", id: item.seller_breed_profile_id },
+  ];
+}
+
+function getItemFallbackGlyph(item: SellerOrderItemRow) {
+  if (item.order_item_source === "equipment_inventory") return "/glyphs/feed-sack.png";
+  if (item.order_item_source === "processed_poultry_inventory") {
+    return "/glyphs/chicken-leg.png";
+  }
+
+  return "/glyphs/hen.png";
+}
+
+function toDisplayImageUrl(value: string | null | undefined) {
+  if (!value) return "";
+  if (value.startsWith("http://") || value.startsWith("https://")) return value;
+  if (value.startsWith("/")) return value;
+
+  return `/storage/v1/object/public/${value}`;
+}
+
+function getCustomerInitials(name: string) {
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+  return initials || "B";
 }

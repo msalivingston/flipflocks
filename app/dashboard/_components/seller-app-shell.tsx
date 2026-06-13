@@ -81,35 +81,35 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
   const isLive = seller.is_publicly_available;
 
   return (
-    <div className="min-h-screen bg-[#fbfaf6] text-stone-950 lg:grid lg:grid-cols-[320px_1fr]">
+    <div className="min-h-screen bg-[#fbfaf6] text-stone-950 lg:grid lg:grid-cols-[275px_1fr]">
       <aside className="hidden border-r border-stone-200/80 bg-white lg:flex lg:min-h-screen lg:flex-col">
-        <div className="px-6 pb-3 pt-4">
+        <div className="px-5 pb-2.5 pt-3.5">
           <Link className="block w-fit" href="/">
             <Image
               src="/branding/flockfront-logo.png"
               alt="FlockFront"
-              width={220}
-              height={73}
+              width={208}
+              height={69}
               priority
             />
           </Link>
-          <div className="mt-2">
+          <div className="mt-1.5">
             <p className="truncate text-lg font-bold text-stone-950">
               {seller.store_name}
             </p>
-            <span className="mt-1 inline-flex items-center gap-2 text-sm font-semibold text-emerald-800">
+            <span className="mt-0.5 inline-flex items-center gap-2 text-sm font-semibold text-emerald-800">
               <span className="size-2.5 rounded-full bg-green-500" />
               {isLive ? "Storefront is live" : "Storefront not live"}
             </span>
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 px-5">
+        <nav className="flex-1 space-y-0.5 px-4">
           <SellerNavLinks />
         </nav>
 
-        <div className="space-y-1.5 border-t border-stone-200 px-6 py-3">
-          <div className="flex items-center gap-3 rounded-xl px-1 py-1">
+        <div className="space-y-1 border-t border-stone-200 px-5 py-2.5">
+          <div className="flex items-center gap-2.5 rounded-xl px-1 py-0.5">
             <NavGlyph src="/glyphs/storefront.png" alt="" />
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-stone-950">
@@ -119,14 +119,14 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <a
-            className="flex min-h-9 items-center gap-3 rounded-xl px-1 text-sm font-medium text-stone-950 transition hover:text-emerald-800"
+            className="flex min-h-9 items-center gap-2.5 rounded-xl px-1 text-sm font-medium text-stone-950 transition hover:text-emerald-800"
             href={`mailto:${SUPPORT_EMAIL}`}
           >
             <NavGlyph src="/glyphs/chat.png" alt="" />
             Contact support
           </a>
           <button
-            className="flex min-h-9 items-center gap-3 rounded-xl px-1 text-sm font-medium text-stone-950 transition hover:text-emerald-800"
+            className="flex min-h-9 items-center gap-2.5 rounded-xl px-1 text-sm font-medium text-stone-950 transition hover:text-emerald-800"
             onClick={handleSignOut}
           >
             <LogOut aria-hidden="true" className="size-5 shrink-0" />
@@ -202,7 +202,7 @@ function SellerNavLinks() {
       <Link
         key={item.href}
         href={item.href}
-        className={`flex min-h-10 items-center gap-2.5 rounded-xl px-4 text-base font-medium transition focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 focus:ring-offset-white ${
+        className={`flex min-h-10 items-center gap-2.5 rounded-xl px-3.5 text-base font-medium transition focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 focus:ring-offset-white ${
           isActive
             ? "bg-[#f0f5ea] text-emerald-950"
             : "text-stone-950 hover:bg-[#f7faf3] hover:text-emerald-950"
