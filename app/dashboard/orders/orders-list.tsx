@@ -108,6 +108,8 @@ export function OrdersList() {
     () => new Set(),
   );
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [expandedPickupNoteOrderId, setExpandedPickupNoteOrderId] =
+    useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -167,6 +169,7 @@ export function OrdersList() {
       setOrders(nextOrders);
       setOrderItemsByOrderId(nextItemsByOrderId);
       setExpandedOrderId(null);
+      setExpandedPickupNoteOrderId(null);
       setIsLoading(false);
     }
 
@@ -236,6 +239,12 @@ export function OrdersList() {
 
   function toggleExpandedOrder(orderId: string) {
     setExpandedOrderId((current) => (current === orderId ? null : orderId));
+  }
+
+  function toggleExpandedPickupNote(orderId: string) {
+    setExpandedPickupNoteOrderId((current) =>
+      current === orderId ? null : orderId,
+    );
   }
 
   function toggleOrderSelection(orderId: string) {
@@ -340,12 +349,14 @@ export function OrdersList() {
         <OrdersTableCard
           allVisibleSelected={allVisibleSelected}
           expandedOrderId={expandedOrderId}
+          expandedPickupNoteOrderId={expandedPickupNoteOrderId}
           itemsByOrderId={orderItemsByOrderId}
           orders={visibleOrders}
           selectedOrderIds={selectedOrderIds}
           selectedVisibleCount={selectedVisibleCount}
           onClearSelection={clearSelection}
           onToggleExpandedOrder={toggleExpandedOrder}
+          onToggleExpandedPickupNote={toggleExpandedPickupNote}
           onToggleOrderSelection={toggleOrderSelection}
           onToggleSelectAll={toggleSelectAllOnPage}
         />
@@ -366,23 +377,27 @@ export function OrdersList() {
 function OrdersTableCard({
   allVisibleSelected,
   expandedOrderId,
+  expandedPickupNoteOrderId,
   itemsByOrderId,
   orders,
   selectedOrderIds,
   selectedVisibleCount,
   onClearSelection,
   onToggleExpandedOrder,
+  onToggleExpandedPickupNote,
   onToggleOrderSelection,
   onToggleSelectAll,
 }: {
   allVisibleSelected: boolean;
   expandedOrderId: string | null;
+  expandedPickupNoteOrderId: string | null;
   itemsByOrderId: Record<string, SellerOrderItemRow[]>;
   orders: SellerOrderRow[];
   selectedOrderIds: Set<string>;
   selectedVisibleCount: number;
   onClearSelection: () => void;
   onToggleExpandedOrder: (orderId: string) => void;
+  onToggleExpandedPickupNote: (orderId: string) => void;
   onToggleOrderSelection: (orderId: string) => void;
   onToggleSelectAll: () => void;
 }) {
@@ -436,11 +451,13 @@ function OrdersTableCard({
         {orders.map((order) => (
           <OrderRow
             isExpanded={expandedOrderId === order.order_id}
+            isPickupNoteExpanded={expandedPickupNoteOrderId === order.order_id}
             isSelected={selectedOrderIds.has(order.order_id)}
             items={itemsByOrderId[order.order_id] ?? []}
             key={order.order_id}
             order={order}
             onToggleExpanded={() => onToggleExpandedOrder(order.order_id)}
+            onTogglePickupNote={() => onToggleExpandedPickupNote(order.order_id)}
             onToggleSelection={() => onToggleOrderSelection(order.order_id)}
           />
         ))}
@@ -491,17 +508,21 @@ function BulkActions({
 
 function OrderRow({
   isExpanded,
+  isPickupNoteExpanded,
   isSelected,
   items,
   order,
   onToggleExpanded,
+  onTogglePickupNote,
   onToggleSelection,
 }: {
   isExpanded: boolean;
+  isPickupNoteExpanded: boolean;
   isSelected: boolean;
   items: SellerOrderItemRow[];
   order: SellerOrderRow;
   onToggleExpanded: () => void;
+  onTogglePickupNote: () => void;
   onToggleSelection: () => void;
 }) {
   const customerName = formatCustomerName(order);
@@ -509,6 +530,7 @@ function OrderRow({
   const pickupNote = order.pickup_note?.trim();
   const mobileDetailsId = `mobile-order-details-${order.order_id}`;
   const desktopDetailsId = `desktop-order-items-${order.order_id}`;
+  const desktopPickupNoteId = `desktop-pickup-note-${order.order_id}`;
   const itemSummary = formatOrderItems(order);
   const paymentSummary = formatPaymentSummary(order);
 
@@ -650,17 +672,7 @@ function OrderRow({
               lifecycle={lifecycle}
             />
           </div>
-        </div>
-
-        <p className="min-w-0 truncate text-sm text-stone-500">
-          {formatShortDate(order.created_at)}
-        </p>
-
-        <div className="min-w-0">
-          <p className="truncate text-sm text-stone-950">
-            {customerName}
-          </p>
-          <p className="mt-0.5 truncate text-sm text-stone-600">
+          <div className="mt-1">
             <button
               aria-controls={desktopDetailsId}
               aria-expanded={isExpanded}
@@ -682,10 +694,42 @@ function OrderRow({
                 {isExpanded ? "▴" : "▾"}
               </span>
             </button>
-            {pickupNote ? (
-              <span className="text-stone-500"> · Note</span>
-            ) : null}
+          </div>
+        </div>
+
+        <p className="min-w-0 truncate text-sm text-stone-500">
+          {formatShortDate(order.created_at)}
+        </p>
+
+        <div className="min-w-0">
+          <p className="truncate text-sm text-stone-950">
+            {customerName}
           </p>
+          {pickupNote ? (
+            <p className="mt-1">
+              <button
+                aria-controls={desktopPickupNoteId}
+                aria-expanded={isPickupNoteExpanded}
+                aria-label={
+                  isPickupNoteExpanded
+                    ? `Hide pickup note for order ${order.order_number}`
+                    : `Show pickup note for order ${order.order_number}`
+                }
+                className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-700/30 ${
+                  isPickupNoteExpanded
+                    ? "border-emerald-800 bg-emerald-50 text-emerald-950"
+                    : "border-emerald-800/35 bg-[#fbfaf6] text-emerald-900 hover:border-emerald-800/60 hover:bg-emerald-50"
+                }`}
+                type="button"
+                onClick={onTogglePickupNote}
+              >
+                <span className="truncate">Pickup note</span>
+                <span aria-hidden="true" className="text-sm leading-none">
+                  {isPickupNoteExpanded ? "\u25B4" : "\u25BE"}
+                </span>
+              </button>
+            </p>
+          ) : null}
         </div>
 
         <p className="min-w-0 font-medium text-stone-950">
@@ -717,6 +761,20 @@ function OrderRow({
         >
           <div className="pl-[calc(2.25rem+0.75rem)]">
             <OrderItemsQuickview items={items} />
+          </div>
+        </div>
+      ) : null}
+
+      {pickupNote && isPickupNoteExpanded ? (
+        <div
+          className="hidden border-t border-stone-200/80 bg-[#fffdf8] px-4 py-3 xl:block"
+          id={desktopPickupNoteId}
+        >
+          <div className="pl-[calc(2.25rem+0.75rem)]">
+            <p className="max-w-3xl text-sm leading-6 text-stone-700">
+              <span className="font-medium text-stone-950">Pickup note:</span>{" "}
+              {pickupNote}
+            </p>
           </div>
         </div>
       ) : null}
@@ -841,7 +899,7 @@ function OrderContactButtons({
       ) : variant === "mobile" ? (
         <span aria-hidden="true" />
       ) : null}
-      {order.buyer_phone_snapshot ? (
+      {variant === "mobile" && order.buyer_phone_snapshot ? (
         <a
           aria-label={`Text ${formatCustomerName(order)}`}
           className={buttonClass}
