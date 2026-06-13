@@ -14,6 +14,7 @@ import {
 import {
   formatCurrency,
   formatDateTime,
+  formatInventoryLabel,
   formatOrderLifecycle,
   formatPaymentMethod,
   getOrderLifecycleState,
@@ -53,6 +54,26 @@ type SellerOrderRow = {
   pickup_option_label_snapshot: string | null;
 };
 
+type SellerOrderItemRow = {
+  order_id: string;
+  order_item_id: string;
+  species_name_snapshot: string | null;
+  breed_display_name_snapshot: string | null;
+  inventory_type_snapshot: string | null;
+  custom_inventory_label_snapshot: string | null;
+  hatch_date_snapshot: string | null;
+  available_date_snapshot: string | null;
+  age_at_sale_days_snapshot: number | null;
+  order_item_source: string | null;
+  custom_item_name_snapshot: string | null;
+  product_type_snapshot: string | null;
+  item_name_snapshot: string | null;
+  item_category_snapshot: string | null;
+  unit_price_snapshot: number | null;
+  quantity: number;
+  line_subtotal: number | null;
+};
+
 const orderFilters: { label: string; value: OrderFilter }[] = [
   { label: "Needs attention", value: "needs_attention" },
   { label: "Ready for pickup", value: "ready_for_pickup" },
@@ -75,6 +96,9 @@ const orderSortOptions: { label: string; value: OrderSort }[] = [
 export function OrdersList() {
   const { seller } = useSellerContext();
   const [orders, setOrders] = useState<SellerOrderRow[]>([]);
+  const [orderItemsByOrderId, setOrderItemsByOrderId] = useState<
+    Record<string, SellerOrderItemRow[]>
+  >({});
   const [filter, setFilter] = useState<OrderFilter>("needs_attention");
   const [pickupNoteFilter, setPickupNoteFilter] =
     useState<PickupNoteFilter>("__all__");
@@ -83,6 +107,7 @@ export function OrdersList() {
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -95,7 +120,7 @@ export function OrdersList() {
       setIsLoading(true);
       setError(null);
 
-      const result = await supabase
+      const orderResult = await supabase
         .from("seller_order_management")
         .select(
           "order_id, order_number, order_source, order_status, payment_method, payment_status, created_at, ready_for_pickup_at, fulfilled_at, canceled_at, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, pickup_note, buyer_notes, total_amount, item_count, total_item_quantity, pickup_option_label_snapshot",
@@ -107,13 +132,41 @@ export function OrdersList() {
 
       if (!isMounted) return;
 
-      if (result.error) {
-        setError(result.error.message);
+      if (orderResult.error) {
+        setError(orderResult.error.message);
         setIsLoading(false);
         return;
       }
 
-      setOrders(result.data ?? []);
+      const nextOrders = orderResult.data ?? [];
+      const orderIds = nextOrders.map((order) => order.order_id);
+      let nextItemsByOrderId: Record<string, SellerOrderItemRow[]> = {};
+
+      if (orderIds.length > 0) {
+        const itemResult = await supabase
+          .from("seller_order_item_detail")
+          .select(
+            "order_id, order_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, line_subtotal",
+          )
+          .eq("store_id", seller.store_id)
+          .in("order_id", orderIds)
+          .order("created_at", { ascending: true })
+          .returns<SellerOrderItemRow[]>();
+
+        if (!isMounted) return;
+
+        if (itemResult.error) {
+          setError(itemResult.error.message);
+          setIsLoading(false);
+          return;
+        }
+
+        nextItemsByOrderId = groupOrderItemsByOrderId(itemResult.data ?? []);
+      }
+
+      setOrders(nextOrders);
+      setOrderItemsByOrderId(nextItemsByOrderId);
+      setExpandedOrderId(null);
       setIsLoading(false);
     }
 
@@ -132,10 +185,10 @@ export function OrdersList() {
     () =>
       orders.filter(
         (order) =>
-          matchesSearch(order, searchQuery) &&
+          matchesSearch(order, searchQuery, orderItemsByOrderId[order.order_id]) &&
           matchesPickupNoteFilter(order, pickupNoteFilter),
       ),
-    [orders, pickupNoteFilter, searchQuery],
+    [orderItemsByOrderId, orders, pickupNoteFilter, searchQuery],
   );
   const visibleOrders = useMemo(
     () =>
@@ -179,6 +232,10 @@ export function OrdersList() {
   function updateSearchQuery(nextQuery: string) {
     setSearchQuery(nextQuery);
     clearSelection();
+  }
+
+  function toggleExpandedOrder(orderId: string) {
+    setExpandedOrderId((current) => (current === orderId ? null : orderId));
   }
 
   function toggleOrderSelection(orderId: string) {
@@ -243,7 +300,7 @@ export function OrdersList() {
             <label>
               <span className="sr-only">Pickup notes filter</span>
               <select
-                className="seller-form-field min-h-12 rounded-lg font-semibold"
+                className="seller-form-field min-h-12 rounded-lg font-medium"
                 value={pickupNoteFilter}
                 onChange={(event) => updatePickupNoteFilter(event.target.value)}
               >
@@ -258,7 +315,7 @@ export function OrdersList() {
             <label>
               <span className="sr-only">Sort orders</span>
               <select
-                className="seller-form-field min-h-12 rounded-lg font-semibold"
+                className="seller-form-field min-h-12 rounded-lg font-medium"
                 value={sort}
                 onChange={(event) => setSort(event.target.value as OrderSort)}
               >
@@ -282,10 +339,13 @@ export function OrdersList() {
       {hasVisibleOrders ? (
         <OrdersTableCard
           allVisibleSelected={allVisibleSelected}
+          expandedOrderId={expandedOrderId}
+          itemsByOrderId={orderItemsByOrderId}
           orders={visibleOrders}
           selectedOrderIds={selectedOrderIds}
           selectedVisibleCount={selectedVisibleCount}
           onClearSelection={clearSelection}
+          onToggleExpandedOrder={toggleExpandedOrder}
           onToggleOrderSelection={toggleOrderSelection}
           onToggleSelectAll={toggleSelectAllOnPage}
         />
@@ -305,18 +365,24 @@ export function OrdersList() {
 
 function OrdersTableCard({
   allVisibleSelected,
+  expandedOrderId,
+  itemsByOrderId,
   orders,
   selectedOrderIds,
   selectedVisibleCount,
   onClearSelection,
+  onToggleExpandedOrder,
   onToggleOrderSelection,
   onToggleSelectAll,
 }: {
   allVisibleSelected: boolean;
+  expandedOrderId: string | null;
+  itemsByOrderId: Record<string, SellerOrderItemRow[]>;
   orders: SellerOrderRow[];
   selectedOrderIds: Set<string>;
   selectedVisibleCount: number;
   onClearSelection: () => void;
+  onToggleExpandedOrder: (orderId: string) => void;
   onToggleOrderSelection: (orderId: string) => void;
   onToggleSelectAll: () => void;
 }) {
@@ -355,22 +421,26 @@ function OrdersTableCard({
 
       <div
         aria-hidden="true"
-        className="hidden grid-cols-[2.25rem_minmax(6.25rem,7.5rem)_minmax(0,1fr)_minmax(7rem,8.5rem)_minmax(6rem,7rem)_10rem] gap-3 bg-[#fbfaf6] px-4 py-3 text-xs font-bold uppercase tracking-[0.08em] text-stone-600 xl:grid"
+        className="hidden grid-cols-[2.25rem_minmax(7rem,9rem)_minmax(7rem,8rem)_minmax(0,1.25fr)_minmax(5rem,6rem)_minmax(7rem,8.5rem)_8.5rem] gap-3 bg-[#fbfaf6] px-4 py-3 text-xs font-medium uppercase tracking-[0.08em] text-stone-600 xl:grid"
       >
         <span />
         <span>Order</span>
+        <span>Date</span>
         <span>Buyer</span>
-        <span>Items &amp; total</span>
+        <span>Total</span>
         <span>Payment</span>
-        <span className="text-right">Actions</span>
+        <span className="text-right">Open</span>
       </div>
 
       <div className="divide-y divide-stone-200/80">
         {orders.map((order) => (
           <OrderRow
+            isExpanded={expandedOrderId === order.order_id}
             isSelected={selectedOrderIds.has(order.order_id)}
+            items={itemsByOrderId[order.order_id] ?? []}
             key={order.order_id}
             order={order}
+            onToggleExpanded={() => onToggleExpandedOrder(order.order_id)}
             onToggleSelection={() => onToggleOrderSelection(order.order_id)}
           />
         ))}
@@ -388,7 +458,7 @@ function BulkActions({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-      <span className="text-xs font-semibold text-stone-500">
+      <span className="text-xs font-medium text-stone-500">
         {selectedCount} selected
       </span>
       <button
@@ -409,7 +479,7 @@ function BulkActions({
         More actions
       </button>
       <button
-        className="min-h-10 rounded-md px-3 text-sm font-bold text-emerald-800 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+        className="min-h-10 rounded-md px-3 text-sm font-medium text-emerald-800 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
         type="button"
         onClick={onClearSelection}
       >
@@ -420,19 +490,27 @@ function BulkActions({
 }
 
 function OrderRow({
+  isExpanded,
   isSelected,
+  items,
   order,
+  onToggleExpanded,
   onToggleSelection,
 }: {
+  isExpanded: boolean;
   isSelected: boolean;
+  items: SellerOrderItemRow[];
   order: SellerOrderRow;
+  onToggleExpanded: () => void;
   onToggleSelection: () => void;
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
   const customerName = formatCustomerName(order);
   const lifecycle = getOrderLifecycleState(order);
   const pickupNote = order.pickup_note?.trim();
-  const detailsId = `mobile-order-details-${order.order_id}`;
+  const mobileDetailsId = `mobile-order-details-${order.order_id}`;
+  const desktopDetailsId = `desktop-order-items-${order.order_id}`;
+  const itemSummary = formatOrderItems(order);
+  const paymentSummary = formatPaymentSummary(order);
 
   return (
     <article className="bg-white transition hover:bg-[#fffdf8]">
@@ -451,7 +529,7 @@ function OrderRow({
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Link
-                className="text-base font-bold text-stone-950 hover:text-emerald-800"
+                className="text-base font-medium text-stone-950 hover:text-emerald-800"
                 href={`/dashboard/orders/${order.order_id}`}
               >
                 #{order.order_number}
@@ -461,7 +539,7 @@ function OrderRow({
                 lifecycle={lifecycle}
               />
             </div>
-            <p className="mt-1 truncate font-semibold text-stone-950">
+            <p className="mt-1 truncate text-sm text-stone-950">
               {customerName}
             </p>
             <p className="mt-1 text-sm leading-5 text-stone-600">
@@ -473,14 +551,14 @@ function OrderRow({
           </div>
 
           <button
-            aria-controls={detailsId}
+            aria-controls={mobileDetailsId}
             aria-expanded={isExpanded}
             aria-label={
               isExpanded ? "Hide order details" : "Show order details"
             }
-            className="flex size-10 items-center justify-center rounded-md border border-stone-200 bg-white text-lg font-bold text-emerald-900 transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+            className="flex size-10 items-center justify-center rounded-md border border-stone-200 bg-white text-lg font-medium text-emerald-900 transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
             type="button"
-            onClick={() => setIsExpanded((current) => !current)}
+            onClick={onToggleExpanded}
           >
             <span aria-hidden="true">{isExpanded ? "^" : "v"}</span>
           </button>
@@ -489,8 +567,10 @@ function OrderRow({
         {isExpanded ? (
           <div
             className="grid gap-3 border-t border-stone-200/80 pt-3"
-            id={detailsId}
+            id={mobileDetailsId}
           >
+            <OrderItemsQuickview items={items} />
+
             <div className="grid gap-2 text-sm text-stone-700">
               {order.buyer_phone_snapshot ? (
                 <a
@@ -519,26 +599,24 @@ function OrderRow({
               ) : null}
               {pickupNote ? (
                 <p className="min-w-0 text-stone-600">
-                  <span className="font-semibold text-stone-700">Note:</span>{" "}
+                  <span className="font-medium text-stone-700">Note:</span>{" "}
                   {pickupNote}
                 </p>
               ) : null}
-              <p>
-                <span className="font-semibold text-stone-700">Payment:</span>{" "}
-                {order.payment_method === "pay_at_pickup"
-                  ? "Pay at pickup"
-                  : formatPaymentMethod(order.payment_method)}
+            <p>
+                <span className="font-medium text-stone-700">Payment:</span>{" "}
+                {paymentSummary}
               </p>
             </div>
 
             <div className="grid gap-2">
               <Link
-                className="inline-flex min-h-10 w-full items-center justify-center gap-1 rounded-md bg-emerald-800 px-3 text-sm font-bold text-white shadow-[0_8px_18px_rgba(4,120,87,0.14)] transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
+                className="inline-flex min-h-10 w-full items-center justify-center gap-1 rounded-md bg-emerald-800 px-3 text-sm font-medium text-white shadow-[0_8px_18px_rgba(4,120,87,0.14)] transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
                 href={`/dashboard/orders/${order.order_id}`}
               >
                 View order
                 <span aria-hidden="true" className="text-lg leading-none">
-                  &gt;
+                  &rarr;
                 </span>
               </Link>
               <OrderContactButtons order={order} />
@@ -547,8 +625,8 @@ function OrderRow({
         ) : null}
       </div>
 
-      <div className="hidden gap-3 px-4 py-4 xl:grid xl:grid-cols-[2.25rem_minmax(6.25rem,7.5rem)_minmax(0,1fr)_minmax(7rem,8.5rem)_minmax(6rem,7rem)_10rem] xl:items-center">
-        <label className="flex min-h-6 items-center gap-3 xl:col-start-1 xl:row-start-1 xl:block">
+      <div className="hidden gap-3 px-4 py-3 xl:grid xl:grid-cols-[2.25rem_minmax(7rem,9rem)_minmax(7rem,8rem)_minmax(0,1.25fr)_minmax(5rem,6rem)_minmax(7rem,8.5rem)_8.5rem] xl:items-center">
+        <label className="flex min-h-6 items-center gap-3">
           <input
             aria-label={`Select order ${order.order_number}`}
             checked={isSelected}
@@ -559,10 +637,10 @@ function OrderRow({
           <span className="sr-only">Select order</span>
         </label>
 
-        <div className="min-w-0 xl:col-start-2 xl:row-start-1">
+        <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Link
-              className="text-base font-bold text-stone-950 hover:text-emerald-800"
+              className="text-base font-medium text-stone-950 hover:text-emerald-800"
               href={`/dashboard/orders/${order.order_id}`}
             >
               #{order.order_number}
@@ -572,83 +650,121 @@ function OrderRow({
               lifecycle={lifecycle}
             />
           </div>
-          <p className="mt-1 text-sm text-stone-600">
-            {formatDateTime(order.created_at)}
-          </p>
         </div>
 
-        <div className="min-w-0 xl:col-start-3 xl:row-start-1">
-          <p className="truncate font-semibold text-stone-950">
+        <p className="min-w-0 truncate text-sm text-stone-500">
+          {formatShortDate(order.created_at)}
+        </p>
+
+        <div className="min-w-0">
+          <p className="truncate text-sm text-stone-950">
             {customerName}
           </p>
-          <div className="mt-1 grid gap-1 text-sm text-stone-700">
-            {order.buyer_phone_snapshot ? (
-              <a
-                className="inline-flex min-w-0 items-center gap-2 hover:text-emerald-800"
-                href={`tel:${order.buyer_phone_snapshot}`}
-              >
-                <Image src="/glyphs/phone.png" alt="" width={15} height={15} />
-                <span className="truncate">{order.buyer_phone_snapshot}</span>
-              </a>
+          <p className="mt-0.5 truncate text-sm text-stone-600">
+            <button
+              aria-controls={desktopDetailsId}
+              aria-expanded={isExpanded}
+              aria-label={
+                isExpanded
+                  ? `Hide items in order ${order.order_number}`
+                  : `Show items in order ${order.order_number}`
+              }
+              className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1.5 text-left text-xs shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-700/30 ${
+                isExpanded
+                  ? "border-emerald-800 bg-emerald-100 text-emerald-950"
+                  : "border-emerald-800/45 bg-[#f4f8ef] text-emerald-900 hover:border-emerald-800 hover:bg-emerald-50"
+              }`}
+              type="button"
+              onClick={onToggleExpanded}
+            >
+              <span className="truncate">{itemSummary}</span>
+              <span aria-hidden="true" className="text-sm leading-none">
+                {isExpanded ? "▴" : "▾"}
+              </span>
+            </button>
+            {pickupNote ? (
+              <span className="text-stone-500"> · Note</span>
             ) : null}
-            {order.buyer_email_snapshot ? (
-              <a
-                className="inline-flex min-w-0 items-center gap-2 hover:text-emerald-800"
-                href={`mailto:${order.buyer_email_snapshot}`}
-              >
-                <Image
-                  src="/glyphs/envelope.png"
-                  alt=""
-                  width={15}
-                  height={15}
-                />
-                <span className="truncate">{order.buyer_email_snapshot}</span>
-              </a>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="min-w-0 xl:col-start-4 xl:row-start-1">
-          <p className="text-sm font-medium text-stone-950">
-            {formatOrderItems(order)}
-          </p>
-          <p className="mt-1 font-semibold text-stone-950">
-            {formatCurrency(order.total_amount)}
           </p>
         </div>
 
-        {pickupNote ? (
-          <p
-            className="min-w-0 truncate text-sm text-stone-500 xl:col-start-3 xl:col-span-2 xl:row-start-2 xl:-mt-1"
-            title={pickupNote}
-          >
-            <span className="font-semibold text-stone-600">Note:</span>{" "}
-            {pickupNote}
-          </p>
-        ) : null}
+        <p className="min-w-0 font-medium text-stone-950">
+          {formatCurrency(order.total_amount)}
+        </p>
 
-        <div className="min-w-0 xl:col-start-5 xl:row-start-1">
-          <p className="text-sm font-semibold text-stone-950">
-            {order.payment_method === "pay_at_pickup"
-              ? "Pay at pickup"
-              : formatPaymentMethod(order.payment_method)}
-          </p>
-        </div>
+        <p className="min-w-0 truncate text-sm font-medium text-stone-950">
+          {paymentSummary}
+        </p>
 
-        <div className="grid min-w-0 gap-1.5 xl:col-start-6 xl:row-span-2 xl:row-start-1 xl:w-40 xl:justify-self-end">
+        <div className="flex min-w-0 items-center justify-end gap-1.5">
+          <OrderContactButtons order={order} variant="desktop" />
           <Link
-            className="inline-flex min-h-9 w-full items-center justify-center gap-1 rounded-md bg-emerald-800 px-2.5 text-sm font-bold text-white shadow-[0_8px_18px_rgba(4,120,87,0.14)] transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
+            className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1 rounded-md border border-stone-300 bg-white px-2.5 text-sm font-medium text-emerald-800 transition hover:border-emerald-700 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
             href={`/dashboard/orders/${order.order_id}`}
           >
-            View order
+            View
             <span aria-hidden="true" className="text-lg leading-none">
-              &gt;
+              &rarr;
             </span>
           </Link>
-          <OrderContactButtons order={order} />
         </div>
       </div>
+
+      {isExpanded ? (
+        <div
+          className="hidden border-t border-stone-200/80 bg-[#fffdf8] px-4 py-3 xl:block"
+          id={desktopDetailsId}
+        >
+          <div className="pl-[calc(2.25rem+0.75rem)]">
+            <OrderItemsQuickview items={items} />
+          </div>
+        </div>
+      ) : null}
     </article>
+  );
+}
+
+function OrderItemsQuickview({ items }: { items: SellerOrderItemRow[] }) {
+  if (items.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-stone-200 bg-white px-3 py-2 text-sm text-stone-500">
+        Item details are not available for this order.
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-2">
+      <p className="text-xs font-medium uppercase tracking-[0.08em] text-stone-500">
+        Items in order
+      </p>
+      <div className="grid gap-1.5">
+        {items.map((item) => {
+          const { details, title } = formatOrderItemSummary(item);
+
+          return (
+            <div
+              className="grid gap-1 rounded-lg border border-stone-200/80 bg-white px-3 py-2 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+              key={item.order_item_id}
+            >
+              <div className="min-w-0">
+                <p className="truncate text-stone-950">
+                  {item.quantity} &times; {title}
+                </p>
+                {details ? (
+                  <p className="mt-0.5 truncate text-xs text-stone-500">
+                    {details}
+                  </p>
+                ) : null}
+              </div>
+              <p className="text-sm text-stone-600 sm:text-right">
+                {formatCurrency(item.line_subtotal)}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -669,7 +785,7 @@ function OrderLifecycleFilters({
         return (
           <button
             aria-pressed={isActive}
-            className={`min-h-10 shrink-0 rounded-full border px-3.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-emerald-700/30 ${
+            className={`min-h-10 shrink-0 rounded-full border px-3.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-emerald-700/30 ${
               isActive
                 ? "border-emerald-800 bg-emerald-800 text-white"
                 : "border-stone-300 bg-white text-stone-700 hover:border-emerald-700 hover:text-emerald-800"
@@ -693,45 +809,62 @@ function OrderLifecycleFilters({
   );
 }
 
-function OrderContactButtons({ order }: { order: SellerOrderRow }) {
+function OrderContactButtons({
+  order,
+  variant = "mobile",
+}: {
+  order: SellerOrderRow;
+  variant?: "desktop" | "mobile";
+}) {
+  const buttonClass =
+    variant === "desktop"
+      ? "seller-small-button size-8 rounded-md p-0"
+      : "seller-small-button min-h-9 rounded-md p-0";
+
   return (
-    <div className="grid max-w-full grid-cols-3 gap-1.5 xl:w-full">
+    <div
+      className={
+        variant === "desktop"
+          ? "flex shrink-0 items-center gap-1"
+          : "grid max-w-full grid-cols-3 gap-1.5 xl:w-full"
+      }
+    >
       {order.buyer_phone_snapshot ? (
         <a
           aria-label={`Call ${formatCustomerName(order)}`}
-          className="seller-small-button min-h-9 rounded-md p-0"
+          className={buttonClass}
           href={`tel:${order.buyer_phone_snapshot}`}
           title="Call buyer"
         >
           <Image src="/glyphs/phone.png" alt="" width={16} height={16} />
         </a>
-      ) : (
+      ) : variant === "mobile" ? (
         <span aria-hidden="true" />
-      )}
+      ) : null}
       {order.buyer_phone_snapshot ? (
         <a
           aria-label={`Text ${formatCustomerName(order)}`}
-          className="seller-small-button min-h-9 rounded-md p-0"
+          className={buttonClass}
           href={`sms:${order.buyer_phone_snapshot}`}
           title="Text buyer"
         >
           <Image src="/glyphs/chat.png" alt="" width={16} height={16} />
         </a>
-      ) : (
+      ) : variant === "mobile" ? (
         <span aria-hidden="true" />
-      )}
+      ) : null}
       {order.buyer_email_snapshot ? (
         <a
           aria-label={`Email ${formatCustomerName(order)}`}
-          className="seller-small-button min-h-9 rounded-md p-0"
+          className={buttonClass}
           href={`mailto:${order.buyer_email_snapshot}`}
           title="Email buyer"
         >
           <Image src="/glyphs/envelope.png" alt="" width={16} height={16} />
         </a>
-      ) : (
+      ) : variant === "mobile" ? (
         <span aria-hidden="true" />
-      )}
+      ) : null}
     </div>
   );
 }
@@ -754,7 +887,7 @@ function OrderLifecycleBadge({
 
   return (
     <span
-      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${tone}`}
+      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${tone}`}
     >
       {label}
     </span>
@@ -780,15 +913,22 @@ function matchesPickupNoteFilter(
   return pickupNote === normalizeFilterText(filter);
 }
 
-function matchesSearch(order: SellerOrderRow, query: string) {
+function matchesSearch(
+  order: SellerOrderRow,
+  query: string,
+  items: SellerOrderItemRow[] = [],
+) {
   const normalizedQuery = normalizeFilterText(query);
 
   if (!normalizedQuery) return true;
 
-  return getOrderSearchText(order).includes(normalizedQuery);
+  return getOrderSearchText(order, items).includes(normalizedQuery);
 }
 
-function getOrderSearchText(order: SellerOrderRow) {
+function getOrderSearchText(
+  order: SellerOrderRow,
+  items: SellerOrderItemRow[] = [],
+) {
   return normalizeFilterText(
     [
       order.order_number,
@@ -800,6 +940,7 @@ function getOrderSearchText(order: SellerOrderRow) {
       order.pickup_note,
       order.pickup_option_label_snapshot,
       order.buyer_notes,
+      ...items.map((item) => getOrderItemSearchText(item)),
     ]
       .filter(Boolean)
       .join(" "),
@@ -808,6 +949,13 @@ function getOrderSearchText(order: SellerOrderRow) {
 
 function normalizeFilterText(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
+}
+
+function groupOrderItemsByOrderId(items: SellerOrderItemRow[]) {
+  return items.reduce<Record<string, SellerOrderItemRow[]>>((groups, item) => {
+    groups[item.order_id] = [...(groups[item.order_id] ?? []), item];
+    return groups;
+  }, {});
 }
 
 function getFilterCounts(orders: SellerOrderRow[]) {
@@ -884,11 +1032,113 @@ function formatCustomerName(order: SellerOrderRow) {
 
 function formatOrderItems(order: SellerOrderRow) {
   const itemCount = order.item_count ?? 0;
-  const quantity = order.total_item_quantity ?? 0;
 
-  return `${quantity} bird${quantity === 1 ? "" : "s"} across ${itemCount} item${
-    itemCount === 1 ? "" : "s"
-  }`;
+  return `${itemCount} item${itemCount === 1 ? "" : "s"}`;
+}
+
+function formatOrderItemSummary(item: SellerOrderItemRow) {
+  const isCustomItem = item.order_item_source === "custom";
+  const isEquipmentItem = item.order_item_source === "equipment_inventory";
+  const isProcessedPoultryItem =
+    item.order_item_source === "processed_poultry_inventory";
+  const inventoryLabel = formatInventoryLabel({
+    custom_inventory_label: item.custom_inventory_label_snapshot,
+    inventory_type: item.inventory_type_snapshot,
+  });
+  const title =
+    isEquipmentItem || isProcessedPoultryItem
+      ? item.item_name_snapshot || item.breed_display_name_snapshot
+      : item.custom_item_name_snapshot || item.breed_display_name_snapshot;
+  const fallbackTitle =
+    item.item_name_snapshot ||
+    item.custom_item_name_snapshot ||
+    item.breed_display_name_snapshot ||
+    "Order item";
+  const category = isCustomItem
+    ? "Custom item"
+    : isEquipmentItem
+      ? [item.item_category_snapshot, item.custom_inventory_label_snapshot]
+          .filter(Boolean)
+          .join(" - ") || "Equipment & Supplies"
+      : isProcessedPoultryItem
+        ? [item.item_category_snapshot, item.custom_inventory_label_snapshot]
+            .filter(Boolean)
+            .join(" - ") || "Processed Poultry"
+        : item.species_name_snapshot;
+  const details = [
+    category,
+    !isCustomItem && !isEquipmentItem && !isProcessedPoultryItem
+      ? formatSellerItemDetail(inventoryLabel)
+      : null,
+    !isCustomItem &&
+    !isEquipmentItem &&
+    !isProcessedPoultryItem &&
+    item.age_at_sale_days_snapshot != null
+      ? formatAgeAtSale(item.age_at_sale_days_snapshot)
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" - ");
+
+  return {
+    details,
+    title: title || fallbackTitle,
+  };
+}
+
+function getOrderItemSearchText(item: SellerOrderItemRow) {
+  const summary = formatOrderItemSummary(item);
+
+  return [
+    summary.title,
+    summary.details,
+    item.product_type_snapshot,
+    item.item_category_snapshot,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function formatSellerItemDetail(value: string | null) {
+  const normalized = value?.trim();
+
+  if (!normalized) return null;
+
+  const lower = normalized.toLowerCase();
+
+  if (lower === "female") return "Female";
+  if (lower === "male") return "Male";
+  if (lower === "straight run") return "Straight run";
+  if (lower === "unknown") return "Unknown";
+
+  return normalized;
+}
+
+function formatAgeAtSale(days: number) {
+  if (days < 7) return `${days} day${days === 1 ? "" : "s"} old`;
+
+  const weeks = Math.floor(days / 7);
+  return `${weeks} week${weeks === 1 ? "" : "s"} old`;
+}
+
+function formatPaymentSummary(order: SellerOrderRow) {
+  if (order.payment_status === "paid") return "Paid";
+  if (order.payment_status === "refunded") return "Refunded";
+  if (order.payment_status === "unpaid") return "Unpaid";
+
+  return order.payment_method === "pay_at_pickup"
+    ? "Pay at pickup"
+    : formatPaymentMethod(order.payment_method);
+}
+
+function formatShortDate(value: string | null) {
+  if (!value) return "Date not set";
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
 }
 
 function getEmptyTitle(filter: OrderFilter, hasSearchOrPickupFilter: boolean) {
