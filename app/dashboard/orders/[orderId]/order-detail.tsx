@@ -105,7 +105,7 @@ const orderDetailButtonClass =
 const orderDetailBackButtonClass =
   "inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-stone-300 bg-white px-3.5 text-sm font-bold text-stone-950 shadow-sm transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-700/30";
 const requestedItemsGridClass =
-  "grid grid-cols-[minmax(0,1fr)_3.25rem_5.75rem_6.5rem] gap-3";
+  "grid gap-3 sm:grid-cols-[minmax(0,1fr)_3.25rem_5.75rem_6.5rem]";
 
 /**
  * Read-only seller order detail for the first public order intake workflow.
@@ -639,7 +639,7 @@ function OrderItemRow({
   ].filter(Boolean);
 
   return (
-    <article className={`${requestedItemsGridClass} gap-y-3 px-4 py-3 sm:items-center`}>
+    <article className={`${requestedItemsGridClass} px-4 py-3 sm:items-center`}>
       <div className="flex min-w-0 gap-3">
         <ItemThumbnail
           alt={media?.alt_text || itemTitle}
@@ -647,13 +647,13 @@ function OrderItemRow({
           src={media?.public_url}
         />
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-bold text-stone-950">
+          <h3 className="break-words text-sm font-bold leading-5 text-stone-950 sm:truncate">
             {itemTitle}
           </h3>
-          <p className="mt-0.5 truncate text-sm text-stone-600">
+          <p className="mt-0.5 break-words text-sm leading-5 text-stone-600 sm:truncate">
             {details.join(" - ")}
           </p>
-          <p className="mt-0.5 text-xs font-medium leading-5 text-stone-500">
+          <p className="mt-0.5 break-words text-xs font-medium leading-5 text-stone-500">
             {item.available_date_snapshot
               ? `Available ${formatShortDate(item.available_date_snapshot)}`
               : null}
@@ -665,10 +665,10 @@ function OrderItemRow({
           </p>
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-2 text-sm sm:contents">
+      <div className="grid grid-cols-1 gap-2 text-sm min-[360px]:grid-cols-3 sm:contents">
         <MobileAmount label="Qty" value={`${item.quantity}`} />
         <MobileAmount
-          label="Each"
+          label="Unit"
           value={formatCurrency(item.unit_price_snapshot)}
         />
         <MobileAmount
@@ -804,9 +804,9 @@ function RequestedTotalRow({
   value: string;
 }) {
   return (
-    <div className={`${requestedItemsGridClass} py-0.5`}>
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 py-0.5 sm:grid-cols-[minmax(0,1fr)_3.25rem_5.75rem_6.5rem]">
       <dt
-        className={`col-span-3 ${
+        className={`sm:col-span-3 ${
           isStrong
             ? "border-t border-stone-200 pt-2 text-base font-bold text-stone-950"
             : "text-stone-700"
@@ -1255,11 +1255,11 @@ function CancellationPanel({
 
 function MobileAmount({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-[#fbfaf6] px-3 py-2 text-right sm:rounded-none sm:bg-transparent sm:p-0 sm:tabular-nums">
+    <div className="min-w-0 rounded-lg bg-[#fbfaf6] px-3 py-2 text-left min-[360px]:text-right sm:rounded-none sm:bg-transparent sm:p-0 sm:text-right sm:tabular-nums">
       <span className="block text-[0.65rem] font-bold uppercase text-stone-500 sm:hidden">
         {label}
       </span>
-      <span className="font-bold text-stone-950">{value}</span>
+      <span className="break-words font-bold text-stone-950">{value}</span>
     </div>
   );
 }
@@ -1278,14 +1278,14 @@ function ItemThumbnail({
   const shouldShowImage = Boolean(displayUrl) && !hasImageError;
 
   return (
-    <span className="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-[#f4f8ef]">
+    <span className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-[#f4f8ef] sm:size-14">
       {shouldShowImage ? (
         <Image
           className="object-cover"
           src={displayUrl}
           alt={alt}
           fill
-          sizes="56px"
+          sizes="(max-width: 639px) 48px, 56px"
           onError={() => setHasImageError(true)}
         />
       ) : (
