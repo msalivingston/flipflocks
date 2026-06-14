@@ -1,17 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../../_components/seller-context";
 import {
-  EmptyState,
   ErrorState,
   LoadingState,
   SellerCard,
 } from "../../_components/seller-ui";
 import {
-  formatAgeAtAvailability,
+  formatAgeAtAvailabilityFromDates,
   formatInventoryTypeLabel,
 } from "../../_lib/listing-formatters";
 import { formatCurrency } from "../order-formatters";
@@ -47,6 +47,7 @@ type OrderLine = {
   id: string;
   inventoryItemId: string;
   customItemName: string;
+  customItemDescription: string;
   search: string;
   quantity: string;
   unitPrice: string;
@@ -62,10 +63,13 @@ type DiscountType = "fixed" | "percent";
 
 type CustomerMode = "existing" | "new";
 
+type BrowseInventoryFilter = "all" | "poultry";
+
 const emptyLine = (): OrderLine => ({
   type: "inventory",
   id: crypto.randomUUID(),
   customItemName: "",
+  customItemDescription: "",
   inventoryItemId: "",
   quantity: "1",
   search: "",
@@ -76,6 +80,7 @@ const customLine = (): OrderLine => ({
   type: "custom",
   id: crypto.randomUUID(),
   customItemName: "",
+  customItemDescription: "",
   inventoryItemId: "",
   quantity: "1",
   search: "",
@@ -91,6 +96,14 @@ export function NewManualOrder() {
   const [customerMode, setCustomerMode] = useState<CustomerMode>("existing");
   const [customerQuery, setCustomerQuery] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [isAddingCustomer, setIsAddingCustomer] = useState(false);
+  const [inventoryQuery, setInventoryQuery] = useState("");
+  const [isBrowseOpen, setIsBrowseOpen] = useState(false);
+  const [browseFilter, setBrowseFilter] = useState<BrowseInventoryFilter>("all");
+  const [browseQuery, setBrowseQuery] = useState("");
+  const [browseAddedInventoryItemId, setBrowseAddedInventoryItemId] = useState<
+    string | null
+  >(null);
   const [newCustomer, setNewCustomer] = useState({
     email: "",
     firstName: "",
@@ -98,7 +111,7 @@ export function NewManualOrder() {
     phone: "",
     businessName: "",
   });
-  const [lines, setLines] = useState<OrderLine[]>([emptyLine()]);
+  const [lines, setLines] = useState<OrderLine[]>([]);
   const [discountType, setDiscountType] = useState<DiscountType>("fixed");
   const [discountValue, setDiscountValue] = useState("");
   const [buyerNotes, setBuyerNotes] = useState("");
@@ -165,6 +178,18 @@ export function NewManualOrder() {
     };
   }, [seller]);
 
+  useEffect(() => {
+    if (!isBrowseOpen) return;
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsBrowseOpen(false);
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [isBrowseOpen]);
+
   const selectedCustomer = customers.find(
     (customer) => customer.customer_id === selectedCustomerId,
   );
@@ -192,16 +217,85 @@ export function NewManualOrder() {
     setSaveError(null);
   }
 
-  function selectInventory(lineId: string, inventoryItemId: string) {
+  function addInventoryItem(inventoryItemId: string) {
     const item = inventory.find((row) => row.inventory_item_id === inventoryItemId);
 
     if (!item) return;
 
-    updateLine(lineId, {
-      inventoryItemId,
-      search: formatInventorySearchLabel(item),
-      unitPrice: formatMoneyInput(item.effective_unit_price ?? 0),
+    setLines((current) => {
+      const existingLine = current.find(
+        (line) =>
+          line.type === "inventory" && line.inventoryItemId === inventoryItemId,
+      );
+
+      if (existingLine) {
+        return current.map((line) =>
+          line.id === existingLine.id
+            ? { ...line, quantity: String(Number(line.quantity || 0) + 1) }
+            : line,
+        );
+      }
+
+      return [
+        ...current,
+        {
+          ...emptyLine(),
+          inventoryItemId,
+          search: formatInventorySearchLabel(item),
+          unitPrice: formatMoneyInput(item.effective_unit_price ?? 0),
+        },
+      ];
     });
+    setInventoryQuery("");
+    setValidationErrors([]);
+    setSaveError(null);
+  }
+
+  function addBrowseInventoryItem(inventoryItemId: string) {
+    addInventoryItem(inventoryItemId);
+    setBrowseAddedInventoryItemId(inventoryItemId);
+    window.setTimeout(() => {
+      setBrowseAddedInventoryItemId((current) =>
+        current === inventoryItemId ? null : current,
+      );
+    }, 1200);
+  }
+
+  function addCustomItem() {
+    setLines((current) => [...current, customLine()]);
+    setValidationErrors([]);
+    setSaveError(null);
+  }
+
+  function removeLine(lineId: string) {
+    setLines((current) => current.filter((line) => line.id !== lineId));
+    setValidationErrors([]);
+    setSaveError(null);
+  }
+
+  function selectCustomer(customerId: string) {
+    setSelectedCustomerId(customerId);
+    setCustomerMode("existing");
+    setCustomerQuery("");
+    setIsAddingCustomer(false);
+    setValidationErrors([]);
+    setSaveError(null);
+  }
+
+  function addNewCustomerInline() {
+    const parsedName = parseFullName(newCustomer.firstName);
+
+    setNewCustomer((current) => ({
+      ...current,
+      firstName: parsedName.firstName,
+      lastName: parsedName.lastName,
+    }));
+    setSelectedCustomerId("");
+    setCustomerMode("new");
+    setIsAddingCustomer(false);
+    setCustomerQuery("");
+    setValidationErrors([]);
+    setSaveError(null);
   }
 
   async function createOrder() {
@@ -223,6 +317,8 @@ export function NewManualOrder() {
 
     setIsSaving(true);
 
+    const parsedNewCustomerName = parseFullName(newCustomer.firstName);
+
     const result = await supabase.rpc("seller_create_manual_order", {
       p_store_id: seller.store_id,
       p_idempotency_key: crypto.randomUUID(),
@@ -231,7 +327,7 @@ export function NewManualOrder() {
         inventory_item_id:
           line.type === "inventory" ? line.inventoryItemId : undefined,
         custom_item_name:
-          line.type === "custom" ? line.customItemName.trim() : undefined,
+          line.type === "custom" ? formatCustomItemPayloadName(line) : undefined,
         quantity: Number(line.quantity),
         unit_price: line.discountedUnitPrice,
         allow_inventory_override:
@@ -248,11 +344,11 @@ export function NewManualOrder() {
       p_customer_first_name:
         customerMode === "existing"
           ? selectedCustomer?.first_name ?? null
-          : newCustomer.firstName.trim(),
+          : parsedNewCustomerName.firstName,
       p_customer_last_name:
         customerMode === "existing"
           ? selectedCustomer?.last_name ?? null
-          : newCustomer.lastName.trim(),
+          : parsedNewCustomerName.lastName,
       p_customer_phone:
         customerMode === "existing"
           ? selectedCustomer?.phone ?? null
@@ -342,78 +438,142 @@ export function NewManualOrder() {
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-      <div className="grid gap-5">
+    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start">
+      <div className="grid min-w-0 gap-3">
         <CustomerSection
           customerMode={customerMode}
           customers={customers}
+          isAddingCustomer={isAddingCustomer}
           newCustomer={newCustomer}
           query={customerQuery}
+          selectedCustomer={selectedCustomer}
           selectedCustomerId={selectedCustomerId}
+          addNewCustomerInline={addNewCustomerInline}
           setCustomerMode={setCustomerMode}
+          setIsAddingCustomer={setIsAddingCustomer}
           setNewCustomer={setNewCustomer}
           setQuery={setCustomerQuery}
+          selectCustomer={selectCustomer}
           setSelectedCustomerId={setSelectedCustomerId}
         />
 
-        <SellerCard className="p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-stone-950">
-                Order Items
-              </h2>
-              <p className="mt-1 text-sm leading-6 text-stone-600">
-                Search by breed or bird type, then adjust quantity and price.
-              </p>
+        <SellerCard className="min-w-0 overflow-hidden p-3">
+          <h2 className="text-lg font-semibold text-stone-950">Order Items</h2>
+          <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <label className="sr-only" htmlFor="manual-order-inventory-search">
+              Search inventory by breed, type, or age
+            </label>
+            <input
+              className="seller-form-field seller-compact-field seller-action-search-field"
+              id="manual-order-inventory-search"
+              placeholder="Quick add: type breed, age, or item name"
+              type="text"
+              value={inventoryQuery}
+              onChange={(event) => {
+                setInventoryQuery(event.target.value);
+                setIsBrowseOpen(false);
+              }}
+            />
+            <div className="flex items-center gap-1.5">
+              <button
+                className="inline-flex min-h-9 items-center rounded-md border border-emerald-100 bg-emerald-50 px-2.5 text-xs font-bold text-emerald-900 transition hover:border-emerald-200 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-700/25"
+                type="button"
+                onClick={() => {
+                  setIsBrowseOpen((current) => !current);
+                  setInventoryQuery("");
+                }}
+              >
+                Browse inventory
+              </button>
+              <button
+                className="inline-flex min-h-9 items-center rounded-md px-2.5 text-xs font-bold text-emerald-800 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/25"
+                type="button"
+                onClick={addCustomItem}
+              >
+                + Custom item
+              </button>
             </div>
-            <button
-              className="seller-secondary-button"
-              type="button"
-              onClick={() => setLines((current) => [...current, emptyLine()])}
-            >
-              Add Another Item
-            </button>
-            <button
-              className="seller-secondary-button"
-              type="button"
-              onClick={() => setLines((current) => [...current, customLine()])}
-            >
-              Add Custom Item
-            </button>
           </div>
 
-          <div className="mt-5 grid gap-4">
-            {lines.map((line, index) => (
-              <OrderItemEditor
-                inventory={inventory}
-                key={line.id}
-                line={line}
-                lineNumber={index + 1}
-                onRemove={() =>
-                  setLines((current) =>
-                    current.length === 1
-                      ? [emptyLine()]
-                      : current.filter((item) => item.id !== line.id),
-                  )
-                }
-                onSelectInventory={(inventoryItemId) =>
-                  selectInventory(line.id, inventoryItemId)
-                }
-                updateLine={(updates) => updateLine(line.id, updates)}
+          <InventorySearchResults
+            inventory={inventory}
+            query={inventoryQuery}
+            onSelect={addInventoryItem}
+          />
+
+          <div className="mt-3 max-w-full overflow-hidden">
+            <div className="min-w-0">
+              <div className="grid grid-cols-[minmax(0,1fr)_72px_96px_90px_28px] gap-2 border-b border-stone-200 px-1 pb-2 text-xs font-bold uppercase tracking-[0.04em] text-stone-500">
+                <span>Item</span>
+                <span className="text-center">Qty</span>
+                <span>Unit price</span>
+                <span className="text-right">Line total</span>
+                <span className="text-right">
+                  <span className="sr-only">Remove</span>
+                </span>
+              </div>
+              {lines.length > 0 ? (
+                <div className="divide-y divide-stone-200">
+                  {lines.map((line) => (
+                    <OrderItemRow
+                      inventory={inventory}
+                      key={line.id}
+                      line={line}
+                      onRemove={() => removeLine(line.id)}
+                      updateLine={(updates) => updateLine(line.id, updates)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="px-1 py-5 text-sm text-stone-600">
+                  Search inventory above or add a custom item to start the order.
+                </p>
+              )}
+            </div>
+          </div>
+        </SellerCard>
+
+        <SellerCard className="min-w-0 p-3">
+          <h2 className="text-lg font-semibold text-stone-950">Order Details</h2>
+          <div className="mt-2 grid gap-2 md:grid-cols-2">
+            <label className="grid gap-1 text-sm font-semibold text-stone-700">
+              Delivery method
+              <select className="seller-form-field seller-compact-field" value="pickup" disabled>
+                <option value="pickup">Pickup</option>
+              </select>
+            </label>
+
+            <label className="grid gap-1 text-sm font-semibold text-stone-700">
+              Pickup note
+              <input
+                className="seller-form-field seller-compact-field"
+                placeholder="Optional pickup details"
+                value={pickupNote}
+                onChange={(event) => setPickupNote(event.target.value)}
               />
-            ))}
+            </label>
+
+            <label className="grid gap-1 text-sm font-semibold text-stone-700 md:col-span-2">
+              Order note
+              <textarea
+                className="seller-form-field seller-compact-field min-h-16 resize-y py-2"
+                placeholder="Add a note for this order"
+                value={buyerNotes}
+                onChange={(event) => setBuyerNotes(event.target.value)}
+              />
+            </label>
           </div>
         </SellerCard>
       </div>
 
-      <SellerCard className="p-5 lg:sticky lg:top-4">
+      <SellerCard className="p-3 lg:sticky lg:top-3">
         <h2 className="text-lg font-semibold text-stone-950">Order Summary</h2>
-        <div className="mt-4 grid gap-4">
+        <div className="mt-3 grid gap-3">
           <label className="grid gap-1 text-sm font-semibold text-stone-700">
             Discount
             <div className="grid grid-cols-[1fr_7rem] gap-2">
               <input
-                className="seller-form-field"
+                className="seller-form-field seller-compact-field"
                 inputMode="decimal"
                 min="0"
                 step="0.01"
@@ -425,7 +585,7 @@ export function NewManualOrder() {
                 }}
               />
               <select
-                className="seller-form-field"
+                className="seller-form-field seller-compact-field"
                 value={discountType}
                 onChange={(event) =>
                   setDiscountType(event.target.value as DiscountType)
@@ -437,33 +597,7 @@ export function NewManualOrder() {
             </div>
           </label>
 
-          <label className="grid gap-1 text-sm font-semibold text-stone-700">
-            Delivery method
-            <select className="seller-form-field" value="pickup" disabled>
-              <option value="pickup">Pickup</option>
-            </select>
-          </label>
-
-          <label className="grid gap-1 text-sm font-semibold text-stone-700">
-            Pickup note
-            <input
-              className="seller-form-field"
-              placeholder="Optional pickup details"
-              value={pickupNote}
-              onChange={(event) => setPickupNote(event.target.value)}
-            />
-          </label>
-
-          <label className="grid gap-1 text-sm font-semibold text-stone-700">
-            Order note
-            <textarea
-              className="seller-form-field min-h-24 resize-y py-3"
-              value={buyerNotes}
-              onChange={(event) => setBuyerNotes(event.target.value)}
-            />
-          </label>
-
-          <dl className="grid gap-2 border-t border-stone-200 pt-4 text-sm">
+          <dl className="grid gap-2 border-t border-stone-200 pt-3 text-sm">
             <SummaryRow label="Subtotal" value={formatCurrency(subtotal)} />
             <SummaryRow
               label="Discount"
@@ -485,7 +619,7 @@ export function NewManualOrder() {
           ) : null}
 
           <button
-            className="inline-flex min-h-11 items-center justify-center rounded-md bg-stone-950 px-5 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-wait disabled:opacity-70"
+            className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-5 text-sm font-semibold text-white transition hover:bg-emerald-900 disabled:cursor-wait disabled:opacity-70"
             disabled={isSaving}
             type="button"
             onClick={createOrder}
@@ -494,6 +628,19 @@ export function NewManualOrder() {
           </button>
         </div>
       </SellerCard>
+
+      {isBrowseOpen ? (
+        <BrowseInventoryDialog
+          addedInventoryItemId={browseAddedInventoryItemId}
+          filter={browseFilter}
+          inventory={inventory}
+          query={browseQuery}
+          onClose={() => setIsBrowseOpen(false)}
+          onFilterChange={setBrowseFilter}
+          onQueryChange={setBrowseQuery}
+          onSelect={addBrowseInventoryItem}
+        />
+      ) : null}
     </div>
   );
 }
@@ -501,16 +648,22 @@ export function NewManualOrder() {
 function CustomerSection({
   customerMode,
   customers,
+  isAddingCustomer,
   newCustomer,
   query,
+  selectedCustomer,
   selectedCustomerId,
+  addNewCustomerInline,
   setCustomerMode,
+  setIsAddingCustomer,
   setNewCustomer,
   setQuery,
+  selectCustomer,
   setSelectedCustomerId,
 }: {
   customerMode: CustomerMode;
   customers: CustomerRow[];
+  isAddingCustomer: boolean;
   newCustomer: {
     email: string;
     firstName: string;
@@ -519,248 +672,450 @@ function CustomerSection({
     businessName: string;
   };
   query: string;
+  selectedCustomer: CustomerRow | undefined;
   selectedCustomerId: string;
+  addNewCustomerInline: () => void;
   setCustomerMode: (mode: CustomerMode) => void;
+  setIsAddingCustomer: (isAdding: boolean) => void;
   setNewCustomer: (customer: typeof newCustomer) => void;
   setQuery: (query: string) => void;
+  selectCustomer: (customerId: string) => void;
   setSelectedCustomerId: (customerId: string) => void;
 }) {
-  const visibleCustomers = filterCustomers(customers, query).slice(0, 6);
+  const canShowResults = query.trim().length >= 2;
+  const visibleCustomers = canShowResults
+    ? filterCustomers(customers, query).slice(0, 6)
+    : [];
+  const selectedCustomerLabel =
+    !isAddingCustomer && customerMode === "existing" && selectedCustomer
+      ? formatCustomerSummary(selectedCustomer)
+      : !isAddingCustomer && customerMode === "new" && newCustomer.email
+        ? formatInlineCustomerSummary(newCustomer)
+        : null;
+  const canAddCustomer =
+    newCustomer.firstName.trim().length > 0 && isEmail(newCustomer.email);
 
   return (
-    <SellerCard className="p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-stone-950">Customer</h2>
-          <p className="mt-1 text-sm leading-6 text-stone-600">
-            Pick an existing customer or add the person standing in front of you.
-          </p>
-        </div>
-        <div className="inline-flex rounded-lg border border-stone-200 bg-stone-50 p-1">
-          {(["existing", "new"] as CustomerMode[]).map((mode) => (
-            <button
-              className={`min-h-9 rounded-md px-3 text-sm font-semibold ${
-                customerMode === mode
-                  ? "bg-emerald-800 text-white"
-                  : "text-stone-700"
-              }`}
-              key={mode}
-              type="button"
-              onClick={() => setCustomerMode(mode)}
-            >
-              {mode === "existing" ? "Existing" : "New"}
-            </button>
-          ))}
-        </div>
+    <SellerCard className="min-w-0 overflow-hidden p-3">
+      <h2 className="text-lg font-semibold text-stone-950">Customer</h2>
+      <div className="relative mt-2">
+        <label className="sr-only" htmlFor="manual-order-customer-search">
+          Search or select customer
+        </label>
+        <input
+          className="seller-form-field seller-compact-field seller-action-search-field pr-36"
+          id="manual-order-customer-search"
+          placeholder="Search or select customer"
+          type="text"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setIsAddingCustomer(false);
+          }}
+        />
+        <button
+          className="absolute right-2 top-1/2 inline-flex min-h-8 -translate-y-1/2 items-center rounded-md px-2.5 text-sm font-bold text-emerald-800 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/25"
+          type="button"
+          onClick={() => {
+            setIsAddingCustomer(true);
+            setCustomerMode("new");
+            setSelectedCustomerId("");
+          }}
+        >
+          + Add Customer
+        </button>
       </div>
 
-      {customerMode === "existing" ? (
-        <div className="mt-4 grid gap-3">
-          <input
-            className="seller-form-field"
-            placeholder="Search customers"
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
+      {canShowResults && customerMode !== "new" ? (
+        <div
+          className="mt-2 overflow-hidden rounded-md border border-stone-200 bg-white shadow-sm"
+          id="manual-order-customer-results"
+        >
           {visibleCustomers.length > 0 ? (
-            <div className="grid gap-2">
-              {visibleCustomers.map((customer) => {
-                const selected = selectedCustomerId === customer.customer_id;
-
-                return (
-                  <button
-                    className={`rounded-lg border px-3 py-3 text-left text-sm transition ${
-                      selected
-                        ? "border-emerald-700 bg-emerald-50"
-                        : "border-stone-200 bg-white hover:border-emerald-400"
-                    }`}
-                    key={customer.customer_id}
-                    type="button"
-                    onClick={() => setSelectedCustomerId(customer.customer_id)}
-                  >
-                    <span className="font-semibold text-stone-950">
-                      {formatCustomerName(customer)}
-                    </span>
-                    <span className="mt-1 block text-stone-600">
-                      {customer.email}
-                      {customer.phone ? ` - ${customer.phone}` : ""}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            visibleCustomers.map((customer) => (
+              <button
+                className="flex min-h-10 w-full items-center justify-between gap-3 border-b border-stone-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none"
+                key={customer.customer_id}
+                type="button"
+                onClick={() => selectCustomer(customer.customer_id)}
+              >
+                <span className="truncate font-semibold text-stone-950">
+                  {formatCustomerSummary(customer)}
+                </span>
+                {selectedCustomerId === customer.customer_id ? (
+                  <span className="text-xs font-bold text-emerald-800">
+                    Selected
+                  </span>
+                ) : null}
+              </button>
+            ))
           ) : (
-            <EmptyState
-              title="No customer matches"
-              description="Switch to New to add this customer inline."
-            />
+            <div className="flex items-center justify-between gap-3 px-3 py-2 text-sm text-stone-600">
+              <span>No results</span>
+              <button
+                className="font-bold text-emerald-800 hover:text-emerald-900"
+                type="button"
+                onClick={() => {
+                  setIsAddingCustomer(true);
+                  setCustomerMode("new");
+                  setSelectedCustomerId("");
+                }}
+              >
+                Add Customer
+              </button>
+            </div>
           )}
         </div>
-      ) : (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <TextField
-            label="First name"
-            value={newCustomer.firstName}
-            onChange={(firstName) => setNewCustomer({ ...newCustomer, firstName })}
-          />
-          <TextField
-            label="Last name"
-            value={newCustomer.lastName}
-            onChange={(lastName) => setNewCustomer({ ...newCustomer, lastName })}
-          />
-          <TextField
-            label="Email"
-            type="email"
-            value={newCustomer.email}
-            onChange={(email) => setNewCustomer({ ...newCustomer, email })}
-          />
-          <TextField
-            label="Phone"
-            type="tel"
-            value={newCustomer.phone}
-            onChange={(phone) => setNewCustomer({ ...newCustomer, phone })}
-          />
-          <div className="sm:col-span-2">
+      ) : null}
+
+      {selectedCustomerLabel ? (
+        <div className="mt-2 flex min-h-10 items-center justify-between gap-3 rounded-md border border-stone-200 bg-[#fffdf7] px-3 text-sm">
+          <span className="truncate font-medium text-stone-800">
+            {selectedCustomerLabel}
+          </span>
+          <button
+            className="shrink-0 text-sm font-bold text-emerald-800 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/25"
+            type="button"
+            onClick={() => {
+              setCustomerMode("existing");
+              setSelectedCustomerId("");
+              setIsAddingCustomer(false);
+            }}
+          >
+            Remove
+          </button>
+        </div>
+      ) : null}
+
+      {isAddingCustomer ? (
+        <div className="mt-2 rounded-md border border-stone-200 bg-[#fffdf7] px-3 py-2">
+          <h3 className="text-sm font-bold text-stone-950">Add New Customer</h3>
+          <div className="mt-2 grid gap-2 md:grid-cols-[1.2fr_1fr_1fr_auto] md:items-end">
             <TextField
-              label="Farm or business"
-              value={newCustomer.businessName}
-              onChange={(businessName) =>
-                setNewCustomer({ ...newCustomer, businessName })
+              label="Name*"
+              placeholder="Full name"
+              value={newCustomer.firstName}
+              onChange={(firstName) =>
+                setNewCustomer({ ...newCustomer, firstName })
               }
             />
+            <TextField
+              label="Email*"
+              placeholder="Email address"
+              type="email"
+              value={newCustomer.email}
+              onChange={(email) => setNewCustomer({ ...newCustomer, email })}
+            />
+            <TextField
+              label="Phone"
+              placeholder="Phone number"
+              type="tel"
+              value={newCustomer.phone}
+              onChange={(phone) => setNewCustomer({ ...newCustomer, phone })}
+            />
+            <button
+              className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-bold text-white hover:bg-emerald-900 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+              disabled={!canAddCustomer}
+              type="button"
+              onClick={addNewCustomerInline}
+            >
+              Add Customer
+            </button>
           </div>
         </div>
-      )}
+      ) : null}
     </SellerCard>
   );
 }
 
-function OrderItemEditor({
+function InventorySearchResults({
   inventory,
-  line,
-  lineNumber,
-  onRemove,
-  onSelectInventory,
-  updateLine,
+  onSelect,
+  query,
 }: {
   inventory: InventorySearchRow[];
-  line: OrderLine;
-  lineNumber: number;
-  onRemove: () => void;
-  onSelectInventory: (inventoryItemId: string) => void;
-  updateLine: (updates: Partial<OrderLine>) => void;
+  onSelect: (inventoryItemId: string) => void;
+  query: string;
 }) {
-  const selectedItem = inventory.find(
-    (row) => row.inventory_item_id === line.inventoryItemId,
-  );
-  const results = filterInventory(inventory, line.search)
-    .filter((item) => item.inventory_item_id !== line.inventoryItemId)
-    .slice(0, 6);
-  const quantity = Number(line.quantity || 0);
-  const unitPrice = Number(line.unitPrice || 0);
-  const exceedsAvailable =
-    line.type === "inventory" && quantityExceedsAvailable(line, inventory);
+  const results = filterInventory(inventory, query).slice(0, 7);
+
+  if (query.trim().length < 2) return null;
 
   return (
-    <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="font-semibold text-stone-950">
-          {line.type === "custom" ? "Custom Item" : "Item"} {lineNumber}
-        </h3>
-        <button className="seller-small-button" type="button" onClick={onRemove}>
-          Remove
-        </button>
-      </div>
+    <div className="mt-2 overflow-hidden rounded-md border border-stone-200 bg-white shadow-sm">
+      {results.length > 0 ? (
+        results.map((item) => (
+          <button
+            className="grid min-h-10 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-stone-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none"
+            key={item.inventory_item_id}
+            type="button"
+            onClick={() => onSelect(item.inventory_item_id)}
+          >
+            <span className="min-w-0">
+              <span className="block truncate font-semibold text-stone-950">
+                {item.breed_display_name}
+              </span>
+              <span className="block truncate text-xs text-stone-600">
+                {formatInventoryMetadata(item)} &middot; {item.quantity_available ?? 0} available
+              </span>
+            </span>
+            <span className="text-sm font-bold text-stone-950">
+              {formatCurrency(item.effective_unit_price)}
+            </span>
+          </button>
+        ))
+      ) : (
+        <p className="px-3 py-2 text-sm text-stone-600">No inventory matches.</p>
+      )}
+    </div>
+  );
+}
 
-      <div className="mt-4 grid gap-3">
-        {line.type === "custom" ? (
-          <TextField
-            label="Item name"
-            value={line.customItemName}
-            onChange={(customItemName) => updateLine({ customItemName })}
+function BrowseInventoryDialog({
+  addedInventoryItemId,
+  filter,
+  inventory,
+  onClose,
+  onFilterChange,
+  onQueryChange,
+  onSelect,
+  query,
+}: {
+  addedInventoryItemId: string | null;
+  filter: BrowseInventoryFilter;
+  inventory: InventorySearchRow[];
+  onClose: () => void;
+  onFilterChange: (filter: BrowseInventoryFilter) => void;
+  onQueryChange: (query: string) => void;
+  onSelect: (inventoryItemId: string) => void;
+  query: string;
+}) {
+  const rows = getBrowseInventoryRows(inventory, filter, query).slice(0, 60);
+  const filters: { label: string; value: BrowseInventoryFilter }[] = [
+    { label: "All", value: "all" },
+    { label: "Poultry", value: "poultry" },
+  ];
+
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/25 px-3 py-4"
+      role="dialog"
+      onMouseDown={onClose}
+    >
+      <div
+        className="flex max-h-[70vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-stone-200 bg-[#fffdf7] shadow-xl"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
+          <h3 className="text-base font-bold text-stone-950">Browse Inventory</h3>
+          <button
+            aria-label="Close Browse Inventory"
+            className="flex size-8 items-center justify-center rounded-md text-sm font-bold text-stone-500 hover:bg-stone-100 hover:text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/25"
+            type="button"
+            onClick={onClose}
+          >
+            x
+          </button>
+        </div>
+
+        <div className="grid gap-2 border-b border-stone-200 px-4 py-3">
+          <input
+            className="seller-form-field seller-compact-field"
+            placeholder="Search inventory"
+            type="text"
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
           />
-        ) : (
-          <label className="grid gap-1 text-sm font-semibold text-stone-700">
-            Smart search
-            <input
-              className="seller-form-field"
-              placeholder="Breed, type, or age"
-              type="search"
-              value={line.search}
-              onChange={(event) =>
-                updateLine({
-                  inventoryItemId: "",
-                  search: event.target.value,
-                  unitPrice: "",
-                })
-              }
-            />
-          </label>
-        )}
+          <div className="flex flex-wrap gap-1">
+            {filters.map((filterOption) => {
+              const selected = filter === filterOption.value;
 
-        {line.type === "custom" ? null : selectedItem ? (
-          <div className="rounded-md border border-emerald-100 bg-white px-3 py-2 text-sm">
-            <p className="font-semibold text-stone-950">
-              {formatInventorySearchLabel(selectedItem)}
+              return (
+                <button
+                  className={`min-h-7 rounded-md px-2.5 text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-emerald-700/25 ${
+                    selected
+                      ? "bg-emerald-800 text-white"
+                      : "bg-white text-stone-700 ring-1 ring-stone-200 hover:bg-emerald-50 hover:text-emerald-800"
+                  }`}
+                  key={filterOption.value}
+                  type="button"
+                  onClick={() => onFilterChange(filterOption.value)}
+                >
+                  {filterOption.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="min-h-0 overflow-y-auto bg-white">
+          {rows.length > 0 ? (
+            rows.map((item) => {
+              const wasAdded = addedInventoryItemId === item.inventory_item_id;
+
+              return (
+                <div
+                  className="grid grid-cols-[minmax(0,1fr)_5rem_5.25rem_4rem] items-center gap-2 border-b border-stone-100 px-4 py-2 text-sm last:border-b-0"
+                  key={item.inventory_item_id}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-bold text-stone-950">
+                      {item.breed_display_name}
+                    </p>
+                    <p className="truncate text-xs text-stone-600">
+                      {formatBrowseInventoryMetadata(item)}
+                    </p>
+                  </div>
+                  <p className="text-right text-xs font-semibold text-stone-600">
+                    {item.quantity_available ?? 0} available
+                  </p>
+                  <p className="text-right text-sm font-bold text-stone-950">
+                    {formatCurrency(item.effective_unit_price)}
+                  </p>
+                  <button
+                    className={`justify-self-end rounded-md px-2 py-1 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700/25 ${
+                      wasAdded
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "text-emerald-800 hover:bg-emerald-50"
+                    }`}
+                    type="button"
+                    onClick={() => onSelect(item.inventory_item_id)}
+                  >
+                    {wasAdded ? "Added" : "Add"}
+                  </button>
+                </div>
+              );
+            })
+          ) : (
+            <p className="px-4 py-4 text-sm text-stone-600">
+              No available inventory to browse.
             </p>
-          </div>
-        ) : results.length > 0 ? (
-          <div className="grid gap-2">
-            {results.map((item) => (
-              <button
-                className="rounded-md border border-stone-200 bg-white px-3 py-2 text-left text-sm hover:border-emerald-500"
-                key={item.inventory_item_id}
-                type="button"
-                onClick={() => onSelectInventory(item.inventory_item_id)}
-              >
-                {formatInventorySearchLabel(item)}
-              </button>
-            ))}
-          </div>
-        ) : line.search.trim() ? (
-          <p className="text-sm text-stone-600">No inventory matches.</p>
-        ) : null}
+          )}
+        </div>
 
-        {exceedsAvailable ? (
-          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
-            Quantity exceeds available inventory. Inventory will be reduced to zero.
-          </p>
-        ) : null}
-
-        <div className="grid gap-3 sm:grid-cols-[8rem_10rem_1fr]">
-          <TextField
-            label="Qty"
-            min="1"
-            step="1"
-            type="number"
-            value={line.quantity}
-            onChange={(quantityValue) => updateLine({ quantity: quantityValue })}
-          />
-          <TextField
-            label="Price"
-            min="0"
-            step="0.01"
-            type="number"
-            value={line.unitPrice}
-            onChange={(price) => updateLine({ unitPrice: price })}
-          />
-          <div>
-            <p className="text-sm font-semibold text-stone-700">Total</p>
-            <p className="mt-2 text-base font-semibold text-stone-950">
-              {formatCurrency(quantity * unitPrice)}
-            </p>
-          </div>
+        <div className="flex justify-end border-t border-stone-200 bg-[#fffdf7] px-4 py-3">
+          <button className="seller-small-button" type="button" onClick={onClose}>
+            Done
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
+function OrderItemRow({
+  inventory,
+  line,
+  onRemove,
+  updateLine,
+}: {
+  inventory: InventorySearchRow[];
+  line: OrderLine;
+  onRemove: () => void;
+  updateLine: (updates: Partial<OrderLine>) => void;
+}) {
+  const selectedItem = inventory.find(
+    (row) => row.inventory_item_id === line.inventoryItemId,
+  );
+  const quantity = Number(line.quantity || 0);
+  const unitPrice = Number(line.unitPrice || 0);
+  const exceedsAvailable =
+    line.type === "inventory" && quantityExceedsAvailable(line, inventory);
+
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_72px_96px_90px_28px] items-start gap-2 px-1 py-2">
+      <div className="min-w-0">
+        {line.type === "custom" ? (
+          <div className="grid min-w-0 gap-1.5">
+            <div className="flex min-w-0 items-center">
+              <input
+                className="min-h-10 min-w-0 flex-1 rounded-md border border-stone-300 px-2 text-sm font-semibold text-stone-950 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                placeholder="Item name"
+                value={line.customItemName}
+                onChange={(event) =>
+                  updateLine({ customItemName: event.target.value })
+                }
+              />
+            </div>
+            <input
+              className="min-h-9 w-full min-w-0 rounded-md border border-stone-300 px-2 text-sm text-stone-700 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+              placeholder="Short description"
+              value={line.customItemDescription}
+              onChange={(event) =>
+                updateLine({ customItemDescription: event.target.value })
+              }
+            />
+          </div>
+        ) : (
+          <>
+            <p className="truncate text-sm font-bold text-stone-950">
+              {selectedItem?.breed_display_name ?? "Inventory item"}
+            </p>
+            <p className="mt-1 truncate text-xs text-stone-600">
+              {selectedItem ? formatInventoryMetadata(selectedItem) : line.search}
+            </p>
+            {exceedsAvailable ? (
+              <p className="mt-1 text-xs font-semibold text-amber-800">
+                Quantity exceeds available inventory.
+              </p>
+            ) : null}
+          </>
+        )}
+      </div>
+
+      <QuantityInput
+        value={line.quantity}
+        onChange={(quantityValue) => updateLine({ quantity: quantityValue })}
+      />
+      <input
+        aria-label="Unit price"
+        className="seller-form-field seller-compact-field"
+        min="0"
+        step="0.01"
+        type="number"
+        value={line.unitPrice}
+        onChange={(event) => updateLine({ unitPrice: event.target.value })}
+      />
+      <p className="pt-2 text-right text-sm font-bold text-stone-950">
+        {formatCurrency(quantity * unitPrice)}
+      </p>
+      <button
+        aria-label="Remove item"
+        className="ml-auto flex size-7 items-center justify-center rounded-md opacity-70 transition hover:bg-red-50 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-500/25"
+        type="button"
+        onClick={onRemove}
+      >
+        <Image alt="" height={16} src="/glyphs/trashcan.png" width={16} />
+      </button>
+    </div>
+  );
+}
+
+function QuantityInput({
+  onChange,
+  value,
+}: {
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <input
+      aria-label="Quantity"
+      className="seller-form-field seller-compact-field text-center"
+      min="1"
+      step="1"
+      type="number"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+}
 function TextField({
   label,
   min,
   onChange,
+  placeholder,
   step,
   type = "text",
   value,
@@ -768,6 +1123,7 @@ function TextField({
   label: string;
   min?: string;
   onChange: (value: string) => void;
+  placeholder?: string;
   step?: string;
   type?: string;
   value: string;
@@ -776,8 +1132,9 @@ function TextField({
     <label className="grid gap-1 text-sm font-semibold text-stone-700">
       {label}
       <input
-        className="seller-form-field"
+        className="seller-form-field seller-compact-field"
         min={min}
+        placeholder={placeholder}
         step={step}
         type={type}
         value={value}
@@ -840,8 +1197,7 @@ function validateOrder({
   }
 
   if (customerMode === "new") {
-    if (!newCustomer.firstName.trim()) errors.push("Add the customer first name.");
-    if (!newCustomer.lastName.trim()) errors.push("Add the customer last name.");
+    if (!newCustomer.firstName.trim()) errors.push("Add the customer name.");
     if (!isEmail(newCustomer.email)) errors.push("Add a valid customer email.");
   }
 
@@ -971,6 +1327,39 @@ function filterInventory(inventory: InventorySearchRow[], query: string) {
   });
 }
 
+function getBrowseInventoryRows(
+  inventory: InventorySearchRow[],
+  filter: BrowseInventoryFilter,
+  query: string,
+) {
+  const normalized = query.trim().toLowerCase();
+
+  return inventory
+    .filter((item) => {
+      if ((item.quantity_available ?? 0) <= 0) return false;
+      if (filter !== "all" && getBrowseInventoryCategory(item) !== filter) {
+        return false;
+      }
+      if (!normalized) return true;
+
+      return [
+        item.breed_display_name,
+        formatInventoryType(item),
+        formatAge(item),
+        item.operational_availability_status,
+      ].some((value) => value.toLowerCase().includes(normalized));
+    })
+    .sort((firstItem, secondItem) =>
+      firstItem.breed_display_name.localeCompare(secondItem.breed_display_name),
+    );
+}
+
+function getBrowseInventoryCategory(
+  item: InventorySearchRow,
+): Exclude<BrowseInventoryFilter, "all"> {
+  return item.inventory_type ? "poultry" : "poultry";
+}
+
 function isActiveLine(line: OrderLine) {
   if (line.type === "custom") {
     return Boolean(line.customItemName.trim() || line.unitPrice.trim());
@@ -1003,6 +1392,21 @@ function formatInventorySearchLabel(item: InventorySearchRow) {
   )}`;
 }
 
+function formatCustomItemPayloadName(line: OrderLine) {
+  const name = line.customItemName.trim();
+  const description = line.customItemDescription.trim();
+
+  return description ? `${name} - ${description}` : name;
+}
+
+function formatInventoryMetadata(item: InventorySearchRow) {
+  return `${formatInventoryType(item)} · ${formatAge(item)} · Inventory`;
+}
+
+function formatBrowseInventoryMetadata(item: InventorySearchRow) {
+  return `${formatInventoryType(item)} · ${formatAge(item)} · Poultry`;
+}
+
 function formatInventoryType(item: InventorySearchRow) {
   return (
     item.custom_inventory_label || formatInventoryTypeLabel(item.inventory_type)
@@ -1010,25 +1414,7 @@ function formatInventoryType(item: InventorySearchRow) {
 }
 
 function formatAge(item: InventorySearchRow) {
-  const days = calculateCurrentAgeDays(item.origin_date);
-
-  return formatAgeAtAvailability(days);
-}
-
-function calculateCurrentAgeDays(originDate: string | null) {
-  if (!originDate) return null;
-
-  const originTime = Date.parse(`${originDate}T00:00:00Z`);
-  const today = new Date();
-  const todayTime = Date.UTC(
-    today.getUTCFullYear(),
-    today.getUTCMonth(),
-    today.getUTCDate(),
-  );
-
-  if (Number.isNaN(originTime)) return null;
-
-  return Math.max(Math.floor((todayTime - originTime) / 86_400_000), 0);
+  return formatAgeAtAvailabilityFromDates(item.origin_date, item.available_date);
 }
 
 function formatCustomerName(customer: {
@@ -1039,6 +1425,60 @@ function formatCustomerName(customer: {
     [customer.first_name, customer.last_name].filter(Boolean).join(" ") ||
     "Customer"
   );
+}
+
+function formatCustomerSummary(customer: CustomerRow) {
+  return [
+    formatCustomerName(customer),
+    customer.email,
+    customer.phone,
+  ]
+    .filter(Boolean)
+    .join(" - ");
+}
+
+function formatInlineCustomerSummary(customer: {
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+}) {
+  return [
+    formatNewCustomerName(customer),
+    customer.email.trim(),
+    customer.phone.trim(),
+  ]
+    .filter(Boolean)
+    .join(" - ");
+}
+
+function formatNewCustomerName(customer: {
+  firstName: string;
+  lastName: string;
+}) {
+  const fullName = [customer.firstName, customer.lastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return fullName || "Customer";
+}
+
+function parseFullName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+
+  if (parts.length === 0) {
+    return { firstName: "", lastName: "" };
+  }
+
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: "Customer" };
+  }
+
+  return {
+    firstName: parts.slice(0, -1).join(" "),
+    lastName: parts[parts.length - 1],
+  };
 }
 
 function getCreatedCustomerEmail(

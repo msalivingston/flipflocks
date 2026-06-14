@@ -109,6 +109,15 @@ body {
   color: #78716c;
 }
 
+.seller-compact-field {
+  min-height: 2.5rem;
+  padding: 0.5rem 0.625rem;
+}
+
+.seller-action-search-field::-webkit-search-cancel-button {
+  display: none;
+}
+
 .seller-money-field {
   padding-left: 3rem;
 }

@@ -7,9 +7,8 @@ export default function NewManualOrderPage() {
       <SellerPageHeader
         eyebrow="Orders"
         title="New Order"
-        description="Build a barn-side customer order from available inventory."
       />
-      <div className="mx-auto w-full max-w-7xl px-5 py-5 sm:px-7">
+      <div className="mx-auto w-full max-w-7xl px-5 py-4 sm:px-7">
         <NewManualOrder />
       </div>
     </>

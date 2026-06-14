@@ -108,7 +108,7 @@ export function OrdersList() {
     () => new Set(),
   );
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  const [expandedPickupNoteOrderId, setExpandedPickupNoteOrderId] =
+  const [expandedBuyerOrderId, setExpandedBuyerOrderId] =
     useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -169,7 +169,7 @@ export function OrdersList() {
       setOrders(nextOrders);
       setOrderItemsByOrderId(nextItemsByOrderId);
       setExpandedOrderId(null);
-      setExpandedPickupNoteOrderId(null);
+      setExpandedBuyerOrderId(null);
       setIsLoading(false);
     }
 
@@ -241,10 +241,8 @@ export function OrdersList() {
     setExpandedOrderId((current) => (current === orderId ? null : orderId));
   }
 
-  function toggleExpandedPickupNote(orderId: string) {
-    setExpandedPickupNoteOrderId((current) =>
-      current === orderId ? null : orderId,
-    );
+  function toggleExpandedBuyer(orderId: string) {
+    setExpandedBuyerOrderId((current) => (current === orderId ? null : orderId));
   }
 
   function toggleOrderSelection(orderId: string) {
@@ -348,15 +346,15 @@ export function OrdersList() {
       {hasVisibleOrders ? (
         <OrdersTableCard
           allVisibleSelected={allVisibleSelected}
+          expandedBuyerOrderId={expandedBuyerOrderId}
           expandedOrderId={expandedOrderId}
-          expandedPickupNoteOrderId={expandedPickupNoteOrderId}
           itemsByOrderId={orderItemsByOrderId}
           orders={visibleOrders}
           selectedOrderIds={selectedOrderIds}
           selectedVisibleCount={selectedVisibleCount}
           onClearSelection={clearSelection}
+          onToggleExpandedBuyer={toggleExpandedBuyer}
           onToggleExpandedOrder={toggleExpandedOrder}
-          onToggleExpandedPickupNote={toggleExpandedPickupNote}
           onToggleOrderSelection={toggleOrderSelection}
           onToggleSelectAll={toggleSelectAllOnPage}
         />
@@ -376,28 +374,28 @@ export function OrdersList() {
 
 function OrdersTableCard({
   allVisibleSelected,
+  expandedBuyerOrderId,
   expandedOrderId,
-  expandedPickupNoteOrderId,
   itemsByOrderId,
   orders,
   selectedOrderIds,
   selectedVisibleCount,
   onClearSelection,
+  onToggleExpandedBuyer,
   onToggleExpandedOrder,
-  onToggleExpandedPickupNote,
   onToggleOrderSelection,
   onToggleSelectAll,
 }: {
   allVisibleSelected: boolean;
+  expandedBuyerOrderId: string | null;
   expandedOrderId: string | null;
-  expandedPickupNoteOrderId: string | null;
   itemsByOrderId: Record<string, SellerOrderItemRow[]>;
   orders: SellerOrderRow[];
   selectedOrderIds: Set<string>;
   selectedVisibleCount: number;
   onClearSelection: () => void;
+  onToggleExpandedBuyer: (orderId: string) => void;
   onToggleExpandedOrder: (orderId: string) => void;
-  onToggleExpandedPickupNote: (orderId: string) => void;
   onToggleOrderSelection: (orderId: string) => void;
   onToggleSelectAll: () => void;
 }) {
@@ -436,7 +434,7 @@ function OrdersTableCard({
 
       <div
         aria-hidden="true"
-        className="hidden grid-cols-[2.25rem_minmax(7rem,9rem)_minmax(7rem,8rem)_minmax(0,1.25fr)_minmax(5rem,6rem)_minmax(7rem,8.5rem)_8.5rem] gap-3 bg-[#fbfaf6] px-4 py-3 text-xs font-medium uppercase tracking-[0.08em] text-stone-600 xl:grid"
+        className="hidden grid-cols-[2.25rem_minmax(9rem,10.5rem)_minmax(6.5rem,7.5rem)_minmax(0,1.6fr)_minmax(4.75rem,5.75rem)_minmax(7rem,8.25rem)_5.5rem] gap-3 bg-[#fbfaf6] px-4 py-3 text-xs font-medium uppercase tracking-[0.08em] text-stone-600 xl:grid"
       >
         <span />
         <span>Order</span>
@@ -450,14 +448,14 @@ function OrdersTableCard({
       <div className="divide-y divide-stone-200/80">
         {orders.map((order) => (
           <OrderRow
+            isBuyerExpanded={expandedBuyerOrderId === order.order_id}
             isExpanded={expandedOrderId === order.order_id}
-            isPickupNoteExpanded={expandedPickupNoteOrderId === order.order_id}
             isSelected={selectedOrderIds.has(order.order_id)}
             items={itemsByOrderId[order.order_id] ?? []}
             key={order.order_id}
             order={order}
+            onToggleBuyer={() => onToggleExpandedBuyer(order.order_id)}
             onToggleExpanded={() => onToggleExpandedOrder(order.order_id)}
-            onTogglePickupNote={() => onToggleExpandedPickupNote(order.order_id)}
             onToggleSelection={() => onToggleOrderSelection(order.order_id)}
           />
         ))}
@@ -507,30 +505,30 @@ function BulkActions({
 }
 
 function OrderRow({
+  isBuyerExpanded,
   isExpanded,
-  isPickupNoteExpanded,
   isSelected,
   items,
   order,
+  onToggleBuyer,
   onToggleExpanded,
-  onTogglePickupNote,
   onToggleSelection,
 }: {
+  isBuyerExpanded: boolean;
   isExpanded: boolean;
-  isPickupNoteExpanded: boolean;
   isSelected: boolean;
   items: SellerOrderItemRow[];
   order: SellerOrderRow;
+  onToggleBuyer: () => void;
   onToggleExpanded: () => void;
-  onTogglePickupNote: () => void;
   onToggleSelection: () => void;
 }) {
   const customerName = formatCustomerName(order);
   const lifecycle = getOrderLifecycleState(order);
   const pickupNote = order.pickup_note?.trim();
   const mobileDetailsId = `mobile-order-details-${order.order_id}`;
+  const desktopBuyerDetailsId = `desktop-buyer-details-${order.order_id}`;
   const desktopDetailsId = `desktop-order-items-${order.order_id}`;
-  const desktopPickupNoteId = `desktop-pickup-note-${order.order_id}`;
   const itemSummary = formatOrderItems(order);
   const paymentSummary = formatPaymentSummary(order);
 
@@ -647,7 +645,7 @@ function OrderRow({
         ) : null}
       </div>
 
-      <div className="hidden gap-3 px-4 py-3 xl:grid xl:grid-cols-[2.25rem_minmax(7rem,9rem)_minmax(7rem,8rem)_minmax(0,1.25fr)_minmax(5rem,6rem)_minmax(7rem,8.5rem)_8.5rem] xl:items-center">
+      <div className="hidden gap-3 px-4 py-2.5 xl:grid xl:grid-cols-[2.25rem_minmax(9rem,10.5rem)_minmax(6.5rem,7.5rem)_minmax(0,1.6fr)_minmax(4.75rem,5.75rem)_minmax(7rem,8.25rem)_5.5rem] xl:items-center">
         <label className="flex min-h-6 items-center gap-3">
           <input
             aria-label={`Select order ${order.order_number}`}
@@ -659,42 +657,31 @@ function OrderRow({
           <span className="sr-only">Select order</span>
         </label>
 
-        <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Link
-              className="text-base font-medium text-stone-950 hover:text-emerald-800"
-              href={`/dashboard/orders/${order.order_id}`}
-            >
-              #{order.order_number}
-            </Link>
-            <OrderLifecycleBadge
-              label={formatOrderLifecycle(order)}
-              lifecycle={lifecycle}
-            />
-          </div>
-          <div className="mt-1">
-            <button
-              aria-controls={desktopDetailsId}
-              aria-expanded={isExpanded}
-              aria-label={
-                isExpanded
-                  ? `Hide items in order ${order.order_number}`
-                  : `Show items in order ${order.order_number}`
-              }
-              className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1.5 text-left text-xs shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-700/30 ${
-                isExpanded
-                  ? "border-emerald-800 bg-emerald-100 text-emerald-950"
-                  : "border-emerald-800/45 bg-[#f4f8ef] text-emerald-900 hover:border-emerald-800 hover:bg-emerald-50"
-              }`}
-              type="button"
-              onClick={onToggleExpanded}
-            >
-              <span className="truncate">{itemSummary}</span>
-              <span aria-hidden="true" className="text-sm leading-none">
-                {isExpanded ? "▴" : "▾"}
-              </span>
-            </button>
-          </div>
+        <div className="flex min-w-0 items-center gap-1 text-sm">
+          <Link
+            className="shrink-0 text-stone-950 hover:text-emerald-800"
+            href={`/dashboard/orders/${order.order_id}`}
+          >
+            #{order.order_number}
+          </Link>
+          <span className="shrink-0 text-stone-500">-</span>
+          <button
+            aria-controls={desktopDetailsId}
+            aria-expanded={isExpanded}
+            aria-label={
+              isExpanded
+                ? `Hide items in order ${order.order_number}`
+                : `Show items in order ${order.order_number}`
+            }
+            className="inline-flex min-w-0 items-center gap-1.5 text-left text-emerald-800 underline-offset-4 transition hover:text-emerald-900 hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+            type="button"
+            onClick={onToggleExpanded}
+          >
+            <span className="truncate">{itemSummary}</span>
+            <span aria-hidden="true" className="text-xs leading-none">
+              {isExpanded ? "\u25B4" : "\u25BE"}
+            </span>
+          </button>
         </div>
 
         <p className="min-w-0 truncate text-sm text-stone-500">
@@ -702,56 +689,65 @@ function OrderRow({
         </p>
 
         <div className="min-w-0">
-          <p className="truncate text-sm text-stone-950">
-            {customerName}
-          </p>
-          {pickupNote ? (
-            <p className="mt-1">
-              <button
-                aria-controls={desktopPickupNoteId}
-                aria-expanded={isPickupNoteExpanded}
-                aria-label={
-                  isPickupNoteExpanded
-                    ? `Hide pickup note for order ${order.order_number}`
-                    : `Show pickup note for order ${order.order_number}`
-                }
-                className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-700/30 ${
-                  isPickupNoteExpanded
-                    ? "border-emerald-800 bg-emerald-50 text-emerald-950"
-                    : "border-emerald-800/35 bg-[#fbfaf6] text-emerald-900 hover:border-emerald-800/60 hover:bg-emerald-50"
-                }`}
-                type="button"
-                onClick={onTogglePickupNote}
-              >
-                <span className="truncate">Pickup note</span>
-                <span aria-hidden="true" className="text-sm leading-none">
-                  {isPickupNoteExpanded ? "\u25B4" : "\u25BE"}
-                </span>
-              </button>
-            </p>
+          <button
+            aria-controls={desktopBuyerDetailsId}
+            aria-expanded={isBuyerExpanded}
+            aria-label={
+              isBuyerExpanded
+                ? `Hide contact details for ${customerName}`
+                : `Show contact details for ${customerName}`
+            }
+            className="inline-flex max-w-full items-center gap-1.5 text-left text-sm text-stone-950 transition hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+            type="button"
+            onClick={onToggleBuyer}
+          >
+            <span className="truncate">{customerName}</span>
+            <span aria-hidden="true" className="text-xs leading-none">
+              {isBuyerExpanded ? "\u25B4" : "\u25BE"}
+            </span>
+          </button>
+          {isBuyerExpanded ? (
+            <div
+              className="mt-1 grid gap-0.5 text-xs leading-5 text-stone-600"
+              id={desktopBuyerDetailsId}
+            >
+              {order.buyer_phone_snapshot ? (
+                <a
+                  className="truncate hover:text-emerald-800"
+                  href={`tel:${order.buyer_phone_snapshot}`}
+                >
+                  {order.buyer_phone_snapshot}
+                </a>
+              ) : null}
+              {order.buyer_email_snapshot ? (
+                <a
+                  className="truncate hover:text-emerald-800"
+                  href={`mailto:${order.buyer_email_snapshot}`}
+                >
+                  {order.buyer_email_snapshot}
+                </a>
+              ) : null}
+            </div>
           ) : null}
         </div>
 
-        <p className="min-w-0 font-medium text-stone-950">
+        <p className="min-w-0 truncate text-sm text-stone-950">
           {formatCurrency(order.total_amount)}
         </p>
 
-        <p className="min-w-0 truncate text-sm font-medium text-stone-950">
+        <p className="min-w-0 truncate text-sm text-stone-950">
           {paymentSummary}
         </p>
 
-        <div className="flex min-w-0 items-center justify-end gap-1.5">
-          <OrderContactButtons order={order} variant="desktop" />
-          <Link
-            className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1 rounded-md border border-stone-300 bg-white px-2.5 text-sm font-medium text-emerald-800 transition hover:border-emerald-700 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
-            href={`/dashboard/orders/${order.order_id}`}
-          >
-            View
-            <span aria-hidden="true" className="text-lg leading-none">
-              &rarr;
-            </span>
-          </Link>
-        </div>
+        <Link
+          className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1 rounded-md border border-stone-300 bg-white px-2.5 text-sm text-emerald-800 transition hover:border-emerald-700 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
+          href={`/dashboard/orders/${order.order_id}`}
+        >
+          View
+          <span aria-hidden="true" className="text-lg leading-none">
+            &rarr;
+          </span>
+        </Link>
       </div>
 
       {isExpanded ? (
@@ -761,20 +757,6 @@ function OrderRow({
         >
           <div className="pl-[calc(2.25rem+0.75rem)]">
             <OrderItemsQuickview items={items} />
-          </div>
-        </div>
-      ) : null}
-
-      {pickupNote && isPickupNoteExpanded ? (
-        <div
-          className="hidden border-t border-stone-200/80 bg-[#fffdf8] px-4 py-3 xl:block"
-          id={desktopPickupNoteId}
-        >
-          <div className="pl-[calc(2.25rem+0.75rem)]">
-            <p className="max-w-3xl text-sm leading-6 text-stone-700">
-              <span className="font-medium text-stone-950">Pickup note:</span>{" "}
-              {pickupNote}
-            </p>
           </div>
         </div>
       ) : null}
