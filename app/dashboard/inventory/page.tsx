@@ -6,14 +6,14 @@ export default function SellerInventoryPage() {
     <>
       <SellerPageHeader
         title="Inventory"
-        description="Manage availability by breed, with editable rows for each type, age, quantity, price, and status."
+        description="Manage birds and equipment with filters, sorting, and quick edits."
         action={
           <PrimaryActionLink href="/dashboard/listings/new">
             Add Inventory
           </PrimaryActionLink>
         }
       />
-      <div className="mx-auto w-full max-w-7xl px-5 py-5 sm:px-7">
+      <div className="mx-auto w-full px-4 py-4 lg:px-5">
         <InventoryManagement />
       </div>
     </>

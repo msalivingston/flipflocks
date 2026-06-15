@@ -21,7 +21,6 @@ import {
   breedLibrarySelect,
   buildLibraryByBreedId,
   buildSpeciesNameById,
-  getProfileDescription,
   sellerBreedProfileSelect,
   sellerMediaSelect,
   speciesSelect,
@@ -56,8 +55,8 @@ type FunctionErrorContext = {
 
 const buyerDescriptionMaxLength = 1000;
 const birdTypeOptions = [
-  { label: "Layer", value: "layer" },
-  { label: "Meat", value: "meat" },
+  { label: "Egg Layer", value: "layer" },
+  { label: "Meat Bird", value: "meat" },
   { label: "Dual Purpose", value: "dual_purpose" },
 ];
 const eggColorOptions = [
@@ -231,10 +230,6 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
     Boolean(catalogBreed && defaultPhotoUrl && !hasActiveCatalogDefaultPhoto) &&
     !mediaError;
   const isBreedPhotoLimitReached = activeBreedPhotoCount >= 4;
-  const descriptionPreview = profile
-    ? getProfileDescription(profile, libraryByBreedId)
-    : "";
-
   function updateDraft(updates: Partial<BreedDraft>) {
     setDraft((current) => (current ? { ...current, ...updates } : current));
     setSaveError(null);
@@ -251,7 +246,7 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
 
     if (draft.sellerDescription.length > buyerDescriptionMaxLength) {
       setSaveError(
-        `Buyer description must be ${buyerDescriptionMaxLength} characters or less.`,
+        `Breed description must be ${buyerDescriptionMaxLength} characters or less.`,
       );
       return;
     }
@@ -535,7 +530,7 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
     <>
       <SellerPageHeader
         title={profile.display_name}
-        description={descriptionPreview || "Manage this breed's storefront presentation."}
+        description="Manage this breed's storefront presentation."
         action={
           <Link className="seller-secondary-button" href="/dashboard/breeds">
             Back to Breeds
@@ -543,117 +538,207 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
         }
       />
 
-      <main className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-5 py-5 sm:px-7">
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-5 py-5 sm:px-7">
         {successMessage ? (
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
             {successMessage}
           </div>
         ) : null}
 
-        <SellerCard className="p-5">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold text-stone-950">
-              Breed Information
-            </h2>
-            <StatusBadge status={speciesName} />
-          </div>
-          <p className="mt-1 text-sm leading-6 text-stone-600">
-            Edit the breed-level content buyers see on your storefront. Catalog
-            breeds can be restored from the FlipFlocks breed library.
-          </p>
-
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <label className="grid gap-1 text-sm font-semibold text-stone-700">
-              Species
-              <input className="seller-form-field" disabled value={speciesName} />
-            </label>
-            <label className="grid gap-1 text-sm font-semibold text-stone-700">
-              Breed name
-              <input
-                className="seller-form-field"
-                value={draft.displayName}
-                onChange={(event) =>
-                  updateDraft({ displayName: event.target.value })
-                }
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.9fr)] xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,0.9fr)]">
+          <div className="order-1 grid content-start gap-4 lg:col-start-1 lg:row-start-1">
+            {mediaError ? (
+              <SellerCard className="p-5">
+                <h2 className="text-lg font-semibold text-stone-950">
+                  Breed Photos
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-stone-600">
+                  Photos could not load right now. You can still update breed
+                  information.
+                </p>
+              </SellerCard>
+            ) : (
+              <ListingPhotosSection
+                canManage={profile.visibility_status !== "archived"}
+                description="Manage the photos buyers see for this breed."
+                emptyDescription="Add clear breed photos once, then reuse them wherever this breed appears."
+                entityId={profile.id}
+                entityType="seller_breed_profile"
+                listingBatchId={profile.id}
+                mediaItems={mediaItems}
+                mode="public-content"
+                storeId={storeId}
+                title="Breed Photos"
+                onReload={() => setReloadKey((current) => current + 1)}
               />
-            </label>
+            )}
 
-            {isChickenBreed ? (
-              <>
-                <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                  Bird type
-                  <select
-                    className="seller-form-field"
-                    value={draft.birdType}
-                    onChange={(event) =>
-                      updateDraft({ birdType: event.target.value })
-                    }
-                  >
-                    <option value="">Choose bird type</option>
-                    {birdTypeOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                  Egg color
-                  <select
-                    className="seller-form-field"
-                    value={draft.eggColor}
-                    onChange={(event) =>
-                      updateDraft({ eggColor: event.target.value })
-                    }
-                  >
-                    <option value="">Choose egg color</option>
-                    {eggColorOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="grid gap-1 text-sm font-semibold text-stone-700 md:col-span-2">
-                  Annual egg production
-                  <select
-                    className="seller-form-field"
-                    value={draft.annualEggProduction}
-                    onChange={(event) =>
-                      updateDraft({ annualEggProduction: event.target.value })
-                    }
-                  >
-                    <option value="">Choose annual egg production</option>
-                    {annualEggProductionOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </>
-            ) : null}
-
-            <label className="grid gap-1 text-sm font-semibold text-stone-700 md:col-span-2">
-              <span className="flex flex-wrap items-center justify-between gap-2">
-                <span>Buyer description</span>
-                {catalogBreed ? (
+            {canShowRestoreDefaultPhoto ? (
+              <SellerCard className="p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-sm font-semibold text-stone-950">
+                      Default Breed Photo
+                    </h2>
+                    <p className="mt-1 text-sm leading-6 text-stone-600">
+                      Add the FlipFlocks catalog image to this photo set.
+                    </p>
+                    {isBreedPhotoLimitReached ? (
+                      <p className="mt-2 text-sm font-semibold text-amber-800">
+                        Remove a photo before restoring the default photo.
+                      </p>
+                    ) : null}
+                    {photoActionError ? (
+                      <p className="mt-2 text-sm font-semibold text-red-700">
+                        {photoActionError}
+                      </p>
+                    ) : null}
+                  </div>
                   <button
-                    className="seller-small-button"
-                    disabled={isRestoringCatalogDefaults}
-                    onClick={() => void restoreCatalogDefaults()}
+                    className="seller-secondary-button"
+                    disabled={
+                      !canManagePhotos ||
+                      isBreedPhotoLimitReached ||
+                      isRestoringDefaultPhoto
+                    }
+                    onClick={() => void restoreDefaultPhoto()}
                     type="button"
                   >
-                    {isRestoringCatalogDefaults
-                      ? "Restoring"
-                      : "Restore Catalog Defaults"}
+                    {isRestoringDefaultPhoto ? "Restoring" : "Restore Default Photo"}
                   </button>
-                ) : null}
-              </span>
+                </div>
+              </SellerCard>
+            ) : null}
+          </div>
+
+          <SellerCard className="order-2 p-4 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <h2 className="text-lg font-semibold text-stone-950">
+                  Breed Details
+                </h2>
+                <StatusBadge status={speciesName} />
+              </div>
+              {catalogBreed ? (
+                <button
+                  className="seller-small-button"
+                  disabled={isRestoringCatalogDefaults}
+                  onClick={() => void restoreCatalogDefaults()}
+                  type="button"
+                >
+                  {isRestoringCatalogDefaults
+                    ? "Restoring"
+                    : "Restore Catalog Defaults"}
+                </button>
+              ) : null}
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              <div className="grid gap-1 text-sm font-semibold text-stone-700">
+                Species
+                <div className="inline-flex min-h-9 w-fit items-center rounded-full border border-emerald-100 bg-emerald-50 px-3 text-xs font-semibold text-emerald-900">
+                  {speciesName}
+                </div>
+              </div>
+
+              <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                Breed name
+                <input
+                  className="seller-form-field min-h-10 py-1.5"
+                  value={draft.displayName}
+                  onChange={(event) =>
+                    updateDraft({ displayName: event.target.value })
+                  }
+                />
+              </label>
+
+              {isChickenBreed ? (
+                <>
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    Purpose
+                    <select
+                      className="seller-form-field min-h-10 py-1.5"
+                      value={draft.birdType}
+                      onChange={(event) =>
+                        updateDraft({ birdType: event.target.value })
+                      }
+                    >
+                      <option value="">Choose purpose</option>
+                      {birdTypeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    Egg color
+                    <select
+                      className="seller-form-field min-h-10 py-1.5"
+                      value={draft.eggColor}
+                      onChange={(event) =>
+                        updateDraft({ eggColor: event.target.value })
+                      }
+                    >
+                      <option value="">Choose egg color</option>
+                      {eggColorOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    Annual egg production
+                    <select
+                      className="seller-form-field min-h-10 py-1.5"
+                      value={draft.annualEggProduction}
+                      onChange={(event) =>
+                        updateDraft({ annualEggProduction: event.target.value })
+                      }
+                    >
+                      <option value="">Choose annual egg production</option>
+                      {annualEggProductionOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              ) : null}
+
+              <div className="pt-1">
+                <button
+                  className="seller-primary-button w-full"
+                  disabled={isSaving}
+                  onClick={() => void saveChanges()}
+                  type="button"
+                >
+                  {isSaving ? "Saving" : "Save Changes"}
+                </button>
+              </div>
+
+              {saveError ? (
+                <ErrorState title="Breed was not saved" message={saveError} />
+              ) : null}
+            </div>
+          </SellerCard>
+
+          <SellerCard className="order-3 p-5 lg:col-start-1 lg:row-start-2">
+            <h2 className="text-lg font-semibold text-stone-950">
+              Breed Description
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-stone-600">
+              Write the storefront copy buyers see for this breed.
+            </p>
+
+            <label className="mt-4 grid gap-1 text-sm font-semibold text-stone-700">
+              <span className="sr-only">Breed Description</span>
               <textarea
-                className="seller-form-field min-h-36 resize-y py-3"
+                className="seller-form-field min-h-44 resize-y py-3"
                 maxLength={buyerDescriptionMaxLength}
                 value={draft.sellerDescription}
                 onChange={(event) =>
@@ -661,96 +746,21 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
                 }
               />
             </label>
-          </div>
 
-          <div className="mt-5">
-            <button
-              className="seller-primary-button"
-              disabled={isSaving}
-              onClick={() => void saveChanges()}
-              type="button"
-            >
-              {isSaving ? "Saving" : "Save Changes"}
-            </button>
-          </div>
-
-          {saveError ? (
-            <div className="mt-4">
-              <ErrorState title="Breed was not saved" message={saveError} />
-            </div>
-          ) : null}
-        </SellerCard>
-
-        {canShowRestoreDefaultPhoto ? (
-          <SellerCard className="p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-stone-950">
-                  Default Breed Photo
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-stone-600">
-                  Restore the FlipFlocks breed library image as one of your
-                  normal breed photos.
-                </p>
-                {isBreedPhotoLimitReached ? (
-                  <p className="mt-2 text-sm font-semibold text-amber-800">
-                    You already have 4 breed photos. Remove a photo before
-                    restoring the default photo.
-                  </p>
-                ) : null}
-                {photoActionError ? (
-                  <p className="mt-2 text-sm font-semibold text-red-700">
-                    {photoActionError}
-                  </p>
-                ) : null}
-              </div>
-              <button
-                className="seller-secondary-button"
-                disabled={
-                  !canManagePhotos ||
-                  isBreedPhotoLimitReached ||
-                  isRestoringDefaultPhoto
-                }
-                onClick={() => void restoreDefaultPhoto()}
-                type="button"
-              >
-                {isRestoringDefaultPhoto ? "Restoring" : "Restore Default Photo"}
-              </button>
-            </div>
           </SellerCard>
-        ) : null}
+        </div>
 
-        {mediaError ? (
-          <SellerCard className="p-5">
-            <h2 className="text-lg font-semibold text-stone-950">Breed Photos</h2>
-            <p className="mt-1 text-sm leading-6 text-stone-600">
-              Photos could not load right now. You can still update breed
-              information.
-            </p>
-          </SellerCard>
-        ) : (
-          <ListingPhotosSection
-            canManage={profile.visibility_status !== "archived"}
-            description="Manage the photos buyers see for this breed."
-            emptyDescription="Add clear breed photos once, then reuse them wherever this breed appears."
-            entityId={profile.id}
-            entityType="seller_breed_profile"
-            listingBatchId={profile.id}
-            mediaItems={mediaItems}
-            mode="public-content"
-            storeId={storeId}
-            title="Breed Photos"
-            onReload={() => setReloadKey((current) => current + 1)}
-          />
-        )}
-
-        <SellerCard className="border-red-200 p-5">
-          <h2 className="text-lg font-semibold text-stone-950">Remove Breed</h2>
-          <p className="mt-1 text-sm leading-6 text-stone-600">
-            Remove this breed from your active breed library. You can add it
-            again later from the breed library.
-          </p>
-          <div className="mt-4">
+        <SellerCard className="border-red-200 bg-red-50/40 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-red-700">
+                Remove Breed
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-stone-600">
+                Remove this breed from your active breed library. You can add it
+                again later from the breed library.
+              </p>
+            </div>
             <button
               className="seller-secondary-button border-red-300 text-red-700 hover:bg-red-50"
               disabled={isRemoving}

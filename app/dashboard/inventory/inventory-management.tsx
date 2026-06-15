@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -19,8 +20,6 @@ import {
 } from "../_lib/listing-formatters";
 import {
   type EquipmentInventoryRow,
-  formatCurrency as formatEquipmentCurrency,
-  formatEquipmentStatus,
 } from "../_lib/equipment-inventory";
 import {
   type ProcessedPoultryInventoryRow,
@@ -56,18 +55,71 @@ type ReservedRow = {
   remaining_unfulfilled_quantity: number | null;
 };
 
-type BreedInventoryGroup = {
-  id: string;
-  breedName: string;
-  speciesName: string;
-  rows: InventoryRow[];
-};
-
 type AgeFilter = "all" | "0_6" | "7_12" | "13_24" | "25_plus" | "unknown";
 type InventoryVisibility = "draft" | "live" | "hidden" | "archived" | "sold_out";
+type AvailabilityFilter =
+  | "all"
+  | "available_now"
+  | "future"
+  | "sold_out"
+  | "local_pickup"
+  | "not_listed"
+  | "unavailable";
+type InventorySort =
+  | "hatch_date"
+  | "name"
+  | "age"
+  | "available"
+  | "reserved"
+  | "price"
+  | "availability";
+
+type FlatInventoryItem =
+  | {
+      kind: "bird";
+      id: string;
+      species: string;
+      speciesFilterValue: string;
+      breedOrItem: string;
+      typeSex: string;
+      hatchDate: string | null;
+      availableDate: string | null;
+      ageDays: number | null;
+      ageLabel: string;
+      availableQuantity: number;
+      reservedQuantity: number;
+      price: number | null;
+      availabilityLabel: string;
+      availabilityValue: AvailabilityFilter;
+      manageHref: string;
+      searchText: string;
+      row: InventoryRow;
+    }
+  | {
+      kind: "equipment";
+      id: string;
+      species: "Equipment";
+      speciesFilterValue: "equipment";
+      breedOrItem: string;
+      typeSex: "—";
+      hatchDate: null;
+      availableDate: null;
+      ageDays: null;
+      ageLabel: "—";
+      availableQuantity: number;
+      reservedQuantity: 0;
+      price: number;
+      availabilityLabel: string;
+      availabilityValue: AvailabilityFilter;
+      manageHref: string;
+      searchText: string;
+      row: EquipmentInventoryRow;
+    };
 
 const unsavedWarning =
   "You have unsaved inventory changes. Save or discard before leaving.";
+const ageTooltipText =
+  "Age shows the first available age until the available date arrives, then updates to the bird’s current age.";
 
 const ageFilterOptions: { label: string; value: AgeFilter }[] = [
   { label: "All ages", value: "all" },
@@ -76,6 +128,16 @@ const ageFilterOptions: { label: string; value: AgeFilter }[] = [
   { label: "13-24 weeks", value: "13_24" },
   { label: "25+ weeks", value: "25_plus" },
   { label: "Age not set", value: "unknown" },
+];
+
+const sortOptions: { label: string; value: InventorySort }[] = [
+  { label: "Hatch date", value: "hatch_date" },
+  { label: "Breed / Item", value: "name" },
+  { label: "Age", value: "age" },
+  { label: "Available", value: "available" },
+  { label: "Reserved", value: "reserved" },
+  { label: "Price", value: "price" },
+  { label: "Availability", value: "availability" },
 ];
 
 export function InventoryManagement() {
@@ -94,11 +156,10 @@ export function InventoryManagement() {
   const [speciesFilter, setSpeciesFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [ageFilter, setAgeFilter] = useState<AgeFilter>("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [availabilityFilter, setAvailabilityFilter] =
+    useState<AvailabilityFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [expandedGroupIds, setExpandedGroupIds] = useState<
-    Record<string, boolean>
-  >({});
+  const [sortBy, setSortBy] = useState<InventorySort>("hatch_date");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -193,18 +254,29 @@ export function InventoryManagement() {
 
   useUnsavedInventoryWarning(hasUnsavedChanges);
 
+  const inventoryItems = useMemo(
+    () =>
+      buildFlatInventoryItems({
+        draftQuantities,
+        equipmentRows,
+        reservedByItemId,
+        rows,
+      }),
+    [draftQuantities, equipmentRows, reservedByItemId, rows],
+  );
+
   const speciesOptions = useMemo(() => {
     const uniqueSpecies = new Map<string, string>();
 
-    for (const row of rows) {
-      uniqueSpecies.set(row.species_slug, row.species_name);
+    for (const item of inventoryItems) {
+      uniqueSpecies.set(item.speciesFilterValue, item.species);
     }
 
     return [
       { label: "All species", value: "all" },
       ...Array.from(uniqueSpecies, ([value, label]) => ({ label, value })),
     ];
-  }, [rows]);
+  }, [inventoryItems]);
 
   const typeOptions = useMemo(() => {
     const uniqueTypes = new Map<string, string>();
@@ -222,73 +294,93 @@ export function InventoryManagement() {
     ];
   }, [rows]);
 
-  const statusOptions = useMemo(() => {
-    const uniqueStatuses = new Map<string, string>();
+  const availabilityOptions = useMemo(() => {
+    const uniqueAvailability = new Map<AvailabilityFilter, string>();
 
-    for (const row of rows) {
-      uniqueStatuses.set(
-        row.operational_availability_status,
-        formatInventoryStatus(row.operational_availability_status),
+    for (const item of inventoryItems) {
+      if (item.availabilityValue === "all") continue;
+      uniqueAvailability.set(
+        item.availabilityValue,
+        getAvailabilityFilterLabel(item.availabilityValue),
       );
     }
 
     return [
-      { label: "All statuses", value: "all" },
-      ...Array.from(uniqueStatuses, ([value, label]) => ({ label, value })).sort(
+      { label: "All availability", value: "all" },
+      ...Array.from(uniqueAvailability, ([value, label]) => ({
+        label,
+        value,
+      })).sort(
         (first, second) => first.label.localeCompare(second.label),
       ),
     ];
-  }, [rows]);
+  }, [inventoryItems]);
 
-  const filteredRows = useMemo(() => {
+  const filteredItems = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
 
-    return rows.filter((row) => {
-      if (speciesFilter !== "all" && row.species_slug !== speciesFilter) {
-        return false;
-      }
+    return inventoryItems
+      .filter((item) => {
+        if (
+          speciesFilter !== "all" &&
+          item.speciesFilterValue !== speciesFilter
+        ) {
+          return false;
+        }
 
-      if (typeFilter !== "all" && getTypeFilterValue(row) !== typeFilter) {
-        return false;
-      }
+        if (
+          typeFilter !== "all" &&
+          (item.kind !== "bird" || getTypeFilterValue(item.row) !== typeFilter)
+        ) {
+          return false;
+        }
 
-      if (!matchesAgeFilter(row, ageFilter)) {
-        return false;
-      }
+        if (item.kind === "bird" && !matchesAgeFilter(item.row, ageFilter)) {
+          return false;
+        }
 
-      if (
-        statusFilter !== "all" &&
-        row.operational_availability_status !== statusFilter
-      ) {
-        return false;
-      }
+        if (item.kind === "equipment" && ageFilter !== "all") {
+          return false;
+        }
 
-      if (!normalizedSearch) return true;
+        if (
+          availabilityFilter !== "all" &&
+          item.availabilityValue !== availabilityFilter
+        ) {
+          return false;
+        }
 
-      const searchable = [
-        row.breed_display_name,
-        row.species_name,
-        getInventoryTypeLabel(row),
-        formatInventoryStatus(row.operational_availability_status),
-      ]
-        .join(" ")
-        .toLowerCase();
+        if (!normalizedSearch) return true;
 
-      return searchable.includes(normalizedSearch);
-    });
-  }, [ageFilter, rows, searchQuery, speciesFilter, statusFilter, typeFilter]);
+        return item.searchText.includes(normalizedSearch);
+      })
+      .sort((first, second) => compareFlatInventoryItems(first, second, sortBy));
+  }, [
+    ageFilter,
+    availabilityFilter,
+    inventoryItems,
+    searchQuery,
+    sortBy,
+    speciesFilter,
+    typeFilter,
+  ]);
 
-  const inventoryGroups = useMemo(
-    () => groupRowsByBreed(filteredRows),
-    [filteredRows],
+  const visibleBirdItems = filteredItems.filter(
+    (item) => item.kind === "bird" && isLiveBirdInventoryRow(item.row),
   );
-
-  const totalBirdsShown = filteredRows
-    .filter(isLiveBirdInventoryRow)
-    .reduce(
-      (total, row) => total + getDisplayedQuantity(row, draftQuantities),
-      0,
-    );
+  const totalBirdsShown = visibleBirdItems.reduce(
+    (total, item) => total + item.availableQuantity,
+    0,
+  );
+  const totalForSale = visibleBirdItems.reduce(
+    (total, item) =>
+      total + Math.max(item.availableQuantity - item.reservedQuantity, 0),
+    0,
+  );
+  const totalReserved = visibleBirdItems.reduce(
+    (total, item) => total + item.reservedQuantity,
+    0,
+  );
 
   function updateDraftQuantity(row: InventoryRow, nextValue: string) {
     setDraftQuantities((current) => {
@@ -385,25 +477,28 @@ export function InventoryManagement() {
   }
 
   return (
-    <div className="space-y-4">
-      <SellerCard className="p-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
-              Total Birds Shown
-            </p>
-            <p className="mt-1 text-3xl font-semibold text-stone-950">
-              {totalBirdsShown}
-            </p>
-            {hasUnsavedChanges ? (
-              <p className="mt-1 text-sm font-medium text-amber-700">
-                {changedRows.length} unsaved row
-                {changedRows.length === 1 ? "" : "s"}
-              </p>
-            ) : null}
+    <div className="space-y-3">
+      <SellerCard className="p-3">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="grid flex-1 gap-2 md:grid-cols-3">
+            <InventorySummaryCard
+              glyph="/glyphs/hen.png"
+              label="Total Birds Shown"
+              value={totalBirdsShown}
+            />
+            <InventorySummaryCard
+              glyph="/glyphs/egg-carton.png"
+              label="Total For Sale"
+              value={totalForSale}
+            />
+            <InventorySummaryCard
+              glyph="/glyphs/calendar.png"
+              label="Reserved"
+              value={totalReserved}
+            />
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2 sm:flex-row xl:justify-end">
             <button
               type="button"
               className="seller-secondary-button"
@@ -423,6 +518,13 @@ export function InventoryManagement() {
           </div>
         </div>
 
+        {hasUnsavedChanges ? (
+          <p className="mt-2 text-xs font-medium text-amber-700">
+            {changedRows.length} unsaved row
+            {changedRows.length === 1 ? "" : "s"}
+          </p>
+        ) : null}
+
         {saveError ? (
           <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">
             {saveError}
@@ -435,8 +537,8 @@ export function InventoryManagement() {
         ) : null}
       </SellerCard>
 
-      <SellerCard className="p-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <SellerCard className="p-3">
+        <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
           <FilterControl
             label="Species"
             value={speciesFilter}
@@ -456,36 +558,44 @@ export function InventoryManagement() {
             onChange={(value) => setAgeFilter(value as AgeFilter)}
           />
           <FilterControl
-            label="Status"
-            value={statusFilter}
-            options={statusOptions}
-            onChange={setStatusFilter}
+            label="Availability"
+            value={availabilityFilter}
+            options={availabilityOptions}
+            onChange={(value) =>
+              setAvailabilityFilter(value as AvailabilityFilter)
+            }
           />
-          <label className="grid gap-1 text-sm font-semibold text-stone-700">
+          <label className="grid gap-1 text-xs font-semibold text-stone-700">
             Search
             <input
-              className="min-h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+              className="min-h-9 rounded-md border border-stone-300 bg-white px-2.5 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
               placeholder="Breed or name"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
             />
           </label>
+          <FilterControl
+            label="Sort by"
+            value={sortBy}
+            options={sortOptions}
+            onChange={(value) => setSortBy(value as InventorySort)}
+          />
         </div>
       </SellerCard>
 
       <SellerCard className="overflow-hidden">
-        {rows.length === 0 ? (
+        {inventoryItems.length === 0 ? (
           <div className="p-4">
             <EmptyState
               title={
-                equipmentRows.length > 0 || processedPoultryRows.length > 0
+                equipmentRows.length > 0
                   ? "No bird inventory yet"
                   : "No inventory yet"
               }
               description={
-                equipmentRows.length > 0 || processedPoultryRows.length > 0
+                equipmentRows.length > 0
                   ? "Add live birds or hatching eggs when you are ready to manage bird availability."
-                  : "Add birds, eggs, equipment, or processed poultry to start building your inventory."
+                  : "Add birds, eggs, or equipment to start building your inventory."
               }
               action={
                 <Link
@@ -497,39 +607,338 @@ export function InventoryManagement() {
               }
             />
           </div>
-        ) : filteredRows.length === 0 ? (
+        ) : filteredItems.length === 0 ? (
           <div className="p-4">
             <EmptyState
               title="No inventory matches these filters"
-              description="Adjust the filters or search to see more of your flock availability."
+              description="Adjust the filters or search to see more inventory."
             />
           </div>
         ) : (
-          <div className="divide-y divide-stone-200">
-            {inventoryGroups.map((group) => (
-              <BreedInventoryRows
-                key={group.id}
-                draftQuantities={draftQuantities}
-                group={group}
-                isExpanded={Boolean(expandedGroupIds[group.id])}
-                reservedByItemId={reservedByItemId}
-                toggleExpanded={() =>
-                  setExpandedGroupIds((current) => ({
-                    ...current,
-                    [group.id]: !current[group.id],
-                  }))
-                }
-                updateDraftQuantity={updateDraftQuantity}
-              />
-            ))}
-          </div>
+          <FlatInventoryTable
+            draftQuantities={draftQuantities}
+            items={filteredItems}
+            updateDraftQuantity={updateDraftQuantity}
+          />
         )}
       </SellerCard>
 
-      <EquipmentInventorySection rows={equipmentRows} />
-      <ProcessedPoultryInventorySection rows={processedPoultryRows} />
+      {processedPoultryRows.length > 0 ? (
+        <ProcessedPoultryInventorySection rows={processedPoultryRows} />
+      ) : null}
     </div>
   );
+}
+
+function InventorySummaryCard({
+  glyph,
+  label,
+  value,
+}: {
+  glyph: string;
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="flex min-h-16 items-center gap-2.5 rounded-md border border-stone-200 bg-white px-3 py-2.5 shadow-sm">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-900/5">
+        <Image src={glyph} alt="" width={21} height={21} />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[0.68rem] font-bold uppercase tracking-[0.05em] text-stone-500">
+          {label}
+        </p>
+        <p className="mt-0.5 text-xl font-semibold leading-none text-stone-950">
+          {value}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function FlatInventoryTable({
+  draftQuantities,
+  items,
+  updateDraftQuantity,
+}: {
+  draftQuantities: Record<string, string>;
+  items: FlatInventoryItem[];
+  updateDraftQuantity: (row: InventoryRow, nextValue: string) => void;
+}) {
+  return (
+    <>
+      <div className="grid gap-3 p-3 lg:hidden">
+        <div className="flex justify-end">
+          <AgeHeaderWithTooltip tooltipId="inventory-age-tooltip-mobile" />
+        </div>
+        {items.map((item) => (
+          <FlatInventoryCard
+            key={item.id}
+            draftQuantities={draftQuantities}
+            item={item}
+            updateDraftQuantity={updateDraftQuantity}
+          />
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto lg:block">
+        <table className="w-full min-w-[940px] border-collapse text-left text-[0.8125rem]">
+          <thead className="bg-stone-50 text-[0.68rem] font-semibold uppercase tracking-[0.05em] text-stone-500">
+            <tr>
+              <th className="px-3 py-2.5">Species</th>
+              <th className="px-3 py-2.5">Breed / Item</th>
+              <th className="px-3 py-2.5">Type/Sex</th>
+              <th className="px-3 py-2.5">Hatch date</th>
+              <th className="px-3 py-2.5">
+                <AgeHeaderWithTooltip tooltipId="inventory-age-tooltip-table" />
+              </th>
+              <th className="px-3 py-2.5 text-center">Available</th>
+              <th className="px-3 py-2.5 text-center">Reserved</th>
+              <th className="px-3 py-2.5">Price</th>
+              <th className="px-3 py-2.5">Availability</th>
+              <th className="px-3 py-2.5 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-stone-200 bg-white">
+            {items.map((item) => (
+              <FlatInventoryTableRow
+                key={item.id}
+                draftQuantities={draftQuantities}
+                item={item}
+                updateDraftQuantity={updateDraftQuantity}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function AgeHeaderWithTooltip({ tooltipId }: { tooltipId: string }) {
+  return (
+    <span className="group relative inline-flex items-center gap-1.5 align-middle">
+      <span>Age</span>
+      <button
+        aria-describedby={tooltipId}
+        aria-label="How age is calculated"
+        className="inline-flex size-4 items-center justify-center rounded-full border border-stone-300 bg-white text-[0.625rem] font-bold leading-none text-stone-600 transition hover:border-emerald-700 hover:text-emerald-800 focus:border-emerald-700 focus:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+        type="button"
+      >
+        i
+      </button>
+      <span
+        className="pointer-events-none absolute left-0 top-6 z-20 w-64 rounded-md border border-stone-200 bg-white px-3 py-2 text-left text-xs font-medium normal-case leading-5 tracking-normal text-stone-700 opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-within:opacity-100"
+        id={tooltipId}
+        role="tooltip"
+      >
+        {ageTooltipText}
+      </span>
+    </span>
+  );
+}
+
+function FlatInventoryTableRow({
+  draftQuantities,
+  item,
+  updateDraftQuantity,
+}: {
+  draftQuantities: Record<string, string>;
+  item: FlatInventoryItem;
+  updateDraftQuantity: (row: InventoryRow, nextValue: string) => void;
+}) {
+  const isChanged = item.kind === "bird" && isRowChanged(item.row, draftQuantities);
+
+  return (
+    <tr className={isChanged ? "bg-amber-50/70" : "bg-white"}>
+      <td className="px-3 py-3 align-top font-medium text-stone-700">
+        {item.species}
+      </td>
+      <td className="px-3 py-3 align-top">
+        <Link
+          className="font-semibold text-stone-950 underline-offset-4 hover:underline"
+          href={item.manageHref}
+        >
+          {item.breedOrItem}
+        </Link>
+      </td>
+      <td className="px-3 py-3 align-top text-stone-700">{item.typeSex}</td>
+      <td className="px-3 py-3 align-top text-stone-700">
+        {formatTableDate(item.hatchDate)}
+      </td>
+      <td className="px-3 py-3 align-top text-stone-700">{item.ageLabel}</td>
+      <td className="px-3 py-3 text-center align-top">
+        <AvailableQuantityControl
+          draftQuantities={draftQuantities}
+          item={item}
+          updateDraftQuantity={updateDraftQuantity}
+        />
+      </td>
+      <td className="px-3 py-3 text-center align-top font-medium text-stone-700">
+        {item.reservedQuantity}
+      </td>
+      <td className="px-3 py-3 align-top font-medium text-stone-700">
+        {formatCurrency(item.price)}
+      </td>
+      <td className="px-3 py-3 align-top">
+        <AvailabilityPill label={item.availabilityLabel} />
+      </td>
+      <td className="px-3 py-3 text-right align-top">
+        <Link
+          className="text-xs font-semibold text-emerald-800 hover:text-emerald-950"
+          href={item.manageHref}
+        >
+          Manage
+        </Link>
+      </td>
+    </tr>
+  );
+}
+
+function FlatInventoryCard({
+  draftQuantities,
+  item,
+  updateDraftQuantity,
+}: {
+  draftQuantities: Record<string, string>;
+  item: FlatInventoryItem;
+  updateDraftQuantity: (row: InventoryRow, nextValue: string) => void;
+}) {
+  const isChanged = item.kind === "bird" && isRowChanged(item.row, draftQuantities);
+
+  return (
+    <article
+      className={`rounded-md border p-3 ${
+        isChanged ? "border-amber-200 bg-amber-50/70" : "border-stone-200 bg-white"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-semibold text-stone-950">
+            {item.breedOrItem}
+          </h2>
+          <p className="mt-0.5 text-xs text-stone-600">
+            {item.species}
+            {item.typeSex !== "—" ? ` • ${item.typeSex}` : ""}
+          </p>
+        </div>
+        <AvailabilityPill label={item.availabilityLabel} />
+      </div>
+
+      <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+        <InventoryCardField label="Hatch date" value={formatTableDate(item.hatchDate)} />
+        <InventoryCardField label="Age" value={item.ageLabel} />
+        <div className="rounded-md bg-stone-50 px-2.5 py-2">
+          <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.05em] text-stone-500">
+            Available
+          </dt>
+          <dd className="mt-1">
+            <AvailableQuantityControl
+              draftQuantities={draftQuantities}
+              item={item}
+              updateDraftQuantity={updateDraftQuantity}
+            />
+          </dd>
+        </div>
+        <InventoryCardField
+          label="Reserved"
+          value={String(item.reservedQuantity)}
+        />
+        <InventoryCardField label="Price" value={formatCurrency(item.price)} />
+        <InventoryCardField label="Availability" value={item.availabilityLabel} />
+      </dl>
+
+      <Link className="seller-small-button mt-4 inline-flex" href={item.manageHref}>
+        Manage
+      </Link>
+    </article>
+  );
+}
+
+function InventoryCardField({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-md bg-stone-50 px-2.5 py-2">
+      <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.05em] text-stone-500">
+        {label}
+      </dt>
+      <dd className="mt-1 text-sm font-semibold text-stone-950">{value}</dd>
+    </div>
+  );
+}
+
+function AvailableQuantityControl({
+  draftQuantities,
+  item,
+  updateDraftQuantity,
+}: {
+  draftQuantities: Record<string, string>;
+  item: FlatInventoryItem;
+  updateDraftQuantity: (row: InventoryRow, nextValue: string) => void;
+}) {
+  if (item.kind === "equipment") {
+    return (
+      <span className="flex justify-center font-semibold text-stone-950">
+        {item.availableQuantity}
+      </span>
+    );
+  }
+
+  const quantityValue =
+    draftQuantities[item.row.inventory_item_id] ??
+    String(item.row.quantity_available ?? 0);
+  const isChanged = isRowChanged(item.row, draftQuantities);
+  const rowHasInvalidQuantity =
+    draftQuantities[item.row.inventory_item_id] != null &&
+    !isValidQuantity(quantityValue);
+
+  return (
+    <div className="flex flex-col items-center">
+      <input
+        aria-label={`Available quantity for ${item.breedOrItem}`}
+        className={`h-8 w-16 rounded-md border px-2 text-center text-sm font-semibold text-stone-950 shadow-sm focus:outline-none focus:ring-2 ${
+          rowHasInvalidQuantity
+            ? "border-red-400 focus:border-red-600 focus:ring-red-600/20"
+            : isChanged
+              ? "border-amber-400 bg-white focus:border-amber-600 focus:ring-amber-600/20"
+              : "border-stone-300 focus:border-emerald-700 focus:ring-emerald-700/20"
+        }`}
+        min="0"
+        step="1"
+        type="number"
+        value={quantityValue}
+        onChange={(event) => updateDraftQuantity(item.row, event.target.value)}
+      />
+      {isChanged ? (
+        <p className="mt-1 text-[0.68rem] font-semibold text-amber-700">
+          Unsaved
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function AvailabilityPill({ label }: { label: string }) {
+  return (
+    <span className="inline-flex whitespace-nowrap rounded-full bg-stone-100 px-2 py-0.5 text-[0.72rem] font-semibold text-stone-800">
+      {label}
+    </span>
+  );
+}
+
+function getAvailabilityFilterLabel(value: AvailabilityFilter) {
+  if (value === "available_now") return "Available now";
+  if (value === "future") return "Future availability";
+  if (value === "sold_out") return "Sold out";
+  if (value === "local_pickup") return "Local pickup";
+  if (value === "not_listed") return "Not listed";
+  if (value === "unavailable") return "Unavailable";
+
+  return "All availability";
 }
 
 function ProcessedPoultryInventorySection({
@@ -688,157 +1097,6 @@ function ProcessedPoultryInventoryCard({
   );
 }
 
-function EquipmentInventorySection({ rows }: { rows: EquipmentInventoryRow[] }) {
-  return (
-    <SellerCard className="overflow-hidden">
-      <div className="border-b border-stone-200 px-4 py-4 sm:px-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-stone-950">
-              Equipment & Supplies
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-stone-600">
-              Simple local-pickup equipment inventory. This does not affect the
-              bird count above.
-            </p>
-          </div>
-          <Link
-            className="seller-secondary-button"
-            href="/dashboard/listings/new/equipment-supplies"
-          >
-            Add Equipment
-          </Link>
-        </div>
-      </div>
-
-      {rows.length === 0 ? (
-        <div className="p-4">
-          <EmptyState
-            title="No equipment inventory yet"
-            description="Create equipment or supply inventory when you have simple items to track."
-          />
-        </div>
-      ) : (
-        <>
-          <div className="grid gap-4 p-4 lg:hidden">
-            {rows.map((row) => (
-              <EquipmentInventoryCard key={row.equipment_inventory_item_id} row={row} />
-            ))}
-          </div>
-          <div className="hidden overflow-x-auto lg:block">
-            <table className="w-full min-w-[820px] border-collapse text-left text-sm">
-              <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-[0.06em] text-stone-500">
-                <tr>
-                  <th className="px-5 py-3">Item</th>
-                  <th className="px-5 py-3">Category</th>
-                  <th className="px-5 py-3">Condition</th>
-                  <th className="px-5 py-3">Quantity</th>
-                  <th className="px-5 py-3">Price</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-200 bg-white">
-                {rows.map((row) => (
-                  <tr key={row.equipment_inventory_item_id}>
-                    <td className="px-5 py-4 align-top">
-                      <Link
-                        className="font-semibold text-stone-950 underline-offset-4 hover:underline"
-                        href={`/dashboard/inventory/equipment/${row.equipment_inventory_item_id}`}
-                      >
-                        {row.item_name}
-                      </Link>
-                      {row.description ? (
-                        <p className="mt-1 max-w-md truncate text-stone-600">
-                          {row.description}
-                        </p>
-                      ) : null}
-                    </td>
-                    <td className="px-5 py-4 align-top text-stone-700">
-                      {row.category}
-                    </td>
-                    <td className="px-5 py-4 align-top text-stone-700">
-                      {row.condition ?? "Not specified"}
-                    </td>
-                    <td className="px-5 py-4 align-top font-semibold text-stone-950">
-                      {row.quantity_available}
-                    </td>
-                    <td className="px-5 py-4 align-top text-stone-700">
-                      {formatEquipmentCurrency(row.price)}
-                    </td>
-                    <td className="px-5 py-4 align-top">
-                      <StatusBadge status={deriveEquipmentBadge(row)} />
-                    </td>
-                    <td className="px-5 py-4 text-right align-top">
-                      <Link
-                        className="seller-small-button"
-                        href={`/dashboard/inventory/equipment/${row.equipment_inventory_item_id}`}
-                      >
-                        Manage
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </SellerCard>
-  );
-}
-
-function EquipmentInventoryCard({ row }: { row: EquipmentInventoryRow }) {
-  return (
-    <div className="rounded-md border border-stone-200 bg-white p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-stone-950">{row.item_name}</h3>
-          <p className="mt-1 text-sm text-stone-600">
-            {row.category}
-            {row.condition ? ` - ${row.condition}` : ""}
-          </p>
-        </div>
-        <StatusBadge status={deriveEquipmentBadge(row)} />
-      </div>
-      <dl className="mt-4 grid grid-cols-2 gap-2">
-        <div className="rounded-md bg-stone-50 px-3 py-2">
-          <dt className="text-xs font-semibold uppercase tracking-[0.06em] text-stone-500">
-            Quantity
-          </dt>
-          <dd className="mt-1 text-lg font-semibold text-stone-950">
-            {row.quantity_available}
-          </dd>
-        </div>
-        <div className="rounded-md bg-stone-50 px-3 py-2">
-          <dt className="text-xs font-semibold uppercase tracking-[0.06em] text-stone-500">
-            Price
-          </dt>
-          <dd className="mt-1 text-lg font-semibold text-stone-950">
-            {formatEquipmentCurrency(row.price)}
-          </dd>
-        </div>
-      </dl>
-      <p className="mt-3 text-sm font-semibold text-stone-600">
-        {formatEquipmentStatus(row)}
-      </p>
-      <Link
-        className="seller-small-button mt-4 inline-flex"
-        href={`/dashboard/inventory/equipment/${row.equipment_inventory_item_id}`}
-      >
-        Manage
-      </Link>
-    </div>
-  );
-}
-
-function deriveEquipmentBadge(row: EquipmentInventoryRow) {
-  if (row.visibility_status === "hidden") return "draft";
-  if (row.visibility_status === "active") return "live";
-
-  return row.visibility_status;
-}
-
 function deriveProcessedPoultryBadge(row: ProcessedPoultryInventoryRow) {
   if (row.visibility_status === "hidden") return "draft";
   if (row.visibility_status === "active") return "live";
@@ -846,190 +1104,202 @@ function deriveProcessedPoultryBadge(row: ProcessedPoultryInventoryRow) {
   return row.visibility_status;
 }
 
-function BreedInventoryRows({
+function buildFlatInventoryItems({
   draftQuantities,
-  group,
-  isExpanded,
+  equipmentRows,
   reservedByItemId,
-  toggleExpanded,
-  updateDraftQuantity,
+  rows,
 }: {
   draftQuantities: Record<string, string>;
-  group: BreedInventoryGroup;
-  isExpanded: boolean;
+  equipmentRows: EquipmentInventoryRow[];
   reservedByItemId: Record<string, number>;
-  toggleExpanded: () => void;
-  updateDraftQuantity: (row: InventoryRow, nextValue: string) => void;
-}) {
-  const expanded = isExpanded;
-  const totalAvailable = group.rows.reduce(
-    (total, row) => total + getDisplayedQuantity(row, draftQuantities),
-    0,
-  );
-  const totalReserved = group.rows.reduce(
-    (total, row) => total + (reservedByItemId[row.inventory_item_id] ?? 0),
-    0,
-  );
-  const summary = summarizeGroupAvailability(group.rows, draftQuantities);
-  const priceRange = formatPriceRange(
-    ...group.rows.reduce<[number | null, number | null]>(
-      ([minPrice, maxPrice], row) => [
-        minNullable(minPrice, row.effective_unit_price),
-        maxNullable(maxPrice, row.effective_unit_price),
-      ],
-      [null, null],
-    ),
-  );
+  rows: InventoryRow[];
+}): FlatInventoryItem[] {
+  return [
+    ...rows.map((row): FlatInventoryItem => {
+      const typeSex = getInventoryTypeLabel(row);
+      const availability = getBirdAvailability(row, draftQuantities);
 
-  return (
-    <section className={expanded ? "bg-emerald-50/40" : "bg-white"}>
-      <button
-        aria-expanded={expanded}
-        className="flex w-full items-start gap-3 px-4 py-4 text-left transition hover:bg-stone-50 sm:px-5"
-        onClick={toggleExpanded}
-        type="button"
-      >
-        <span
-          aria-hidden="true"
-          className={`mt-0.5 inline-block shrink-0 text-stone-500 transition ${
-            expanded ? "rotate-90" : ""
-          }`}
-        >
-          &gt;
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-bold uppercase tracking-[0.08em] text-stone-950">
-            {group.breedName}
-          </span>
-          <span className="mt-1 block text-sm font-semibold leading-6 normal-case tracking-normal text-stone-600">
-            {[
-              group.speciesName,
-              `${group.rows.length} record${group.rows.length === 1 ? "" : "s"}`,
-              `${totalAvailable} available`,
-              `${totalReserved} reserved`,
-              summary,
-              priceRange,
-            ].join(" - ")}
-          </span>
-        </span>
-      </button>
+      return {
+        kind: "bird",
+        id: `bird:${row.inventory_item_id}`,
+        species: row.species_name,
+        speciesFilterValue: row.species_slug,
+        breedOrItem: row.breed_display_name,
+        typeSex,
+        hatchDate: row.origin_date,
+        availableDate: row.available_date,
+        ageDays: calculateInventoryAgeDays(row),
+        ageLabel: formatInventoryAge(row),
+        availableQuantity: getDisplayedQuantity(row, draftQuantities),
+        reservedQuantity: reservedByItemId[row.inventory_item_id] ?? 0,
+        price: row.effective_unit_price,
+        availabilityLabel: availability.label,
+        availabilityValue: availability.value,
+        manageHref: `/dashboard/inventory/${row.listing_batch_id}`,
+        row,
+        searchText: [
+          row.breed_display_name,
+          row.species_name,
+          typeSex,
+          row.custom_inventory_label,
+          availability.label,
+          formatInventoryStatus(row.operational_availability_status),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase(),
+      };
+    }),
+    ...equipmentRows.map((row): FlatInventoryItem => {
+      const availability = getEquipmentAvailability(row);
 
-      {expanded ? (
-        <div className="px-4 pb-4 sm:px-5">
-          <div className="overflow-x-auto rounded-md border border-stone-200 bg-white">
-            <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-              <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-[0.06em] text-stone-500">
-                <tr>
-                  <th className="px-3 py-3">Type/Sex</th>
-                  <th className="px-3 py-3">Age</th>
-                  <th className="px-3 py-3">Available</th>
-                  <th className="px-3 py-3">Reserved</th>
-                  <th className="px-3 py-3">Price</th>
-                  <th className="px-3 py-3">Status/Availability</th>
-                  <th className="px-3 py-3">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100">
-                {group.rows.map((row) => (
-                  <InventoryTableRow
-                    key={row.inventory_item_id}
-                    draftQuantities={draftQuantities}
-                    reservedQuantity={reservedByItemId[row.inventory_item_id] ?? 0}
-                    row={row}
-                    updateDraftQuantity={updateDraftQuantity}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : null}
-    </section>
-  );
+      return {
+        kind: "equipment",
+        id: `equipment:${row.equipment_inventory_item_id}`,
+        species: "Equipment",
+        speciesFilterValue: "equipment",
+        breedOrItem: row.item_name,
+        typeSex: "—",
+        hatchDate: null,
+        availableDate: null,
+        ageDays: null,
+        ageLabel: "—",
+        availableQuantity: row.quantity_available,
+        reservedQuantity: 0,
+        price: row.price,
+        availabilityLabel: availability.label,
+        availabilityValue: availability.value,
+        manageHref: `/dashboard/inventory/equipment/${row.equipment_inventory_item_id}`,
+        row,
+        searchText: [
+          row.item_name,
+          row.category,
+          row.condition,
+          row.description,
+          availability.label,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase(),
+      };
+    }),
+  ];
 }
 
-function InventoryTableRow({
-  draftQuantities,
-  reservedQuantity,
-  row,
-  updateDraftQuantity,
-}: {
-  draftQuantities: Record<string, string>;
-  reservedQuantity: number;
-  row: InventoryRow;
-  updateDraftQuantity: (row: InventoryRow, nextValue: string) => void;
-}) {
-  const isChanged = isRowChanged(row, draftQuantities);
-  const quantityValue =
-    draftQuantities[row.inventory_item_id] ??
-    String(row.quantity_available ?? 0);
-  const rowHasInvalidQuantity =
-    draftQuantities[row.inventory_item_id] != null &&
-    !isValidQuantity(quantityValue);
-
-  return (
-    <tr className={isChanged ? "bg-amber-50/70" : "bg-white"}>
-      <td className="px-3 py-3 align-top text-stone-700">
-        {getInventoryTypeLabel(row)}
-      </td>
-      <td className="px-3 py-3 align-top text-stone-700">
-        {formatInventoryAge(row)}
-      </td>
-      <td className="px-3 py-3 align-top">
-        <input
-          className={`h-9 w-20 rounded-md border px-2 text-sm font-semibold text-stone-950 shadow-sm focus:outline-none focus:ring-2 ${
-            rowHasInvalidQuantity
-              ? "border-red-400 focus:border-red-600 focus:ring-red-600/20"
-              : isChanged
-                ? "border-amber-400 bg-white focus:border-amber-600 focus:ring-amber-600/20"
-                : "border-stone-300 focus:border-emerald-700 focus:ring-emerald-700/20"
-          }`}
-          min="0"
-          step="1"
-          type="number"
-          value={quantityValue}
-          onChange={(event) => updateDraftQuantity(row, event.target.value)}
-        />
-        {isChanged ? (
-          <p className="mt-1 text-xs font-semibold text-amber-700">Unsaved</p>
-        ) : null}
-      </td>
-      <td className="px-3 py-3 align-top font-medium text-stone-700">
-        {reservedQuantity}
-      </td>
-      <td className="px-3 py-3 align-top font-medium text-stone-700">
-        {formatCurrency(row.effective_unit_price)}
-      </td>
-      <td className="px-3 py-3 align-top">
-        <InventoryStateBadges row={row} />
-      </td>
-      <td className="px-3 py-3 align-top">
-        <Link
-          className="text-sm font-semibold text-emerald-800 hover:text-emerald-950"
-          href={`/dashboard/inventory/${row.listing_batch_id}`}
-        >
-          Manage
-        </Link>
-      </td>
-    </tr>
-  );
-}
-
-function InventoryStateBadges({ row }: { row: InventoryRow }) {
+function getBirdAvailability(
+  row: InventoryRow,
+  draftQuantities: Record<string, string>,
+): { label: string; value: AvailabilityFilter } {
   const visibility = getInventoryVisibility(row);
-  const showAvailability =
-    visibility === "live" && row.operational_availability_status !== "sold_out";
 
-  return (
-    <div className="flex flex-wrap gap-2">
-      <StatusBadge status={visibility} />
-      {showAvailability ? (
-        <span className="inline-flex items-center rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-700">
-          {formatInventoryAvailability(row)}
-        </span>
-      ) : null}
-    </div>
+  if (visibility === "draft" || visibility === "hidden") {
+    return { label: "Not listed", value: "not_listed" };
+  }
+
+  if (
+    visibility === "sold_out" ||
+    row.operational_availability_status === "sold_out" ||
+    getDisplayedQuantity(row, draftQuantities) <= 0
+  ) {
+    return { label: "Sold out", value: "sold_out" };
+  }
+
+  if (visibility !== "live") {
+    return { label: "Unavailable", value: "unavailable" };
+  }
+
+  if (row.available_date && isFutureDate(row.available_date)) {
+    return {
+      label: `Available ${formatShortDate(row.available_date)}`,
+      value: "future",
+    };
+  }
+
+  return { label: "Available now", value: "available_now" };
+}
+
+function getEquipmentAvailability(row: EquipmentInventoryRow): {
+  label: string;
+  value: AvailabilityFilter;
+} {
+  if (row.visibility_status === "hidden") {
+    return { label: "Not listed", value: "not_listed" };
+  }
+
+  if (row.operational_availability_status === "sold_out") {
+    return { label: "Sold out", value: "sold_out" };
+  }
+
+  if (row.visibility_status !== "active") {
+    return { label: "Unavailable", value: "unavailable" };
+  }
+
+  return { label: "Local pickup", value: "local_pickup" };
+}
+
+function compareFlatInventoryItems(
+  left: FlatInventoryItem,
+  right: FlatInventoryItem,
+  sortBy: InventorySort,
+) {
+  if (sortBy === "hatch_date") {
+    const hatchDateComparison = compareNullableDates(
+      left.hatchDate,
+      right.hatchDate,
+    );
+
+    if (hatchDateComparison !== 0) return hatchDateComparison;
+
+    return left.breedOrItem.localeCompare(right.breedOrItem);
+  }
+
+  if (sortBy === "name") {
+    return left.breedOrItem.localeCompare(right.breedOrItem);
+  }
+
+  if (sortBy === "age") {
+    return compareNullableNumbers(left.ageDays, right.ageDays);
+  }
+
+  if (sortBy === "available") {
+    return right.availableQuantity - left.availableQuantity;
+  }
+
+  if (sortBy === "reserved") {
+    return right.reservedQuantity - left.reservedQuantity;
+  }
+
+  if (sortBy === "price") {
+    return compareNullableNumbers(left.price, right.price);
+  }
+
+  const availabilityComparison = left.availabilityLabel.localeCompare(
+    right.availabilityLabel,
   );
+
+  if (availabilityComparison !== 0) return availabilityComparison;
+
+  return left.breedOrItem.localeCompare(right.breedOrItem);
+}
+
+function compareNullableDates(left: string | null, right: string | null) {
+  if (left && right && left !== right) return left.localeCompare(right);
+  if (left && !right) return -1;
+  if (!left && right) return 1;
+
+  return 0;
+}
+
+function compareNullableNumbers(
+  left: number | null | undefined,
+  right: number | null | undefined,
+) {
+  if (left != null && right != null && left !== right) return left - right;
+  if (left != null && right == null) return -1;
+  if (left == null && right != null) return 1;
+
+  return 0;
 }
 
 function buildReservedMap(rows: ReservedRow[]) {
@@ -1045,51 +1315,10 @@ function buildReservedMap(rows: ReservedRow[]) {
 }
 
 function isLiveBirdInventoryRow(row: InventoryRow) {
-  return row.batch_type !== "hatching_eggs" && row.inventory_type !== "hatching_eggs";
-}
-
-function groupRowsByBreed(rows: InventoryRow[]) {
-  const groups = new Map<string, BreedInventoryGroup>();
-
-  for (const row of rows) {
-    const groupId = `${row.species_slug}:${row.breed_display_name}`;
-    const existing = groups.get(groupId);
-
-    if (existing) {
-      existing.rows.push(row);
-      continue;
-    }
-
-    groups.set(groupId, {
-      id: groupId,
-      breedName: row.breed_display_name,
-      speciesName: row.species_name,
-      rows: [row],
-    });
-  }
-
-  return Array.from(groups.values()).map((group) => ({
-    ...group,
-    rows: group.rows.slice().sort(compareInventoryRows),
-  }));
-}
-
-function compareInventoryRows(left: InventoryRow, right: InventoryRow) {
-  if (left.available_date !== right.available_date) {
-    return left.available_date.localeCompare(right.available_date);
-  }
-
-  const leftAge = calculateInventoryAgeDays(left);
-  const rightAge = calculateInventoryAgeDays(right);
-
-  if (leftAge !== rightAge) {
-    return (
-      (leftAge ?? Number.MAX_SAFE_INTEGER) -
-      (rightAge ?? Number.MAX_SAFE_INTEGER)
-    );
-  }
-
-  return getInventoryTypeLabel(left).localeCompare(getInventoryTypeLabel(right));
+  return (
+    row.batch_type !== "hatching_eggs" &&
+    row.inventory_type !== "hatching_eggs"
+  );
 }
 
 function getInventoryTypeLabel(row: InventoryRow) {
@@ -1125,37 +1354,6 @@ function formatCurrency(value: number | null | undefined) {
   }).format(value);
 }
 
-function formatPriceRange(
-  minPrice: number | null | undefined,
-  maxPrice: number | null | undefined,
-) {
-  if (minPrice == null && maxPrice == null) return "Not priced";
-  if (minPrice === maxPrice || maxPrice == null) return formatCurrency(minPrice);
-  if (minPrice == null) return formatCurrency(maxPrice);
-
-  return `${formatCurrency(minPrice)} - ${formatCurrency(maxPrice)}`;
-}
-
-function minNullable(
-  current: number | null | undefined,
-  next: number | null | undefined,
-) {
-  if (current == null) return next ?? null;
-  if (next == null) return current;
-
-  return Math.min(current, next);
-}
-
-function maxNullable(
-  current: number | null | undefined,
-  next: number | null | undefined,
-) {
-  if (current == null) return next ?? null;
-  if (next == null) return current;
-
-  return Math.max(current, next);
-}
-
 function getInventoryVisibility(row: InventoryRow): InventoryVisibility {
   if (
     row.listing_batch_visibility_status === "archived" ||
@@ -1169,72 +1367,6 @@ function getInventoryVisibility(row: InventoryRow): InventoryVisibility {
   if (row.listing_batch_visibility_status === "hidden") return "draft";
 
   return "hidden";
-}
-
-function formatInventoryAvailability(row: InventoryRow) {
-  if (row.operational_availability_status === "sold_out") return "Sold Out";
-  if (getInventoryVisibility(row) !== "live") return "";
-
-  const today = new Date();
-  const todayIso = [
-    today.getFullYear(),
-    String(today.getMonth() + 1).padStart(2, "0"),
-    String(today.getDate()).padStart(2, "0"),
-  ].join("-");
-
-  if (row.available_date && row.available_date > todayIso) {
-    return `Available ${formatShortDate(row.available_date)}`;
-  }
-
-  return "Available Now";
-}
-
-function summarizeGroupAvailability(
-  rows: InventoryRow[],
-  draftQuantities: Record<string, string>,
-) {
-  const counts = rows.reduce(
-    (summary, row) => {
-      const visibility = getInventoryVisibility(row);
-
-      if (visibility === "draft") summary.draft += 1;
-      else if (visibility === "hidden") summary.hidden += 1;
-      else if (visibility === "archived") summary.archived += 1;
-      else if (visibility === "sold_out") summary.soldOut += 1;
-      else if (getDisplayedQuantity(row, draftQuantities) <= 0) {
-        summary.soldOut += 1;
-      } else if (row.available_date && isFutureDate(row.available_date)) {
-        summary.future += 1;
-      } else {
-        summary.availableNow += 1;
-      }
-
-      return summary;
-    },
-    {
-      archived: 0,
-      availableNow: 0,
-      draft: 0,
-      future: 0,
-      hidden: 0,
-      soldOut: 0,
-    },
-  );
-
-  const parts = [
-    formatCount(counts.availableNow, "available now"),
-    formatCount(counts.future, "future"),
-    formatCount(counts.draft, "draft"),
-    formatCount(counts.hidden, "hidden"),
-    formatCount(counts.soldOut, "sold out"),
-    formatCount(counts.archived, "archived"),
-  ].filter(Boolean);
-
-  return parts.length > 0 ? parts.join(" - ") : "No availability";
-}
-
-function formatCount(count: number, label: string) {
-  return count > 0 ? `${count} ${label}` : "";
 }
 
 function isFutureDate(value: string) {
@@ -1252,6 +1384,16 @@ function formatShortDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatTableDate(value: string | null) {
+  if (!value) return "—";
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   }).format(new Date(`${value}T00:00:00`));
 }
 

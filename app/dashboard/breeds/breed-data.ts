@@ -65,7 +65,7 @@ export const breedLibrarySelect =
 export const sellerBreedProfileSelect =
   "id, store_id, species_id, breed_id, custom_breed_name, display_name, seller_description, seller_notes, visibility_status, moderation_status, bird_type, egg_color, annual_egg_production";
 export const sellerMediaSelect =
-  "media_asset_id, media_link_id, store_id, entity_type, entity_id, display_context, public_url, alt_text, caption, sort_order, is_featured, moderation_status, asset_status, visibility_status, original_filename, content_type, file_size_bytes, width_px, height_px, source_type, source_breed_id, source_image_url";
+  "media_asset_id, media_link_id, store_id, entity_type, entity_id, display_context, public_url, alt_text, caption, sort_order, is_featured, crop_metadata, moderation_status, asset_status, visibility_status, original_filename, content_type, file_size_bytes, width_px, height_px, source_type, source_breed_id, source_image_url";
 
 export function buildSpeciesNameById(species: BreedSpecies[]) {
   return new Map(species.map((item) => [item.id, item.common_name]));
@@ -174,9 +174,18 @@ export function compareMedia(
 export function toDisplayImageUrl(value: string | null | undefined) {
   if (!value) return "";
   if (value.startsWith("http://") || value.startsWith("https://")) return value;
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+  if (value.startsWith("/") && supabaseUrl) {
+    return `${supabaseUrl}${value}`;
+  }
+
   if (value.startsWith("/")) return value;
 
-  return `/storage/v1/object/public/${value}`;
+  const storagePath = `/storage/v1/object/public/${value}`;
+
+  return supabaseUrl ? `${supabaseUrl}${storagePath}` : storagePath;
 }
 
 export function getBreedInitials(name: string) {

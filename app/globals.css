@@ -109,6 +109,28 @@ body {
   color: #78716c;
 }
 
+.photo-menu-button {
+  display: flex;
+  min-height: 2rem;
+  width: 100%;
+  align-items: center;
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  text-align: left;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #292524;
+}
+
+.photo-menu-button:hover {
+  background: #f5f5f4;
+}
+
+.photo-menu-button:disabled {
+  cursor: not-allowed;
+  color: #a8a29e;
+}
+
 .seller-compact-field {
   min-height: 2.5rem;
   padding: 0.5rem 0.625rem;

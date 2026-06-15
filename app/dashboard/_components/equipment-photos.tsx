@@ -9,7 +9,7 @@ import {
 export const equipmentPhotoLimit = 4;
 
 export const sellerMediaSelect =
-  "media_asset_id, media_link_id, store_id, entity_type, entity_id, display_context, public_url, alt_text, caption, sort_order, is_featured, moderation_status, asset_status, visibility_status, original_filename, content_type, file_size_bytes, width_px, height_px";
+  "media_asset_id, media_link_id, store_id, entity_type, entity_id, display_context, public_url, alt_text, caption, sort_order, is_featured, crop_metadata, moderation_status, asset_status, visibility_status, original_filename, content_type, file_size_bytes, width_px, height_px";
 
 const acceptedImageTypes = ["image/jpeg", "image/png", "image/webp"] as const;
 const maxImageSizeBytes = 8 * 1024 * 1024;

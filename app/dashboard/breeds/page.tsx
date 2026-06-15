@@ -6,7 +6,7 @@ export default function SellerBreedsPage() {
     <>
       <SellerPageHeader
         title="Breeds"
-        description="Manage the breeds you raise and use on your storefront."
+        description="Build the breed list for your storefront."
         action={<BreedsHeaderAction />}
       />
       <div className="mx-auto w-full max-w-6xl px-5 py-5 sm:px-7">

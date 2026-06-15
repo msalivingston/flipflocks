@@ -1,9 +1,12 @@
 "use client";
 
-import Image from "next/image";
-import { useId, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { ErrorState, SellerCard } from "../../_components/seller-ui";
+import {
+  type DashboardPhoto,
+  PhotoManager,
+} from "../../_components/photo-manager";
+import type { PhotoCropMetadata } from "../../_components/photo-crop-editor";
 
 export type ListingPhotoItem = {
   media_asset_id: string;
@@ -17,6 +20,7 @@ export type ListingPhotoItem = {
   caption: string | null;
   sort_order: number | null;
   is_featured: boolean;
+  crop_metadata?: PhotoCropMetadata | null;
   moderation_status: string;
   asset_status: string;
   visibility_status: string;
@@ -77,7 +81,6 @@ export function ListingPhotosSection({
   listingBatchId,
   mode = "readonly",
   mediaItems,
-  onReload,
   storeId,
   title = "Photos",
 }: {
@@ -94,27 +97,25 @@ export function ListingPhotosSection({
   title?: string;
 }) {
   const mediaEntityId = entityId ?? listingBatchId;
-  const headingId = useId();
-  const activePhotos = mediaItems.filter(
+  const [localMediaItems, setLocalMediaItems] =
+    useState<ListingPhotoItem[]>(mediaItems);
+  const activePhotos = localMediaItems.filter(
     (item) =>
       item.visibility_status === "active" &&
       item.asset_status === "active" &&
       item.moderation_status === "approved",
   );
   const orderedPhotos = useMemo(() => sortPhotos(activePhotos), [activePhotos]);
-  const featuredPhoto =
-    orderedPhotos.find((photo) => photo.is_featured) ?? orderedPhotos[0] ?? null;
-  const remainingPhotos = featuredPhoto
-    ? orderedPhotos.filter((photo) => photo.media_link_id !== featuredPhoto.media_link_id)
-    : [];
+  const dashboardPhotos = useMemo(
+    () => orderedPhotos.map(toDashboardPhoto),
+    [orderedPhotos],
+  );
   const photoCount = orderedPhotos.length;
-  const canAddPhotos = canManage && photoCount < maxListingPhotos;
   const remainingPhotoSlots = Math.max(maxListingPhotos - photoCount, 0);
-  const sectionRef = useRef<HTMLElement | null>(null);
+  const removePhotoContext =
+    entityType === "seller_breed_profile" ? "breed" : "item";
+  const sectionRef = useRef<HTMLDivElement | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [isRemovingLinkId, setIsRemovingLinkId] = useState<string | null>(null);
-  const [isUpdatingLinkId, setIsUpdatingLinkId] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<PhotoError | null>(null);
 
   async function uploadPhotos(files: FileList | null) {
@@ -138,7 +139,6 @@ export function ListingPhotosSection({
     const selectedFiles = filesToUpload;
     const validationError = validateFiles(selectedFiles);
 
-    setMessage(null);
     setError(null);
 
     if (validationError) {
@@ -147,6 +147,8 @@ export function ListingPhotosSection({
     }
 
     setIsUploading(true);
+
+    const uploadedMedia: ListingPhotoItem[] = [];
 
     for (const [index, file] of selectedFiles.entries()) {
       const { data: sessionData, error: sessionError } =
@@ -172,7 +174,10 @@ export function ListingPhotosSection({
       formData.append("entity_id", mediaEntityId);
       formData.append("display_context", "gallery");
       formData.append("sort_order", String(photoCount + index));
-      formData.append("is_featured", String(photoCount === 0 && index === 0));
+      formData.append(
+        "is_featured",
+        String(photoCount === 0 && uploadedMedia.length === 0 && index === 0),
+      );
 
       const { data, error: uploadError } =
         await supabase.functions.invoke<UploadResponse>("seller-media-upload", {
@@ -192,30 +197,24 @@ export function ListingPhotosSection({
         setIsUploading(false);
         return;
       }
+
+      if (data?.media) {
+        uploadedMedia.push(data.media);
+      }
     }
 
+    if (uploadedMedia.length > 0) {
+      setLocalMediaItems((current) =>
+        normalizePhotoOrder([...current, ...uploadedMedia]),
+      );
+    }
     setIsUploading(false);
-    setMessage(
-      selectedFiles.length === 1
-        ? "Photo attached."
-        : "Photos attached.",
-    );
-    onReload();
-    keepPhotosInView();
   }
 
   async function removePhoto(photo: ListingPhotoItem) {
     if (!canManage) return;
 
-    const shouldRemove = window.confirm(
-      "Remove this photo? The image file will not be deleted.",
-    );
-
-    if (!shouldRemove) return;
-
-    setMessage(null);
     setError(null);
-    setIsRemovingLinkId(photo.media_link_id);
 
     const { error: archiveError } = await supabase.rpc(
       "seller_archive_media_link",
@@ -233,68 +232,30 @@ export function ListingPhotosSection({
         title: "Photo was not removed",
         message: "The photo was not removed. Please try again.",
       });
-      setIsRemovingLinkId(null);
       return;
     }
 
-    setIsRemovingLinkId(null);
-    setMessage("Photo removed.");
-    onReload();
-    keepPhotosInView();
+    setLocalMediaItems((current) =>
+      normalizePhotoOrder(
+        current.filter((item) => item.media_link_id !== photo.media_link_id),
+      ),
+    );
   }
 
   async function makeFeatured(photo: ListingPhotoItem) {
-    if (!canManage || photo.is_featured) return;
-
-    setMessage(null);
-    setError(null);
-    setIsUpdatingLinkId(photo.media_link_id);
-
-    const { error: featuredError } = await supabase.rpc(
-      "seller_set_media_featured",
-      {
-        p_media_link_id: photo.media_link_id,
-      },
-    );
-
-    if (featuredError) {
-      console.error("seller media featured update failed", {
-        mediaLinkId: photo.media_link_id,
-        message: featuredError.message,
-      });
-      setError({
-        title: "Photo order was not saved",
-        message: "The featured photo was not changed. Please try again.",
-      });
-      setIsUpdatingLinkId(null);
-      return;
-    }
-
-    setIsUpdatingLinkId(null);
-    setMessage("Featured photo updated.");
-    onReload();
-    keepPhotosInView();
-  }
-
-  async function movePhoto(photo: ListingPhotoItem, direction: "left" | "right") {
     if (!canManage) return;
 
-    const currentIndex = orderedPhotos.findIndex(
-      (item) => item.media_link_id === photo.media_link_id,
-    );
-    const targetIndex = direction === "left" ? currentIndex - 1 : currentIndex + 1;
-
-    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= orderedPhotos.length) {
-      return;
-    }
-
-    const reorderedPhotos = [...orderedPhotos];
-    const [movedPhoto] = reorderedPhotos.splice(currentIndex, 1);
-    reorderedPhotos.splice(targetIndex, 0, movedPhoto);
-
-    setMessage(null);
     setError(null);
-    setIsUpdatingLinkId(photo.media_link_id);
+
+    const reorderedPhotos = [
+      photo,
+      ...orderedPhotos.filter((item) => item.media_link_id !== photo.media_link_id),
+    ];
+    const previousItems = localMediaItems;
+
+    setLocalMediaItems((current) =>
+      applyReorderedPhotos(current, reorderedPhotos.map(toDashboardPhoto)),
+    );
 
     const { error: reorderError } = await supabase.rpc("seller_reorder_media", {
       p_entity_type: entityType,
@@ -304,288 +265,187 @@ export function ListingPhotosSection({
     });
 
     if (reorderError) {
+      setLocalMediaItems(previousItems);
       console.error("seller media reorder failed", {
         mediaLinkId: photo.media_link_id,
         message: reorderError.message,
       });
       setError({
         title: "Photo order was not saved",
-        message: "The photo order was not changed. Please try again.",
+        message: "The featured photo was not changed. Please try again.",
       });
-      setIsUpdatingLinkId(null);
       return;
     }
 
-    setIsUpdatingLinkId(null);
-    setMessage("Photo order updated.");
-    onReload();
-    keepPhotosInView();
-  }
+    const { error: featuredError } = await supabase.rpc(
+      "seller_set_media_featured",
+      {
+        p_media_link_id: photo.media_link_id,
+      },
+    );
 
-  function keepPhotosInView() {
-    window.setTimeout(() => {
-      sectionRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
+    if (featuredError) {
+      setLocalMediaItems(previousItems);
+      console.error("seller media featured update failed", {
+        mediaLinkId: photo.media_link_id,
+        message: featuredError.message,
       });
-    }, 100);
+      setError({
+        title: "Photo order was not saved",
+        message: "The featured photo was not changed. Please try again.",
+      });
+      return;
+    }
+
+  }
+
+  async function reorderPhotos(nextPhotos: DashboardPhoto[]) {
+    if (!canManage) return;
+
+    const nextLinkIds = nextPhotos.map((photo) => photo.id);
+    const nextIdSet = new Set(nextLinkIds);
+
+    if (
+      nextPhotos.length !== orderedPhotos.length ||
+      nextIdSet.size !== orderedPhotos.length
+    ) {
+      return;
+    }
+
+    setError(null);
+    const previousItems = localMediaItems;
+
+    setLocalMediaItems((current) => applyReorderedPhotos(current, nextPhotos));
+
+    const { error: reorderError } = await supabase.rpc("seller_reorder_media", {
+      p_entity_type: entityType,
+      p_entity_id: mediaEntityId,
+      p_display_context: "gallery",
+      p_media_link_ids: nextLinkIds,
+    });
+
+    if (reorderError) {
+      setLocalMediaItems(previousItems);
+      console.error("seller media reorder failed", {
+        message: reorderError.message,
+      });
+      setError({
+        title: "Photo order was not saved",
+        message: "The photo order was not changed. Please try again.",
+      });
+      return;
+    }
+
+    const featuredLinkId = nextLinkIds[0];
+
+    if (featuredLinkId) {
+      const { error: featuredError } = await supabase.rpc(
+        "seller_set_media_featured",
+        {
+          p_media_link_id: featuredLinkId,
+        },
+      );
+
+      if (featuredError) {
+        setLocalMediaItems(previousItems);
+        console.error("seller media featured update failed", {
+          mediaLinkId: featuredLinkId,
+          message: featuredError.message,
+        });
+        setError({
+          title: "Photo order was not saved",
+          message: "The featured photo was not changed. Please try again.",
+        });
+        return;
+      }
+    }
+
+  }
+
+  async function saveCrop(photo: DashboardPhoto, crop: PhotoCropMetadata | null) {
+    if (!canManage) return;
+
+    setError(null);
+
+    const { error: cropError } = await supabase.rpc("seller_update_media_crop", {
+      p_crop_metadata: crop,
+      p_media_link_id: photo.id,
+    });
+
+    if (cropError) {
+      console.error("seller media crop update failed", {
+        mediaLinkId: photo.id,
+        message: cropError.message,
+      });
+      setError({
+        title: "Photo crop was not saved",
+        message: "The crop was not saved. Please try again.",
+      });
+      return;
+    }
+
+    setLocalMediaItems((current) =>
+      current.map((item) =>
+        item.media_link_id === photo.id
+          ? {
+              ...item,
+              crop_metadata: crop,
+            }
+          : item,
+      ),
+    );
   }
 
   return (
-    <SellerCard className="p-5">
-      <section ref={sectionRef} aria-labelledby={headingId}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2
-            className="text-lg font-semibold text-stone-950"
-            id={headingId}
-          >
-            {title}
-          </h2>
-          <p className="mt-1 text-sm leading-6 text-stone-600">
-            {description ??
-              (mode === "public-content"
-                ? "Update the photos buyers see on this live listing. Add up to 4 photos."
-                : "Add up to 4 photos. The featured photo is shown first to buyers.")}
-          </p>
-          <p className="mt-1 text-xs font-semibold text-stone-500">
-            {photoCount} of {maxListingPhotos} photos added
-          </p>
-        </div>
-        {canAddPhotos ? (
-          <label className="seller-secondary-button cursor-pointer">
-            {isUploading ? "Uploading" : "Add photos"}
-            <input
-              accept={acceptedImageTypes.join(",")}
-              className="sr-only"
-              disabled={isUploading}
-              multiple
-              type="file"
-              onChange={(event) => {
-                void uploadPhotos(event.target.files);
-                event.target.value = "";
-              }}
-            />
-          </label>
-        ) : canManage ? (
-          <p className="rounded-md bg-stone-100 px-3 py-2 text-sm font-semibold text-stone-700">
-            You&apos;ve added the maximum of 4 photos.
-          </p>
-        ) : null}
-      </div>
-
-      {message ? (
-        <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
-          {message}
-        </div>
-      ) : null}
-
-      {error ? (
-        <div className="mt-4">
-          <ErrorState title={error.title} message={error.message} />
-        </div>
-      ) : null}
-
-      {photoCount === 0 ? (
-        <div className="mt-5 rounded-lg border border-dashed border-stone-300 bg-stone-50 px-4 py-6 text-center">
-          <h3 className="font-semibold text-stone-950">No photos yet</h3>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">
-            {emptyDescription ??
-              "Add up to 4 clear photos so buyers can recognize these birds."}
-          </p>
-          {canAddPhotos ? <AddPhotoSlot isUploading={isUploading} onUpload={uploadPhotos} /> : null}
-        </div>
-      ) : (
-        <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(260px,1fr)]">
-          {featuredPhoto ? (
-            <PhotoTile
-              canManage={canManage}
-              isFeatured
-              isRemoving={isRemovingLinkId === featuredPhoto.media_link_id}
-              isUpdating={isUpdatingLinkId === featuredPhoto.media_link_id}
-              photo={featuredPhoto}
-              size="large"
-              onMakeFeatured={() => void makeFeatured(featuredPhoto)}
-              onMoveLeft={() => void movePhoto(featuredPhoto, "left")}
-              onMoveRight={() => void movePhoto(featuredPhoto, "right")}
-              onRemove={() => void removePhoto(featuredPhoto)}
-              disableMoveLeft={
-                orderedPhotos[0]?.media_link_id === featuredPhoto.media_link_id
-              }
-              disableMoveRight={
-                orderedPhotos[orderedPhotos.length - 1]?.media_link_id ===
-                featuredPhoto.media_link_id
-              }
-            />
-          ) : null}
-
-          <div className="grid grid-cols-2 gap-3">
-            {remainingPhotos.map((photo) => (
-              <PhotoTile
-                key={photo.media_link_id}
-                canManage={canManage}
-                isFeatured={photo.is_featured}
-                isRemoving={isRemovingLinkId === photo.media_link_id}
-                isUpdating={isUpdatingLinkId === photo.media_link_id}
-                photo={photo}
-                size="small"
-                onMakeFeatured={() => void makeFeatured(photo)}
-                onMoveLeft={() => void movePhoto(photo, "left")}
-                onMoveRight={() => void movePhoto(photo, "right")}
-                onRemove={() => void removePhoto(photo)}
-                disableMoveLeft={orderedPhotos[0]?.media_link_id === photo.media_link_id}
-                disableMoveRight={
-                  orderedPhotos[orderedPhotos.length - 1]?.media_link_id ===
-                  photo.media_link_id
-                }
-              />
-            ))}
-            {canAddPhotos ? (
-              <AddPhotoSlot isUploading={isUploading} onUpload={uploadPhotos} />
-            ) : null}
-          </div>
-        </div>
-      )}
-
-      {!canManage ? (
-        <p className="mt-4 text-sm leading-6 text-stone-600">
-          Photo changes are not available for this listing state yet.
-        </p>
-      ) : null}
-      </section>
-    </SellerCard>
-  );
-}
-
-function PhotoTile({
-  canManage,
-  disableMoveLeft,
-  disableMoveRight,
-  isFeatured,
-  isRemoving,
-  isUpdating,
-  onMakeFeatured,
-  onMoveLeft,
-  onMoveRight,
-  onRemove,
-  photo,
-  size,
-}: {
-  canManage: boolean;
-  disableMoveLeft: boolean;
-  disableMoveRight: boolean;
-  isFeatured: boolean;
-  isRemoving: boolean;
-  isUpdating: boolean;
-  onMakeFeatured: () => void;
-  onMoveLeft: () => void;
-  onMoveRight: () => void;
-  onRemove: () => void;
-  photo: ListingPhotoItem;
-  size: "large" | "small";
-}) {
-  return (
-    <figure className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
-      <div className="relative">
-        <Image
-          alt={photo.alt_text || "Listing photo"}
-          className={`w-full object-cover ${
-            size === "large" ? "aspect-[4/3]" : "aspect-square"
-          }`}
-          height={photo.height_px ?? 600}
-          src={toPublicImageUrl(photo.public_url)}
-          unoptimized
-          width={photo.width_px ?? 800}
-        />
-        {isFeatured ? (
-          <span className="absolute left-3 top-3 rounded-full bg-stone-950/90 px-3 py-1 text-xs font-semibold text-white">
-            Featured
-          </span>
-        ) : null}
-      </div>
-      <figcaption className="grid gap-3 p-3 text-sm">
-        <div>
-          <p className="truncate font-semibold text-stone-950">
-            {photo.original_filename || "Listing photo"}
-          </p>
-          <p className="mt-1 text-stone-600">
-            {isFeatured ? "Main listing photo" : "Additional photo"}
-          </p>
-        </div>
-        {canManage ? (
-          <div className="flex flex-wrap gap-2">
-            {!isFeatured ? (
-              <button
-                className="seller-small-button"
-                disabled={isUpdating}
-                onClick={onMakeFeatured}
-                type="button"
-              >
-                Make featured
-              </button>
-            ) : null}
-            <button
-              className="seller-small-button"
-              disabled={disableMoveLeft || isUpdating}
-              onClick={onMoveLeft}
-              type="button"
-            >
-              Move left
-            </button>
-            <button
-              className="seller-small-button"
-              disabled={disableMoveRight || isUpdating}
-              onClick={onMoveRight}
-              type="button"
-            >
-              Move right
-            </button>
-            <button
-              className="seller-small-button"
-              disabled={isRemoving}
-              onClick={onRemove}
-              type="button"
-            >
-              {isRemoving ? "Removing" : "Remove photo"}
-            </button>
-          </div>
-        ) : null}
-      </figcaption>
-    </figure>
-  );
-}
-
-function AddPhotoSlot({
-  isUploading,
-  onUpload,
-}: {
-  isUploading: boolean;
-  onUpload: (files: FileList | null) => void;
-}) {
-  return (
-    <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 bg-stone-50 px-4 py-6 text-center text-sm transition hover:border-emerald-700 hover:bg-emerald-50">
-      <span className="text-3xl font-light text-stone-500">+</span>
-      <span className="mt-2 font-semibold text-stone-950">
-        {isUploading ? "Uploading" : "Add photo"}
-      </span>
-      <span className="mt-1 text-stone-600">JPG, PNG, or WebP under 8 MB</span>
-      <input
-        accept={acceptedImageTypes.join(",")}
-        className="sr-only"
-        disabled={isUploading}
-        multiple
-        type="file"
-        onChange={(event) => {
-          onUpload(event.target.files);
-          event.target.value = "";
+    <div ref={sectionRef}>
+      <PhotoManager
+        acceptedTypes={acceptedImageTypes}
+        canManage={canManage}
+        description={
+          description ??
+          (mode === "public-content"
+            ? "Update the photos buyers see on this live listing."
+            : "Add up to 4 photos buyers should see first.")
+        }
+        emptyDescription={emptyDescription}
+        error={error}
+        helperText="Drag photos to reorder. The first photo is the featured storefront photo."
+        isUploading={isUploading}
+        maxFileSizeMb={maxImageSizeBytes / 1024 / 1024}
+        maxPhotos={maxListingPhotos}
+        photos={dashboardPhotos}
+        removePhotoContext={removePhotoContext}
+        title={title}
+        onAddPhotos={(files) => void uploadPhotos(files)}
+        onRemovePhoto={(photo) => {
+          const listingPhoto = orderedPhotos.find(
+            (item) => item.media_link_id === photo.id,
+          );
+          if (listingPhoto) return removePhoto(listingPhoto);
+        }}
+        onReorderPhotos={(photos) => reorderPhotos(photos)}
+        onResetCrop={(photo) => saveCrop(photo, null)}
+        onSaveCrop={(photo, crop) => saveCrop(photo, crop)}
+        onSetFeaturedPhoto={(photo) => {
+          const listingPhoto = orderedPhotos.find(
+            (item) => item.media_link_id === photo.id,
+          );
+          if (listingPhoto) return makeFeatured(listingPhoto);
         }}
       />
-    </label>
+    </div>
   );
 }
 
 function validateFiles(files: File[]) {
   for (const file of files) {
+    if (!acceptedImageTypes.includes(file.type as (typeof acceptedImageTypes)[number])) {
+      return {
+        title: "File type not supported",
+        message: "Use a JPG, PNG, or WebP photo.",
+      };
+    }
+
     if (file.size <= 0 || file.size > maxImageSizeBytes) {
       return {
         title: "Photo is too large",
@@ -611,6 +471,65 @@ function sortPhotos(photos: ListingPhotoItem[]) {
     }
 
     return first.media_link_id.localeCompare(second.media_link_id);
+  });
+}
+
+function toDashboardPhoto(photo: ListingPhotoItem): DashboardPhoto {
+  return {
+    altText: photo.alt_text,
+    cropMetadata: photo.crop_metadata,
+    filename: photo.original_filename,
+    height: photo.height_px,
+    id: photo.media_link_id,
+    label: photo.alt_text || photo.original_filename || "Photo",
+    sortOrder: photo.sort_order,
+    url: toPublicImageUrl(photo.public_url),
+    width: photo.width_px,
+  };
+}
+
+function normalizePhotoOrder(items: ListingPhotoItem[]) {
+  const activeItems = sortPhotos(
+    items.filter(
+      (item) =>
+        item.visibility_status === "active" &&
+        item.asset_status === "active" &&
+        item.moderation_status === "approved",
+    ),
+  );
+  const activeOrderById = new Map(
+    activeItems.map((item, index) => [item.media_link_id, index]),
+  );
+
+  return items.map((item) => {
+    const nextOrder = activeOrderById.get(item.media_link_id);
+
+    if (nextOrder === undefined) return item;
+
+    return {
+      ...item,
+      is_featured: nextOrder === 0,
+      sort_order: nextOrder,
+    };
+  });
+}
+
+function applyReorderedPhotos(
+  currentItems: ListingPhotoItem[],
+  nextPhotos: DashboardPhoto[],
+) {
+  const orderById = new Map(nextPhotos.map((photo, index) => [photo.id, index]));
+
+  return currentItems.map((item) => {
+    const nextOrder = orderById.get(item.media_link_id);
+
+    if (nextOrder === undefined) return item;
+
+    return {
+      ...item,
+      is_featured: nextOrder === 0,
+      sort_order: nextOrder,
+    };
   });
 }
 

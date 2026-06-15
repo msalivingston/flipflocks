@@ -81,34 +81,34 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
   const isLive = seller.is_publicly_available;
 
   return (
-    <div className="min-h-screen bg-[#fbfaf6] text-stone-950 lg:grid lg:grid-cols-[275px_1fr]">
-      <aside className="hidden border-r border-stone-200/80 bg-white lg:flex lg:min-h-screen lg:flex-col">
-        <div className="px-5 pb-2.5 pt-3.5">
+    <div className="min-h-screen bg-[#fbfaf6] text-stone-950 lg:grid lg:grid-cols-[224px_1fr]">
+      <aside className="hidden border-r border-stone-200/80 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
+        <div className="px-3.5 pb-2 pt-3">
           <Link className="block w-fit" href="/">
             <Image
               src="/branding/flockfront-logo.png"
               alt="FlockFront"
-              width={208}
+              width={164}
               height={69}
               priority
             />
           </Link>
           <div className="mt-1.5">
-            <p className="truncate text-lg font-bold text-stone-950">
+            <p className="truncate text-base font-bold text-stone-950">
               {seller.store_name}
             </p>
-            <span className="mt-0.5 inline-flex items-center gap-2 text-sm font-semibold text-emerald-800">
-              <span className="size-2.5 rounded-full bg-green-500" />
+            <span className="mt-0.5 inline-flex items-center gap-2 text-xs font-semibold text-emerald-800">
+              <span className="size-2 rounded-full bg-green-500" />
               {isLive ? "Storefront is live" : "Storefront not live"}
             </span>
           </div>
         </div>
 
-        <nav className="flex-1 space-y-0.5 px-4">
+        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2.5">
           <SellerNavLinks />
         </nav>
 
-        <div className="space-y-1 border-t border-stone-200 px-5 py-2.5">
+        <div className="sticky bottom-0 shrink-0 space-y-1 border-t border-stone-200 bg-white px-3 py-2.5">
           <div className="flex items-center gap-2.5 rounded-xl px-1 py-0.5">
             <NavGlyph src="/glyphs/storefront.png" alt="" />
             <div className="min-w-0">
@@ -119,14 +119,14 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <a
-            className="flex min-h-9 items-center gap-2.5 rounded-xl px-1 text-sm font-medium text-stone-950 transition hover:text-emerald-800"
+            className="flex min-h-8 items-center gap-2 rounded-xl px-1 text-xs font-medium text-stone-950 transition hover:text-emerald-800"
             href={`mailto:${SUPPORT_EMAIL}`}
           >
             <NavGlyph src="/glyphs/chat.png" alt="" />
             Contact support
           </a>
           <button
-            className="flex min-h-9 items-center gap-2.5 rounded-xl px-1 text-sm font-medium text-stone-950 transition hover:text-emerald-800"
+            className="flex min-h-8 items-center gap-2 rounded-xl px-1 text-xs font-medium text-stone-950 transition hover:text-emerald-800"
             onClick={handleSignOut}
           >
             <LogOut aria-hidden="true" className="size-5 shrink-0" />
@@ -202,7 +202,7 @@ function SellerNavLinks() {
       <Link
         key={item.href}
         href={item.href}
-        className={`flex min-h-10 items-center gap-2.5 rounded-xl px-3.5 text-base font-medium transition focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 focus:ring-offset-white ${
+        className={`flex min-h-8 items-center gap-2 rounded-lg px-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 focus:ring-offset-white ${
           isActive
             ? "bg-[#f0f5ea] text-emerald-950"
             : "text-stone-950 hover:bg-[#f7faf3] hover:text-emerald-950"
@@ -241,8 +241,8 @@ function MobileSellerNavLinks() {
 
 function NavGlyph({ src, alt }: { src: string; alt: string }) {
   return (
-    <span className="flex size-7 shrink-0 items-center justify-center">
-      <Image src={src} alt={alt} width={23} height={23} />
+    <span className="flex size-5 shrink-0 items-center justify-center">
+      <Image src={src} alt={alt} width={18} height={18} />
     </span>
   );
 }
