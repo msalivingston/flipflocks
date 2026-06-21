@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -549,10 +550,11 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
           <div className="order-1 grid content-start gap-4 lg:col-start-1 lg:row-start-1">
             {mediaError ? (
               <SellerCard className="p-5">
-                <h2 className="text-lg font-semibold text-stone-950">
-                  Breed Photos
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-stone-600">
+                <SectionHeading
+                  glyph="/glyphs/camera.png"
+                  title="Breed Photos"
+                />
+                <p className="mt-2 text-sm leading-5 text-stone-500">
                   Photos could not load right now. You can still update breed
                   information.
                 </p>
@@ -577,10 +579,12 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
               <SellerCard className="p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h2 className="text-sm font-semibold text-stone-950">
-                      Default Breed Photo
-                    </h2>
-                    <p className="mt-1 text-sm leading-6 text-stone-600">
+                    <SectionHeading
+                      glyph="/glyphs/storefront.png"
+                      title="Default Breed Photo"
+                      compact
+                    />
+                    <p className="mt-2 text-sm leading-5 text-stone-500">
                       Add the FlipFlocks catalog image to this photo set.
                     </p>
                     {isBreedPhotoLimitReached ? (
@@ -614,9 +618,7 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
           <SellerCard className="order-2 p-4 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold text-stone-950">
-                  Breed Details
-                </h2>
+                <SectionHeading glyph="/glyphs/egg.png" title="Breed Details" />
                 <StatusBadge status={speciesName} />
               </div>
               {catalogBreed ? (
@@ -728,10 +730,11 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
           </SellerCard>
 
           <SellerCard className="order-3 p-5 lg:col-start-1 lg:row-start-2">
-            <h2 className="text-lg font-semibold text-stone-950">
-              Breed Description
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-stone-600">
+            <SectionHeading
+              glyph="/glyphs/pencil.png"
+              title="Breed Description"
+            />
+            <p className="mt-2 text-sm leading-5 text-stone-500">
               Write the storefront copy buyers see for this breed.
             </p>
 
@@ -753,10 +756,12 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
         <SellerCard className="border-red-200 bg-red-50/40 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-base font-semibold text-red-700">
-                Remove Breed
-              </h2>
-              <p className="mt-1 text-sm leading-6 text-stone-600">
+              <SectionHeading
+                glyph="/glyphs/trashcan.png"
+                title="Remove Breed"
+                tone="danger"
+              />
+              <p className="mt-2 text-sm leading-5 text-stone-600">
                 Remove this breed from your active breed library. You can add it
                 again later from the breed library.
               </p>
@@ -773,6 +778,41 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
         </SellerCard>
       </main>
     </>
+  );
+}
+
+function SectionHeading({
+  compact = false,
+  glyph,
+  title,
+  tone = "default",
+}: {
+  compact?: boolean;
+  glyph: string;
+  title: string;
+  tone?: "default" | "danger";
+}) {
+  const chipClass =
+    tone === "danger"
+      ? "bg-red-100 ring-red-200"
+      : "bg-emerald-900/10 ring-emerald-900/10";
+  const titleClass =
+    tone === "danger" ? "text-red-700" : "text-emerald-950";
+  const sizeClass = compact ? "size-7" : "size-8";
+  const imageSize = compact ? 15 : 17;
+
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <span
+        aria-hidden="true"
+        className={`flex ${sizeClass} shrink-0 items-center justify-center rounded-full ring-1 ${chipClass}`}
+      >
+        <Image src={glyph} alt="" width={imageSize} height={imageSize} />
+      </span>
+      <h2 className={`text-base font-bold tracking-normal ${titleClass}`}>
+        {title}
+      </h2>
+    </div>
   );
 }
 

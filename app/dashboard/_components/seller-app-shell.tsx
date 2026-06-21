@@ -81,7 +81,7 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
   const isLive = seller.is_publicly_available;
 
   return (
-    <div className="min-h-screen bg-[#fbfaf6] text-stone-950 lg:grid lg:grid-cols-[224px_1fr]">
+    <div className="min-h-screen overflow-x-hidden bg-[#fbfaf6] text-stone-950 lg:grid lg:grid-cols-[224px_minmax(0,1fr)]">
       <aside className="hidden border-r border-stone-200/80 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
         <div className="px-3.5 pb-2 pt-3">
           <Link className="block w-fit" href="/">
@@ -135,7 +135,7 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <div className="flex min-h-screen flex-col">
+      <div className="flex min-h-screen min-w-0 flex-col">
         <header className="sticky top-0 z-30 border-b border-stone-200/80 bg-white lg:hidden">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
@@ -166,7 +166,7 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-x-hidden pb-[calc(5.75rem+env(safe-area-inset-bottom))] lg:pb-0">
+        <main className="min-w-0 flex-1 overflow-x-hidden pb-[calc(5.75rem+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
         </main>
 

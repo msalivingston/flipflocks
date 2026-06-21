@@ -49,6 +49,20 @@ export function SellerCard({
   );
 }
 
+export function DashboardPageContent({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`w-full min-w-0 max-w-none px-5 py-5 sm:px-7 ${className}`}>
+      {children}
+    </div>
+  );
+}
+
 export function StatusBadge({ status }: { status: string | null | undefined }) {
   const label = status ? status.replaceAll("_", " ") : "unknown";
   const tone = getStatusTone(status);

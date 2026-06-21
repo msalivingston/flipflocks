@@ -269,13 +269,24 @@ export function PhotoManager({
       <section aria-labelledby={headingId}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-stone-950" id={headingId}>
-              {title}
-            </h2>
+            <div className="flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-900/10 ring-1 ring-emerald-900/10"
+              >
+                <Image src="/glyphs/camera.png" alt="" width={17} height={17} />
+              </span>
+              <h2
+                className="text-base font-bold tracking-normal text-emerald-950"
+                id={headingId}
+              >
+                {title}
+              </h2>
+            </div>
             {description ? (
-              <p className="mt-1 text-sm leading-6 text-stone-600">{description}</p>
+              <p className="mt-2 text-sm leading-5 text-stone-500">{description}</p>
             ) : null}
-            <p className="mt-1 text-sm leading-6 text-stone-600">{helperText}</p>
+            <p className="mt-1 text-sm leading-5 text-stone-500">{helperText}</p>
             <p className="mt-1 text-xs font-semibold text-stone-500">
               {photos.length} of {maxPhotos} photos added
             </p>
