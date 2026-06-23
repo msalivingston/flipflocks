@@ -6,6 +6,7 @@ export type PhotoPlaceholder = {
 
 export type BirdOffering = {
   id: string;
+  sellerBreedProfileId: string | null;
   breed: string;
   soldAs: string;
   quantity: string;
@@ -26,4 +27,16 @@ export type ReadinessChecks = {
 export type AgeAtAvailabilityResult = {
   message: string;
   status: "ready" | "warning";
+};
+
+export type SpeciesOption = {
+  id: string | null;
+  label: string;
+  slug: string | null;
+};
+
+export type BreedOption = {
+  id: string | null;
+  label: string;
+  speciesId: string | null;
 };

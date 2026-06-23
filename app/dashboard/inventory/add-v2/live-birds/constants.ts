@@ -1,4 +1,4 @@
-import type { BirdOffering } from "./types";
+import type { BirdOffering, BreedOption, SpeciesOption } from "./types";
 
 export const inputClass =
   "min-h-10 w-full rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20";
@@ -9,25 +9,38 @@ export const disabledButtonClass =
 export const mutedTextActionClass =
   "text-xs font-semibold text-stone-400";
 
-export const speciesOptions = [
-  "Chickens",
-  "Ducks",
-  "Geese",
-  "Turkeys",
-  "Guinea",
-  "Quail",
-  "Pheasants",
-  "Peafowl",
-  "Pigeons",
-  "Ratites",
+export const supportedSpeciesSlugs = [
+  "chicken",
+  "duck",
+  "goose",
+  "turkey",
+  "guinea-fowl",
+  "quail",
+  "pheasant",
+  "peafowl",
+  "pigeons-doves",
+  "emus-ostriches-rheas",
 ];
 
-export const breedOptions = [
-  "Ameraucana - Blue",
-  "Rhode Island Red",
-  "Buff Orpington",
-  "Barred Rock",
-  "Easter Egger",
+export const fallbackSpeciesOptions: SpeciesOption[] = [
+  { id: null, label: "Chickens", slug: "chicken" },
+  { id: null, label: "Ducks", slug: "duck" },
+  { id: null, label: "Geese", slug: "goose" },
+  { id: null, label: "Turkeys", slug: "turkey" },
+  { id: null, label: "Guinea", slug: "guinea-fowl" },
+  { id: null, label: "Quail", slug: "quail" },
+  { id: null, label: "Pheasants", slug: "pheasant" },
+  { id: null, label: "Peafowl", slug: "peafowl" },
+  { id: null, label: "Pigeons", slug: "pigeons-doves" },
+  { id: null, label: "Ratites", slug: "emus-ostriches-rheas" },
+];
+
+export const fallbackBreedOptions: BreedOption[] = [
+  { id: null, label: "Ameraucana - Blue", speciesId: null },
+  { id: null, label: "Rhode Island Red", speciesId: null },
+  { id: null, label: "Buff Orpington", speciesId: null },
+  { id: null, label: "Barred Rock", speciesId: null },
+  { id: null, label: "Easter Egger", speciesId: null },
 ];
 
 export const soldAsOptions = ["Female", "Male", "Straight run", "Pair", "Trio"];
@@ -40,6 +53,7 @@ export const defaultDescription =
 export const initialOfferings: BirdOffering[] = [
   {
     id: "offering-1",
+    sellerBreedProfileId: null,
     breed: "Ameraucana - Blue",
     soldAs: "Female",
     quantity: "10",
@@ -61,6 +75,7 @@ export const initialOfferings: BirdOffering[] = [
   },
   {
     id: "offering-2",
+    sellerBreedProfileId: null,
     breed: "Rhode Island Red",
     soldAs: "Straight run",
     quantity: "24",

@@ -1,17 +1,19 @@
 import {
-  breedOptions,
   inputClass,
   mutedTextActionClass,
   soldAsOptions,
 } from "./constants";
 import { getNumberInputValue } from "./helpers";
 import { SectionCard } from "./SectionCard";
-import type { BirdOffering } from "./types";
+import type { BirdOffering, BreedOption } from "./types";
 
 export function BirdOfferingsCard({
   addOffering,
   addPlaceholderPhoto,
+  breedOptions,
+  breedOptionsMessage,
   duplicateOffering,
+  duplicateOfferingIds,
   offerings,
   removeOffering,
   removePlaceholderPhoto,
@@ -21,7 +23,10 @@ export function BirdOfferingsCard({
 }: {
   addOffering: () => void;
   addPlaceholderPhoto: (offeringId: string) => void;
+  breedOptions: BreedOption[];
+  breedOptionsMessage: string | null;
   duplicateOffering: (offeringId: string) => void;
+  duplicateOfferingIds: Set<string>;
   offerings: BirdOffering[];
   removeOffering: (offeringId: string) => void;
   removePlaceholderPhoto: (offeringId: string, photoId: string) => void;
@@ -38,14 +43,28 @@ export function BirdOfferingsCard({
       step="2"
       title="Bird Offerings"
     >
+      {breedOptionsMessage ? (
+        <p className="mt-4 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-semibold leading-5 text-stone-600">
+          {breedOptionsMessage}
+        </p>
+      ) : null}
+      {duplicateOfferingIds.size > 0 ? (
+        <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
+          This batch already has an offering for this breed and sold-as type.
+          Choose a different sold-as type or remove the duplicate before saving
+          later.
+        </p>
+      ) : null}
       <div className="mt-4 space-y-3">
         {offerings.map((offering, index) =>
           offering.expanded ? (
             <ExpandedOfferingCard
               key={offering.id}
               addPlaceholderPhoto={addPlaceholderPhoto}
+              breedOptions={breedOptions}
               canRemove={offerings.length > 1}
               duplicateOffering={duplicateOffering}
+              hasDuplicateCombination={duplicateOfferingIds.has(offering.id)}
               index={index}
               offering={offering}
               removeOffering={removeOffering}
@@ -59,6 +78,7 @@ export function BirdOfferingsCard({
               key={offering.id}
               canRemove={offerings.length > 1}
               duplicateOffering={duplicateOffering}
+              hasDuplicateCombination={duplicateOfferingIds.has(offering.id)}
               index={index}
               offering={offering}
               removeOffering={removeOffering}
@@ -81,8 +101,10 @@ export function BirdOfferingsCard({
 
 function ExpandedOfferingCard({
   addPlaceholderPhoto,
+  breedOptions,
   canRemove,
   duplicateOffering,
+  hasDuplicateCombination,
   index,
   offering,
   removeOffering,
@@ -92,8 +114,10 @@ function ExpandedOfferingCard({
   updateOffering,
 }: {
   addPlaceholderPhoto: (offeringId: string) => void;
+  breedOptions: BreedOption[];
   canRemove: boolean;
   duplicateOffering: (offeringId: string) => void;
+  hasDuplicateCombination: boolean;
   index: number;
   offering: BirdOffering;
   removeOffering: (offeringId: string) => void;
@@ -147,13 +171,26 @@ function ExpandedOfferingCard({
           label="Breed"
           options={breedOptions}
           value={offering.breed}
-          onChange={(value) => updateOffering(offering.id, { breed: value })}
+          selectedId={offering.sellerBreedProfileId}
+          onChange={(option) =>
+            updateOffering(offering.id, {
+              breed: option.label,
+              sellerBreedProfileId: option.id,
+            })
+          }
         />
         <SelectField
           label="Sold as"
-          options={soldAsOptions}
+          options={soldAsOptions.map((option) => ({
+            id: option,
+            label: option,
+            speciesId: null,
+          }))}
           value={offering.soldAs}
-          onChange={(value) => updateOffering(offering.id, { soldAs: value })}
+          selectedId={offering.soldAs}
+          onChange={(option) =>
+            updateOffering(offering.id, { soldAs: option.label })
+          }
         />
         <NumberField
           label="Quantity available"
@@ -167,6 +204,12 @@ function ExpandedOfferingCard({
           onChange={(value) => updateOffering(offering.id, { price: value })}
         />
       </div>
+      {hasDuplicateCombination ? (
+        <p className="mx-4 mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
+          Duplicate breed and sold-as combination. This is okay for local
+          layout testing, but it will need to be resolved before save is added.
+        </p>
+      ) : null}
 
       <div className="border-t border-stone-200 px-4 py-4">
         <StaticPhotosPanel
@@ -205,6 +248,7 @@ function ExpandedOfferingCard({
 function CollapsedOfferingRow({
   canRemove,
   duplicateOffering,
+  hasDuplicateCombination,
   index,
   offering,
   removeOffering,
@@ -212,13 +256,18 @@ function CollapsedOfferingRow({
 }: {
   canRemove: boolean;
   duplicateOffering: (offeringId: string) => void;
+  hasDuplicateCombination: boolean;
   index: number;
   offering: BirdOffering;
   removeOffering: (offeringId: string) => void;
   toggleOfferingExpanded: (offeringId: string) => void;
 }) {
   return (
-    <div className="rounded-lg border border-stone-200 bg-white px-4 py-3 shadow-sm">
+    <div
+      className={`rounded-lg border bg-white px-4 py-3 shadow-sm ${
+        hasDuplicateCombination ? "border-amber-200" : "border-stone-200"
+      }`}
+    >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
         <button
           className="flex flex-wrap items-center gap-x-3 gap-y-2 text-left"
@@ -260,6 +309,11 @@ function CollapsedOfferingRow({
           removeOffering={removeOffering}
         />
       </div>
+      {hasDuplicateCombination ? (
+        <p className="mt-2 text-xs font-semibold text-amber-800">
+          Duplicate breed and sold-as combination.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -314,13 +368,21 @@ function SelectField({
   label,
   onChange,
   options,
+  selectedId,
   value,
 }: {
   label: string;
-  onChange: (value: string) => void;
-  options: string[];
+  onChange: (value: BreedOption) => void;
+  options: BreedOption[];
+  selectedId: string | null;
   value: string;
 }) {
+  const selectedValue = getBreedOptionValue({
+    id: selectedId,
+    label: value,
+    speciesId: null,
+  });
+
   return (
     <label>
       <span className="mb-1.5 block text-xs font-semibold text-stone-600">
@@ -329,12 +391,21 @@ function SelectField({
       <span className="relative block">
         <select
           className={`${inputClass} appearance-none pr-9`}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
+          value={selectedValue}
+          onChange={(event) => {
+            const nextOption = options.find(
+              (option) => getBreedOptionValue(option) === event.target.value,
+            );
+
+            if (nextOption) onChange(nextOption);
+          }}
         >
           {options.map((option) => (
-            <option key={option} value={option}>
-              {option}
+            <option
+              key={getBreedOptionValue(option)}
+              value={getBreedOptionValue(option)}
+            >
+              {option.label}
             </option>
           ))}
         </select>
@@ -344,6 +415,10 @@ function SelectField({
       </span>
     </label>
   );
+}
+
+function getBreedOptionValue(option: BreedOption) {
+  return option.id ?? `local:${option.label}`;
 }
 
 function NumberField({

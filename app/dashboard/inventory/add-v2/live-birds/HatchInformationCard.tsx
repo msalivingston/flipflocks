@@ -1,24 +1,32 @@
 import Image from "next/image";
-import { inputClass, speciesOptions } from "./constants";
+import { inputClass } from "./constants";
 import { SectionCard } from "./SectionCard";
-import type { AgeAtAvailabilityResult } from "./types";
+import type { AgeAtAvailabilityResult, SpeciesOption } from "./types";
 
 export function HatchInformationCard({
   ageAtAvailability,
   availableDate,
   hatchDate,
+  referenceError,
+  referenceLoading,
   setAvailableDate,
   setHatchDate,
   setSpecies,
   species,
+  speciesOptions,
+  usingFallbackSpecies,
 }: {
   ageAtAvailability: AgeAtAvailabilityResult;
   availableDate: string;
   hatchDate: string;
+  referenceError: string | null;
+  referenceLoading: boolean;
   setAvailableDate: (value: string) => void;
   setHatchDate: (value: string) => void;
-  setSpecies: (value: string) => void;
-  species: string;
+  setSpecies: (value: SpeciesOption) => void;
+  species: SpeciesOption;
+  speciesOptions: SpeciesOption[];
+  usingFallbackSpecies: boolean;
 }) {
   return (
     <SectionCard step="1" title="Hatch Information">
@@ -26,7 +34,11 @@ export function HatchInformationCard({
         All bird offerings below will use this hatch date.
       </p>
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        <SpeciesField value={species} onChange={setSpecies} />
+        <SpeciesField
+          options={speciesOptions}
+          value={species}
+          onChange={setSpecies}
+        />
         <DateField
           glyph="/glyphs/calendar.png"
           label="Hatch date"
@@ -49,16 +61,35 @@ export function HatchInformationCard({
       >
         {ageAtAvailability.message}
       </div>
+      {referenceLoading ? (
+        <p className="mt-3 text-xs font-semibold text-stone-500">
+          Loading species and breed profile options...
+        </p>
+      ) : null}
+      {referenceError ? (
+        <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
+          Reference data could not be loaded. Local placeholder options are still
+          available for this UI shell.
+        </p>
+      ) : null}
+      {!referenceLoading && !referenceError && usingFallbackSpecies ? (
+        <p className="mt-3 text-xs font-semibold text-stone-500">
+          Species options are local placeholders until matching reference rows
+          are available.
+        </p>
+      ) : null}
     </SectionCard>
   );
 }
 
 function SpeciesField({
   onChange,
+  options,
   value,
 }: {
-  onChange: (value: string) => void;
-  value: string;
+  onChange: (value: SpeciesOption) => void;
+  options: SpeciesOption[];
+  value: SpeciesOption;
 }) {
   return (
     <label>
@@ -75,12 +106,21 @@ function SpeciesField({
         />
         <select
           className={`${inputClass} appearance-none pl-10 pr-9`}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
+          value={getSpeciesOptionValue(value)}
+          onChange={(event) => {
+            const nextOption = options.find(
+              (option) => getSpeciesOptionValue(option) === event.target.value,
+            );
+
+            if (nextOption) onChange(nextOption);
+          }}
         >
-          {speciesOptions.map((speciesOption) => (
-            <option key={speciesOption} value={speciesOption}>
-              {speciesOption}
+          {options.map((speciesOption) => (
+            <option
+              key={getSpeciesOptionValue(speciesOption)}
+              value={getSpeciesOptionValue(speciesOption)}
+            >
+              {speciesOption.label}
             </option>
           ))}
         </select>
@@ -90,6 +130,10 @@ function SpeciesField({
       </span>
     </label>
   );
+}
+
+function getSpeciesOptionValue(option: SpeciesOption) {
+  return option.id ?? `local:${option.slug ?? option.label}`;
 }
 
 function DateField({
