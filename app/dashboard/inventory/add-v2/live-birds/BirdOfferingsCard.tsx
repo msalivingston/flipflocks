@@ -10,16 +10,22 @@ import type { BirdOffering } from "./types";
 
 export function BirdOfferingsCard({
   addOffering,
+  addPlaceholderPhoto,
   duplicateOffering,
   offerings,
   removeOffering,
+  removePlaceholderPhoto,
+  setFeaturedPhoto,
   toggleOfferingExpanded,
   updateOffering,
 }: {
   addOffering: () => void;
+  addPlaceholderPhoto: (offeringId: string) => void;
   duplicateOffering: (offeringId: string) => void;
   offerings: BirdOffering[];
   removeOffering: (offeringId: string) => void;
+  removePlaceholderPhoto: (offeringId: string, photoId: string) => void;
+  setFeaturedPhoto: (offeringId: string, photoId: string) => void;
   toggleOfferingExpanded: (offeringId: string) => void;
   updateOffering: (
     offeringId: string,
@@ -37,11 +43,14 @@ export function BirdOfferingsCard({
           offering.expanded ? (
             <ExpandedOfferingCard
               key={offering.id}
+              addPlaceholderPhoto={addPlaceholderPhoto}
               canRemove={offerings.length > 1}
               duplicateOffering={duplicateOffering}
               index={index}
               offering={offering}
               removeOffering={removeOffering}
+              removePlaceholderPhoto={removePlaceholderPhoto}
+              setFeaturedPhoto={setFeaturedPhoto}
               toggleOfferingExpanded={toggleOfferingExpanded}
               updateOffering={updateOffering}
             />
@@ -71,19 +80,25 @@ export function BirdOfferingsCard({
 }
 
 function ExpandedOfferingCard({
+  addPlaceholderPhoto,
   canRemove,
   duplicateOffering,
   index,
   offering,
   removeOffering,
+  removePlaceholderPhoto,
+  setFeaturedPhoto,
   toggleOfferingExpanded,
   updateOffering,
 }: {
+  addPlaceholderPhoto: (offeringId: string) => void;
   canRemove: boolean;
   duplicateOffering: (offeringId: string) => void;
   index: number;
   offering: BirdOffering;
   removeOffering: (offeringId: string) => void;
+  removePlaceholderPhoto: (offeringId: string, photoId: string) => void;
+  setFeaturedPhoto: (offeringId: string, photoId: string) => void;
   toggleOfferingExpanded: (offeringId: string) => void;
   updateOffering: (
     offeringId: string,
@@ -153,29 +168,35 @@ function ExpandedOfferingCard({
         />
       </div>
 
-      <div className="grid gap-5 border-t border-stone-200 px-4 py-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.6fr)]">
-        <div>
-          <h3 className="text-sm font-semibold text-stone-950">
-            Buyer Content
-          </h3>
-          <p className="mt-3 text-xs font-semibold text-stone-600">
-            Description
-          </p>
-          <textarea
-            className={`${inputClass} mt-2 min-h-28 resize-y py-3 leading-6`}
-            value={offering.description}
-            onChange={(event) =>
-              updateOffering(offering.id, {
-                description: event.target.value,
-              })
-            }
-          />
-          <p className="mt-2 text-xs font-medium text-stone-500">
-            {offering.description.length} / 500
-          </p>
-        </div>
+      <div className="border-t border-stone-200 px-4 py-4">
+        <StaticPhotosPanel
+          addPlaceholderPhoto={addPlaceholderPhoto}
+          offeringId={offering.id}
+          photos={offering.photos}
+          removePlaceholderPhoto={removePlaceholderPhoto}
+          setFeaturedPhoto={setFeaturedPhoto}
+        />
+      </div>
 
-        <StaticPhotosPanel photos={offering.photos} />
+      <div className="border-t border-stone-200 px-4 py-4">
+        <h3 className="text-sm font-semibold text-stone-950">
+          Buyer Content
+        </h3>
+        <p className="mt-3 text-xs font-semibold text-stone-600">
+          Description
+        </p>
+        <textarea
+          className={`${inputClass} mt-2 min-h-36 resize-y py-3 leading-6`}
+          value={offering.description}
+          onChange={(event) =>
+            updateOffering(offering.id, {
+              description: event.target.value,
+            })
+          }
+        />
+        <p className="mt-2 text-xs font-medium text-stone-500">
+          {offering.description.length} / 500
+        </p>
       </div>
     </div>
   );
@@ -359,7 +380,19 @@ function NumberField({
   );
 }
 
-function StaticPhotosPanel({ photos }: { photos: BirdOffering["photos"] }) {
+function StaticPhotosPanel({
+  addPlaceholderPhoto,
+  offeringId,
+  photos,
+  removePlaceholderPhoto,
+  setFeaturedPhoto,
+}: {
+  addPlaceholderPhoto: (offeringId: string) => void;
+  offeringId: string;
+  photos: BirdOffering["photos"];
+  removePlaceholderPhoto: (offeringId: string, photoId: string) => void;
+  setFeaturedPhoto: (offeringId: string, photoId: string) => void;
+}) {
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
@@ -369,14 +402,24 @@ function StaticPhotosPanel({ photos }: { photos: BirdOffering["photos"] }) {
             Featured
           </span>
         </div>
-        <span className="rounded-md border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-semibold text-stone-500 shadow-sm">
-          Manage photos
-        </span>
+        <button
+          className="rounded-md border border-emerald-800/30 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2"
+          type="button"
+          onClick={() => addPlaceholderPhoto(offeringId)}
+        >
+          Add placeholder photo
+        </button>
       </div>
       {photos.length > 0 ? (
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {photos.map((photo) => (
-            <PhotoPlaceholderTile key={photo.id} photo={photo} />
+            <PhotoPlaceholderTile
+              key={photo.id}
+              offeringId={offeringId}
+              photo={photo}
+              removePlaceholderPhoto={removePlaceholderPhoto}
+              setFeaturedPhoto={setFeaturedPhoto}
+            />
           ))}
         </div>
       ) : (
@@ -392,12 +435,18 @@ function StaticPhotosPanel({ photos }: { photos: BirdOffering["photos"] }) {
 }
 
 function PhotoPlaceholderTile({
+  offeringId,
   photo,
+  removePlaceholderPhoto,
+  setFeaturedPhoto,
 }: {
+  offeringId: string;
   photo: BirdOffering["photos"][number];
+  removePlaceholderPhoto: (offeringId: string, photoId: string) => void;
+  setFeaturedPhoto: (offeringId: string, photoId: string) => void;
 }) {
   return (
-    <div className="relative flex min-h-28 flex-col items-center justify-center rounded-md border border-stone-200 bg-stone-50 px-3 text-center">
+    <div className="relative flex min-h-32 flex-col items-center justify-center rounded-md border border-stone-200 bg-stone-50 px-3 py-3 text-center">
       {photo.isFeatured ? (
         <span className="absolute left-2 top-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[0.68rem] font-semibold text-emerald-800">
           Featured
@@ -409,6 +458,24 @@ function PhotoPlaceholderTile({
       <span className="mt-2 text-xs font-semibold text-stone-700">
         {photo.label}
       </span>
+      <div className="mt-3 flex flex-wrap justify-center gap-2">
+        {!photo.isFeatured ? (
+          <button
+            className="rounded-md border border-stone-200 bg-white px-2 py-1 text-[0.68rem] font-semibold text-emerald-800 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2"
+            type="button"
+            onClick={() => setFeaturedPhoto(offeringId, photo.id)}
+          >
+            Set featured
+          </button>
+        ) : null}
+        <button
+          className="rounded-md border border-stone-200 bg-white px-2 py-1 text-[0.68rem] font-semibold text-red-500 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200 focus:ring-offset-2"
+          type="button"
+          onClick={() => removePlaceholderPhoto(offeringId, photo.id)}
+        >
+          Remove
+        </button>
+      </div>
     </div>
   );
 }

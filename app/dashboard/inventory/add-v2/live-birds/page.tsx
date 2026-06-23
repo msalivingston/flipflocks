@@ -23,6 +23,7 @@ import type { BirdOffering } from "./types";
 
 export default function LiveBirdsV2Page() {
   const nextOfferingId = useRef(initialOfferings.length + 1);
+  const nextPhotoId = useRef(4);
   const [species, setSpecies] = useState("Chickens");
   const [hatchDate, setHatchDate] = useState(defaultHatchDate);
   const [availableDate, setAvailableDate] = useState(defaultAvailableDate);
@@ -52,6 +53,13 @@ export default function LiveBirdsV2Page() {
     nextOfferingId.current += 1;
 
     return offeringId;
+  }
+
+  function createLocalPhotoId() {
+    const photoId = `photo-${nextPhotoId.current}`;
+    nextPhotoId.current += 1;
+
+    return photoId;
   }
 
   function updateOffering(
@@ -96,6 +104,78 @@ export default function LiveBirdsV2Page() {
     ]);
   }
 
+  function addPlaceholderPhoto(offeringId: string) {
+    const photoId = createLocalPhotoId();
+
+    setOfferings((currentOfferings) =>
+      currentOfferings.map((offering) => {
+        if (offering.id !== offeringId) return offering;
+
+        const hasFeaturedPhoto = offering.photos.some(
+          (photo) => photo.isFeatured,
+        );
+
+        return {
+          ...offering,
+          photos: [
+            ...offering.photos,
+            {
+              id: photoId,
+              label: `Photo ${offering.photos.length + 1}`,
+              isFeatured: !hasFeaturedPhoto,
+            },
+          ],
+        };
+      }),
+    );
+  }
+
+  function removePlaceholderPhoto(offeringId: string, photoId: string) {
+    setOfferings((currentOfferings) =>
+      currentOfferings.map((offering) => {
+        if (offering.id !== offeringId) return offering;
+
+        const removedPhoto = offering.photos.find(
+          (photo) => photo.id === photoId,
+        );
+        const remainingPhotos = offering.photos.filter(
+          (photo) => photo.id !== photoId,
+        );
+
+        if (!removedPhoto?.isFeatured) {
+          return {
+            ...offering,
+            photos: remainingPhotos,
+          };
+        }
+
+        return {
+          ...offering,
+          photos: remainingPhotos.map((photo, index) => ({
+            ...photo,
+            isFeatured: index === 0,
+          })),
+        };
+      }),
+    );
+  }
+
+  function setFeaturedPhoto(offeringId: string, photoId: string) {
+    setOfferings((currentOfferings) =>
+      currentOfferings.map((offering) =>
+        offering.id === offeringId
+          ? {
+              ...offering,
+              photos: offering.photos.map((photo) => ({
+                ...photo,
+                isFeatured: photo.id === photoId,
+              })),
+            }
+          : offering,
+      ),
+    );
+  }
+
   function removeOffering(offeringId: string) {
     setOfferings((currentOfferings) => {
       if (currentOfferings.length <= 1) return currentOfferings;
@@ -116,7 +196,17 @@ export default function LiveBirdsV2Page() {
   }
 
   function duplicateOffering(offeringId: string) {
+    const sourceOffering = offerings.find(
+      (offering) => offering.id === offeringId,
+    );
+
+    if (!sourceOffering) return;
+
     const duplicatedOfferingId = createLocalOfferingId();
+    const duplicatedPhotos = sourceOffering.photos.map((photo) => ({
+      ...photo,
+      id: createLocalPhotoId(),
+    }));
 
     setOfferings((currentOfferings) => {
       const sourceIndex = currentOfferings.findIndex(
@@ -134,10 +224,7 @@ export default function LiveBirdsV2Page() {
         price: sourceOffering.price,
         description: sourceOffering.description,
         expanded: true,
-        photos: sourceOffering.photos.map((photo, index) => ({
-          ...photo,
-          id: `${duplicatedOfferingId}-photo-${index + 1}`,
-        })),
+        photos: duplicatedPhotos,
       };
 
       return [
@@ -193,9 +280,12 @@ export default function LiveBirdsV2Page() {
             />
             <BirdOfferingsCard
               addOffering={addOffering}
+              addPlaceholderPhoto={addPlaceholderPhoto}
               duplicateOffering={duplicateOffering}
               offerings={offerings}
               removeOffering={removeOffering}
+              removePlaceholderPhoto={removePlaceholderPhoto}
+              setFeaturedPhoto={setFeaturedPhoto}
               toggleOfferingExpanded={toggleOfferingExpanded}
               updateOffering={updateOffering}
             />
