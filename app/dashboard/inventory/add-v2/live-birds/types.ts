@@ -6,6 +6,8 @@ export type PhotoPlaceholder = {
 
 export type BirdOffering = {
   id: string;
+  inventoryItemId?: string | null;
+  listingBatchBreedId?: string | null;
   sellerBreedProfileId: string | null;
   breed: string;
   soldAs: string;

@@ -49,6 +49,8 @@ type DraftRow = {
   species_name: string | null;
   origin_date: string | null;
   available_date: string | null;
+  listing_batch_breed_visibility_status: string;
+  inventory_visibility_status: string;
   listing_batch_updated_at: string | null;
   inventory_updated_at: string | null;
 };
@@ -58,8 +60,8 @@ type SavedDraft = {
   speciesName: string | null;
   hatchDate: string | null;
   availableDate: string | null;
-  offeringCount: number;
-  breedGroupCount: number;
+  birdEntryCount: number;
+  breedCount: number;
   lastSavedAt: string | null;
 };
 
@@ -82,7 +84,7 @@ export default function AddInventoryV2Page() {
       const { data, error } = await supabase
         .from("seller_inventory_management")
         .select(
-          "listing_batch_id, listing_batch_breed_id, inventory_item_id, species_name, origin_date, available_date, listing_batch_updated_at, inventory_updated_at",
+          "listing_batch_id, listing_batch_breed_id, inventory_item_id, species_name, origin_date, available_date, listing_batch_breed_visibility_status, inventory_visibility_status, listing_batch_updated_at, inventory_updated_at",
         )
         .eq("store_id", seller.store_id)
         .eq("batch_type", "live_animals")
@@ -240,15 +242,15 @@ function SavedDraftCard({ draft }: { draft: SavedDraft }) {
               value={formatDate(draft.availableDate)}
             />
             <DraftMeta
-              label="Offerings"
-              value={`${draft.offeringCount} offering${
-                draft.offeringCount === 1 ? "" : "s"
+              label="Sale options"
+              value={`${draft.birdEntryCount} sale option${
+                draft.birdEntryCount === 1 ? "" : "s"
               }`}
             />
             <DraftMeta
-              label="Breed groups"
-              value={`${draft.breedGroupCount} group${
-                draft.breedGroupCount === 1 ? "" : "s"
+              label="Breeds"
+              value={`${draft.breedCount} breed${
+                draft.breedCount === 1 ? "" : "s"
               }`}
             />
             <DraftMeta
@@ -257,7 +259,7 @@ function SavedDraftCard({ draft }: { draft: SavedDraft }) {
             />
           </div>
           <p className="mt-3 text-sm leading-6 text-stone-500">
-            Draft saved. Continue editing is coming next.
+            Not published yet. Continue to finish setup.
           </p>
         </div>
         <Link
@@ -315,8 +317,11 @@ function getSavedDrafts(rows: DraftRow[]) {
         speciesName: row.species_name,
       };
 
-    existing.breedGroupIds.add(row.listing_batch_breed_id);
-    existing.inventoryItemIds.add(row.inventory_item_id);
+    if (isActiveDraftContent(row)) {
+      existing.breedGroupIds.add(row.listing_batch_breed_id);
+      existing.inventoryItemIds.add(row.inventory_item_id);
+    }
+
     existing.lastSavedAt = getLatestTimestamp(
       existing.lastSavedAt,
       row.listing_batch_updated_at,
@@ -330,10 +335,17 @@ function getSavedDrafts(rows: DraftRow[]) {
     speciesName: draft.speciesName,
     hatchDate: draft.hatchDate,
     availableDate: draft.availableDate,
-    offeringCount: draft.inventoryItemIds.size,
-    breedGroupCount: draft.breedGroupIds.size,
+    birdEntryCount: draft.inventoryItemIds.size,
+    breedCount: draft.breedGroupIds.size,
     lastSavedAt: draft.lastSavedAt,
   }));
+}
+
+function isActiveDraftContent(row: DraftRow) {
+  return (
+    row.listing_batch_breed_visibility_status === "active" &&
+    row.inventory_visibility_status === "active"
+  );
 }
 
 function getLatestTimestamp(...values: Array<string | null>) {

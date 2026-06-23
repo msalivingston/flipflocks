@@ -102,7 +102,7 @@ function PreflightStatus({
         {saveDraftDisabledReason
           ? saveDraftDisabledReason
           : preflight.canSaveDraft
-            ? "Ready for draft save wiring."
+            ? "Ready to save draft."
             : "Draft save not ready yet."}
       </p>
       {saveDraftMessage ? (
