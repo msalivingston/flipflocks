@@ -15,6 +15,7 @@ import {
   initialOfferings,
   supportedSpeciesSlugs,
 } from "./constants";
+import { buildCreateLiveBirdsDraftPayload } from "./createDraftPayload";
 import {
   getAgeAtAvailability,
   getNumberInputValue,
@@ -25,6 +26,8 @@ import { HatchInformationCard } from "./HatchInformationCard";
 import { buildLiveBirdsSavePayloadPreview } from "./payloadPreview";
 import { ReadyToPublishCard } from "./ReadyToPublishCard";
 import { ReviewPublishCard } from "./ReviewPublishCard";
+import type { SaveDraftStatus } from "./ReviewPublishCard";
+import { getSaveDraftPreflight } from "./saveDraftPreflight";
 import { SavePreviewCard } from "./SavePreviewCard";
 import type { BirdOffering, BreedOption, SpeciesOption } from "./types";
 
@@ -39,6 +42,11 @@ type SellerBreedProfileRow = {
   id: string;
   species_id: string;
   display_name: string;
+};
+
+type CreateDraftResult = {
+  listing_batch_id: string;
+  visibility_status: string;
 };
 
 export default function LiveBirdsV2Page() {
@@ -56,6 +64,12 @@ export default function LiveBirdsV2Page() {
   >([]);
   const [referenceDataLoading, setReferenceDataLoading] = useState(true);
   const [referenceDataError, setReferenceDataError] = useState<string | null>(
+    null,
+  );
+  const [saveDraftMessage, setSaveDraftMessage] = useState<string | null>(null);
+  const [saveDraftStatus, setSaveDraftStatus] =
+    useState<SaveDraftStatus>("idle");
+  const [savedListingBatchId, setSavedListingBatchId] = useState<string | null>(
     null,
   );
   const [hatchDate, setHatchDate] = useState(defaultHatchDate);
@@ -105,6 +119,25 @@ export default function LiveBirdsV2Page() {
         species,
       }),
     [availableDate, hatchDate, offerings, species],
+  );
+  const saveDraftPreflight = useMemo(
+    () =>
+      getSaveDraftPreflight({
+        availableDate,
+        hatchDate,
+        offerings,
+        species,
+        usingFallbackBreeds,
+        usingFallbackSpecies,
+      }),
+    [
+      availableDate,
+      hatchDate,
+      offerings,
+      species,
+      usingFallbackBreeds,
+      usingFallbackSpecies,
+    ],
   );
 
   useEffect(() => {
@@ -344,6 +377,67 @@ export default function LiveBirdsV2Page() {
     });
   }
 
+  async function handleSaveDraft() {
+    if (
+      !saveDraftPreflight.canSaveDraft ||
+      saveDraftStatus === "saving" ||
+      savedListingBatchId
+    ) {
+      return;
+    }
+
+    if (!seller?.store_id) {
+      setSaveDraftStatus("error");
+      setSaveDraftMessage("The store context is missing. The draft was not saved.");
+      return;
+    }
+
+    const payload = buildCreateLiveBirdsDraftPayload({
+      availableDate,
+      hatchDate,
+      offerings,
+      species,
+      storeId: seller.store_id,
+    });
+
+    if (!payload) {
+      setSaveDraftStatus("error");
+      setSaveDraftMessage("The draft payload could not be prepared.");
+      return;
+    }
+
+    setSaveDraftStatus("saving");
+    setSaveDraftMessage(null);
+
+    const createResult = await supabase.rpc(
+      "seller_create_listing_batch_with_inventory",
+      payload,
+    );
+
+    if (createResult.error) {
+      setSaveDraftStatus("error");
+      setSaveDraftMessage(
+        `Draft could not be saved. ${createResult.error.message}`,
+      );
+      return;
+    }
+
+    const createdRows = Array.isArray(createResult.data)
+      ? (createResult.data as CreateDraftResult[])
+      : [];
+    const createdDraft = createdRows[0];
+
+    if (!createdDraft?.listing_batch_id) {
+      setSaveDraftStatus("error");
+      setSaveDraftMessage("Draft could not be saved. No draft ID was returned.");
+      return;
+    }
+
+    setSavedListingBatchId(createdDraft.listing_batch_id);
+    setSaveDraftStatus("success");
+    setSaveDraftMessage("Draft saved. It is not published yet.");
+  }
+
   return (
     <DashboardPageContent className="bg-stone-50/60">
       <div className="max-w-7xl">
@@ -402,8 +496,14 @@ export default function LiveBirdsV2Page() {
               availableDate={availableDate}
               birdsTotal={birdsTotal}
               hatchDate={hatchDate}
+              onSaveDraft={handleSaveDraft}
               offeringCount={offerings.length}
               priceRange={priceRange}
+              saveDraftMessage={
+                saveDraftPreflight.canSaveDraft ? saveDraftMessage : null
+              }
+              saveDraftPreflight={saveDraftPreflight}
+              saveDraftStatus={saveDraftStatus}
               species={species.label}
             />
             {process.env.NODE_ENV === "development" ? (
@@ -417,7 +517,12 @@ export default function LiveBirdsV2Page() {
               hatchDate={hatchDate}
               offeringCount={offerings.length}
             />
-            <ReadyToPublishCard readiness={readiness} />
+            <ReadyToPublishCard
+              onSaveDraft={handleSaveDraft}
+              readiness={readiness}
+              saveDraftPreflight={saveDraftPreflight}
+              saveDraftStatus={saveDraftStatus}
+            />
           </aside>
         </div>
       </div>

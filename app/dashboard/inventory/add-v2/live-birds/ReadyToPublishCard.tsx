@@ -1,12 +1,20 @@
-import { disabledButtonClass } from "./constants";
 import { areAllReadinessChecksComplete } from "./helpers";
+import { SaveDraftButton } from "./ReviewPublishCard";
+import type { SaveDraftStatus } from "./ReviewPublishCard";
+import type { SaveDraftPreflightResult } from "./saveDraftPreflight";
 import { SidebarCard } from "./SidebarCard";
 import type { ReadinessChecks } from "./types";
 
 export function ReadyToPublishCard({
+  onSaveDraft,
   readiness,
+  saveDraftPreflight,
+  saveDraftStatus,
 }: {
+  onSaveDraft: () => void;
   readiness: ReadinessChecks;
+  saveDraftPreflight: SaveDraftPreflightResult;
+  saveDraftStatus: SaveDraftStatus;
 }) {
   const readyToReview = areAllReadinessChecksComplete(readiness);
 
@@ -53,9 +61,11 @@ export function ReadyToPublishCard({
         >
           Review & publish
         </button>
-        <button className={disabledButtonClass} disabled type="button">
-          Save draft
-        </button>
+        <SaveDraftButton
+          canSaveDraft={saveDraftPreflight.canSaveDraft}
+          onSaveDraft={onSaveDraft}
+          saveDraftStatus={saveDraftStatus}
+        />
       </div>
       <p className="mt-4 text-sm leading-6 text-stone-500">
         Buyer preview will appear during review.

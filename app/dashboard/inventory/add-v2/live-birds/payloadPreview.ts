@@ -1,3 +1,4 @@
+import { liveBirdsV2DraftMarker } from "./constants";
 import type { BirdOffering, SpeciesOption } from "./types";
 
 export type InventoryTypePreview =
@@ -16,6 +17,7 @@ export type SavePayloadPreview = {
     originDate: string;
     availableDate: string;
     visibilityStatus: "hidden";
+    internalBatchLabel: typeof liveBirdsV2DraftMarker;
     recommendedBasePrice: number | null;
   };
   listingBatchBreeds: Array<{
@@ -66,6 +68,7 @@ export function buildLiveBirdsSavePayloadPreview({
       originDate: hatchDate,
       availableDate,
       visibilityStatus: "hidden",
+      internalBatchLabel: liveBirdsV2DraftMarker,
       recommendedBasePrice,
     },
     listingBatchBreeds: getListingBatchBreedsPreview(offerings),

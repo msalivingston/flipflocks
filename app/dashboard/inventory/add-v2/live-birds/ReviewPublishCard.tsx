@@ -1,26 +1,35 @@
 import { disabledButtonClass } from "./constants";
 import { formatDisplayDate } from "./helpers";
 import { SectionCard } from "./SectionCard";
+import type { SaveDraftPreflightResult } from "./saveDraftPreflight";
 
 export function ReviewPublishCard({
   availableDate,
   birdsTotal,
   hatchDate,
+  onSaveDraft,
   offeringCount,
   priceRange,
+  saveDraftMessage,
+  saveDraftPreflight,
+  saveDraftStatus,
   species,
 }: {
   availableDate: string;
   birdsTotal: number;
   hatchDate: string;
+  onSaveDraft: () => void;
   offeringCount: number;
   priceRange: string;
+  saveDraftMessage: string | null;
+  saveDraftPreflight: SaveDraftPreflightResult;
+  saveDraftStatus: SaveDraftStatus;
   species: string;
 }) {
   return (
     <SectionCard step="3" title="Review & Publish">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="space-y-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <ReviewSummaryItem label="Species" value={species || "Not selected"} />
           <ReviewSummaryItem
             label="Hatch date"
@@ -37,10 +46,17 @@ export function ReviewPublishCard({
           <ReviewSummaryItem label="Total birds" value={String(birdsTotal)} />
           <ReviewSummaryItem label="Price range" value={priceRange} />
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button className={disabledButtonClass} disabled type="button">
-            Save draft
-          </button>
+        <PreflightStatus
+          preflight={saveDraftPreflight}
+          saveDraftMessage={saveDraftMessage}
+          saveDraftStatus={saveDraftStatus}
+        />
+        <div className="flex flex-wrap justify-end gap-2">
+          <SaveDraftButton
+            canSaveDraft={saveDraftPreflight.canSaveDraft}
+            onSaveDraft={onSaveDraft}
+            saveDraftStatus={saveDraftStatus}
+          />
           <button
             className="inline-flex min-h-10 cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-4 text-sm font-semibold text-white opacity-65"
             disabled
@@ -52,6 +68,115 @@ export function ReviewPublishCard({
       </div>
     </SectionCard>
   );
+}
+
+function PreflightStatus({
+  preflight,
+  saveDraftMessage,
+  saveDraftStatus,
+}: {
+  preflight: SaveDraftPreflightResult;
+  saveDraftMessage: string | null;
+  saveDraftStatus: SaveDraftStatus;
+}) {
+  const messageClass =
+    saveDraftStatus === "error"
+      ? "border-red-200 text-red-700"
+      : "border-emerald-200 text-emerald-800";
+
+  return (
+    <div
+      className={`rounded-md border px-3 py-3 text-sm ${
+        preflight.canSaveDraft
+          ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+          : "border-amber-200 bg-amber-50 text-amber-900"
+      }`}
+    >
+      <p className="font-semibold">
+        {preflight.canSaveDraft
+          ? "Ready for draft save wiring."
+          : "Draft save not ready yet."}
+      </p>
+      {saveDraftMessage ? (
+        <p
+          className={`mt-2 rounded-md border bg-white/70 px-3 py-2 text-xs font-semibold ${messageClass}`}
+        >
+          {saveDraftMessage}
+        </p>
+      ) : null}
+      {preflight.blockingIssues.length > 0 ? (
+        <PreflightList
+          items={preflight.blockingIssues}
+          label="Before save wiring"
+        />
+      ) : null}
+      {preflight.warnings.length > 0 ? (
+        <PreflightList items={preflight.warnings} label="Notes" />
+      ) : null}
+    </div>
+  );
+}
+
+function PreflightList({
+  items,
+  label,
+}: {
+  items: string[];
+  label: string;
+}) {
+  return (
+    <div className="mt-3">
+      <p className="text-xs font-semibold text-current">
+        {label}
+      </p>
+      <ul className="mt-1 space-y-1 text-xs font-medium leading-5">
+        {items.map((item) => (
+          <li key={item}>- {item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function SaveDraftButton({
+  canSaveDraft,
+  onSaveDraft,
+  saveDraftStatus,
+}: {
+  canSaveDraft: boolean;
+  onSaveDraft: () => void;
+  saveDraftStatus: SaveDraftStatus;
+}) {
+  const disabled =
+    !canSaveDraft || saveDraftStatus === "saving" || saveDraftStatus === "success";
+  const label = getSaveDraftButtonLabel(saveDraftStatus);
+
+  if (disabled) {
+    return (
+      <button className={disabledButtonClass} disabled type="button">
+        {label}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      className="inline-flex min-h-10 items-center justify-center rounded-md border border-emerald-800/30 bg-white px-4 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+      onClick={onSaveDraft}
+      type="button"
+    >
+      {label}
+    </button>
+  );
+}
+
+export type SaveDraftStatus = "idle" | "saving" | "success" | "error";
+
+function getSaveDraftButtonLabel(saveDraftStatus: SaveDraftStatus) {
+  if (saveDraftStatus === "saving") return "Saving...";
+  if (saveDraftStatus === "success") return "Draft saved";
+
+  return "Save draft";
 }
 
 function ReviewSummaryItem({

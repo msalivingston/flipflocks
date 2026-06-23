@@ -9,6 +9,8 @@ export const disabledButtonClass =
 export const mutedTextActionClass =
   "text-xs font-semibold text-stone-400";
 
+export const liveBirdsV2DraftMarker = "__add_inventory_v2_live_birds__";
+
 export const supportedSpeciesSlugs = [
   "chicken",
   "duck",
