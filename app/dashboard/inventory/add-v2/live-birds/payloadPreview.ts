@@ -122,6 +122,23 @@ export function mapSoldAsToInventoryType(soldAs: string): InventoryTypePreview {
   }
 }
 
+export function mapInventoryTypeToSoldAs(inventoryType: string) {
+  switch (inventoryType) {
+    case "female":
+      return "Female";
+    case "male":
+      return "Male";
+    case "straight_run":
+      return "Straight run";
+    case "pair":
+      return "Pair";
+    case "trio":
+      return "Trio";
+    default:
+      return "";
+  }
+}
+
 function getListingBatchBreedsPreview(offerings: BirdOffering[]) {
   const rowsByProfileId = new Map<
     string,

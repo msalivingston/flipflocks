@@ -8,11 +8,13 @@ import type { ReadinessChecks } from "./types";
 export function ReadyToPublishCard({
   onSaveDraft,
   readiness,
+  saveDraftDisabledReason,
   saveDraftPreflight,
   saveDraftStatus,
 }: {
   onSaveDraft: () => void;
   readiness: ReadinessChecks;
+  saveDraftDisabledReason: string | null;
   saveDraftPreflight: SaveDraftPreflightResult;
   saveDraftStatus: SaveDraftStatus;
 }) {
@@ -64,6 +66,7 @@ export function ReadyToPublishCard({
         <SaveDraftButton
           canSaveDraft={saveDraftPreflight.canSaveDraft}
           onSaveDraft={onSaveDraft}
+          saveDraftDisabledReason={saveDraftDisabledReason}
           saveDraftStatus={saveDraftStatus}
         />
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../../../_components/seller-context";
@@ -13,6 +14,7 @@ import {
   fallbackBreedOptions,
   fallbackSpeciesOptions,
   initialOfferings,
+  liveBirdsV2DraftMarker,
   supportedSpeciesSlugs,
 } from "./constants";
 import { buildCreateLiveBirdsDraftPayload } from "./createDraftPayload";
@@ -23,7 +25,10 @@ import {
   getReadinessChecks,
 } from "./helpers";
 import { HatchInformationCard } from "./HatchInformationCard";
-import { buildLiveBirdsSavePayloadPreview } from "./payloadPreview";
+import {
+  buildLiveBirdsSavePayloadPreview,
+  mapInventoryTypeToSoldAs,
+} from "./payloadPreview";
 import { ReadyToPublishCard } from "./ReadyToPublishCard";
 import { ReviewPublishCard } from "./ReviewPublishCard";
 import type { SaveDraftStatus } from "./ReviewPublishCard";
@@ -44,12 +49,36 @@ type SellerBreedProfileRow = {
   display_name: string;
 };
 
+type DraftInventoryRow = {
+  listing_batch_id: string;
+  listing_batch_breed_id: string;
+  inventory_item_id: string;
+  species_id: string;
+  species_name: string;
+  species_slug: string;
+  seller_breed_profile_id: string;
+  breed_display_name: string;
+  batch_type: string;
+  origin_date: string | null;
+  available_date: string;
+  base_price: number | null;
+  internal_batch_label: string | null;
+  listing_batch_visibility_status: string;
+  listing_batch_breed_sort_order: number | null;
+  inventory_type: string;
+  quantity_available: number | null;
+  price_override: number | null;
+  inventory_item_sort_order: number | null;
+};
+
 type CreateDraftResult = {
   listing_batch_id: string;
   visibility_status: string;
 };
 
 export default function LiveBirdsV2Page() {
+  const searchParams = useSearchParams();
+  const draftId = searchParams.get("draftId");
   const { seller } = useSellerContext();
   const nextOfferingId = useRef(initialOfferings.length + 1);
   const nextPhotoId = useRef(4);
@@ -66,6 +95,9 @@ export default function LiveBirdsV2Page() {
   const [referenceDataError, setReferenceDataError] = useState<string | null>(
     null,
   );
+  const [draftLoadError, setDraftLoadError] = useState<string | null>(null);
+  const [draftLoading, setDraftLoading] = useState(Boolean(draftId));
+  const [loadedDraftId, setLoadedDraftId] = useState<string | null>(null);
   const [saveDraftMessage, setSaveDraftMessage] = useState<string | null>(null);
   const [saveDraftStatus, setSaveDraftStatus] =
     useState<SaveDraftStatus>("idle");
@@ -139,15 +171,21 @@ export default function LiveBirdsV2Page() {
       usingFallbackSpecies,
     ],
   );
+  const isLoadedDraft = loadedDraftId !== null;
+  const saveDraftDisabledReason = isLoadedDraft
+    ? "Updating saved drafts is coming next."
+    : null;
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadReferenceData() {
+    async function loadPageData() {
       if (!seller) return;
 
       setReferenceDataLoading(true);
+      setDraftLoading(Boolean(draftId));
       setReferenceDataError(null);
+      setDraftLoadError(null);
 
       const [speciesResult, profileResult] = await Promise.all([
         supabase
@@ -174,6 +212,7 @@ export default function LiveBirdsV2Page() {
       if (loadError) {
         setReferenceDataError(loadError.message);
         setReferenceDataLoading(false);
+        setDraftLoading(false);
         return;
       }
 
@@ -184,37 +223,89 @@ export default function LiveBirdsV2Page() {
           label: row.common_name,
           slug: row.slug,
         }));
-      const nextSpeciesOptions =
+      const baseSpeciesOptions =
         loadedSpecies.length > 0 ? loadedSpecies : fallbackSpeciesOptions;
       const loadedBreedOptions = (profileResult.data ?? []).map((row) => ({
         id: row.id,
         label: row.display_name,
         speciesId: row.species_id,
       }));
+      const draftRows = draftId
+        ? await loadDraftRows({
+            draftId,
+            storeId: seller.store_id,
+          })
+        : null;
+
+      if (!isMounted) return;
+
+      if (draftRows && "error" in draftRows) {
+        setDraftLoadError(draftRows.error);
+        setLoadedDraftId(null);
+        setReferenceDataLoading(false);
+        setDraftLoading(false);
+        return;
+      }
+
       const nextSpecies =
+        draftRows
+          ? getDraftSpeciesOption(draftRows.rows, baseSpeciesOptions)
+          : null;
+      const nextSpeciesOptions =
+        draftRows && nextSpecies
+          ? mergeDraftSpeciesOptions(baseSpeciesOptions, nextSpecies)
+          : baseSpeciesOptions;
+      const selectedSpecies =
+        nextSpecies ??
         nextSpeciesOptions.find((option) => option.slug === "chicken") ??
         nextSpeciesOptions[0] ??
         fallbackSpeciesOptions[0];
+      const nextSellerBreedProfileOptions = draftRows?.rows
+        ? mergeDraftBreedOptions(loadedBreedOptions, draftRows.rows)
+        : loadedBreedOptions;
       const nextBreedOptions = getBreedOptionsForSpecies(
-        loadedBreedOptions,
-        nextSpecies,
+        nextSellerBreedProfileOptions,
+        selectedSpecies,
       );
 
       setSpeciesOptions(nextSpeciesOptions);
-      setSellerBreedProfileOptions(loadedBreedOptions);
-      setSpecies(nextSpecies);
-      setOfferings((currentOfferings) =>
-        alignOfferingsToBreedOptions(currentOfferings, nextBreedOptions),
-      );
+      setSellerBreedProfileOptions(nextSellerBreedProfileOptions);
+      setSpecies(selectedSpecies);
+
+      if (draftRows) {
+        const loadedOfferings = getOfferingsFromDraftRows(draftRows.rows);
+
+        setLoadedDraftId(draftId);
+        setHatchDate(draftRows.rows[0]?.origin_date ?? "");
+        setAvailableDate(draftRows.rows[0]?.available_date ?? "");
+        setOfferings(loadedOfferings);
+        nextOfferingId.current = loadedOfferings.length + 1;
+        nextPhotoId.current = 1;
+        setSaveDraftStatus("idle");
+        setSaveDraftMessage(null);
+        setSavedListingBatchId(null);
+      } else {
+        setLoadedDraftId(null);
+        setHatchDate(defaultHatchDate);
+        setAvailableDate(defaultAvailableDate);
+        setOfferings(alignOfferingsToBreedOptions(initialOfferings, nextBreedOptions));
+        nextOfferingId.current = initialOfferings.length + 1;
+        nextPhotoId.current = 4;
+        setSaveDraftStatus("idle");
+        setSaveDraftMessage(null);
+        setSavedListingBatchId(null);
+      }
+
       setReferenceDataLoading(false);
+      setDraftLoading(false);
     }
 
-    void loadReferenceData();
+    void loadPageData();
 
     return () => {
       isMounted = false;
     };
-  }, [seller]);
+  }, [draftId, seller]);
 
   function createLocalOfferingId() {
     const offeringId = `offering-${nextOfferingId.current}`;
@@ -381,7 +472,8 @@ export default function LiveBirdsV2Page() {
     if (
       !saveDraftPreflight.canSaveDraft ||
       saveDraftStatus === "saving" ||
-      savedListingBatchId
+      savedListingBatchId ||
+      isLoadedDraft
     ) {
       return;
     }
@@ -457,13 +549,32 @@ export default function LiveBirdsV2Page() {
                 Add birds from one hatch date, then create one or more bird
                 offerings from that batch.
               </p>
+              {isLoadedDraft ? (
+                <p className="mt-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800">
+                  Draft loaded. Changes are local until update-save is added.
+                </p>
+              ) : null}
             </div>
             <span className="inline-flex w-fit rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
-              Draft not saved yet
+              {isLoadedDraft ? "Loaded draft" : "Draft not saved yet"}
             </span>
           </div>
         </header>
 
+        {draftLoading ? (
+          <div className="rounded-lg border border-stone-200 bg-white px-5 py-8 text-sm font-semibold text-stone-600 shadow-sm">
+            Loading saved draft...
+          </div>
+        ) : draftLoadError ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-5 shadow-sm">
+            <h2 className="text-base font-semibold text-red-950">
+              Draft could not be loaded
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-red-800">
+              {draftLoadError}
+            </p>
+          </div>
+        ) : (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
           <main className="space-y-4">
             <HatchInformationCard
@@ -500,8 +611,11 @@ export default function LiveBirdsV2Page() {
               offeringCount={offerings.length}
               priceRange={priceRange}
               saveDraftMessage={
-                saveDraftPreflight.canSaveDraft ? saveDraftMessage : null
+                saveDraftPreflight.canSaveDraft
+                  ? saveDraftMessage ?? saveDraftDisabledReason
+                  : saveDraftDisabledReason
               }
+              saveDraftDisabledReason={saveDraftDisabledReason}
               saveDraftPreflight={saveDraftPreflight}
               saveDraftStatus={saveDraftStatus}
               species={species.label}
@@ -520,13 +634,125 @@ export default function LiveBirdsV2Page() {
             <ReadyToPublishCard
               onSaveDraft={handleSaveDraft}
               readiness={readiness}
+              saveDraftDisabledReason={saveDraftDisabledReason}
               saveDraftPreflight={saveDraftPreflight}
               saveDraftStatus={saveDraftStatus}
             />
           </aside>
         </div>
+        )}
       </div>
     </DashboardPageContent>
+  );
+}
+
+async function loadDraftRows({
+  draftId,
+  storeId,
+}: {
+  draftId: string;
+  storeId: string;
+}): Promise<{ rows: DraftInventoryRow[] } | { error: string }> {
+  const { data, error } = await supabase
+    .from("seller_inventory_management")
+    .select(
+      "listing_batch_id, listing_batch_breed_id, inventory_item_id, species_id, species_name, species_slug, seller_breed_profile_id, breed_display_name, batch_type, origin_date, available_date, base_price, internal_batch_label, listing_batch_visibility_status, listing_batch_breed_sort_order, inventory_type, quantity_available, price_override, inventory_item_sort_order",
+    )
+    .eq("store_id", storeId)
+    .eq("listing_batch_id", draftId)
+    .eq("batch_type", "live_animals")
+    .eq("listing_batch_visibility_status", "hidden")
+    .eq("internal_batch_label", liveBirdsV2DraftMarker)
+    .order("listing_batch_breed_sort_order", { ascending: true })
+    .order("inventory_item_sort_order", { ascending: true })
+    .returns<DraftInventoryRow[]>();
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  if (!data || data.length === 0) {
+    return {
+      error:
+        "This draft was not found, is not a hidden Live Birds v2 draft, or is not available for this store.",
+    };
+  }
+
+  return { rows: data };
+}
+
+function getDraftSpeciesOption(
+  rows: DraftInventoryRow[],
+  speciesOptions: SpeciesOption[],
+) {
+  const firstRow = rows[0];
+
+  if (!firstRow) return null;
+
+  return (
+    speciesOptions.find((option) => option.id === firstRow.species_id) ?? {
+      id: firstRow.species_id,
+      label: firstRow.species_name,
+      slug: firstRow.species_slug,
+    }
+  );
+}
+
+function mergeDraftSpeciesOptions(
+  speciesOptions: SpeciesOption[],
+  draftSpecies: SpeciesOption,
+) {
+  if (speciesOptions.some((option) => option.id === draftSpecies.id)) {
+    return speciesOptions;
+  }
+
+  return [...speciesOptions, draftSpecies];
+}
+
+function mergeDraftBreedOptions(
+  breedOptions: BreedOption[],
+  rows: DraftInventoryRow[],
+) {
+  const optionsById = new Map<string, BreedOption>();
+
+  breedOptions.forEach((option) => {
+    if (!option.id) return;
+
+    optionsById.set(option.id, option);
+  });
+
+  rows.forEach((row) => {
+    if (optionsById.has(row.seller_breed_profile_id)) return;
+
+    optionsById.set(row.seller_breed_profile_id, {
+      id: row.seller_breed_profile_id,
+      label: row.breed_display_name,
+      speciesId: row.species_id,
+    });
+  });
+
+  return Array.from(optionsById.values());
+}
+
+function getOfferingsFromDraftRows(rows: DraftInventoryRow[]) {
+  const uniqueRowsByInventoryItemId = new Map<string, DraftInventoryRow>();
+
+  rows.forEach((row) => {
+    uniqueRowsByInventoryItemId.set(row.inventory_item_id, row);
+  });
+
+  return Array.from(uniqueRowsByInventoryItemId.values()).map(
+    (row, index): BirdOffering => ({
+      id: `offering-${index + 1}`,
+      sellerBreedProfileId: row.seller_breed_profile_id,
+      breed: row.breed_display_name,
+      soldAs: mapInventoryTypeToSoldAs(row.inventory_type),
+      quantity: String(row.quantity_available ?? 0),
+      price: String(row.price_override ?? row.base_price ?? 0),
+      description: "",
+      expanded: index === 0,
+      photos: [],
+    }),
   );
 }
 

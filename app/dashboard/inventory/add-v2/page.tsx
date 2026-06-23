@@ -260,13 +260,12 @@ function SavedDraftCard({ draft }: { draft: SavedDraft }) {
             Draft saved. Continue editing is coming next.
           </p>
         </div>
-        <button
-          className="inline-flex min-h-10 cursor-not-allowed items-center justify-center rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-400"
-          disabled
-          type="button"
+        <Link
+          className="inline-flex min-h-10 items-center justify-center rounded-md border border-emerald-800/30 bg-white px-4 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+          href={`/dashboard/inventory/add-v2/live-birds?draftId=${draft.id}`}
         >
-          Continue coming soon
-        </button>
+          Continue
+        </Link>
       </div>
     </article>
   );

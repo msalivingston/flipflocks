@@ -10,6 +10,7 @@ export function ReviewPublishCard({
   onSaveDraft,
   offeringCount,
   priceRange,
+  saveDraftDisabledReason,
   saveDraftMessage,
   saveDraftPreflight,
   saveDraftStatus,
@@ -21,6 +22,7 @@ export function ReviewPublishCard({
   onSaveDraft: () => void;
   offeringCount: number;
   priceRange: string;
+  saveDraftDisabledReason: string | null;
   saveDraftMessage: string | null;
   saveDraftPreflight: SaveDraftPreflightResult;
   saveDraftStatus: SaveDraftStatus;
@@ -48,6 +50,7 @@ export function ReviewPublishCard({
         </div>
         <PreflightStatus
           preflight={saveDraftPreflight}
+          saveDraftDisabledReason={saveDraftDisabledReason}
           saveDraftMessage={saveDraftMessage}
           saveDraftStatus={saveDraftStatus}
         />
@@ -55,6 +58,7 @@ export function ReviewPublishCard({
           <SaveDraftButton
             canSaveDraft={saveDraftPreflight.canSaveDraft}
             onSaveDraft={onSaveDraft}
+            saveDraftDisabledReason={saveDraftDisabledReason}
             saveDraftStatus={saveDraftStatus}
           />
           <button
@@ -72,10 +76,12 @@ export function ReviewPublishCard({
 
 function PreflightStatus({
   preflight,
+  saveDraftDisabledReason,
   saveDraftMessage,
   saveDraftStatus,
 }: {
   preflight: SaveDraftPreflightResult;
+  saveDraftDisabledReason: string | null;
   saveDraftMessage: string | null;
   saveDraftStatus: SaveDraftStatus;
 }) {
@@ -93,9 +99,11 @@ function PreflightStatus({
       }`}
     >
       <p className="font-semibold">
-        {preflight.canSaveDraft
-          ? "Ready for draft save wiring."
-          : "Draft save not ready yet."}
+        {saveDraftDisabledReason
+          ? saveDraftDisabledReason
+          : preflight.canSaveDraft
+            ? "Ready for draft save wiring."
+            : "Draft save not ready yet."}
       </p>
       {saveDraftMessage ? (
         <p
@@ -141,14 +149,19 @@ function PreflightList({
 export function SaveDraftButton({
   canSaveDraft,
   onSaveDraft,
+  saveDraftDisabledReason,
   saveDraftStatus,
 }: {
   canSaveDraft: boolean;
   onSaveDraft: () => void;
+  saveDraftDisabledReason: string | null;
   saveDraftStatus: SaveDraftStatus;
 }) {
   const disabled =
-    !canSaveDraft || saveDraftStatus === "saving" || saveDraftStatus === "success";
+    Boolean(saveDraftDisabledReason) ||
+    !canSaveDraft ||
+    saveDraftStatus === "saving" ||
+    saveDraftStatus === "success";
   const label = getSaveDraftButtonLabel(saveDraftStatus);
 
   if (disabled) {
