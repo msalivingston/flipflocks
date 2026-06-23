@@ -1,0 +1,30 @@
+import type { ReactNode } from "react";
+
+export function SectionCard({
+  badge,
+  children,
+  step,
+  title,
+}: {
+  badge?: string;
+  children: ReactNode;
+  step: string;
+  title: string;
+}) {
+  return (
+    <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex items-center gap-3">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-900">
+          {step}
+        </span>
+        <h2 className="text-lg font-semibold text-stone-950">{title}</h2>
+        {badge ? (
+          <span className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs font-semibold text-stone-600">
+            {badge}
+          </span>
+        ) : null}
+      </div>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
