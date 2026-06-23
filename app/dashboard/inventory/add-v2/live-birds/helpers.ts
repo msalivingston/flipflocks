@@ -75,8 +75,7 @@ export function getReadinessChecks({
       offerings.every(
         (offering) =>
           offering.breed.trim().length > 0 &&
-          offering.soldAs.trim().length > 0 &&
-          offering.description.trim().length > 0,
+          offering.soldAs.trim().length > 0,
       ),
   };
 }

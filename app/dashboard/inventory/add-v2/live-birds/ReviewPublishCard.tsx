@@ -8,8 +8,12 @@ export function ReviewPublishCard({
   birdsTotal,
   hatchDate,
   onSaveDraft,
+  onReviewPublish,
   offeringCount,
   priceRange,
+  publishDisabledReason,
+  publishMessage,
+  publishStatus,
   saveDraftDisabledReason,
   saveDraftMessage,
   saveDraftPreflight,
@@ -20,8 +24,12 @@ export function ReviewPublishCard({
   birdsTotal: number;
   hatchDate: string;
   onSaveDraft: () => void;
+  onReviewPublish: () => void;
   offeringCount: number;
   priceRange: string;
+  publishDisabledReason: string | null;
+  publishMessage: string | null;
+  publishStatus: PublishStatus;
   saveDraftDisabledReason: string | null;
   saveDraftMessage: string | null;
   saveDraftPreflight: SaveDraftPreflightResult;
@@ -53,6 +61,8 @@ export function ReviewPublishCard({
           saveDraftDisabledReason={saveDraftDisabledReason}
           saveDraftMessage={saveDraftMessage}
           saveDraftStatus={saveDraftStatus}
+          publishMessage={publishMessage}
+          publishStatus={publishStatus}
         />
         <div className="flex flex-wrap justify-end gap-2">
           <SaveDraftButton
@@ -61,13 +71,11 @@ export function ReviewPublishCard({
             saveDraftDisabledReason={saveDraftDisabledReason}
             saveDraftStatus={saveDraftStatus}
           />
-          <button
-            className="inline-flex min-h-10 cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-4 text-sm font-semibold text-white opacity-65"
-            disabled
-            type="button"
-          >
-            Review & publish
-          </button>
+          <ReviewPublishButton
+            onReviewPublish={onReviewPublish}
+            publishDisabledReason={publishDisabledReason}
+            publishStatus={publishStatus}
+          />
         </div>
       </div>
     </SectionCard>
@@ -79,16 +87,23 @@ function PreflightStatus({
   saveDraftDisabledReason,
   saveDraftMessage,
   saveDraftStatus,
+  publishMessage,
+  publishStatus,
 }: {
   preflight: SaveDraftPreflightResult;
   saveDraftDisabledReason: string | null;
   saveDraftMessage: string | null;
   saveDraftStatus: SaveDraftStatus;
+  publishMessage: string | null;
+  publishStatus: PublishStatus;
 }) {
-  const messageClass =
-    saveDraftStatus === "error"
-      ? "border-red-200 text-red-700"
-      : "border-emerald-200 text-emerald-800";
+  if (publishStatus === "success" && publishMessage) {
+    return (
+      <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm font-semibold text-emerald-900">
+        {publishMessage}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -106,16 +121,19 @@ function PreflightStatus({
             : "Draft save not ready yet."}
       </p>
       {saveDraftMessage ? (
-        <p
-          className={`mt-2 rounded-md border bg-white/70 px-3 py-2 text-xs font-semibold ${messageClass}`}
-        >
+        <p className={`mt-2 rounded-md border bg-white/70 px-3 py-2 text-xs font-semibold ${getStatusMessageClass(saveDraftStatus)}`}>
           {saveDraftMessage}
+        </p>
+      ) : null}
+      {publishMessage ? (
+        <p className={`mt-2 rounded-md border bg-white/70 px-3 py-2 text-xs font-semibold ${getStatusMessageClass(publishStatus)}`}>
+          {publishMessage}
         </p>
       ) : null}
       {preflight.blockingIssues.length > 0 ? (
         <PreflightList
           items={preflight.blockingIssues}
-          label="Before save wiring"
+          label="Before saving"
         />
       ) : null}
       {preflight.warnings.length > 0 ? (
@@ -184,12 +202,65 @@ export function SaveDraftButton({
 }
 
 export type SaveDraftStatus = "idle" | "saving" | "success" | "error";
+export type PublishStatus = "idle" | "publishing" | "success" | "error";
+
+export function ReviewPublishButton({
+  onReviewPublish,
+  publishDisabledReason,
+  publishStatus,
+}: {
+  onReviewPublish: () => void;
+  publishDisabledReason: string | null;
+  publishStatus: PublishStatus;
+}) {
+  const disabled =
+    Boolean(publishDisabledReason) ||
+    publishStatus === "publishing" ||
+    publishStatus === "success";
+  const label = getReviewPublishButtonLabel(publishStatus);
+
+  if (disabled) {
+    return (
+      <button
+        className="inline-flex min-h-10 cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-4 text-sm font-semibold text-white opacity-65"
+        disabled
+        title={publishDisabledReason ?? undefined}
+        type="button"
+      >
+        {label}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+      onClick={onReviewPublish}
+      type="button"
+    >
+      {label}
+    </button>
+  );
+}
 
 function getSaveDraftButtonLabel(saveDraftStatus: SaveDraftStatus) {
   if (saveDraftStatus === "saving") return "Saving...";
   if (saveDraftStatus === "success") return "Draft saved";
 
   return "Save draft";
+}
+
+function getReviewPublishButtonLabel(publishStatus: PublishStatus) {
+  if (publishStatus === "publishing") return "Publishing...";
+  if (publishStatus === "success") return "Published";
+
+  return "Review & publish";
+}
+
+function getStatusMessageClass(status: SaveDraftStatus | PublishStatus) {
+  return status === "error"
+    ? "border-red-200 text-red-700"
+    : "border-emerald-200 text-emerald-800";
 }
 
 function ReviewSummaryItem({

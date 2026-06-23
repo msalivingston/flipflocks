@@ -1,18 +1,24 @@
 import { areAllReadinessChecksComplete } from "./helpers";
-import { SaveDraftButton } from "./ReviewPublishCard";
-import type { SaveDraftStatus } from "./ReviewPublishCard";
+import { ReviewPublishButton, SaveDraftButton } from "./ReviewPublishCard";
+import type { PublishStatus, SaveDraftStatus } from "./ReviewPublishCard";
 import type { SaveDraftPreflightResult } from "./saveDraftPreflight";
 import { SidebarCard } from "./SidebarCard";
 import type { ReadinessChecks } from "./types";
 
 export function ReadyToPublishCard({
   onSaveDraft,
+  onReviewPublish,
+  publishDisabledReason,
+  publishStatus,
   readiness,
   saveDraftDisabledReason,
   saveDraftPreflight,
   saveDraftStatus,
 }: {
   onSaveDraft: () => void;
+  onReviewPublish: () => void;
+  publishDisabledReason: string | null;
+  publishStatus: PublishStatus;
   readiness: ReadinessChecks;
   saveDraftDisabledReason: string | null;
   saveDraftPreflight: SaveDraftPreflightResult;
@@ -56,13 +62,11 @@ export function ReadyToPublishCard({
           : "Finish the remaining items before publishing."}
       </p>
       <div className="mt-6 grid gap-3">
-        <button
-          className="inline-flex min-h-12 cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-4 text-sm font-semibold text-white opacity-65"
-          disabled
-          type="button"
-        >
-          Review & publish
-        </button>
+        <ReviewPublishButton
+          onReviewPublish={onReviewPublish}
+          publishDisabledReason={publishDisabledReason}
+          publishStatus={publishStatus}
+        />
         <SaveDraftButton
           canSaveDraft={saveDraftPreflight.canSaveDraft}
           onSaveDraft={onSaveDraft}
