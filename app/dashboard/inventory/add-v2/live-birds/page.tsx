@@ -344,53 +344,6 @@ export default function LiveBirdsV2Page() {
     });
   }
 
-  function duplicateOffering(offeringId: string) {
-    const sourceOffering = offerings.find(
-      (offering) => offering.id === offeringId,
-    );
-
-    if (!sourceOffering) return;
-
-    const duplicatedOfferingId = createLocalOfferingId();
-    const duplicatedPhotos = sourceOffering.photos.map((photo) => ({
-      ...photo,
-      id: createLocalPhotoId(),
-    }));
-
-    setOfferings((currentOfferings) => {
-      const sourceIndex = currentOfferings.findIndex(
-        (offering) => offering.id === offeringId,
-      );
-
-      if (sourceIndex === -1) return currentOfferings;
-
-      const sourceOffering = currentOfferings[sourceIndex];
-      const nextOffering: BirdOffering = {
-        id: duplicatedOfferingId,
-        sellerBreedProfileId: sourceOffering.sellerBreedProfileId,
-        breed: sourceOffering.breed,
-        soldAs: sourceOffering.soldAs,
-        quantity: sourceOffering.quantity,
-        price: sourceOffering.price,
-        description: sourceOffering.description,
-        expanded: true,
-        photos: duplicatedPhotos,
-      };
-
-      return [
-        ...currentOfferings.slice(0, sourceIndex + 1).map((offering) => ({
-          ...offering,
-          expanded: false,
-        })),
-        nextOffering,
-        ...currentOfferings.slice(sourceIndex + 1).map((offering) => ({
-          ...offering,
-          expanded: false,
-        })),
-      ];
-    });
-  }
-
   return (
     <DashboardPageContent className="bg-stone-50/60">
       <div className="max-w-7xl">
@@ -437,7 +390,6 @@ export default function LiveBirdsV2Page() {
               addPlaceholderPhoto={addPlaceholderPhoto}
               breedOptions={breedOptions}
               breedOptionsMessage={breedOptionsMessage}
-              duplicateOffering={duplicateOffering}
               duplicateOfferingIds={duplicateOfferingIds}
               offerings={offerings}
               removeOffering={removeOffering}

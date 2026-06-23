@@ -12,7 +12,6 @@ export function BirdOfferingsCard({
   addPlaceholderPhoto,
   breedOptions,
   breedOptionsMessage,
-  duplicateOffering,
   duplicateOfferingIds,
   offerings,
   removeOffering,
@@ -25,7 +24,6 @@ export function BirdOfferingsCard({
   addPlaceholderPhoto: (offeringId: string) => void;
   breedOptions: BreedOption[];
   breedOptionsMessage: string | null;
-  duplicateOffering: (offeringId: string) => void;
   duplicateOfferingIds: Set<string>;
   offerings: BirdOffering[];
   removeOffering: (offeringId: string) => void;
@@ -63,7 +61,6 @@ export function BirdOfferingsCard({
               addPlaceholderPhoto={addPlaceholderPhoto}
               breedOptions={breedOptions}
               canRemove={offerings.length > 1}
-              duplicateOffering={duplicateOffering}
               hasDuplicateCombination={duplicateOfferingIds.has(offering.id)}
               index={index}
               offering={offering}
@@ -77,7 +74,6 @@ export function BirdOfferingsCard({
             <CollapsedOfferingRow
               key={offering.id}
               canRemove={offerings.length > 1}
-              duplicateOffering={duplicateOffering}
               hasDuplicateCombination={duplicateOfferingIds.has(offering.id)}
               index={index}
               offering={offering}
@@ -103,7 +99,6 @@ function ExpandedOfferingCard({
   addPlaceholderPhoto,
   breedOptions,
   canRemove,
-  duplicateOffering,
   hasDuplicateCombination,
   index,
   offering,
@@ -116,7 +111,6 @@ function ExpandedOfferingCard({
   addPlaceholderPhoto: (offeringId: string) => void;
   breedOptions: BreedOption[];
   canRemove: boolean;
-  duplicateOffering: (offeringId: string) => void;
   hasDuplicateCombination: boolean;
   index: number;
   offering: BirdOffering;
@@ -148,10 +142,6 @@ function ExpandedOfferingCard({
           </span>
         </button>
         <div className="flex items-center gap-3">
-          <DuplicateOfferingControl
-            duplicateOffering={duplicateOffering}
-            offeringId={offering.id}
-          />
           <RemoveOfferingControl
             canRemove={canRemove}
             offeringId={offering.id}
@@ -247,7 +237,6 @@ function ExpandedOfferingCard({
 
 function CollapsedOfferingRow({
   canRemove,
-  duplicateOffering,
   hasDuplicateCombination,
   index,
   offering,
@@ -255,7 +244,6 @@ function CollapsedOfferingRow({
   toggleOfferingExpanded,
 }: {
   canRemove: boolean;
-  duplicateOffering: (offeringId: string) => void;
   hasDuplicateCombination: boolean;
   index: number;
   offering: BirdOffering;
@@ -299,10 +287,6 @@ function CollapsedOfferingRow({
         >
           Edit
         </button>
-        <DuplicateOfferingControl
-          duplicateOffering={duplicateOffering}
-          offeringId={offering.id}
-        />
         <RemoveOfferingControl
           canRemove={canRemove}
           offeringId={offering.id}
@@ -315,24 +299,6 @@ function CollapsedOfferingRow({
         </p>
       ) : null}
     </div>
-  );
-}
-
-function DuplicateOfferingControl({
-  duplicateOffering,
-  offeringId,
-}: {
-  duplicateOffering: (offeringId: string) => void;
-  offeringId: string;
-}) {
-  return (
-    <button
-      className="text-xs font-semibold text-emerald-700 transition hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2"
-      type="button"
-      onClick={() => duplicateOffering(offeringId)}
-    >
-      Duplicate
-    </button>
   );
 }
 
