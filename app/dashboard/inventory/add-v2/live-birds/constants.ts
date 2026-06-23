@@ -46,6 +46,18 @@ export const initialOfferings: BirdOffering[] = [
     price: "15",
     description: defaultDescription,
     expanded: true,
+    photos: [
+      {
+        id: "photo-1",
+        label: "Featured",
+        isFeatured: true,
+      },
+      {
+        id: "photo-2",
+        label: "Coop view",
+        isFeatured: false,
+      },
+    ],
   },
   {
     id: "offering-2",
@@ -55,5 +67,12 @@ export const initialOfferings: BirdOffering[] = [
     price: "6",
     description: "Hardy red birds with steady temperament and classic brown egg production.",
     expanded: false,
+    photos: [
+      {
+        id: "photo-3",
+        label: "Featured",
+        isFeatured: true,
+      },
+    ],
   },
 ];

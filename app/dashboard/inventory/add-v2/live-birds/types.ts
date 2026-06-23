@@ -1,3 +1,9 @@
+export type PhotoPlaceholder = {
+  id: string;
+  label: string;
+  isFeatured: boolean;
+};
+
 export type BirdOffering = {
   id: string;
   breed: string;
@@ -6,6 +12,7 @@ export type BirdOffering = {
   price: string;
   description: string;
   expanded: boolean;
+  photos: PhotoPlaceholder[];
 };
 
 export type ReadinessChecks = {

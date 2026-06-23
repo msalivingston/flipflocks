@@ -91,6 +91,7 @@ export default function LiveBirdsV2Page() {
         price: "0",
         description: "",
         expanded: true,
+        photos: [],
       },
     ]);
   }
@@ -133,6 +134,10 @@ export default function LiveBirdsV2Page() {
         price: sourceOffering.price,
         description: sourceOffering.description,
         expanded: true,
+        photos: sourceOffering.photos.map((photo, index) => ({
+          ...photo,
+          id: `${duplicatedOfferingId}-photo-${index + 1}`,
+        })),
       };
 
       return [

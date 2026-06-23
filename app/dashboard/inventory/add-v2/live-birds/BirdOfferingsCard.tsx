@@ -1,4 +1,3 @@
-import Image from "next/image";
 import {
   breedOptions,
   inputClass,
@@ -176,7 +175,7 @@ function ExpandedOfferingCard({
           </p>
         </div>
 
-        <StaticPhotosPanel />
+        <StaticPhotosPanel photos={offering.photos} />
       </div>
     </div>
   );
@@ -219,7 +218,9 @@ function CollapsedOfferingRow({
           <span className="text-stone-300">-</span>
           <span className="text-stone-500">${offering.price} each</span>
           <span className="text-stone-300">-</span>
-          <span className="text-stone-500">3 photos</span>
+          <span className="text-stone-500">
+            {formatPhotoCount(offering.photos.length)}
+          </span>
         </button>
         <button
           className={`ml-auto ${mutedTextActionClass} transition hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2`}
@@ -358,7 +359,7 @@ function NumberField({
   );
 }
 
-function StaticPhotosPanel() {
+function StaticPhotosPanel({ photos }: { photos: BirdOffering["photos"] }) {
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
@@ -372,37 +373,49 @@ function StaticPhotosPanel() {
           Manage photos
         </span>
       </div>
-      <div className="mt-3 grid grid-cols-4 gap-3">
-        <PhotoTile featured glyph="/glyphs/hen.png" />
-        <PhotoTile glyph="/glyphs/hen.png" />
-        <PhotoTile glyph="/glyphs/rooster.png" />
-        <div className="flex min-h-28 flex-col items-center justify-center rounded-md border border-dashed border-stone-300 bg-stone-50 text-sm font-semibold text-stone-600">
-          <span className="text-2xl leading-none text-stone-400">+</span>
-          Add photo
+      {photos.length > 0 ? (
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {photos.map((photo) => (
+            <PhotoPlaceholderTile key={photo.id} photo={photo} />
+          ))}
         </div>
-      </div>
+      ) : (
+        <div className="mt-3 rounded-md border border-dashed border-stone-300 bg-stone-50 px-4 py-5 text-sm font-semibold leading-6 text-stone-500">
+          No photos added yet. Photo tools will be added later.
+        </div>
+      )}
       <p className="mt-3 text-xs font-medium text-emerald-800">
-        Saved to this breed for future use.
+        Placeholder photos are local-only for this UI shell.
       </p>
     </div>
   );
 }
 
-function PhotoTile({
-  featured = false,
-  glyph,
+function PhotoPlaceholderTile({
+  photo,
 }: {
-  featured?: boolean;
-  glyph: string;
+  photo: BirdOffering["photos"][number];
 }) {
   return (
-    <div className="relative flex min-h-28 items-center justify-center rounded-md border border-stone-200 bg-stone-50">
-      {featured ? (
+    <div className="relative flex min-h-28 flex-col items-center justify-center rounded-md border border-stone-200 bg-stone-50 px-3 text-center">
+      {photo.isFeatured ? (
         <span className="absolute left-2 top-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[0.68rem] font-semibold text-emerald-800">
           Featured
         </span>
       ) : null}
-      <Image src={glyph} alt="" width={58} height={58} />
+      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-800">
+        PH
+      </span>
+      <span className="mt-2 text-xs font-semibold text-stone-700">
+        {photo.label}
+      </span>
     </div>
   );
+}
+
+function formatPhotoCount(photoCount: number) {
+  if (photoCount === 0) return "No photos";
+  if (photoCount === 1) return "1 photo";
+
+  return `${photoCount} photos`;
 }
