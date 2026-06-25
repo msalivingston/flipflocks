@@ -242,8 +242,8 @@ function SavedDraftCard({ draft }: { draft: SavedDraft }) {
               value={formatDate(draft.availableDate)}
             />
             <DraftMeta
-              label="Sale options"
-              value={`${draft.birdEntryCount} sale option${
+              label="Birds for Sale"
+              value={`${draft.birdEntryCount} group${
                 draft.birdEntryCount === 1 ? "" : "s"
               }`}
             />

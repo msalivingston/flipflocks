@@ -1,5 +1,6 @@
 import { mapSoldAsToInventoryType } from "./payloadPreview";
-import type { BirdOffering, SpeciesOption } from "./types";
+import { getPriceAdjustmentIssues } from "./priceAdjustment";
+import type { BirdOffering, PriceAdjustmentState, SpeciesOption } from "./types";
 
 export type SaveDraftPreflightResult = {
   canSaveDraft: boolean;
@@ -11,6 +12,7 @@ export function getSaveDraftPreflight({
   availableDate,
   hatchDate,
   offerings,
+  priceAdjustment,
   species,
   usingFallbackBreeds,
   usingFallbackSpecies,
@@ -18,6 +20,7 @@ export function getSaveDraftPreflight({
   availableDate: string;
   hatchDate: string;
   offerings: BirdOffering[];
+  priceAdjustment: PriceAdjustmentState;
   species: SpeciesOption;
   usingFallbackBreeds: boolean;
   usingFallbackSpecies: boolean;
@@ -26,6 +29,7 @@ export function getSaveDraftPreflight({
     ...getSpeciesIssues(species),
     ...getDateIssues({ availableDate, hatchDate }),
     ...getOfferingIssues(offerings),
+    ...getPriceAdjustmentIssues({ offerings, priceAdjustment }),
   ];
   const warnings = getPreflightWarnings({
     offerings,
@@ -80,11 +84,11 @@ function getOfferingIssues(offerings: BirdOffering[]) {
   const issues: string[] = [];
 
   if (offerings.length === 0) {
-    return ["Add at least one bird offering before draft save wiring."];
+    return ["Add at least one Birds for Sale group before saving."];
   }
 
   offerings.forEach((offering, index) => {
-    const label = `Bird Offering ${index + 1}`;
+    const label = `Group ${index + 1}`;
     const quantity = Number(offering.quantity);
     const price = Number(offering.price);
 
@@ -128,7 +132,7 @@ function getDuplicateCombinationIssues(offerings: BirdOffering[]) {
     const combinationKey = `${offering.sellerBreedProfileId}:${inventoryType}`;
     offeringLabelsByCombination.set(combinationKey, [
       ...(offeringLabelsByCombination.get(combinationKey) ?? []),
-      `Bird Offering ${index + 1}`,
+      `Group ${index + 1}`,
     ]);
   });
 
@@ -151,20 +155,12 @@ function getPreflightWarnings({
 }) {
   const warnings: string[] = [];
 
-  if (offerings.some((offering) => offering.photos.length > 0)) {
-    warnings.push("Photo placeholders will not be saved yet.");
-  }
-
-  if (offerings.some((offering) => offering.description.trim().length > 0)) {
-    warnings.push("Descriptions will not be saved yet.");
-  }
-
   if (offerings.some((offering) => Number(offering.quantity) === 0)) {
-    warnings.push("One or more offerings have quantity 0.");
+    warnings.push("One or more groups have quantity 0.");
   }
 
   if (offerings.some((offering) => Number(offering.price) === 0)) {
-    warnings.push("One or more offerings have price 0.");
+    warnings.push("One or more groups have price 0.");
   }
 
   if (usingFallbackSpecies) {

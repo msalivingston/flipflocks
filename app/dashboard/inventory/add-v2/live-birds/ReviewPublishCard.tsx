@@ -37,7 +37,7 @@ export function ReviewPublishCard({
   species: string;
 }) {
   return (
-    <SectionCard step="3" title="Review & Publish">
+    <SectionCard step="4" title="Review & Publish">
       <div className="space-y-5">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <ReviewSummaryItem label="Species" value={species || "Not selected"} />
@@ -50,7 +50,7 @@ export function ReviewPublishCard({
             value={formatDisplayDate(availableDate)}
           />
           <ReviewSummaryItem
-            label="Bird offerings"
+            label="Birds for Sale"
             value={String(offeringCount)}
           />
           <ReviewSummaryItem label="Total birds" value={String(birdsTotal)} />
@@ -135,9 +135,6 @@ function PreflightStatus({
           items={preflight.blockingIssues}
           label="Before saving"
         />
-      ) : null}
-      {preflight.warnings.length > 0 ? (
-        <PreflightList items={preflight.warnings} label="Notes" />
       ) : null}
     </div>
   );

@@ -38,58 +38,89 @@ export const fallbackSpeciesOptions: SpeciesOption[] = [
 ];
 
 export const fallbackBreedOptions: BreedOption[] = [
-  { id: null, label: "Ameraucana - Blue", speciesId: null },
-  { id: null, label: "Rhode Island Red", speciesId: null },
-  { id: null, label: "Buff Orpington", speciesId: null },
-  { id: null, label: "Barred Rock", speciesId: null },
-  { id: null, label: "Easter Egger", speciesId: null },
+  {
+    id: null,
+    label: "Ameraucana - Blue",
+    speciesId: null,
+    breedId: null,
+    catalogImageUrl: null,
+    catalogDescription: null,
+    sellerPhotoUrl: null,
+    sellerDescription: null,
+    source: "fallback",
+  },
+  {
+    id: null,
+    label: "Rhode Island Red",
+    speciesId: null,
+    breedId: null,
+    catalogImageUrl: null,
+    catalogDescription: null,
+    sellerPhotoUrl: null,
+    sellerDescription: null,
+    source: "fallback",
+  },
+  {
+    id: null,
+    label: "Buff Orpington",
+    speciesId: null,
+    breedId: null,
+    catalogImageUrl: null,
+    catalogDescription: null,
+    sellerPhotoUrl: null,
+    sellerDescription: null,
+    source: "fallback",
+  },
+  {
+    id: null,
+    label: "Barred Rock",
+    speciesId: null,
+    breedId: null,
+    catalogImageUrl: null,
+    catalogDescription: null,
+    sellerPhotoUrl: null,
+    sellerDescription: null,
+    source: "fallback",
+  },
+  {
+    id: null,
+    label: "Easter Egger",
+    speciesId: null,
+    breedId: null,
+    catalogImageUrl: null,
+    catalogDescription: null,
+    sellerPhotoUrl: null,
+    sellerDescription: null,
+    source: "fallback",
+  },
 ];
 
 export const soldAsOptions = ["Female", "Male", "Straight run", "Pair", "Trio"];
 
 export const defaultHatchDate = "2026-06-21";
 export const defaultAvailableDate = "2027-01-21";
-export const defaultDescription =
-  "Gentle, friendly birds known for their blue eggs. Calm temperament and beautiful lavender-blue plumage.";
 
 export const initialOfferings: BirdOffering[] = [
   {
     id: "offering-1",
     sellerBreedProfileId: null,
+    breedId: null,
     breed: "Ameraucana - Blue",
     soldAs: "Female",
     quantity: "10",
     price: "15",
-    description: defaultDescription,
+    description: "",
     expanded: true,
-    photos: [
-      {
-        id: "photo-1",
-        label: "Featured",
-        isFeatured: true,
-      },
-      {
-        id: "photo-2",
-        label: "Coop view",
-        isFeatured: false,
-      },
-    ],
   },
   {
     id: "offering-2",
     sellerBreedProfileId: null,
+    breedId: null,
     breed: "Rhode Island Red",
     soldAs: "Straight run",
     quantity: "24",
     price: "6",
-    description: "Hardy red birds with steady temperament and classic brown egg production.",
+    description: "",
     expanded: false,
-    photos: [
-      {
-        id: "photo-3",
-        label: "Featured",
-        isFeatured: true,
-      },
-    ],
   },
 ];

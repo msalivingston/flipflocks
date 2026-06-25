@@ -32,18 +32,9 @@ export type SavePayloadPreview = {
     inventoryType: InventoryTypePreview;
     quantityAvailable: number;
     priceOverride: number | null;
-    descriptionNote: string;
-  }>;
-  photoPlaceholders: Array<{
-    localOfferingId: string;
-    photoCount: number;
-    featuredLabel: string | null;
   }>;
   warnings: string[];
 };
-
-const descriptionPersistenceWarning =
-  "Descriptions are currently per-offering in v2, but the existing storefront primarily uses seller_breed_profiles.seller_description. Persistence strategy still needs a decision.";
 
 export function buildLiveBirdsSavePayloadPreview({
   availableDate,
@@ -88,17 +79,10 @@ export function buildLiveBirdsSavePayloadPreview({
           offeringPrice !== recommendedBasePrice
             ? offeringPrice
             : null,
-        descriptionNote: offering.description,
       };
     }),
-    photoPlaceholders: offerings.map((offering) => ({
-      localOfferingId: offering.id,
-      photoCount: offering.photos.length,
-      featuredLabel:
-        offering.photos.find((photo) => photo.isFeatured)?.label ?? null,
-    })),
     warnings: [
-      descriptionPersistenceWarning,
+      "Breed photos are managed through seller_breed_profiles and are not saved on draft groups or stock records.",
       ...getMissingBackendIdWarnings({ offerings, species }),
       ...duplicateCombinationWarnings,
     ],
@@ -187,7 +171,7 @@ function getDuplicateInventoryCombinationWarnings(offerings: BirdOffering[]) {
     .filter(([, offeringIds]) => offeringIds.length > 1)
     .map(
       ([combinationKey, offeringIds]) =>
-        `Duplicate sellerBreedProfileId + inventoryType combination (${combinationKey}) appears in local offerings: ${offeringIds.join(", ")}.`,
+        `Duplicate sellerBreedProfileId + inventoryType combination (${combinationKey}) appears in local groups: ${offeringIds.join(", ")}.`,
     );
 }
 
@@ -210,7 +194,7 @@ function getMissingBackendIdWarnings({
 
   if (offeringsMissingBreedProfile.length > 0) {
     warnings.push(
-      `Some offerings are using local fallback breed labels and have no sellerBreedProfileId yet: ${offeringsMissingBreedProfile.join(", ")}.`,
+      `Some groups are using local fallback breed labels and have no sellerBreedProfileId yet: ${offeringsMissingBreedProfile.join(", ")}.`,
     );
   }
 

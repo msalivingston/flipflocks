@@ -81,6 +81,7 @@ export function ListingPhotosSection({
   listingBatchId,
   mode = "readonly",
   mediaItems,
+  onReload,
   storeId,
   title = "Photos",
 }: {
@@ -207,6 +208,7 @@ export function ListingPhotosSection({
       setLocalMediaItems((current) =>
         normalizePhotoOrder([...current, ...uploadedMedia]),
       );
+      onReload();
     }
     setIsUploading(false);
   }
@@ -240,6 +242,7 @@ export function ListingPhotosSection({
         current.filter((item) => item.media_link_id !== photo.media_link_id),
       ),
     );
+    onReload();
   }
 
   async function makeFeatured(photo: ListingPhotoItem) {
@@ -297,6 +300,7 @@ export function ListingPhotosSection({
       return;
     }
 
+    onReload();
   }
 
   async function reorderPhotos(nextPhotos: DashboardPhoto[]) {
@@ -360,6 +364,7 @@ export function ListingPhotosSection({
       }
     }
 
+    onReload();
   }
 
   async function saveCrop(photo: DashboardPhoto, crop: PhotoCropMetadata | null) {
@@ -394,6 +399,7 @@ export function ListingPhotosSection({
           : item,
       ),
     );
+    onReload();
   }
 
   return (

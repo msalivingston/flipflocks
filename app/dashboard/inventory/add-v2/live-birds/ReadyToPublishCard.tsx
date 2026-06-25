@@ -35,7 +35,7 @@ export function ReadyToPublishCard({
         />
         <ChecklistRow
           complete={readiness.birdOfferingsAdded}
-          label="Bird offerings added"
+          label="Birds for Sale added"
         />
         <ChecklistRow
           complete={readiness.birdQuantitiesEntered}

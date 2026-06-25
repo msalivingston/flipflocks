@@ -31,7 +31,7 @@ export function HatchInformationCard({
   return (
     <SectionCard step="1" title="Hatch Information">
       <p className="text-sm leading-6 text-stone-600">
-        All bird offerings below will use this hatch date.
+        All groups below will use this hatch date.
       </p>
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <SpeciesField
@@ -124,9 +124,10 @@ function SpeciesField({
             </option>
           ))}
         </select>
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">
-          v
-        </span>
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute right-3 top-1/2 h-2 w-2 -translate-y-1/2 rotate-45 border-b-2 border-r-2 border-emerald-800/70"
+        />
       </span>
     </label>
   );
