@@ -8,7 +8,7 @@ export default function SellerInventoryPage() {
         title="Inventory"
         description="Manage birds and equipment with filters, sorting, and quick edits."
         action={
-          <PrimaryActionLink href="/dashboard/listings/new">
+          <PrimaryActionLink href="/dashboard/inventory/add-v2">
             Add Inventory
           </PrimaryActionLink>
         }

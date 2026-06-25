@@ -1,5 +1,5 @@
 import { areAllReadinessChecksComplete } from "./helpers";
-import { ReviewPublishButton, SaveDraftButton } from "./ReviewPublishCard";
+import { PublishInventoryButton, SaveDraftButton } from "./ReviewPublishCard";
 import type { PublishStatus, SaveDraftStatus } from "./ReviewPublishCard";
 import type { SaveDraftPreflightResult } from "./saveDraftPreflight";
 import { SidebarCard } from "./SidebarCard";
@@ -24,7 +24,7 @@ export function ReadyToPublishCard({
   saveDraftPreflight: SaveDraftPreflightResult;
   saveDraftStatus: SaveDraftStatus;
 }) {
-  const readyToReview = areAllReadinessChecksComplete(readiness);
+  const readyToPublish = areAllReadinessChecksComplete(readiness);
 
   return (
     <SidebarCard title="Ready to Publish">
@@ -52,17 +52,17 @@ export function ReadyToPublishCard({
       </div>
       <p
         className={`mt-5 rounded-md border px-3 py-2 text-sm font-semibold ${
-          readyToReview
+          readyToPublish
             ? "border-emerald-200 bg-emerald-50 text-emerald-800"
             : "border-stone-200 bg-stone-50 text-stone-600"
         }`}
       >
-        {readyToReview
-          ? "Looks ready to review."
+        {readyToPublish
+          ? "Looks ready to publish."
           : "Finish the remaining items before publishing."}
       </p>
       <div className="mt-6 grid gap-3">
-        <ReviewPublishButton
+        <PublishInventoryButton
           onReviewPublish={onReviewPublish}
           publishDisabledReason={publishDisabledReason}
           publishStatus={publishStatus}
@@ -74,9 +74,6 @@ export function ReadyToPublishCard({
           saveDraftStatus={saveDraftStatus}
         />
       </div>
-      <p className="mt-4 text-sm leading-6 text-stone-500">
-        Buyer preview will appear during review.
-      </p>
     </SidebarCard>
   );
 }

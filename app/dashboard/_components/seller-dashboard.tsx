@@ -160,11 +160,11 @@ export function SellerDashboard() {
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <PrimaryActionLink href="/dashboard/listings/new">
+            <PrimaryActionLink href="/dashboard/inventory/add-v2">
               <span aria-hidden="true" className="mr-2 text-xl leading-none">
                 +
               </span>
-              Add Listing
+              Add Inventory
             </PrimaryActionLink>
             <Link
               className="seller-secondary-button gap-2"

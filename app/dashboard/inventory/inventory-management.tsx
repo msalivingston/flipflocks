@@ -600,7 +600,7 @@ export function InventoryManagement() {
               action={
                 <Link
                   className="seller-primary-button"
-                  href="/dashboard/listings/new"
+                  href="/dashboard/inventory/add-v2"
                 >
                   Add Inventory
                 </Link>

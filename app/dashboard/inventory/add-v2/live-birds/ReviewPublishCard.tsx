@@ -1,16 +1,10 @@
 import { disabledButtonClass } from "./constants";
-import { formatDisplayDate } from "./helpers";
 import { SectionCard } from "./SectionCard";
 import type { SaveDraftPreflightResult } from "./saveDraftPreflight";
 
 export function ReviewPublishCard({
-  availableDate,
-  birdsTotal,
-  hatchDate,
   onSaveDraft,
   onReviewPublish,
-  offeringCount,
-  priceRange,
   publishDisabledReason,
   publishMessage,
   publishStatus,
@@ -18,15 +12,9 @@ export function ReviewPublishCard({
   saveDraftMessage,
   saveDraftPreflight,
   saveDraftStatus,
-  species,
 }: {
-  availableDate: string;
-  birdsTotal: number;
-  hatchDate: string;
   onSaveDraft: () => void;
   onReviewPublish: () => void;
-  offeringCount: number;
-  priceRange: string;
   publishDisabledReason: string | null;
   publishMessage: string | null;
   publishStatus: PublishStatus;
@@ -34,44 +22,37 @@ export function ReviewPublishCard({
   saveDraftMessage: string | null;
   saveDraftPreflight: SaveDraftPreflightResult;
   saveDraftStatus: SaveDraftStatus;
-  species: string;
 }) {
   return (
-    <SectionCard step="4" title="Review & Publish">
-      <div className="space-y-5">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <ReviewSummaryItem label="Species" value={species || "Not selected"} />
-          <ReviewSummaryItem
-            label="Hatch date"
-            value={formatDisplayDate(hatchDate)}
-          />
-          <ReviewSummaryItem
-            label="Available date"
-            value={formatDisplayDate(availableDate)}
-          />
-          <ReviewSummaryItem
-            label="Birds for Sale"
-            value={String(offeringCount)}
-          />
-          <ReviewSummaryItem label="Total birds" value={String(birdsTotal)} />
-          <ReviewSummaryItem label="Price range" value={priceRange} />
+    <SectionCard step="4" title="Ready to publish?">
+      <div className="space-y-6">
+        <div className="space-y-3">
+          <p className="text-sm leading-6 text-stone-700">
+            Review the details above, then publish when everything looks right.
+          </p>
+          <p className="text-sm leading-6 text-stone-500">
+            Published birds will appear in your storefront inventory.
+          </p>
         </div>
-        <PreflightStatus
+
+        <FinalActionStatus
           preflight={saveDraftPreflight}
+          publishDisabledReason={publishDisabledReason}
+          publishMessage={publishMessage}
+          publishStatus={publishStatus}
           saveDraftDisabledReason={saveDraftDisabledReason}
           saveDraftMessage={saveDraftMessage}
           saveDraftStatus={saveDraftStatus}
-          publishMessage={publishMessage}
-          publishStatus={publishStatus}
         />
-        <div className="flex flex-wrap justify-end gap-2">
+
+        <div className="flex flex-wrap justify-end gap-3">
           <SaveDraftButton
             canSaveDraft={saveDraftPreflight.canSaveDraft}
             onSaveDraft={onSaveDraft}
             saveDraftDisabledReason={saveDraftDisabledReason}
             saveDraftStatus={saveDraftStatus}
           />
-          <ReviewPublishButton
+          <PublishInventoryButton
             onReviewPublish={onReviewPublish}
             publishDisabledReason={publishDisabledReason}
             publishStatus={publishStatus}
@@ -82,77 +63,85 @@ export function ReviewPublishCard({
   );
 }
 
-function PreflightStatus({
+function FinalActionStatus({
   preflight,
+  publishDisabledReason,
+  publishMessage,
+  publishStatus,
   saveDraftDisabledReason,
   saveDraftMessage,
   saveDraftStatus,
-  publishMessage,
-  publishStatus,
 }: {
   preflight: SaveDraftPreflightResult;
+  publishDisabledReason: string | null;
+  publishMessage: string | null;
+  publishStatus: PublishStatus;
   saveDraftDisabledReason: string | null;
   saveDraftMessage: string | null;
   saveDraftStatus: SaveDraftStatus;
-  publishMessage: string | null;
-  publishStatus: PublishStatus;
 }) {
-  if (publishStatus === "success" && publishMessage) {
-    return (
-      <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm font-semibold text-emerald-900">
-        {publishMessage}
-      </div>
-    );
+  const messages = [
+    saveDraftMessage
+      ? {
+          key: "save",
+          status: saveDraftStatus,
+          text: saveDraftMessage,
+        }
+      : null,
+    publishMessage
+      ? {
+          key: "publish",
+          status: publishStatus,
+          text: publishMessage,
+        }
+      : null,
+  ].filter(Boolean) as Array<{
+    key: string;
+    status: SaveDraftStatus | PublishStatus;
+    text: string;
+  }>;
+  const visibleDisabledReason =
+    publishStatus === "success"
+      ? null
+      : saveDraftDisabledReason ?? publishDisabledReason;
+
+  if (
+    messages.length === 0 &&
+    !visibleDisabledReason &&
+    preflight.blockingIssues.length === 0
+  ) {
+    return null;
   }
 
   return (
-    <div
-      className={`rounded-md border px-3 py-3 text-sm ${
-        preflight.canSaveDraft
-          ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-          : "border-amber-200 bg-amber-50 text-amber-900"
-      }`}
-    >
-      <p className="font-semibold">
-        {saveDraftDisabledReason
-          ? saveDraftDisabledReason
-          : preflight.canSaveDraft
-            ? "Ready to save draft."
-            : "Draft save not ready yet."}
-      </p>
-      {saveDraftMessage ? (
-        <p className={`mt-2 rounded-md border bg-white/70 px-3 py-2 text-xs font-semibold ${getStatusMessageClass(saveDraftStatus)}`}>
-          {saveDraftMessage}
+    <div className="space-y-2">
+      {messages.map((message) => (
+        <p
+          className={`rounded-md border px-3 py-2 text-sm font-semibold ${getStatusMessageClass(
+            message.status,
+          )}`}
+          key={message.key}
+        >
+          {message.text}
         </p>
-      ) : null}
-      {publishMessage ? (
-        <p className={`mt-2 rounded-md border bg-white/70 px-3 py-2 text-xs font-semibold ${getStatusMessageClass(publishStatus)}`}>
-          {publishMessage}
+      ))}
+      {visibleDisabledReason ? (
+        <p className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-semibold text-stone-700">
+          {visibleDisabledReason}
         </p>
       ) : null}
       {preflight.blockingIssues.length > 0 ? (
-        <PreflightList
-          items={preflight.blockingIssues}
-          label="Before saving"
-        />
+        <PreflightList items={preflight.blockingIssues} />
       ) : null}
     </div>
   );
 }
 
-function PreflightList({
-  items,
-  label,
-}: {
-  items: string[];
-  label: string;
-}) {
+function PreflightList({ items }: { items: string[] }) {
   return (
-    <div className="mt-3">
-      <p className="text-xs font-semibold text-current">
-        {label}
-      </p>
-      <ul className="mt-1 space-y-1 text-xs font-medium leading-5">
+    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+      <p className="font-semibold">Finish these details before publishing.</p>
+      <ul className="mt-2 space-y-1 text-xs font-medium leading-5">
         {items.map((item) => (
           <li key={item}>- {item}</li>
         ))}
@@ -189,7 +178,7 @@ export function SaveDraftButton({
 
   return (
     <button
-      className="inline-flex min-h-10 items-center justify-center rounded-md border border-emerald-800/30 bg-white px-4 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+      className="inline-flex min-h-10 items-center justify-center rounded-md border border-emerald-800/40 bg-white px-5 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
       onClick={onSaveDraft}
       type="button"
     >
@@ -201,7 +190,7 @@ export function SaveDraftButton({
 export type SaveDraftStatus = "idle" | "saving" | "success" | "error";
 export type PublishStatus = "idle" | "publishing" | "success" | "error";
 
-export function ReviewPublishButton({
+export function PublishInventoryButton({
   onReviewPublish,
   publishDisabledReason,
   publishStatus,
@@ -214,12 +203,12 @@ export function ReviewPublishButton({
     Boolean(publishDisabledReason) ||
     publishStatus === "publishing" ||
     publishStatus === "success";
-  const label = getReviewPublishButtonLabel(publishStatus);
+  const label = getPublishInventoryButtonLabel(publishStatus);
 
   if (disabled) {
     return (
       <button
-        className="inline-flex min-h-10 cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-4 text-sm font-semibold text-white opacity-65"
+        className="inline-flex min-h-10 cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-5 text-sm font-semibold text-white opacity-65"
         disabled
         title={publishDisabledReason ?? undefined}
         type="button"
@@ -231,7 +220,7 @@ export function ReviewPublishButton({
 
   return (
     <button
-      className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+      className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
       onClick={onReviewPublish}
       type="button"
     >
@@ -247,30 +236,15 @@ function getSaveDraftButtonLabel(saveDraftStatus: SaveDraftStatus) {
   return "Save draft";
 }
 
-function getReviewPublishButtonLabel(publishStatus: PublishStatus) {
+function getPublishInventoryButtonLabel(publishStatus: PublishStatus) {
   if (publishStatus === "publishing") return "Publishing...";
   if (publishStatus === "success") return "Published";
 
-  return "Review & publish";
+  return "Publish inventory";
 }
 
 function getStatusMessageClass(status: SaveDraftStatus | PublishStatus) {
   return status === "error"
-    ? "border-red-200 text-red-700"
-    : "border-emerald-200 text-emerald-800";
-}
-
-function ReviewSummaryItem({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-md border border-stone-200 bg-stone-50/70 px-3 py-2">
-      <p className="text-xs font-semibold text-stone-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-stone-950">{value}</p>
-    </div>
-  );
+    ? "border-red-200 bg-red-50 text-red-700"
+    : "border-emerald-200 bg-emerald-50 text-emerald-800";
 }

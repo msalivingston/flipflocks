@@ -34,7 +34,6 @@ import {
   areAllReadinessChecksComplete,
   getAgeAtAvailability,
   getNumberInputValue,
-  getPriceRange,
   getReadinessChecks,
 } from "./helpers";
 import { HatchInformationCard } from "./HatchInformationCard";
@@ -112,6 +111,10 @@ type InventoryItemResult = {
 type BreedProfileUpsertResult = {
   seller_breed_profile_id?: string | null;
 };
+
+const showDeveloperSavePreview =
+  process.env.NODE_ENV === "development" &&
+  process.env.NEXT_PUBLIC_SHOW_ADD_INVENTORY_V2_SAVE_PREVIEW === "true";
 
 export default function LiveBirdsV2Page() {
   const router = useRouter();
@@ -204,7 +207,6 @@ export default function LiveBirdsV2Page() {
       }),
     [availableDate, hatchDate, offerings, species.label],
   );
-  const priceRange = useMemo(() => getPriceRange(offerings), [offerings]);
   const duplicateOfferingIds = useMemo(
     () => getDuplicateBreedSoldAsOfferingIds(offerings),
     [offerings],
@@ -241,6 +243,7 @@ export default function LiveBirdsV2Page() {
     ],
   );
   const isLoadedDraft = loadedDraftId !== null;
+  const currentSavedDraftId = loadedDraftId ?? savedListingBatchId;
   const loadedDraftSpeciesDisabledReason = isLoadedDraft
     ? getLoadedDraftSaveDisabledReason({
         loadedDraftSpeciesId,
@@ -249,14 +252,14 @@ export default function LiveBirdsV2Page() {
     : null;
   const isPublished = publishedListingBatchId !== null;
   const saveDraftDisabledReason = isPublished
-    ? "Published inventory cannot be saved as a hidden draft here."
+    ? "Published inventory cannot be saved as a draft here."
     : loadedDraftSpeciesDisabledReason;
   const publishDisabledReason = getPublishDisabledReason({
-    isLoadedDraft,
     isPublished,
     loadedDraftSpeciesDisabledReason,
     preflightCanSaveDraft: saveDraftPreflight.canSaveDraft,
     readyToPublish: areAllReadinessChecksComplete(readiness),
+    saveDraftStatus,
   });
 
   useEffect(() => {
@@ -776,58 +779,30 @@ export default function LiveBirdsV2Page() {
     return { ok: true as const };
   }
 
-  async function handleSaveDraft() {
-    if (
-      !saveDraftPreflight.canSaveDraft ||
-      saveDraftStatus === "saving" ||
-      publishStatus === "publishing" ||
-      savedListingBatchId ||
-      (isLoadedDraft && saveDraftDisabledReason)
-    ) {
-      return;
-    }
-
-    if (!seller?.store_id) {
-      setSaveDraftStatus("error");
-      setSaveDraftMessage("The store context is missing. The draft was not saved.");
-      return;
-    }
-
-    if (isLoadedDraft && loadedDraftId) {
-      await updateLoadedDraft({
-        draftId: loadedDraftId,
-        storeId: seller.store_id,
-      });
-      return;
-    }
-
+  async function createHiddenDraft({
+    storeId,
+  }: {
+    storeId: string;
+  }): Promise<{ ok: true; listingBatchId: string } | { ok: false; message: string }> {
     const payload = buildCreateLiveBirdsDraftPayload({
       availableDate,
       hatchDate,
       offerings,
       species,
-      storeId: seller.store_id,
+      storeId,
     });
 
     if (!payload) {
-      setSaveDraftStatus("error");
-      setSaveDraftMessage("The draft payload could not be prepared.");
-      return;
+      return { ok: false, message: "The draft payload could not be prepared." };
     }
 
-    setSaveDraftStatus("saving");
-    setSaveDraftMessage(null);
-
-    const descriptionResult = await saveBreedDescriptionsToLibrary({
-      storeId: seller.store_id,
-    });
+    const descriptionResult = await saveBreedDescriptionsToLibrary({ storeId });
 
     if (!descriptionResult.ok) {
-      setSaveDraftStatus("error");
-      setSaveDraftMessage(
-        `Draft could not be saved. Breed description could not be updated. ${descriptionResult.message}`,
-      );
-      return;
+      return {
+        ok: false,
+        message: `Breed description could not be updated. ${descriptionResult.message}`,
+      };
     }
 
     const createResult = await supabase.rpc(
@@ -836,11 +811,7 @@ export default function LiveBirdsV2Page() {
     );
 
     if (createResult.error) {
-      setSaveDraftStatus("error");
-      setSaveDraftMessage(
-        `Draft could not be saved. ${createResult.error.message}`,
-      );
-      return;
+      return { ok: false, message: createResult.error.message };
     }
 
     const createdRows = Array.isArray(createResult.data)
@@ -849,9 +820,7 @@ export default function LiveBirdsV2Page() {
     const createdDraft = createdRows[0];
 
     if (!createdDraft?.listing_batch_id) {
-      setSaveDraftStatus("error");
-      setSaveDraftMessage("Draft could not be saved. No draft ID was returned.");
-      return;
+      return { ok: false, message: "No draft ID was returned." };
     }
 
     const priceAdjustmentResult = await savePriceAdjustmentForBatch(
@@ -859,55 +828,45 @@ export default function LiveBirdsV2Page() {
     );
 
     if (!priceAdjustmentResult.ok) {
-      setSaveDraftStatus("error");
-      setSaveDraftMessage(
-        `Draft was created, but age-based price changes could not be saved. ${priceAdjustmentResult.message}`,
-      );
-      return;
+      return {
+        ok: false,
+        message: `Draft was created, but age-based price changes could not be saved. ${priceAdjustmentResult.message}`,
+      };
     }
 
-    setSavedListingBatchId(createdDraft.listing_batch_id);
-    setSaveDraftStatus("success");
-    setSaveDraftMessage("Draft saved. It is not published yet.");
+    return { ok: true, listingBatchId: createdDraft.listing_batch_id };
   }
 
-  async function updateLoadedDraft({
+  async function updateHiddenDraft({
     draftId,
     storeId,
   }: {
     draftId: string;
     storeId: string;
-  }) {
-    setSaveDraftStatus("saving");
-    setSaveDraftMessage(null);
-
+  }): Promise<{ ok: true; listingBatchId: string } | { ok: false; message: string }> {
     const draftRowsResult = await loadDraftRows({ draftId, storeId });
 
     if ("error" in draftRowsResult) {
-      setSaveDraftStatus("error");
-      setSaveDraftMessage(`Draft could not be updated. ${draftRowsResult.error}`);
-      return;
+      return { ok: false, message: draftRowsResult.error };
     }
 
     const currentRows = draftRowsResult.rows;
     const currentSpeciesId = currentRows[0]?.species_id ?? null;
 
     if (!species.id || species.id !== currentSpeciesId) {
-      setSaveDraftStatus("error");
-      setSaveDraftMessage(
-        "Draft could not be updated. Changing species on saved drafts is coming next.",
-      );
-      return;
+      return {
+        ok: false,
+        message: "Changing species on saved drafts is coming next.",
+      };
     }
 
     const descriptionResult = await saveBreedDescriptionsToLibrary({ storeId });
 
     if (!descriptionResult.ok) {
-      setSaveDraftStatus("error");
-      setSaveDraftMessage(
-        `Draft could not be updated. Breed description could not be updated. ${descriptionResult.message}`,
-      );
-      return;
+      return {
+        ok: false,
+        message: `Breed description could not be updated. ${descriptionResult.message}`,
+      };
     }
 
     const basePrice = getBasePriceForOfferings(offerings);
@@ -924,11 +883,7 @@ export default function LiveBirdsV2Page() {
     });
 
     if (batchResult.error) {
-      setSaveDraftStatus("error");
-      setSaveDraftMessage(
-        `Draft could not be updated. ${batchResult.error.message}`,
-      );
-      return;
+      return { ok: false, message: batchResult.error.message };
     }
 
     const synced = await syncDraftOfferings({
@@ -939,19 +894,16 @@ export default function LiveBirdsV2Page() {
     });
 
     if (!synced.ok) {
-      setSaveDraftStatus("error");
-      setSaveDraftMessage(`Draft could not be updated. ${synced.message}`);
-      return;
+      return { ok: false, message: synced.message };
     }
 
     const priceAdjustmentResult = await savePriceAdjustmentForBatch(draftId);
 
     if (!priceAdjustmentResult.ok) {
-      setSaveDraftStatus("error");
-      setSaveDraftMessage(
-        `Draft could not be updated. Age-based price changes could not be saved. ${priceAdjustmentResult.message}`,
-      );
-      return;
+      return {
+        ok: false,
+        message: `Age-based price changes could not be saved. ${priceAdjustmentResult.message}`,
+      };
     }
 
     const refreshedRows = await loadDraftRows({ draftId, storeId });
@@ -969,45 +921,94 @@ export default function LiveBirdsV2Page() {
       setPriceAdjustment(hydratePriceAdjustment(refreshedRows.rows[0]));
     }
 
+    return { ok: true, listingBatchId: draftId };
+  }
+
+  async function saveCurrentHiddenDraft({
+    draftId,
+    storeId,
+  }: {
+    draftId: string | null;
+    storeId: string;
+  }) {
+    return draftId
+      ? updateHiddenDraft({ draftId, storeId })
+      : createHiddenDraft({ storeId });
+  }
+
+  async function handleSaveDraft() {
+    if (
+      !saveDraftPreflight.canSaveDraft ||
+      saveDraftStatus === "saving" ||
+      publishStatus === "publishing" ||
+      savedListingBatchId ||
+      (isLoadedDraft && saveDraftDisabledReason)
+    ) {
+      return;
+    }
+
+    if (!seller?.store_id) {
+      setSaveDraftStatus("error");
+      setSaveDraftMessage("The store context is missing. The draft was not saved.");
+      return;
+    }
+
+    setSaveDraftStatus("saving");
+    setSaveDraftMessage(null);
+
+    const saveResult = await saveCurrentHiddenDraft({
+      draftId: currentSavedDraftId,
+      storeId: seller.store_id,
+    });
+
+    if (!saveResult.ok) {
+      setSaveDraftStatus("error");
+      setSaveDraftMessage(
+        `Draft could not be ${currentSavedDraftId ? "updated" : "saved"}. ${saveResult.message}`,
+      );
+      return;
+    }
+
+    if (!currentSavedDraftId) {
+      setSavedListingBatchId(saveResult.listingBatchId);
+    }
     setSaveDraftStatus("success");
-    setSaveDraftMessage("Draft updated. It is not published yet.");
+    setSaveDraftMessage(
+      currentSavedDraftId
+        ? "Draft updated. It is not published yet."
+        : "Draft saved. It is not published yet.",
+    );
   }
 
   async function handleReviewPublish() {
     if (
       publishDisabledReason ||
       publishStatus === "publishing" ||
-      publishStatus === "success"
+      publishStatus === "success" ||
+      saveDraftStatus === "saving"
     ) {
       return;
     }
 
-    if (!seller?.store_id || !loadedDraftId) {
+    if (!seller?.store_id) {
       setPublishStatus("error");
-      setPublishMessage("The saved draft context is missing. Nothing was published.");
+      setPublishMessage("The store context is missing. Nothing was published.");
       return;
     }
 
     setPublishStatus("publishing");
     setPublishMessage(null);
+    setSaveDraftMessage(null);
 
-    const draftRowsResult = await loadDraftRows({
-      draftId: loadedDraftId,
+    const saveResult = await saveCurrentHiddenDraft({
+      draftId: currentSavedDraftId,
       storeId: seller.store_id,
     });
 
-    if ("error" in draftRowsResult) {
-      setPublishStatus("error");
-      setPublishMessage(`Draft could not be published. ${draftRowsResult.error}`);
-      return;
-    }
-
-    const currentSpeciesId = draftRowsResult.rows[0]?.species_id ?? null;
-
-    if (!species.id || species.id !== currentSpeciesId) {
+    if (!saveResult.ok) {
       setPublishStatus("error");
       setPublishMessage(
-        "Draft could not be published. Changing species on saved drafts is coming next.",
+        `Inventory could not be published. ${saveResult.message}`,
       );
       return;
     }
@@ -1015,7 +1016,7 @@ export default function LiveBirdsV2Page() {
     const publishResult = await supabase.rpc(
       "seller_set_listing_batch_visibility",
       {
-        p_listing_batch_id: loadedDraftId,
+        p_listing_batch_id: saveResult.listingBatchId,
         p_visibility_status: "active",
         p_note: "Published from Add Inventory v2.",
       },
@@ -1027,7 +1028,7 @@ export default function LiveBirdsV2Page() {
       return;
     }
 
-    setPublishedListingBatchId(loadedDraftId);
+    setPublishedListingBatchId(saveResult.listingBatchId);
     setPublishStatus("success");
     setPublishMessage("Published to storefront.");
     setSaveDraftMessage(null);
@@ -1057,7 +1058,7 @@ export default function LiveBirdsV2Page() {
                 <p className="mt-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800">
                   {isPublished
                     ? "Published to storefront."
-                    : "Draft loaded. Save Draft updates this hidden draft."}
+                    : "Draft loaded. Save draft updates this saved draft."}
                 </p>
               ) : null}
             </div>
@@ -1135,13 +1136,8 @@ export default function LiveBirdsV2Page() {
                 updatePriceAdjustment={updatePriceAdjustment}
               />
               <ReviewPublishCard
-                availableDate={availableDate}
-                birdsTotal={birdsTotal}
-                hatchDate={hatchDate}
                 onSaveDraft={handleSaveDraft}
                 onReviewPublish={handleReviewPublish}
-                offeringCount={offerings.length}
-                priceRange={priceRange}
                 publishDisabledReason={publishDisabledReason}
                 publishMessage={publishMessage}
                 publishStatus={publishStatus}
@@ -1149,9 +1145,8 @@ export default function LiveBirdsV2Page() {
                 saveDraftDisabledReason={saveDraftDisabledReason}
                 saveDraftPreflight={saveDraftPreflight}
                 saveDraftStatus={saveDraftStatus}
-                species={species.label}
               />
-              {process.env.NODE_ENV === "development" ? (
+              {showDeveloperSavePreview ? (
                 <SavePreviewCard payloadPreview={savePayloadPreview} />
               ) : null}
             </main>
@@ -1495,22 +1490,22 @@ function getLoadedDraftSaveDisabledReason({
 }
 
 function getPublishDisabledReason({
-  isLoadedDraft,
   isPublished,
   loadedDraftSpeciesDisabledReason,
   preflightCanSaveDraft,
   readyToPublish,
+  saveDraftStatus,
 }: {
-  isLoadedDraft: boolean;
   isPublished: boolean;
   loadedDraftSpeciesDisabledReason: string | null;
   preflightCanSaveDraft: boolean;
   readyToPublish: boolean;
+  saveDraftStatus: SaveDraftStatus;
 }) {
   if (isPublished) return "Published to storefront.";
 
-  if (!isLoadedDraft) {
-    return "Save this as a draft before publishing.";
+  if (saveDraftStatus === "saving") {
+    return "Save is already in progress.";
   }
 
   if (loadedDraftSpeciesDisabledReason) {
@@ -1518,7 +1513,7 @@ function getPublishDisabledReason({
   }
 
   if (!preflightCanSaveDraft) {
-    return "Resolve draft save blockers before publishing.";
+    return "Finish the required details before publishing.";
   }
 
   if (!readyToPublish) {
