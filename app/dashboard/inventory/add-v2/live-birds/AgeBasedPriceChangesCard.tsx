@@ -21,7 +21,7 @@ export function AgeBasedPriceChangesCard({
 
   return (
     <SectionCard badge="Optional" step="3" title="Age-based price changes">
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium leading-6 text-stone-600">
@@ -51,7 +51,7 @@ export function AgeBasedPriceChangesCard({
         </div>
 
         {priceAdjustment.enabled ? (
-          <div className="space-y-4 rounded-md border border-stone-200 bg-stone-50/60 p-4">
+          <div className="space-y-3 rounded-md border border-stone-200 bg-stone-50/60 p-3 sm:space-y-4 sm:p-4">
             <div className="grid gap-3 lg:grid-cols-[minmax(260px,1.35fr)_1fr_1fr_1fr]">
               <PriceDirectionToggle
                 direction={priceAdjustment.direction}

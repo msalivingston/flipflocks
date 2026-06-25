@@ -25,8 +25,8 @@ export function ReviewPublishCard({
 }) {
   return (
     <SectionCard step="4" title="Ready to publish?">
-      <div className="space-y-6">
-        <div className="space-y-3">
+      <div className="space-y-4 sm:space-y-6">
+        <div className="space-y-2 sm:space-y-3">
           <p className="text-sm leading-6 text-stone-700">
             Review the details above, then publish when everything looks right.
           </p>
@@ -45,7 +45,7 @@ export function ReviewPublishCard({
           saveDraftStatus={saveDraftStatus}
         />
 
-        <div className="flex flex-wrap justify-end gap-3">
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
           <SaveDraftButton
             canSaveDraft={saveDraftPreflight.canSaveDraft}
             onSaveDraft={onSaveDraft}
@@ -170,7 +170,11 @@ export function SaveDraftButton({
 
   if (disabled) {
     return (
-      <button className={disabledButtonClass} disabled type="button">
+      <button
+        className={`${disabledButtonClass} w-full sm:w-auto`}
+        disabled
+        type="button"
+      >
         {label}
       </button>
     );
@@ -178,7 +182,7 @@ export function SaveDraftButton({
 
   return (
     <button
-      className="inline-flex min-h-10 items-center justify-center rounded-md border border-emerald-800/40 bg-white px-5 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+      className="inline-flex min-h-10 w-full items-center justify-center rounded-md border border-emerald-800/40 bg-white px-5 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:w-auto"
       onClick={onSaveDraft}
       type="button"
     >
@@ -208,7 +212,7 @@ export function PublishInventoryButton({
   if (disabled) {
     return (
       <button
-        className="inline-flex min-h-10 cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-5 text-sm font-semibold text-white opacity-65"
+        className="inline-flex min-h-10 w-full cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-5 text-sm font-semibold text-white opacity-65 sm:w-auto"
         disabled
         title={publishDisabledReason ?? undefined}
         type="button"
@@ -220,7 +224,7 @@ export function PublishInventoryButton({
 
   return (
     <button
-      className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+      className="inline-flex min-h-10 w-full items-center justify-center rounded-md bg-emerald-800 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:w-auto"
       onClick={onReviewPublish}
       type="button"
     >

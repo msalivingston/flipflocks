@@ -1394,7 +1394,7 @@ export default function LiveBirdsV2Page() {
               ) : null}
             </main>
 
-            <aside className="space-y-4">
+            <aside className="hidden space-y-4 xl:block">
               <BatchSummaryCard
                 birdsTotal={birdsTotal}
                 hatchDate={hatchDate}

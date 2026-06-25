@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   inputClass,
   mutedTextActionClass,
@@ -70,7 +71,7 @@ export function BirdOfferingsCard({
           a different sex/type or remove the duplicate before saving later.
         </p>
       ) : null}
-      <div className="mt-4 space-y-3">
+      <div className="mt-3 space-y-3 sm:mt-4">
         {offerings.map((offering, index) =>
           offering.expanded ? (
             <ExpandedOfferingCard
@@ -105,7 +106,7 @@ export function BirdOfferingsCard({
       </div>
 
       <button
-        className="mt-3 inline-flex min-h-10 items-center rounded-md border border-emerald-800/30 bg-white px-4 text-sm font-semibold text-emerald-900 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+        className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-md border border-emerald-800/30 bg-white px-4 text-sm font-semibold text-emerald-900 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:w-auto"
         onClick={addOffering}
         type="button"
       >
@@ -152,18 +153,23 @@ function ExpandedOfferingCard({
   const selectedBreedOption = findSelectedBreedOption(breedOptions, offering);
   const title = getBirdsForSaleTitle(offering, index);
   const summary = getBirdsForSaleSummary(offering);
+  const [isMobilePhotoOpen, setIsMobilePhotoOpen] = useState(false);
+  const [isMobileDescriptionOpen, setIsMobileDescriptionOpen] = useState(false);
+  const breedMediaItems = offering.sellerBreedProfileId
+    ? breedMediaItemsByProfileId[offering.sellerBreedProfileId] ?? []
+    : [];
 
   return (
     <div className="rounded-lg border border-stone-200 bg-white shadow-sm">
-      <div className="flex items-start justify-between gap-3 border-b border-stone-200 px-4 py-3">
+      <div className="flex items-start justify-between gap-3 border-b border-stone-200 px-3 py-3 sm:px-4">
         <button
-          className="flex items-start gap-3 text-left"
+          className="flex min-w-0 flex-1 items-start gap-3 text-left"
           type="button"
           onClick={() => toggleOfferingExpanded(offering.id)}
         >
           <DisclosureChevron expanded />
-          <span>
-            <span className="block text-sm font-semibold text-stone-950">
+          <span className="min-w-0">
+            <span className="block break-words text-sm font-semibold text-stone-950">
               {title}
             </span>
             <span className="mt-0.5 block text-xs font-medium text-stone-500">
@@ -171,7 +177,7 @@ function ExpandedOfferingCard({
             </span>
           </span>
         </button>
-        <div className="flex items-center gap-3">
+        <div className="hidden shrink-0 items-center gap-3 sm:flex">
           <RemoveOfferingControl
             canRemove={canRemove}
             offeringId={offering.id}
@@ -186,7 +192,7 @@ function ExpandedOfferingCard({
         </div>
       </div>
 
-      <div className="grid gap-4 px-4 py-4 lg:grid-cols-4">
+      <div className="grid gap-3 px-3 py-3 sm:gap-4 sm:px-4 sm:py-4 lg:grid-cols-4">
         <SelectField
           label="Breed"
           options={breedOptions}
@@ -234,42 +240,78 @@ function ExpandedOfferingCard({
         </p>
       ) : null}
 
-      <div className="border-t border-stone-200 px-4 py-4">
+      <div className="border-t border-stone-200 px-3 py-3 sm:px-4 sm:py-4">
+        <div className="lg:hidden">
+          <CompactMobilePanel
+            actionLabel="Edit photo"
+            expanded={isMobilePhotoOpen}
+            subtext={getMobileBreedPhotoSubtext({
+              breedMediaItems,
+              breedOption: selectedBreedOption,
+            })}
+            title="Breed photo"
+            onToggle={() => setIsMobilePhotoOpen((current) => !current)}
+          />
+        </div>
+        <div className={isMobilePhotoOpen ? "mt-3 lg:mt-0" : "hidden lg:block"}>
         <BreedPhotoPanel
-          breedMediaItems={
-            offering.sellerBreedProfileId
-              ? breedMediaItemsByProfileId[offering.sellerBreedProfileId] ?? []
-              : []
-          }
+          breedMediaItems={breedMediaItems}
           breedOption={selectedBreedOption}
           offering={offering}
           prepareBreedPhotoProfile={prepareBreedPhotoProfile}
           storeId={storeId}
           onBreedPhotosChanged={onBreedPhotosChanged}
         />
+        </div>
       </div>
 
-      <div className="border-t border-stone-200 px-4 py-4">
-        <h3 className="text-sm font-semibold text-stone-950">
-          Breed description
-        </h3>
-        <p className="mt-1 max-w-3xl text-xs font-medium leading-5 text-stone-500">
-          This description is used anywhere this breed appears in your store.
-          Changing it updates your personal breed library.
-        </p>
-        <p className="mt-3 text-xs font-semibold text-stone-600">
-          Description buyers see
-        </p>
-        <textarea
-          className={`${inputClass} mt-2 min-h-36 resize-y py-3 leading-6`}
-          value={offering.description}
-          onChange={(event) =>
-            updateBreedDescription(offering.id, event.target.value)
-          }
-        />
-        <p className="mt-2 text-xs font-medium text-stone-500">
-          {offering.description.length} / 500
-        </p>
+      <div className="border-t border-stone-200 px-3 py-3 sm:px-4 sm:py-4">
+        <div className="lg:hidden">
+          <CompactMobilePanel
+            actionLabel="Edit description"
+            expanded={isMobileDescriptionOpen}
+            subtext={
+              offering.description.trim().length > 0
+                ? "Shown anywhere this breed appears in your store"
+                : "No breed description yet"
+            }
+            title="Breed description"
+            onToggle={() =>
+              setIsMobileDescriptionOpen((current) => !current)
+            }
+          />
+        </div>
+        <div
+          className={isMobileDescriptionOpen ? "mt-3 lg:mt-0" : "hidden lg:block"}
+        >
+          <h3 className="text-sm font-semibold text-stone-950">
+            Breed description
+          </h3>
+          <p className="mt-1 max-w-3xl text-xs font-medium leading-5 text-stone-500">
+            This description is used anywhere this breed appears in your store.
+            Changing it updates your personal breed library.
+          </p>
+          <p className="mt-3 text-xs font-semibold text-stone-600">
+            Description buyers see
+          </p>
+          <textarea
+            className={`${inputClass} mt-2 min-h-32 resize-y py-3 leading-6 sm:min-h-36`}
+            value={offering.description}
+            onChange={(event) =>
+              updateBreedDescription(offering.id, event.target.value)
+            }
+          />
+          <p className="mt-2 text-xs font-medium text-stone-500">
+            {offering.description.length} / 500
+          </p>
+        </div>
+        <div className="mt-3 flex justify-end sm:hidden">
+          <RemoveOfferingControl
+            canRemove={canRemove}
+            offeringId={offering.id}
+            removeOffering={removeOffering}
+          />
+        </div>
       </div>
     </div>
   );
@@ -295,19 +337,19 @@ function CollapsedOfferingRow({
 
   return (
     <div
-      className={`rounded-lg border bg-white px-4 py-3 shadow-sm ${
+      className={`rounded-lg border bg-white px-3 py-3 shadow-sm sm:px-4 ${
         hasDuplicateCombination ? "border-amber-200" : "border-stone-200"
       }`}
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
         <button
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 text-left"
+          className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 text-left"
           type="button"
           onClick={() => toggleOfferingExpanded(offering.id)}
         >
           <DisclosureChevron />
           <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="font-semibold text-stone-950">
+            <span className="break-words font-semibold text-stone-950">
               {title}
             </span>
             <span className="text-xs font-medium text-stone-500">
@@ -316,7 +358,7 @@ function CollapsedOfferingRow({
           </span>
         </button>
         <button
-          className={`ml-auto ${mutedTextActionClass} transition hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2`}
+          className={`${mutedTextActionClass} ml-auto transition hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2`}
           type="button"
           onClick={() => toggleOfferingExpanded(offering.id)}
         >
@@ -356,12 +398,46 @@ function RemoveOfferingControl({
 
   return (
     <button
-      className="text-xs font-semibold text-red-500 transition hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200 focus:ring-offset-2"
+      className="text-xs font-semibold text-red-400 transition hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200 focus:ring-offset-2 sm:text-red-500"
       type="button"
       onClick={() => removeOffering(offeringId)}
     >
       Remove group
     </button>
+  );
+}
+
+function CompactMobilePanel({
+  actionLabel,
+  expanded,
+  subtext,
+  title,
+  onToggle,
+}: {
+  actionLabel: string;
+  expanded: boolean;
+  subtext: string;
+  title: string;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="rounded-md border border-stone-200 bg-stone-50/70 px-3 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-stone-950">{title}</p>
+          <p className="mt-0.5 text-xs font-medium leading-5 text-stone-500">
+            {subtext}
+          </p>
+        </div>
+        <button
+          className="shrink-0 rounded-md border border-emerald-800/30 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 shadow-sm"
+          type="button"
+          onClick={onToggle}
+        >
+          {expanded ? "Hide" : actionLabel}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -545,6 +621,23 @@ function BreedPhotoPanel({
       </div>
     </div>
   );
+}
+
+function getMobileBreedPhotoSubtext({
+  breedMediaItems,
+  breedOption,
+}: {
+  breedMediaItems: ListingPhotoItem[];
+  breedOption: BreedOption | null;
+}) {
+  const featuredMedia = pickFeaturedMedia(breedMediaItems);
+  const sellerPhotoUrl = toDisplayImageUrl(featuredMedia?.public_url);
+  const catalogPhotoUrl = toDisplayImageUrl(breedOption?.catalogImageUrl);
+
+  if (sellerPhotoUrl) return "Using your personal breed library photo";
+  if (catalogPhotoUrl) return "Using default breed photo";
+
+  return "No breed photo yet";
 }
 
 function DisclosureChevron({ expanded = false }: { expanded?: boolean }) {
