@@ -21,8 +21,6 @@ import { BatchSummaryCard } from "./BatchSummaryCard";
 import { BirdOfferingsCard } from "./BirdOfferingsCard";
 import { AgeBasedPriceChangesCard } from "./AgeBasedPriceChangesCard";
 import {
-  defaultAvailableDate,
-  defaultHatchDate,
   fallbackBreedOptions,
   fallbackSpeciesOptions,
   initialOfferings,
@@ -33,12 +31,14 @@ import { buildCreateLiveBirdsDraftPayload } from "./createDraftPayload";
 import {
   areAllReadinessChecksComplete,
   getAgeAtAvailability,
+  getBirdsForSaleGroupCount,
   getNumberInputValue,
   getReadinessChecks,
 } from "./helpers";
 import { HatchInformationCard } from "./HatchInformationCard";
 import {
   buildLiveBirdsSavePayloadPreview,
+  getCustomInventoryLabelForSoldAs,
   mapInventoryTypeToSoldAs,
   mapSoldAsToInventoryType,
 } from "./payloadPreview";
@@ -89,6 +89,7 @@ type DraftInventoryRow = {
   listing_batch_breed_sort_order: number | null;
   listing_batch_breed_visibility_status: string;
   inventory_type: string;
+  custom_inventory_label: string | null;
   quantity_available: number | null;
   price_override: number | null;
   inventory_item_sort_order: number | null;
@@ -144,6 +145,7 @@ export default function LiveBirdsV2Page() {
   );
   const [draftLoadError, setDraftLoadError] = useState<string | null>(null);
   const [draftLoading, setDraftLoading] = useState(Boolean(draftId));
+  const [formResetKey, setFormResetKey] = useState(0);
   const [loadedDraftSpeciesId, setLoadedDraftSpeciesId] = useState<
     string | null
   >(null);
@@ -156,11 +158,19 @@ export default function LiveBirdsV2Page() {
   const [publishedListingBatchId, setPublishedListingBatchId] = useState<
     string | null
   >(null);
+  const [isStartOverDialogOpen, setIsStartOverDialogOpen] = useState(false);
+  const [pendingNavigationHref, setPendingNavigationHref] = useState<
+    string | null
+  >(null);
+  const [navigationSaveMessage, setNavigationSaveMessage] = useState<
+    string | null
+  >(null);
   const [savedListingBatchId, setSavedListingBatchId] = useState<string | null>(
     null,
   );
-  const [hatchDate, setHatchDate] = useState(defaultHatchDate);
-  const [availableDate, setAvailableDate] = useState(defaultAvailableDate);
+  const [savedFormSnapshot, setSavedFormSnapshot] = useState<string | null>(null);
+  const [hatchDate, setHatchDate] = useState("");
+  const [availableDate, setAvailableDate] = useState("");
   const [offerings, setOfferings] = useState<BirdOffering[]>(initialOfferings);
   const [priceAdjustment, setPriceAdjustment] = useState<PriceAdjustmentState>(
     defaultPriceAdjustment,
@@ -197,6 +207,10 @@ export default function LiveBirdsV2Page() {
     (total, offering) => total + getNumberInputValue(offering.quantity),
     0,
   );
+  const birdsForSaleGroupCount = useMemo(
+    () => getBirdsForSaleGroupCount(offerings),
+    [offerings],
+  );
   const readiness = useMemo(
     () =>
       getReadinessChecks({
@@ -221,6 +235,21 @@ export default function LiveBirdsV2Page() {
       }),
     [availableDate, hatchDate, offerings, species],
   );
+  const currentFormSnapshot = useMemo(
+    () =>
+      getLiveBirdsFormSnapshot({
+        availableDate,
+        hatchDate,
+        offerings,
+        priceAdjustment,
+        species,
+      }),
+    [availableDate, hatchDate, offerings, priceAdjustment, species],
+  );
+  const hasMeaningfulUnsavedChanges =
+    publishedListingBatchId === null &&
+    savedFormSnapshot !== null &&
+    currentFormSnapshot !== savedFormSnapshot;
   const saveDraftPreflight = useMemo(
     () =>
       getSaveDraftPreflight({
@@ -370,11 +399,8 @@ export default function LiveBirdsV2Page() {
         draftRows && nextSpecies
           ? mergeDraftSpeciesOptions(baseSpeciesOptions, nextSpecies)
           : baseSpeciesOptions;
-      const selectedSpecies =
-        nextSpecies ??
-        nextSpeciesOptions.find((option) => option.slug === "chicken") ??
-        nextSpeciesOptions[0] ??
-        fallbackSpeciesOptions[0];
+      const blankSpecies = getBlankSpeciesOption();
+      const selectedSpecies = nextSpecies ?? blankSpecies;
       const nextBreedOptions = getBreedOptionsForSpecies({
         catalogBreeds: loadedCatalogBreeds,
         mediaItems: loadedBreedMediaItems,
@@ -393,14 +419,24 @@ export default function LiveBirdsV2Page() {
           getOfferingsFromDraftRows(draftRows.rows),
           nextBreedOptions,
         );
+        const loadedHatchDate = draftRows.rows[0]?.origin_date ?? "";
+        const loadedAvailableDate = draftRows.rows[0]?.available_date ?? "";
+        const loadedPriceAdjustment = hydratePriceAdjustment(draftRows.rows[0]);
 
         setLoadedDraftId(draftId);
         setLoadedDraftSpeciesId(draftRows.rows[0]?.species_id ?? null);
-        setHatchDate(draftRows.rows[0]?.origin_date ?? "");
-        setAvailableDate(draftRows.rows[0]?.available_date ?? "");
-        setPriceAdjustment(hydratePriceAdjustment(draftRows.rows[0]));
+        setHatchDate(loadedHatchDate);
+        setAvailableDate(loadedAvailableDate);
+        setPriceAdjustment(loadedPriceAdjustment);
         setOfferings(loadedOfferings);
         nextOfferingId.current = loadedOfferings.length + 1;
+        setSavedFormSnapshot(getLiveBirdsFormSnapshot({
+          availableDate: loadedAvailableDate,
+          hatchDate: loadedHatchDate,
+          offerings: loadedOfferings,
+          priceAdjustment: loadedPriceAdjustment,
+          species: selectedSpecies,
+        }));
         setSaveDraftStatus("idle");
         setSaveDraftMessage(null);
         setPublishStatus("idle");
@@ -408,13 +444,25 @@ export default function LiveBirdsV2Page() {
         setPublishedListingBatchId(null);
         setSavedListingBatchId(null);
       } else {
+        const blankOfferings = alignOfferingsToBreedOptions(
+          initialOfferings,
+          nextBreedOptions,
+        );
+
         setLoadedDraftId(null);
         setLoadedDraftSpeciesId(null);
-        setHatchDate(defaultHatchDate);
-        setAvailableDate(defaultAvailableDate);
+        setHatchDate("");
+        setAvailableDate("");
         setPriceAdjustment(defaultPriceAdjustment);
-        setOfferings(alignOfferingsToBreedOptions(initialOfferings, nextBreedOptions));
+        setOfferings(blankOfferings);
         nextOfferingId.current = initialOfferings.length + 1;
+        setSavedFormSnapshot(getLiveBirdsFormSnapshot({
+          availableDate: "",
+          hatchDate: "",
+          offerings: blankOfferings,
+          priceAdjustment: defaultPriceAdjustment,
+          species: selectedSpecies,
+        }));
         setSaveDraftStatus("idle");
         setSaveDraftMessage(null);
         setPublishStatus("idle");
@@ -433,6 +481,78 @@ export default function LiveBirdsV2Page() {
       isMounted = false;
     };
   }, [draftId, seller]);
+
+  useEffect(() => {
+    if (!hasMeaningfulUnsavedChanges) return;
+
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [hasMeaningfulUnsavedChanges]);
+
+  useEffect(() => {
+    function handleDocumentClick(event: MouseEvent) {
+      if (
+        !hasMeaningfulUnsavedChanges ||
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+
+      const target = event.target;
+
+      if (!(target instanceof Element)) return;
+
+      const link = target.closest("a");
+
+      if (!link) return;
+
+      const href = link.getAttribute("href");
+      const targetAttribute = link.getAttribute("target");
+
+      if (
+        !href ||
+        href.startsWith("#") ||
+        href.startsWith("mailto:") ||
+        href.startsWith("tel:") ||
+        targetAttribute === "_blank" ||
+        link.hasAttribute("download")
+      ) {
+        return;
+      }
+
+      const destination = new URL(href, window.location.href);
+
+      if (destination.origin !== window.location.origin) return;
+
+      const currentLocation = `${window.location.pathname}${window.location.search}`;
+      const nextLocation = `${destination.pathname}${destination.search}`;
+
+      if (nextLocation === currentLocation) return;
+
+      event.preventDefault();
+      setNavigationSaveMessage(null);
+      setPendingNavigationHref(nextLocation);
+    }
+
+    document.addEventListener("click", handleDocumentClick, true);
+
+    return () => {
+      document.removeEventListener("click", handleDocumentClick, true);
+    };
+  }, [hasMeaningfulUnsavedChanges]);
 
   function createLocalOfferingId() {
     const offeringId = `offering-${nextOfferingId.current}`;
@@ -936,21 +1056,30 @@ export default function LiveBirdsV2Page() {
       : createHiddenDraft({ storeId });
   }
 
-  async function handleSaveDraft() {
+  async function saveDraftFromCurrentForm({
+    errorPrefix = "Draft could not be saved.",
+  }: {
+    errorPrefix?: string;
+  } = {}) {
     if (
       !saveDraftPreflight.canSaveDraft ||
       saveDraftStatus === "saving" ||
       publishStatus === "publishing" ||
-      savedListingBatchId ||
       (isLoadedDraft && saveDraftDisabledReason)
     ) {
-      return;
+      return {
+        ok: false as const,
+        message: saveDraftPreflight.blockingIssues[0] ?? "This draft is not ready to save yet.",
+      };
     }
 
     if (!seller?.store_id) {
       setSaveDraftStatus("error");
       setSaveDraftMessage("The store context is missing. The draft was not saved.");
-      return;
+      return {
+        ok: false as const,
+        message: "The store context is missing. The draft was not saved.",
+      };
     }
 
     setSaveDraftStatus("saving");
@@ -964,9 +1093,12 @@ export default function LiveBirdsV2Page() {
     if (!saveResult.ok) {
       setSaveDraftStatus("error");
       setSaveDraftMessage(
-        `Draft could not be ${currentSavedDraftId ? "updated" : "saved"}. ${saveResult.message}`,
+        `${errorPrefix} ${saveResult.message}`,
       );
-      return;
+      return {
+        ok: false as const,
+        message: saveResult.message,
+      };
     }
 
     if (!currentSavedDraftId) {
@@ -978,6 +1110,19 @@ export default function LiveBirdsV2Page() {
         ? "Draft updated. It is not published yet."
         : "Draft saved. It is not published yet.",
     );
+
+    setSavedFormSnapshot(currentFormSnapshot);
+
+    return {
+      ok: true as const,
+      listingBatchId: saveResult.listingBatchId,
+    };
+  }
+
+  async function handleSaveDraft() {
+    await saveDraftFromCurrentForm({
+      errorPrefix: `Draft could not be ${currentSavedDraftId ? "updated" : "saved"}.`,
+    });
   }
 
   async function handleReviewPublish() {
@@ -1032,7 +1177,93 @@ export default function LiveBirdsV2Page() {
     setPublishStatus("success");
     setPublishMessage("Published to storefront.");
     setSaveDraftMessage(null);
+    setSavedFormSnapshot(currentFormSnapshot);
     router.push("/dashboard/inventory");
+  }
+
+  function resetNewFormState({
+    replaceUrl = true,
+  }: {
+    replaceUrl?: boolean;
+  } = {}) {
+    const nextSpecies = getBlankSpeciesOption();
+    const nextBreedOptions = getBreedOptionsForSpecies({
+      catalogBreeds,
+      mediaItems: breedMediaItems,
+      sellerBreedProfiles,
+      species: nextSpecies,
+    });
+
+    setSpecies(nextSpecies);
+    setLoadedDraftId(null);
+    setLoadedDraftSpeciesId(null);
+    setHatchDate("");
+    setAvailableDate("");
+    const nextOfferings = alignOfferingsToBreedOptions(
+      initialOfferings,
+      nextBreedOptions,
+    );
+    setOfferings(nextOfferings);
+    nextOfferingId.current = initialOfferings.length + 1;
+    setPriceAdjustment(defaultPriceAdjustment);
+    setBreedPhotoActionMessage(null);
+    setSaveDraftMessage(null);
+    setSaveDraftStatus("idle");
+    setPublishMessage(null);
+    setPublishStatus("idle");
+    setPublishedListingBatchId(null);
+    setSavedListingBatchId(null);
+    setPendingNavigationHref(null);
+    setNavigationSaveMessage(null);
+    setSavedFormSnapshot(getLiveBirdsFormSnapshot({
+      availableDate: "",
+      hatchDate: "",
+      offerings: nextOfferings,
+      priceAdjustment: defaultPriceAdjustment,
+      species: nextSpecies,
+    }));
+    setFormResetKey((current) => current + 1);
+
+    if (replaceUrl) {
+      router.replace("/dashboard/inventory/add-v2/live-birds");
+    }
+  }
+
+  function confirmStartOver() {
+    setIsStartOverDialogOpen(false);
+
+    if (draftId) {
+      router.push("/dashboard/inventory/add-v2");
+      return;
+    }
+
+    resetNewFormState();
+  }
+
+  function leavePendingNavigationWithoutSaving() {
+    const nextHref = pendingNavigationHref;
+
+    if (!nextHref) return;
+
+    resetNewFormState({ replaceUrl: false });
+    setPendingNavigationHref(null);
+    router.push(nextHref);
+  }
+
+  async function saveDraftThenContinuePendingNavigation() {
+    if (!pendingNavigationHref) return;
+
+    setNavigationSaveMessage(null);
+    const result = await saveDraftFromCurrentForm();
+
+    if (!result.ok) {
+      setNavigationSaveMessage(`Draft could not be saved. ${result.message}`);
+      return;
+    }
+
+    const nextHref = pendingNavigationHref;
+    setPendingNavigationHref(null);
+    router.push(nextHref);
   }
 
   return (
@@ -1062,19 +1293,28 @@ export default function LiveBirdsV2Page() {
                 </p>
               ) : null}
             </div>
-            <span
-              className={`inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold ${
-                isPublished
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                  : "border-amber-200 bg-amber-50 text-amber-800"
-              }`}
-            >
-              {isPublished
-                ? "Published"
-                : isLoadedDraft
-                  ? "Loaded draft"
-                  : "Draft not saved yet"}
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                className="inline-flex min-h-9 items-center rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2"
+                type="button"
+                onClick={() => setIsStartOverDialogOpen(true)}
+              >
+                Start over
+              </button>
+              <span
+                className={`inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold ${
+                  isPublished
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-amber-200 bg-amber-50 text-amber-800"
+                }`}
+              >
+                {isPublished
+                  ? "Published"
+                  : isLoadedDraft
+                    ? "Loaded draft"
+                    : "Draft not saved yet"}
+              </span>
+            </div>
           </div>
         </header>
 
@@ -1092,7 +1332,10 @@ export default function LiveBirdsV2Page() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+          <div
+            className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]"
+            key={formResetKey}
+          >
             <main className="space-y-4">
               <HatchInformationCard
                 ageAtAvailability={ageAtAvailability}
@@ -1155,7 +1398,7 @@ export default function LiveBirdsV2Page() {
               <BatchSummaryCard
                 birdsTotal={birdsTotal}
                 hatchDate={hatchDate}
-                offeringCount={offerings.length}
+                offeringCount={birdsForSaleGroupCount}
               />
               <ReadyToPublishCard
                 onReviewPublish={handleReviewPublish}
@@ -1171,7 +1414,135 @@ export default function LiveBirdsV2Page() {
           </div>
         )}
       </div>
+      {isStartOverDialogOpen ? (
+        <StartOverDialog
+          onCancel={() => setIsStartOverDialogOpen(false)}
+          onConfirm={confirmStartOver}
+        />
+      ) : null}
+      {pendingNavigationHref ? (
+        <UnsavedNavigationDialog
+          canSaveDraft={saveDraftPreflight.canSaveDraft}
+          message={navigationSaveMessage}
+          saving={saveDraftStatus === "saving"}
+          onKeepEditing={() => {
+            setNavigationSaveMessage(null);
+            setPendingNavigationHref(null);
+          }}
+          onLeaveWithoutSaving={leavePendingNavigationWithoutSaving}
+          onSaveDraft={saveDraftThenContinuePendingNavigation}
+        />
+      ) : null}
     </DashboardPageContent>
+  );
+}
+
+function StartOverDialog({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/35 px-4"
+      role="dialog"
+    >
+      <div className="w-full max-w-md rounded-lg border border-stone-200 bg-white p-5 shadow-xl">
+        <h2 className="text-lg font-semibold text-stone-950">Start over?</h2>
+        <p className="mt-2 text-sm leading-6 text-stone-600">
+          This will clear the information on this page. Saved drafts will not be
+          deleted.
+        </p>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            className="inline-flex min-h-10 items-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2"
+            type="button"
+            onClick={onCancel}
+          >
+            Keep editing
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+            type="button"
+            onClick={onConfirm}
+          >
+            Start over
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UnsavedNavigationDialog({
+  canSaveDraft,
+  message,
+  saving,
+  onKeepEditing,
+  onLeaveWithoutSaving,
+  onSaveDraft,
+}: {
+  canSaveDraft: boolean;
+  message: string | null;
+  saving: boolean;
+  onKeepEditing: () => void;
+  onLeaveWithoutSaving: () => void;
+  onSaveDraft: () => void;
+}) {
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/35 px-4"
+      role="dialog"
+    >
+      <div className="w-full max-w-lg rounded-lg border border-stone-200 bg-white p-5 shadow-xl">
+        <h2 className="text-lg font-semibold text-stone-950">
+          Save this draft?
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-stone-600">
+          This inventory has not been saved. Save it as a draft before leaving?
+        </p>
+        {message ? (
+          <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold leading-5 text-red-800">
+            {message}
+          </p>
+        ) : null}
+        {!canSaveDraft ? (
+          <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-5 text-amber-800">
+            This draft needs a few more details before it can be saved.
+          </p>
+        ) : null}
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            className="inline-flex min-h-10 items-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2"
+            type="button"
+            onClick={onLeaveWithoutSaving}
+            disabled={saving}
+          >
+            Leave without saving
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2"
+            type="button"
+            onClick={onKeepEditing}
+            disabled={saving}
+          >
+            Keep editing
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-emerald-800/45"
+            type="button"
+            onClick={onSaveDraft}
+            disabled={!canSaveDraft || saving}
+          >
+            {saving ? "Saving..." : "Save draft"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1215,6 +1586,9 @@ async function syncDraftOfferings({
     }
 
     const inventoryType = mapSoldAsToInventoryType(offering.soldAs);
+    const customInventoryLabel = getCustomInventoryLabelForSoldAs(
+      offering.soldAs,
+    );
 
     if (inventoryType === "unknown") {
       return {
@@ -1317,7 +1691,7 @@ async function syncDraftOfferings({
       const inventoryResult = await supabase.rpc("seller_update_inventory_item", {
         p_inventory_item_id: rowToUpdate.inventory_item_id,
         p_inventory_type: inventoryType,
-        p_custom_inventory_label: null,
+        p_custom_inventory_label: customInventoryLabel,
         p_price_override: getNumberInputValue(offering.price) === basePrice
           ? null
           : getNumberInputValue(offering.price),
@@ -1343,7 +1717,7 @@ async function syncDraftOfferings({
       const createItemResult = await supabase.rpc("seller_create_inventory_item", {
         p_listing_batch_breed_id: listingBatchBreedId,
         p_inventory_type: inventoryType,
-        p_custom_inventory_label: null,
+        p_custom_inventory_label: customInventoryLabel,
         p_quantity_available: getNumberInputValue(offering.quantity),
         p_price_override: getNumberInputValue(offering.price) === basePrice
           ? null
@@ -1392,7 +1766,7 @@ async function loadDraftRows({
   const { data, error } = await supabase
     .from("seller_inventory_management")
     .select(
-      "listing_batch_id, listing_batch_breed_id, inventory_item_id, species_id, species_name, species_slug, seller_breed_profile_id, breed_display_name, batch_type, origin_date, available_date, base_price, auto_price_adjustment_enabled, price_adjustment_direction, price_adjustment_amount, price_adjustment_interval_weeks, price_adjustment_max_price, price_adjustment_min_price, internal_batch_label, listing_batch_visibility_status, listing_batch_breed_sort_order, listing_batch_breed_visibility_status, inventory_type, quantity_available, price_override, inventory_item_sort_order, inventory_visibility_status",
+      "listing_batch_id, listing_batch_breed_id, inventory_item_id, species_id, species_name, species_slug, seller_breed_profile_id, breed_display_name, batch_type, origin_date, available_date, base_price, auto_price_adjustment_enabled, price_adjustment_direction, price_adjustment_amount, price_adjustment_interval_weeks, price_adjustment_max_price, price_adjustment_min_price, internal_batch_label, listing_batch_visibility_status, listing_batch_breed_sort_order, listing_batch_breed_visibility_status, inventory_type, custom_inventory_label, quantity_available, price_override, inventory_item_sort_order, inventory_visibility_status",
     )
     .eq("store_id", storeId)
     .eq("listing_batch_id", draftId)
@@ -1434,6 +1808,55 @@ function getDraftSpeciesOption(
   );
 }
 
+function getBlankSpeciesOption(): SpeciesOption {
+  return {
+    id: null,
+    label: "",
+    slug: null,
+  };
+}
+
+function getLiveBirdsFormSnapshot({
+  availableDate,
+  hatchDate,
+  offerings,
+  priceAdjustment,
+  species,
+}: {
+  availableDate: string;
+  hatchDate: string;
+  offerings: BirdOffering[];
+  priceAdjustment: PriceAdjustmentState;
+  species: SpeciesOption;
+}) {
+  return JSON.stringify({
+    availableDate,
+    hatchDate,
+    offerings: offerings.map((offering) => ({
+      breed: offering.breed.trim(),
+      breedId: offering.breedId ?? null,
+      description: offering.description.trim(),
+      price: offering.price.trim(),
+      quantity: offering.quantity.trim(),
+      sellerBreedProfileId: offering.sellerBreedProfileId,
+      soldAs: offering.soldAs.trim(),
+    })),
+    priceAdjustment: {
+      amount: priceAdjustment.amount.trim(),
+      direction: priceAdjustment.direction,
+      enabled: priceAdjustment.enabled,
+      intervalWeeks: priceAdjustment.intervalWeeks.trim(),
+      maxPrice: priceAdjustment.maxPrice.trim(),
+      minPrice: priceAdjustment.minPrice.trim(),
+    },
+    species: {
+      id: species.id,
+      label: species.label.trim(),
+      slug: species.slug,
+    },
+  });
+}
+
 function mergeDraftSpeciesOptions(
   speciesOptions: SpeciesOption[],
   draftSpecies: SpeciesOption,
@@ -1466,7 +1889,10 @@ function getOfferingsFromDraftRows(rows: DraftInventoryRow[]) {
       sellerBreedProfileId: row.seller_breed_profile_id,
       breedId: null,
       breed: row.breed_display_name,
-      soldAs: mapInventoryTypeToSoldAs(row.inventory_type),
+      soldAs: mapInventoryTypeToSoldAs(
+        row.inventory_type,
+        row.custom_inventory_label,
+      ),
       quantity: String(row.quantity_available ?? 0),
       price: String(row.price_override ?? row.base_price ?? 0),
       description: "",
@@ -1670,6 +2096,13 @@ function alignOfferingsToBreedOptions(
 ) {
   let changed = false;
   const nextOfferings = offerings.map((offering, index) => {
+    const isBlankOffering =
+      !offering.sellerBreedProfileId &&
+      !offering.breedId &&
+      offering.breed.trim().length === 0;
+
+    if (isBlankOffering) return offering;
+
     const matchingOption =
       findBreedOptionById(breedOptions, offering.sellerBreedProfileId) ??
       findBreedOptionByBreedId(breedOptions, offering.breedId ?? null) ??

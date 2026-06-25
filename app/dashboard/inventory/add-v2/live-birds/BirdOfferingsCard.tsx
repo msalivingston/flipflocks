@@ -3,7 +3,7 @@ import {
   mutedTextActionClass,
   soldAsOptions,
 } from "./constants";
-import { getNumberInputValue } from "./helpers";
+import { getBirdsForSaleGroupCount, getNumberInputValue } from "./helpers";
 import {
   ListingPhotosSection,
   type ListingPhotoItem,
@@ -46,12 +46,19 @@ export function BirdOfferingsCard({
   updateOfferingBreed: (offeringId: string, option: BreedOption) => void;
   onBreedPhotosChanged: () => void;
 }) {
+  const birdsForSaleGroupCount = getBirdsForSaleGroupCount(offerings);
+
   return (
     <SectionCard
-      badge={`${offerings.length} group${offerings.length === 1 ? "" : "s"}`}
+      badge={`${birdsForSaleGroupCount} group${
+        birdsForSaleGroupCount === 1 ? "" : "s"
+      }`}
       step="2"
       title="Birds for Sale"
     >
+      <p className="text-sm leading-6 text-stone-600">
+        Add one group for each breed, sex/type, quantity, and price.
+      </p>
       {breedOptionsMessage ? (
         <p className="mt-4 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-semibold leading-5 text-stone-600">
           {breedOptionsMessage}
@@ -59,8 +66,8 @@ export function BirdOfferingsCard({
       ) : null}
       {duplicateOfferingIds.size > 0 ? (
         <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
-          This page already has a group for this breed and sold-as type. Choose
-          a different sold-as type or remove the duplicate before saving later.
+          This page already has a group for this breed and sex/type. Choose
+          a different sex/type or remove the duplicate before saving later.
         </p>
       ) : null}
       <div className="mt-4 space-y-3">
@@ -143,6 +150,8 @@ function ExpandedOfferingCard({
   onBreedPhotosChanged: () => void;
 }) {
   const selectedBreedOption = findSelectedBreedOption(breedOptions, offering);
+  const title = getBirdsForSaleTitle(offering, index);
+  const summary = getBirdsForSaleSummary(offering);
 
   return (
     <div className="rounded-lg border border-stone-200 bg-white shadow-sm">
@@ -155,10 +164,10 @@ function ExpandedOfferingCard({
           <DisclosureChevron expanded />
           <span>
             <span className="block text-sm font-semibold text-stone-950">
-              Group {index + 1}
+              {title}
             </span>
             <span className="mt-0.5 block text-xs font-medium text-stone-500">
-              Expanded preview
+              {summary}
             </span>
           </span>
         </button>
@@ -220,8 +229,8 @@ function ExpandedOfferingCard({
       </div>
       {hasDuplicateCombination ? (
         <p className="mx-4 mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
-          Duplicate breed and sold-as combination. Choose a different sold-as
-          type or remove this group before saving.
+          Duplicate breed and sex/type combination. Choose a different sex/type
+          or remove this group before saving.
         </p>
       ) : null}
 
@@ -281,6 +290,9 @@ function CollapsedOfferingRow({
   removeOffering: (offeringId: string) => void;
   toggleOfferingExpanded: (offeringId: string) => void;
 }) {
+  const title = getBirdsForSaleTitle(offering, index);
+  const summary = getBirdsForSaleSummary(offering);
+
   return (
     <div
       className={`rounded-lg border bg-white px-4 py-3 shadow-sm ${
@@ -294,18 +306,14 @@ function CollapsedOfferingRow({
           onClick={() => toggleOfferingExpanded(offering.id)}
         >
           <DisclosureChevron />
-          <span className="font-semibold text-stone-950">
-            Group {index + 1}
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="font-semibold text-stone-950">
+              {title}
+            </span>
+            <span className="text-xs font-medium text-stone-500">
+              {summary}
+            </span>
           </span>
-          <span className="text-stone-500">{offering.breed}</span>
-          <span className="text-stone-300">-</span>
-          <span className="text-stone-500">Sold as {offering.soldAs}</span>
-          <span className="text-stone-300">-</span>
-          <span className="text-stone-500">
-            {getNumberInputValue(offering.quantity)} available
-          </span>
-          <span className="text-stone-300">-</span>
-          <span className="text-stone-500">${offering.price} each</span>
         </button>
         <button
           className={`ml-auto ${mutedTextActionClass} transition hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2`}
@@ -322,7 +330,7 @@ function CollapsedOfferingRow({
       </div>
       {hasDuplicateCombination ? (
         <p className="mt-2 text-xs font-semibold text-amber-800">
-          Duplicate breed and sold-as combination.
+          Duplicate breed and sex/type combination.
         </p>
       ) : null}
     </div>
@@ -372,6 +380,7 @@ function SelectField({
   selectedId: string | null;
   value: string;
 }) {
+  const placeholderLabel = label === "Sold as" ? "Choose sex/type" : "Choose breed";
   const selectedValue = getBreedOptionValue({
     id: selectedId,
     label: value,
@@ -401,6 +410,11 @@ function SelectField({
             if (nextOption) onChange(nextOption);
           }}
         >
+          {value.trim().length === 0 && !selectedId && !selectedBreedId ? (
+            <option disabled value={selectedValue}>
+              {placeholderLabel}
+            </option>
+          ) : null}
           {options.map((option) => (
             <option
               key={getBreedOptionValue(option)}
@@ -562,4 +576,54 @@ function findSelectedBreedOption(
     ) ??
     null
   );
+}
+
+function getBirdsForSaleTitle(offering: BirdOffering, index: number) {
+  const breed = offering.breed.trim();
+  const soldAs = offering.soldAs.trim();
+
+  if (breed && soldAs) {
+    return `${breed} ${getSoldAsTitleText(soldAs)}`;
+  }
+
+  if (breed) return breed;
+
+  return `Birds for Sale #${index + 1}`;
+}
+
+function getBirdsForSaleSummary(offering: BirdOffering) {
+  const details = [];
+  const quantity = offering.quantity.trim();
+  const price = offering.price.trim();
+
+  if (quantity) {
+    details.push(`${getNumberInputValue(quantity)} available`);
+  }
+
+  if (price) {
+    details.push(`$${getNumberInputValue(price)} each`);
+  }
+
+  return details.length > 0
+    ? details.join(" · ")
+    : "Choose breed, sex/type, quantity, and price.";
+}
+
+function getSoldAsTitleText(soldAs: string) {
+  switch (soldAs) {
+    case "Female":
+      return "females";
+    case "Male":
+      return "males";
+    case "Straight run":
+      return "straight run";
+    case "Pair":
+      return "pairs";
+    case "Trio":
+      return "trios";
+    case "Flock":
+      return "flock";
+    default:
+      return soldAs.toLowerCase();
+  }
 }

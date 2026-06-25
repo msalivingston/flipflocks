@@ -7,6 +7,7 @@ export type InventoryTypePreview =
   | "straight_run"
   | "pair"
   | "trio"
+  | "other"
   | "unknown";
 
 export type SavePayloadPreview = {
@@ -30,6 +31,7 @@ export type SavePayloadPreview = {
     breedLabel: string;
     soldAs: string;
     inventoryType: InventoryTypePreview;
+    customInventoryLabel: string | null;
     quantityAvailable: number;
     priceOverride: number | null;
   }>;
@@ -72,6 +74,7 @@ export function buildLiveBirdsSavePayloadPreview({
         breedLabel: offering.breed,
         soldAs: offering.soldAs,
         inventoryType: mapSoldAsToInventoryType(offering.soldAs),
+        customInventoryLabel: getCustomInventoryLabelForSoldAs(offering.soldAs),
         quantityAvailable: getNumberValue(offering.quantity),
         priceOverride:
           recommendedBasePrice !== null &&
@@ -101,12 +104,21 @@ export function mapSoldAsToInventoryType(soldAs: string): InventoryTypePreview {
       return "pair";
     case "Trio":
       return "trio";
+    case "Flock":
+      return "other";
     default:
       return "unknown";
   }
 }
 
-export function mapInventoryTypeToSoldAs(inventoryType: string) {
+export function getCustomInventoryLabelForSoldAs(soldAs: string) {
+  return soldAs === "Flock" ? "Flock" : null;
+}
+
+export function mapInventoryTypeToSoldAs(
+  inventoryType: string,
+  customInventoryLabel?: string | null,
+) {
   switch (inventoryType) {
     case "female":
       return "Female";
@@ -118,6 +130,8 @@ export function mapInventoryTypeToSoldAs(inventoryType: string) {
       return "Pair";
     case "trio":
       return "Trio";
+    case "other":
+      return customInventoryLabel?.trim() ?? "";
     default:
       return "";
   }

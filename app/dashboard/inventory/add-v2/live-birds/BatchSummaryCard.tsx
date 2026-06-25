@@ -11,7 +11,7 @@ export function BatchSummaryCard({
   offeringCount: number;
 }) {
   return (
-    <SidebarCard title="Hatch Summary">
+    <SidebarCard title="Birds for Sale Summary">
       <SummaryRow
         glyph="/glyphs/calendar.png"
         label="Hatch date"
@@ -19,12 +19,12 @@ export function BatchSummaryCard({
       />
       <SummaryRow
         glyph="/glyphs/hen.png"
-        label="Birds for Sale"
+        label="Breeds for Sale"
         value={String(offeringCount)}
       />
       <SummaryRow
         glyph="/glyphs/customers.png"
-        label="Birds total"
+        label="Total Birds for Sale"
         value={String(birdsTotal)}
       />
     </SidebarCard>

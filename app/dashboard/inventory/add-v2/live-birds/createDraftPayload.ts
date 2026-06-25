@@ -1,5 +1,8 @@
 import { liveBirdsV2DraftMarker } from "./constants";
-import { mapSoldAsToInventoryType } from "./payloadPreview";
+import {
+  getCustomInventoryLabelForSoldAs,
+  mapSoldAsToInventoryType,
+} from "./payloadPreview";
 import type { BirdOffering, SpeciesOption } from "./types";
 
 export type CreateLiveBirdsDraftPayload = {
@@ -19,7 +22,7 @@ export type CreateLiveBirdsDraftPayload = {
         ReturnType<typeof mapSoldAsToInventoryType>,
         "unknown"
       >;
-      custom_inventory_label: null;
+      custom_inventory_label: string | null;
       quantity_available: number;
       price_override: number | null;
       sort_order: number;
@@ -103,7 +106,7 @@ function getBreedGroups({
 
     group.inventory_items.push({
       inventory_type: inventoryType,
-      custom_inventory_label: null,
+      custom_inventory_label: getCustomInventoryLabelForSoldAs(offering.soldAs),
       quantity_available: getNumberValue(offering.quantity),
       price_override: price === basePrice ? null : price,
       sort_order: group.inventory_items.length,

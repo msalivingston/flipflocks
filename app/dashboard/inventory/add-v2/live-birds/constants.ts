@@ -95,7 +95,14 @@ export const fallbackBreedOptions: BreedOption[] = [
   },
 ];
 
-export const soldAsOptions = ["Female", "Male", "Straight run", "Pair", "Trio"];
+export const soldAsOptions = [
+  "Female",
+  "Male",
+  "Straight run",
+  "Pair",
+  "Trio",
+  "Flock",
+];
 
 export const defaultHatchDate = "2026-06-21";
 export const defaultAvailableDate = "2027-01-21";
@@ -105,22 +112,11 @@ export const initialOfferings: BirdOffering[] = [
     id: "offering-1",
     sellerBreedProfileId: null,
     breedId: null,
-    breed: "Ameraucana - Blue",
-    soldAs: "Female",
-    quantity: "10",
-    price: "15",
+    breed: "",
+    soldAs: "",
+    quantity: "",
+    price: "",
     description: "",
     expanded: true,
-  },
-  {
-    id: "offering-2",
-    sellerBreedProfileId: null,
-    breedId: null,
-    breed: "Rhode Island Red",
-    soldAs: "Straight run",
-    quantity: "24",
-    price: "6",
-    description: "",
-    expanded: false,
   },
 ];

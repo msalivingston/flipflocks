@@ -53,7 +53,7 @@ export function getReadinessChecks({
     parsedHatchDate !== null &&
     parsedAvailableDate !== null &&
     getDateDifferenceDays(parsedHatchDate, parsedAvailableDate) >= 0;
-  const birdOfferingsAdded = offerings.length > 0;
+  const birdOfferingsAdded = offerings.some(isBirdsForSaleGroupStarted);
 
   return {
     hatchInformationComplete:
@@ -78,6 +78,21 @@ export function getReadinessChecks({
           offering.soldAs.trim().length > 0,
       ),
   };
+}
+
+export function isBirdsForSaleGroupStarted(offering: BirdOffering) {
+  return (
+    Boolean(offering.sellerBreedProfileId) ||
+    Boolean(offering.breedId) ||
+    offering.breed.trim().length > 0 ||
+    offering.soldAs.trim().length > 0 ||
+    offering.quantity.trim().length > 0 ||
+    offering.price.trim().length > 0
+  );
+}
+
+export function getBirdsForSaleGroupCount(offerings: BirdOffering[]) {
+  return offerings.filter(isBirdsForSaleGroupStarted).length;
 }
 
 export function areAllReadinessChecksComplete(readiness: ReadinessChecks) {

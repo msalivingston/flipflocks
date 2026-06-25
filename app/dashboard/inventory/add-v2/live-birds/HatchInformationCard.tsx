@@ -31,7 +31,7 @@ export function HatchInformationCard({
   return (
     <SectionCard step="1" title="Hatch Information">
       <p className="text-sm leading-6 text-stone-600">
-        All groups below will use this hatch date.
+        Use a separate entry for birds from a different hatch date.
       </p>
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <SpeciesField
@@ -115,6 +115,11 @@ function SpeciesField({
             if (nextOption) onChange(nextOption);
           }}
         >
+          {value.label.trim().length === 0 ? (
+            <option disabled value={getSpeciesOptionValue(value)}>
+              Choose species
+            </option>
+          ) : null}
           {options.map((speciesOption) => (
             <option
               key={getSpeciesOptionValue(speciesOption)}
