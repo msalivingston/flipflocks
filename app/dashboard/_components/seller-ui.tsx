@@ -69,7 +69,7 @@ export function StatusBadge({ status }: { status: string | null | undefined }) {
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${tone}`}
+      className={`inline-flex min-h-7 items-center rounded-full px-2.5 py-1 text-sm font-semibold capitalize sm:min-h-0 sm:text-xs ${tone}`}
     >
       {label}
     </span>
@@ -231,10 +231,10 @@ export function FilterControl({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="grid gap-1 text-sm font-semibold text-stone-700">
+    <label className="grid gap-1.5 text-sm font-semibold text-stone-700">
       {label}
       <select
-        className="min-h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+        className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-base font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >

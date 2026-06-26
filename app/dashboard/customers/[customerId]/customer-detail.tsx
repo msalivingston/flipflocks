@@ -372,7 +372,7 @@ function CustomerOrderCard({ order }: { order: SellerCustomerOrderRow }) {
             <h3 className="text-lg font-semibold text-stone-950">
               {formatOrderNumber(order.order_number)}
             </h3>
-            <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-100">
+            <span className="inline-flex min-h-7 items-center rounded-full bg-emerald-50 px-2.5 py-1 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-100 sm:min-h-0 sm:text-xs">
               {status}
             </span>
           </div>
@@ -384,7 +384,7 @@ function CustomerOrderCard({ order }: { order: SellerCustomerOrderRow }) {
           </p>
         </div>
         <Link
-          className="inline-flex min-h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-950 transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900"
+          className="inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-950 transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 sm:min-h-10"
           href={`/dashboard/orders/${order.order_id}`}
         >
           View order
@@ -600,11 +600,11 @@ function CustomerNotesCard({
       {isEditing ? (
         <form className="mt-5 grid gap-4" onSubmit={saveNotes}>
           <label className="grid gap-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+            <span className="text-sm font-semibold uppercase tracking-[0.12em] text-stone-500 sm:text-xs">
               Notes
             </span>
             <textarea
-              className="min-h-32 w-full resize-y rounded-md border border-stone-300 bg-white px-3 py-2 text-sm leading-6 text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100"
+              className="min-h-32 w-full resize-y rounded-md border border-stone-300 bg-white px-3 py-2 text-base leading-6 text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100 sm:text-sm"
               onChange={(event) => setNotes(event.target.value)}
               value={notes}
             />
@@ -662,12 +662,12 @@ function SummaryStat({
       <div className="flex justify-start sm:justify-center">
         <IconBubble src={icon} size="sm" />
       </div>
-      <dt className="mt-2 text-xs font-medium text-stone-600">{label}</dt>
+      <dt className="mt-2 text-sm font-medium text-stone-600 sm:text-xs">{label}</dt>
       <dd className="mt-1 whitespace-nowrap text-base font-semibold text-stone-950">
         {value}
       </dd>
       {subvalue ? (
-        <dd className="mt-1 whitespace-nowrap text-xs font-medium text-stone-600">
+        <dd className="mt-1 whitespace-nowrap text-sm font-medium text-stone-600 sm:text-xs">
           {subvalue}
         </dd>
       ) : null}
@@ -678,8 +678,8 @@ function SummaryStat({
 function CompactFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 border-stone-100 sm:border-l sm:pl-4 sm:first:border-l-0 sm:first:pl-0">
-      <dt className="text-xs font-medium text-stone-500">{label}</dt>
-      <dd className="mt-1 truncate font-semibold text-stone-950">{value}</dd>
+      <dt className="text-sm font-medium text-stone-500 sm:text-xs">{label}</dt>
+      <dd className="mt-1 truncate text-base font-semibold text-stone-950 sm:text-sm">{value}</dd>
     </div>
   );
 }
@@ -687,10 +687,10 @@ function CompactFact({ label, value }: { label: string; value: string }) {
 function DetailField({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+      <dt className="text-sm font-semibold uppercase tracking-[0.12em] text-stone-500 sm:text-xs">
         {label}
       </dt>
-      <dd className="mt-2 break-words text-sm font-semibold leading-6 text-stone-950">
+      <dd className="mt-2 break-words text-base font-semibold leading-6 text-stone-950 sm:text-sm">
         {value}
       </dd>
     </div>
@@ -710,11 +710,11 @@ function EditableField({
 }) {
   return (
     <label className="grid gap-2">
-      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+      <span className="text-sm font-semibold uppercase tracking-[0.12em] text-stone-500 sm:text-xs">
         {label}
       </span>
       <input
-        className="min-h-10 w-full rounded-md border border-stone-300 bg-white px-3 text-sm text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100"
+        className="min-h-11 w-full rounded-md border border-stone-300 bg-white px-3 text-base text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100 sm:min-h-10 sm:text-sm"
         onChange={(event) => onChange(event.target.value)}
         type={type}
         value={value}
@@ -766,7 +766,7 @@ function FormActions({
   return (
     <div className="flex flex-wrap justify-end gap-2">
       <button
-        className="inline-flex min-h-10 items-center justify-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-950 transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex min-h-11 items-center justify-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-950 transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10"
         disabled={isSaving}
         onClick={onCancel}
         type="button"
@@ -774,7 +774,7 @@ function FormActions({
         Cancel
       </button>
       <button
-        className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10"
         disabled={isSaving}
         type="submit"
       >
@@ -815,7 +815,7 @@ function InitialsBubble({ customer }: { customer: SellerCustomerDetailRow }) {
 function BackToCustomersLink() {
   return (
     <Link
-      className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-950 shadow-sm transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900"
+      className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-950 shadow-sm transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 sm:min-h-10"
       href="/dashboard/customers"
     >
       <ArrowLeft aria-hidden="true" className="size-4" />

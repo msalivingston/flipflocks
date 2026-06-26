@@ -141,7 +141,7 @@ function PreflightList({ items }: { items: string[] }) {
   return (
     <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
       <p className="font-semibold">Finish these details before publishing.</p>
-      <ul className="mt-2 space-y-1 text-xs font-medium leading-5">
+      <ul className="mt-2 space-y-1 text-sm font-medium leading-5 sm:text-xs">
         {items.map((item) => (
           <li key={item}>- {item}</li>
         ))}
@@ -182,7 +182,7 @@ export function SaveDraftButton({
 
   return (
     <button
-      className="inline-flex min-h-10 w-full items-center justify-center rounded-md border border-emerald-800/40 bg-white px-5 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:w-auto"
+      className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-emerald-800/40 bg-white px-5 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:w-auto"
       onClick={onSaveDraft}
       type="button"
     >
@@ -212,7 +212,7 @@ export function PublishInventoryButton({
   if (disabled) {
     return (
       <button
-        className="inline-flex min-h-10 w-full cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-5 text-sm font-semibold text-white opacity-65 sm:w-auto"
+        className="inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-5 text-sm font-semibold text-white opacity-65 sm:min-h-10 sm:w-auto"
         disabled
         title={publishDisabledReason ?? undefined}
         type="button"
@@ -224,7 +224,7 @@ export function PublishInventoryButton({
 
   return (
     <button
-      className="inline-flex min-h-10 w-full items-center justify-center rounded-md bg-emerald-800 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:w-auto"
+      className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-800 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:w-auto"
       onClick={onReviewPublish}
       type="button"
     >

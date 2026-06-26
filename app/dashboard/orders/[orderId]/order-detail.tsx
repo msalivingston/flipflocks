@@ -101,9 +101,9 @@ type OrderDetailState = {
 };
 
 const orderDetailButtonClass =
-  "inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-emerald-700 bg-white px-3.5 text-sm font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/30";
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-emerald-700 bg-white px-3.5 text-sm font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:min-h-9";
 const orderDetailBackButtonClass =
-  "inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-stone-300 bg-white px-3.5 text-sm font-bold text-stone-950 shadow-sm transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-700/30";
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-stone-300 bg-white px-3.5 text-sm font-bold text-stone-950 shadow-sm transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:min-h-9";
 const requestedItemsGridClass =
   "grid gap-3 sm:grid-cols-[minmax(0,1fr)_3.25rem_5.75rem_6.5rem]";
 
@@ -125,7 +125,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
-  const [restoreInventoryOnCancel, setRestoreInventoryOnCancel] = useState(false);
+  const [restoreInventoryOnCancel, setRestoreInventoryOnCancel] = useState(true);
   const [showCancelPanel, setShowCancelPanel] = useState(false);
   const [showFulfillmentDialog, setShowFulfillmentDialog] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -352,7 +352,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     const { error: cancelError } = await supabase.rpc("cancel_order", {
       p_order_id: order.order_id,
       p_canceled_reason: trimmedReason,
-      p_restore_inventory: restoreInventoryOnCancel,
+      p_restore_inventory: true,
     });
 
     if (cancelError) {
@@ -362,12 +362,10 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     }
 
     setActionMessage(
-      restoreInventoryOnCancel
-        ? "Order canceled. Inventory-backed items were returned to available inventory."
-        : "Order canceled. Inventory was not changed.",
+      "Order canceled. Inventory-backed items were returned to available inventory.",
     );
     setCancelReason("");
-    setRestoreInventoryOnCancel(false);
+    setRestoreInventoryOnCancel(true);
     setShowCancelPanel(false);
     setRefreshKey((current) => current + 1);
     setIsCanceling(false);
@@ -380,7 +378,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   function openCancelPanel() {
     setActionError(null);
     setActionMessage(null);
-    setRestoreInventoryOnCancel(false);
+    setRestoreInventoryOnCancel(true);
     setShowFulfillmentDialog(false);
     setShowCancelPanel(true);
   }
@@ -389,7 +387,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     <div className="mx-auto flex w-full max-w-[1260px] flex-col gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-7">
       <header className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[0.7rem] font-bold uppercase text-emerald-800">
+          <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-sm font-bold uppercase text-emerald-800 sm:text-xs">
             Storefront order
           </span>
           <h1 className="mt-2 text-3xl font-bold text-stone-950 sm:text-[2.1rem]">
@@ -477,11 +475,10 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           onCancel={cancelOrder}
           onClose={() => {
             setCancelReason("");
-            setRestoreInventoryOnCancel(false);
+            setRestoreInventoryOnCancel(true);
             setShowCancelPanel(false);
           }}
           onReasonChange={setCancelReason}
-          onRestoreInventoryChange={setRestoreInventoryOnCancel}
         />
       ) : null}
 
@@ -498,7 +495,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_19.5rem]">
         <main className="grid gap-3">
           <SellerCard className="overflow-hidden shadow-[0_12px_30px_rgba(46,39,25,0.045)]">
-            <div className={`${requestedItemsGridClass} border-b border-stone-200/80 bg-white px-4 py-3 text-xs font-bold uppercase text-stone-600`}>
+            <div className={`${requestedItemsGridClass} border-b border-stone-200/80 bg-white px-4 py-3 text-sm font-bold uppercase text-stone-600 sm:text-xs`}>
               <h2 className="text-lg font-bold normal-case text-stone-950">
                 Items
               </h2>
@@ -653,7 +650,7 @@ function OrderItemRow({
           <p className="mt-0.5 break-words text-sm leading-5 text-stone-600 sm:truncate">
             {details.join(" - ")}
           </p>
-          <p className="mt-0.5 break-words text-xs font-medium leading-5 text-stone-500">
+          <p className="mt-0.5 break-words text-sm font-medium leading-5 text-stone-500 sm:text-xs">
             {item.available_date_snapshot
               ? `Available ${formatShortDate(item.available_date_snapshot)}`
               : null}
@@ -1186,7 +1183,6 @@ function CancellationPanel({
   onCancel,
   onClose,
   onReasonChange,
-  onRestoreInventoryChange,
 }: {
   cancelReason: string;
   isCanceling: boolean;
@@ -1194,7 +1190,6 @@ function CancellationPanel({
   onCancel: () => void;
   onClose: () => void;
   onReasonChange: (value: string) => void;
-  onRestoreInventoryChange: (value: boolean) => void;
 }) {
   return (
     <section className="rounded-xl border border-red-200 bg-red-50 p-4">
@@ -1207,7 +1202,7 @@ function CancellationPanel({
           </p>
         </div>
         <button
-          className="seller-small-button border-red-200 text-red-800 hover:bg-red-100"
+          className="seller-small-button rounded-md border-red-200 text-red-800 hover:bg-red-100"
           disabled={isCanceling}
           type="button"
           onClick={onClose}
@@ -1226,23 +1221,24 @@ function CancellationPanel({
       </label>
       <label className="mt-4 flex gap-3 rounded-md border border-red-200 bg-white p-3 text-sm text-stone-700">
         <input
-          className="mt-1 h-4 w-4 rounded border-stone-300 text-red-700 focus:ring-red-500"
+          className="mt-1 size-6 rounded border-stone-300 text-red-700 focus:ring-red-500 sm:size-4"
           checked={restoreInventoryOnCancel}
+          disabled
+          readOnly
           type="checkbox"
-          onChange={(event) => onRestoreInventoryChange(event.target.checked)}
         />
         <span>
           <span className="block font-semibold text-stone-950">
-            Restore inventory?
+            Restore inventory
           </span>
           <span className="mt-1 block leading-6 text-stone-600">
-            If checked, inventory-backed items will be returned to available
-            inventory.
+            Inventory-backed items will be returned to available inventory when
+            this order is canceled.
           </span>
         </span>
       </label>
       <button
-        className="mt-4 min-h-10 rounded-md bg-red-700 px-4 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-stone-300"
+        className="mt-4 min-h-11 rounded-md bg-red-700 px-4 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-stone-300 sm:min-h-10"
         disabled={isCanceling}
         type="button"
         onClick={onCancel}
@@ -1256,7 +1252,7 @@ function CancellationPanel({
 function MobileAmount({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-lg bg-[#fbfaf6] px-3 py-2 text-left min-[360px]:text-right sm:rounded-none sm:bg-transparent sm:p-0 sm:text-right sm:tabular-nums">
-      <span className="block text-[0.65rem] font-bold uppercase text-stone-500 sm:hidden">
+      <span className="block text-xs font-bold uppercase text-stone-500 sm:hidden">
         {label}
       </span>
       <span className="break-words font-bold text-stone-950">{value}</span>

@@ -296,13 +296,13 @@ function MetricCard({
           />
         </span>
         <div className="min-w-0">
-          <p className="text-xs font-medium leading-snug text-stone-600 sm:text-sm">
+          <p className="text-sm font-medium leading-snug text-stone-600">
             {label}
           </p>
           <p className={`mt-0.5 font-serif text-2xl font-bold sm:mt-1 sm:text-3xl ${valueTone}`}>
             {value ?? 0}
           </p>
-          <p className="mt-0.5 text-[0.7rem] leading-4 text-stone-500 sm:mt-1 sm:text-sm">
+          <p className="mt-0.5 text-sm leading-5 text-stone-500 sm:mt-1">
             {helper}
           </p>
         </div>
@@ -432,7 +432,7 @@ function OrderRow({
               <div className="flex min-w-0 flex-wrap items-start gap-x-4 gap-y-1.5">
                 {order.buyer_phone_snapshot ? (
                   <a
-                    className="inline-flex items-center gap-2 whitespace-nowrap text-stone-950 underline-offset-4 hover:underline"
+                    className="inline-flex min-h-11 items-center gap-2 whitespace-nowrap text-stone-950 underline-offset-4 hover:underline sm:min-h-0"
                     href={`tel:${order.buyer_phone_snapshot}`}
                   >
                     <Image
@@ -476,7 +476,7 @@ function OrderRow({
                 </a>
               ) : null}
               <Link
-                className="seller-small-button min-h-9 gap-2 bg-emerald-800 px-4 text-white hover:bg-emerald-900"
+                className="seller-small-button min-h-11 gap-2 bg-emerald-800 px-4 text-white hover:bg-emerald-900 sm:min-h-9"
                 href={`/dashboard/orders/${order.order_id}`}
               >
                 View order

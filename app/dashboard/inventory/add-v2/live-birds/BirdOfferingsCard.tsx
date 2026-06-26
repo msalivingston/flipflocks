@@ -61,12 +61,12 @@ export function BirdOfferingsCard({
         Add one group for each breed, sex/type, quantity, and price.
       </p>
       {breedOptionsMessage ? (
-        <p className="mt-4 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-semibold leading-5 text-stone-600">
+        <p className="mt-4 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-semibold leading-5 text-stone-600">
           {breedOptionsMessage}
         </p>
       ) : null}
       {duplicateOfferingIds.size > 0 ? (
-        <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
+        <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-5 text-amber-800">
           This page already has a group for this breed and sex/type. Choose
           a different sex/type or remove the duplicate before saving later.
         </p>
@@ -172,7 +172,7 @@ function ExpandedOfferingCard({
             <span className="block break-words text-sm font-semibold text-stone-950">
               {title}
             </span>
-            <span className="mt-0.5 block text-xs font-medium text-stone-500">
+            <span className="mt-0.5 block text-sm font-medium text-stone-500 sm:text-xs">
               {summary}
             </span>
           </span>
@@ -234,7 +234,7 @@ function ExpandedOfferingCard({
         />
       </div>
       {hasDuplicateCombination ? (
-        <p className="mx-4 mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
+        <p className="mx-4 mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-5 text-amber-800">
           Duplicate breed and sex/type combination. Choose a different sex/type
           or remove this group before saving.
         </p>
@@ -287,11 +287,11 @@ function ExpandedOfferingCard({
           <h3 className="text-sm font-semibold text-stone-950">
             Breed description
           </h3>
-          <p className="mt-1 max-w-3xl text-xs font-medium leading-5 text-stone-500">
+          <p className="mt-1 max-w-3xl text-sm font-medium leading-5 text-stone-500 sm:text-xs">
             This description is used anywhere this breed appears in your store.
             Changing it updates your personal breed library.
           </p>
-          <p className="mt-3 text-xs font-semibold text-stone-600">
+          <p className="mt-3 text-sm font-semibold text-stone-600 sm:text-xs">
             Description buyers see
           </p>
           <textarea
@@ -301,7 +301,7 @@ function ExpandedOfferingCard({
               updateBreedDescription(offering.id, event.target.value)
             }
           />
-          <p className="mt-2 text-xs font-medium text-stone-500">
+          <p className="mt-2 text-sm font-medium text-stone-500 sm:text-xs">
             {offering.description.length} / 500
           </p>
         </div>
@@ -352,7 +352,7 @@ function CollapsedOfferingRow({
             <span className="break-words font-semibold text-stone-950">
               {title}
             </span>
-            <span className="text-xs font-medium text-stone-500">
+            <span className="text-sm font-medium text-stone-500 sm:text-xs">
               {summary}
             </span>
           </span>
@@ -371,7 +371,7 @@ function CollapsedOfferingRow({
         />
       </div>
       {hasDuplicateCombination ? (
-        <p className="mt-2 text-xs font-semibold text-amber-800">
+        <p className="mt-2 text-sm font-semibold text-amber-800 sm:text-xs">
           Duplicate breed and sex/type combination.
         </p>
       ) : null}
@@ -398,7 +398,7 @@ function RemoveOfferingControl({
 
   return (
     <button
-      className="text-xs font-semibold text-red-400 transition hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200 focus:ring-offset-2 sm:text-red-500"
+      className="min-h-11 rounded-md px-2 text-sm font-semibold text-red-500 transition hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200 focus:ring-offset-2 sm:min-h-0 sm:px-0 sm:text-red-500"
       type="button"
       onClick={() => removeOffering(offeringId)}
     >
@@ -425,12 +425,12 @@ function CompactMobilePanel({
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-stone-950">{title}</p>
-          <p className="mt-0.5 text-xs font-medium leading-5 text-stone-500">
+          <p className="mt-0.5 text-sm font-medium leading-5 text-stone-500 sm:text-xs">
             {subtext}
           </p>
         </div>
         <button
-          className="shrink-0 rounded-md border border-emerald-800/30 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 shadow-sm"
+          className="min-h-11 shrink-0 rounded-md border border-emerald-800/30 bg-white px-3 py-2 text-sm font-semibold text-emerald-900 shadow-sm sm:min-h-0 sm:text-xs"
           type="button"
           onClick={onToggle}
         >
@@ -471,7 +471,7 @@ function SelectField({
 
   return (
     <label>
-      <span className="mb-1.5 block text-xs font-semibold text-stone-600">
+      <span className="mb-1.5 block text-sm font-semibold text-stone-600 sm:text-xs">
         {label}
       </span>
       <span className="relative block">
@@ -529,7 +529,7 @@ function NumberField({
 }) {
   return (
     <label>
-      <span className="mb-1.5 block text-xs font-semibold text-stone-600">
+      <span className="mb-1.5 block text-sm font-semibold text-stone-600 sm:text-xs">
         {label}
       </span>
       <span className="relative block">
@@ -577,7 +577,7 @@ function BreedPhotoPanel({
   return (
     <div>
       <div className="mb-3 flex justify-end">
-        <span className="w-fit rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+        <span className="w-fit rounded-full bg-emerald-100 px-2.5 py-1 text-sm font-semibold text-emerald-800 sm:text-xs">
           {photoSource}
         </span>
       </div>
@@ -605,12 +605,12 @@ function BreedPhotoPanel({
             <p className="text-sm font-semibold text-stone-700">
               This catalog breed is not in your personal breed library yet.
             </p>
-            <p className="mt-2 text-xs font-medium leading-5 text-stone-500">
+            <p className="mt-2 text-sm font-medium leading-5 text-stone-500 sm:text-xs">
               Change breed photo will first add this breed to your personal
               breed library, then save photos there.
             </p>
             <button
-              className="mt-3 rounded-md border border-emerald-800/30 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2"
+              className="mt-3 min-h-11 rounded-md border border-emerald-800/30 bg-white px-3 py-2 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2 sm:min-h-0 sm:text-xs"
               type="button"
               onClick={() => prepareBreedPhotoProfile(offering.id)}
             >

@@ -147,7 +147,7 @@ function InventoryOptionCard({ option }: { option: InventoryOption }) {
             {option.title}
           </h2>
           {option.href ? null : (
-            <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">
+            <span className="rounded-full bg-stone-100 px-2.5 py-1 text-sm font-semibold text-stone-600 sm:text-xs">
               Coming soon
             </span>
           )}
@@ -230,7 +230,7 @@ function SavedDraftCard({ draft }: { draft: SavedDraft }) {
             <h3 className="text-base font-semibold text-stone-950">
               Live Birds
             </h3>
-            <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-800">
+            <span className="rounded-full bg-sky-100 px-2.5 py-1 text-sm font-semibold text-sky-800 sm:text-xs">
               Draft
             </span>
           </div>
@@ -282,8 +282,8 @@ function DraftMeta({
 }) {
   return (
     <div>
-      <p className="text-xs font-semibold text-stone-500">{label}</p>
-      <p className="mt-0.5 font-semibold text-stone-800">
+      <p className="text-sm font-semibold text-stone-500 sm:text-xs">{label}</p>
+      <p className="mt-0.5 text-base font-semibold text-stone-800 sm:text-sm">
         {value || "Not set"}
       </p>
     </div>

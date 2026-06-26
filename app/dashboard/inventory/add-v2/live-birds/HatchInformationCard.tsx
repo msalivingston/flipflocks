@@ -62,18 +62,18 @@ export function HatchInformationCard({
         {ageAtAvailability.message}
       </div>
       {referenceLoading ? (
-        <p className="mt-3 text-xs font-semibold text-stone-500">
+        <p className="mt-3 text-sm font-semibold text-stone-500 sm:text-xs">
           Loading species and breed profile options...
         </p>
       ) : null}
       {referenceError ? (
-        <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
+        <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-5 text-amber-800 sm:text-xs">
           Reference data could not be loaded. Local placeholder options are still
           available for this UI shell.
         </p>
       ) : null}
       {!referenceLoading && !referenceError && usingFallbackSpecies ? (
-        <p className="mt-3 text-xs font-semibold text-stone-500">
+        <p className="mt-3 text-sm font-semibold text-stone-500 sm:text-xs">
           Species options are local placeholders until matching reference rows
           are available.
         </p>
@@ -93,7 +93,7 @@ function SpeciesField({
 }) {
   return (
     <label>
-      <span className="mb-1.5 block text-xs font-semibold text-stone-600">
+      <span className="mb-1.5 block text-sm font-semibold text-stone-600 sm:text-xs">
         Species
       </span>
       <span className="relative block">
@@ -155,7 +155,7 @@ function DateField({
 }) {
   return (
     <label>
-      <span className="mb-1.5 block text-xs font-semibold text-stone-600">
+      <span className="mb-1.5 block text-sm font-semibold text-stone-600 sm:text-xs">
         {label}
       </span>
       <span className="relative block">

@@ -184,7 +184,7 @@ export function CustomersList() {
             height={18}
           />
           <input
-            className="min-h-12 w-full rounded-lg border border-stone-300 bg-white py-3 pl-11 pr-4 text-sm font-medium text-stone-950 shadow-sm outline-none transition placeholder:text-stone-500 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20"
+            className="min-h-12 w-full rounded-lg border border-stone-300 bg-white py-3 pl-11 pr-4 text-base font-medium text-stone-950 shadow-sm outline-none transition placeholder:text-stone-500 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 sm:text-sm"
             placeholder="Search by name, email, phone, or farm name..."
             type="search"
             value={query}
@@ -206,7 +206,7 @@ export function CustomersList() {
             height={18}
           />
           <select
-            className="min-h-12 w-full appearance-none rounded-lg border border-stone-300 bg-white py-3 pl-11 pr-9 text-sm font-semibold text-stone-950 shadow-sm outline-none transition focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20"
+            className="min-h-12 w-full appearance-none rounded-lg border border-stone-300 bg-white py-3 pl-11 pr-9 text-base font-semibold text-stone-950 shadow-sm outline-none transition focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 sm:text-sm"
             value={customerFilter}
             onChange={(event) => {
               setCustomerFilter(event.target.value);
@@ -226,7 +226,7 @@ export function CustomersList() {
         <label className="relative min-w-0 flex-[1_1_14rem] sm:max-w-64">
           <span className="sr-only">Sort customers</span>
           <select
-            className="min-h-12 w-full appearance-none rounded-lg border border-stone-300 bg-white px-4 py-3 pr-9 text-sm font-semibold text-stone-950 shadow-sm outline-none transition focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20"
+            className="min-h-12 w-full appearance-none rounded-lg border border-stone-300 bg-white px-4 py-3 pr-9 text-base font-semibold text-stone-950 shadow-sm outline-none transition focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 sm:text-sm"
             value={sort}
             onChange={(event) => {
               setSort(event.target.value);
@@ -244,7 +244,7 @@ export function CustomersList() {
         </label>
 
         <Link
-          className="ml-auto inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-800 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900"
+          className="ml-auto inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-800 px-4 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 sm:text-sm"
           href="/dashboard/orders/new"
         >
           <span aria-hidden="true" className="text-xl leading-none">
@@ -356,7 +356,7 @@ function CustomerRow({
               </p>
             ) : null}
             <ContactLine email={customer.email} phone={customer.phone} />
-            <p className="mt-1 truncate text-xs font-medium text-stone-500">
+            <p className="mt-1 truncate text-sm font-medium text-stone-500">
               {customer.order_count ?? 0}{" "}
               {(customer.order_count ?? 0) === 1 ? "order" : "orders"}{" "}
               <span aria-hidden="true">&middot;</span>{" "}
@@ -376,7 +376,7 @@ function CustomerRow({
       </td>
       <td className="px-4 py-5 text-right">
         <Link
-          className="inline-flex min-h-9 items-center justify-center whitespace-nowrap rounded-md border border-stone-300 bg-white px-3 text-sm font-bold text-emerald-900 transition hover:border-emerald-700 hover:bg-emerald-50"
+          className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-md border border-stone-300 bg-white px-3 text-sm font-bold text-emerald-900 transition hover:border-emerald-700 hover:bg-emerald-50 md:min-h-9"
           href={`/dashboard/customers/${customer.customer_id}`}
         >
           View
@@ -411,7 +411,7 @@ function LastOrderDate({ value }: { value: string | null }) {
   return (
     <span className="grid gap-0.5">
       <span className="whitespace-nowrap">{formatDate(value)}</span>
-      <span className="whitespace-nowrap text-xs font-medium text-stone-500">
+      <span className="whitespace-nowrap text-sm font-medium text-stone-500 md:text-xs">
         {formatRelativeDate(value)}
       </span>
     </span>
@@ -467,7 +467,7 @@ function Pagination({
             </span>
           ) : (
             <button
-              className={`inline-flex min-h-10 min-w-10 items-center justify-center rounded-md border px-3 font-semibold shadow-sm transition ${
+              className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border px-3 font-semibold shadow-sm transition sm:min-h-10 sm:min-w-10 ${
                 paginationItem === currentPage
                   ? "border-emerald-800 bg-emerald-800 text-white"
                   : "border-stone-200 bg-white text-stone-950 hover:bg-stone-50"
@@ -481,7 +481,7 @@ function Pagination({
           ),
         )}
         <button
-          className="inline-flex min-h-10 items-center justify-center rounded-md border border-stone-200 bg-white px-3 font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-45"
+          className="inline-flex min-h-11 items-center justify-center rounded-md border border-stone-200 bg-white px-3 font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-10"
           type="button"
           disabled={currentPage === totalPages}
           onClick={() => onPageChange(currentPage + 1)}

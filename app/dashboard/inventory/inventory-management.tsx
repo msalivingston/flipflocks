@@ -74,6 +74,11 @@ type InventorySort =
   | "price"
   | "availability";
 
+type DeletedInventoryEntry = {
+  deleted_item_type: "listing_inventory" | "equipment_inventory";
+  deleted_item_id: string;
+};
+
 type FlatInventoryItem =
   | {
       kind: "bird";
@@ -162,6 +167,9 @@ export function InventoryManagement() {
   const [sortBy, setSortBy] = useState<InventorySort>("hatch_date");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -365,6 +373,13 @@ export function InventoryManagement() {
     typeFilter,
   ]);
 
+  const selectedItems = useMemo(
+    () => filteredItems.filter((item) => selectedItemIds.includes(item.id)),
+    [filteredItems, selectedItemIds],
+  );
+  const selectedCount = selectedItems.length;
+  const visibleSelectedItemIds = selectedItems.map((item) => item.id);
+
   const visibleBirdItems = filteredItems.filter(
     (item) => item.kind === "bird" && isLiveBirdInventoryRow(item.row),
   );
@@ -455,6 +470,118 @@ export function InventoryManagement() {
     setIsSaving(false);
   }
 
+  function toggleItemSelection(itemId: string) {
+    setSelectedItemIds((current) =>
+      current.includes(itemId)
+        ? current.filter((selectedId) => selectedId !== itemId)
+        : [...current, itemId],
+    );
+    setSaveError(null);
+    setSuccessMessage(null);
+  }
+
+  function setVisibleSelection(shouldSelect: boolean) {
+    if (!shouldSelect) {
+      setSelectedItemIds([]);
+      return;
+    }
+
+    setSelectedItemIds(filteredItems.map((item) => item.id));
+    setSaveError(null);
+    setSuccessMessage(null);
+  }
+
+  function clearSelection() {
+    setSelectedItemIds([]);
+    setIsDeleteConfirmOpen(false);
+  }
+
+  async function deleteSelectedInventory() {
+    if (!seller || selectedItems.length === 0 || isDeleting) return;
+
+    const selectedBirdIds = selectedItems
+      .filter((item) => item.kind === "bird")
+      .map((item) => item.row.inventory_item_id);
+    const selectedEquipmentIds = selectedItems
+      .filter((item) => item.kind === "equipment")
+      .map((item) => item.row.equipment_inventory_item_id);
+
+    setIsDeleting(true);
+    setSaveError(null);
+    setSuccessMessage(null);
+
+    try {
+      const result = await supabase.rpc("seller_delete_inventory_entries", {
+        p_equipment_inventory_item_ids: selectedEquipmentIds,
+        p_inventory_item_ids: selectedBirdIds,
+      });
+
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
+
+      const deletedEntries = Array.isArray(result.data)
+        ? (result.data as DeletedInventoryEntry[])
+        : [];
+      const deletedBirdIds = new Set(
+        deletedEntries
+          .filter((entry) => entry.deleted_item_type === "listing_inventory")
+          .map((entry) => entry.deleted_item_id),
+      );
+      const deletedEquipmentIds = new Set(
+        deletedEntries
+          .filter((entry) => entry.deleted_item_type === "equipment_inventory")
+          .map((entry) => entry.deleted_item_id),
+      );
+      const deletedCount = deletedBirdIds.size + deletedEquipmentIds.size;
+
+      if (deletedCount === 0) {
+        throw new Error("No inventory entries were deleted.");
+      }
+
+      setRows((current) =>
+        current.filter((row) => !deletedBirdIds.has(row.inventory_item_id)),
+      );
+      setEquipmentRows((current) =>
+        current.filter(
+          (row) => !deletedEquipmentIds.has(row.equipment_inventory_item_id),
+        ),
+      );
+      setReservedByItemId((current) => {
+        const next = { ...current };
+
+        for (const deletedId of deletedBirdIds) {
+          delete next[deletedId];
+        }
+
+        return next;
+      });
+      setDraftQuantities((current) => {
+        const next = { ...current };
+
+        for (const deletedId of deletedBirdIds) {
+          delete next[deletedId];
+        }
+
+        return next;
+      });
+
+      setSelectedItemIds([]);
+      setSuccessMessage(
+        `Deleted ${deletedCount} inventory ${deletedCount === 1 ? "entry" : "entries"}.`,
+      );
+    } catch (error) {
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : "Could not delete selected inventory entries.",
+      );
+    } finally {
+      setIsDeleteConfirmOpen(false);
+      setIsDeleting(false);
+    }
+  }
+
   if (isLoading) {
     return <LoadingState label="Loading inventory" />;
   }
@@ -519,7 +646,7 @@ export function InventoryManagement() {
         </div>
 
         {hasUnsavedChanges ? (
-          <p className="mt-2 text-xs font-medium text-amber-700">
+          <p className="mt-2 text-sm font-medium text-amber-700">
             {changedRows.length} unsaved row
             {changedRows.length === 1 ? "" : "s"}
           </p>
@@ -565,10 +692,10 @@ export function InventoryManagement() {
               setAvailabilityFilter(value as AvailabilityFilter)
             }
           />
-          <label className="grid gap-1 text-xs font-semibold text-stone-700">
+          <label className="grid gap-1.5 text-sm font-semibold text-stone-700">
             Search
             <input
-              className="min-h-9 rounded-md border border-stone-300 bg-white px-2.5 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+              className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-base font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm"
               placeholder="Breed or name"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
@@ -618,6 +745,12 @@ export function InventoryManagement() {
           <FlatInventoryTable
             draftQuantities={draftQuantities}
             items={filteredItems}
+            isDeleting={isDeleting}
+            onClearSelection={clearSelection}
+            onDeleteSelected={() => setIsDeleteConfirmOpen(true)}
+            onSelectVisible={setVisibleSelection}
+            onToggleSelection={toggleItemSelection}
+            selectedItemIds={visibleSelectedItemIds}
             updateDraftQuantity={updateDraftQuantity}
           />
         )}
@@ -625,6 +758,15 @@ export function InventoryManagement() {
 
       {processedPoultryRows.length > 0 ? (
         <ProcessedPoultryInventorySection rows={processedPoultryRows} />
+      ) : null}
+
+      {isDeleteConfirmOpen ? (
+        <DeleteInventoryConfirmModal
+          isDeleting={isDeleting}
+          selectedCount={selectedCount}
+          onCancel={() => setIsDeleteConfirmOpen(false)}
+          onConfirm={deleteSelectedInventory}
+        />
       ) : null}
     </div>
   );
@@ -645,7 +787,7 @@ function InventorySummaryCard({
         <Image src={glyph} alt="" width={21} height={21} />
       </span>
       <div className="min-w-0">
-        <p className="text-[0.68rem] font-bold uppercase tracking-[0.05em] text-stone-500">
+        <p className="text-xs font-bold uppercase tracking-[0.05em] text-stone-500 sm:text-[0.68rem]">
           {label}
         </p>
         <p className="mt-0.5 text-xl font-semibold leading-none text-stone-950">
@@ -656,17 +798,113 @@ function InventorySummaryCard({
   );
 }
 
+function DeleteInventoryConfirmModal({
+  isDeleting,
+  selectedCount,
+  onCancel,
+  onConfirm,
+}: {
+  isDeleting: boolean;
+  selectedCount: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      aria-labelledby="delete-inventory-title"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 px-4 py-6"
+      role="dialog"
+    >
+      <div className="w-full max-w-md rounded-md border border-stone-200 bg-white p-5 shadow-xl">
+        <h2
+          className="text-lg font-semibold leading-7 text-stone-950"
+          id="delete-inventory-title"
+        >
+          Delete selected inventory?
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-stone-700">
+          This permanently removes the selected inventory entries. Use this only
+          for test data or entries that were never actually sold.
+        </p>
+        <p className="mt-3 text-sm font-semibold text-stone-950">
+          {selectedCount} selected
+        </p>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            className="seller-secondary-button"
+            disabled={isDeleting}
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="rounded-md border border-red-700 bg-red-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700/25 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isDeleting || selectedCount === 0}
+            onClick={onConfirm}
+          >
+            {isDeleting ? "Deleting..." : "Delete permanently"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FlatInventoryTable({
   draftQuantities,
+  isDeleting,
   items,
+  onClearSelection,
+  onDeleteSelected,
+  onSelectVisible,
+  onToggleSelection,
+  selectedItemIds,
   updateDraftQuantity,
 }: {
   draftQuantities: Record<string, string>;
+  isDeleting: boolean;
   items: FlatInventoryItem[];
+  onClearSelection: () => void;
+  onDeleteSelected: () => void;
+  onSelectVisible: (shouldSelect: boolean) => void;
+  onToggleSelection: (itemId: string) => void;
+  selectedItemIds: string[];
   updateDraftQuantity: (row: InventoryRow, nextValue: string) => void;
 }) {
+  const selectedCount = selectedItemIds.length;
+  const allVisibleSelected =
+    items.length > 0 && items.every((item) => selectedItemIds.includes(item.id));
+
   return (
     <>
+      {selectedCount > 0 ? (
+        <div className="hidden border-b border-stone-200 bg-emerald-50/70 px-4 py-3 lg:flex lg:items-center lg:justify-between">
+          <p className="text-sm font-semibold text-emerald-950">
+            {selectedCount} selected
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded-md border border-red-700 bg-red-700 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700/25 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isDeleting}
+              onClick={onDeleteSelected}
+            >
+              Delete selected
+            </button>
+            <button
+              type="button"
+              className="seller-secondary-button"
+              disabled={isDeleting}
+              onClick={onClearSelection}
+            >
+              Clear selection
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div className="grid gap-3 p-3 lg:hidden">
         <div className="flex justify-end">
           <AgeHeaderWithTooltip tooltipId="inventory-age-tooltip-mobile" />
@@ -676,14 +914,50 @@ function FlatInventoryTable({
             key={item.id}
             draftQuantities={draftQuantities}
             item={item}
+            isSelected={selectedItemIds.includes(item.id)}
+            onToggleSelection={onToggleSelection}
             updateDraftQuantity={updateDraftQuantity}
           />
         ))}
       </div>
+      {selectedCount > 0 ? (
+        <div className="sticky bottom-0 z-30 border-t border-emerald-900/20 bg-white/95 px-3 py-2 shadow-[0_-8px_20px_rgba(0,0,0,0.08)] backdrop-blur lg:hidden">
+          <div className="flex items-center gap-2">
+            <p className="min-w-0 flex-1 text-sm font-semibold text-emerald-950">
+              {selectedCount} selected
+            </p>
+            <button
+              type="button"
+              className="min-h-11 rounded-md border border-red-700 bg-red-700 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700/25 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isDeleting}
+              onClick={onDeleteSelected}
+            >
+              Delete selected
+            </button>
+            <button
+              type="button"
+              className="min-h-11 rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 shadow-sm transition hover:border-emerald-700 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isDeleting}
+              onClick={onClearSelection}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div className="hidden overflow-x-auto lg:block">
         <table className="w-full min-w-[940px] border-collapse text-left text-[0.8125rem]">
           <thead className="bg-stone-50 text-[0.68rem] font-semibold uppercase tracking-[0.05em] text-stone-500">
             <tr>
+              <th className="w-10 px-3 py-2.5">
+                <input
+                  aria-label="Select all visible inventory rows"
+                  checked={allVisibleSelected}
+                  className="size-4 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
+                  type="checkbox"
+                  onChange={(event) => onSelectVisible(event.target.checked)}
+                />
+              </th>
               <th className="px-3 py-2.5">Species</th>
               <th className="px-3 py-2.5">Breed / Item</th>
               <th className="px-3 py-2.5">Type/Sex</th>
@@ -704,6 +978,8 @@ function FlatInventoryTable({
                 key={item.id}
                 draftQuantities={draftQuantities}
                 item={item}
+                isSelected={selectedItemIds.includes(item.id)}
+                onToggleSelection={onToggleSelection}
                 updateDraftQuantity={updateDraftQuantity}
               />
             ))}
@@ -739,17 +1015,38 @@ function AgeHeaderWithTooltip({ tooltipId }: { tooltipId: string }) {
 
 function FlatInventoryTableRow({
   draftQuantities,
+  isSelected,
   item,
+  onToggleSelection,
   updateDraftQuantity,
 }: {
   draftQuantities: Record<string, string>;
+  isSelected: boolean;
   item: FlatInventoryItem;
+  onToggleSelection: (itemId: string) => void;
   updateDraftQuantity: (row: InventoryRow, nextValue: string) => void;
 }) {
   const isChanged = item.kind === "bird" && isRowChanged(item.row, draftQuantities);
 
   return (
-    <tr className={isChanged ? "bg-amber-50/70" : "bg-white"}>
+    <tr
+      className={
+        isSelected
+          ? "bg-emerald-50/80"
+          : isChanged
+            ? "bg-amber-50/70"
+            : "bg-white"
+      }
+    >
+      <td className="px-3 py-3 align-top">
+        <input
+          aria-label={`Select ${item.breedOrItem}`}
+          checked={isSelected}
+          className="size-4 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
+          type="checkbox"
+          onChange={() => onToggleSelection(item.id)}
+        />
+      </td>
       <td className="px-3 py-3 align-top font-medium text-stone-700">
         {item.species}
       </td>
@@ -796,11 +1093,15 @@ function FlatInventoryTableRow({
 
 function FlatInventoryCard({
   draftQuantities,
+  isSelected,
   item,
+  onToggleSelection,
   updateDraftQuantity,
 }: {
   draftQuantities: Record<string, string>;
+  isSelected: boolean;
   item: FlatInventoryItem;
+  onToggleSelection: (itemId: string) => void;
   updateDraftQuantity: (row: InventoryRow, nextValue: string) => void;
 }) {
   const isChanged = item.kind === "bird" && isRowChanged(item.row, draftQuantities);
@@ -808,18 +1109,31 @@ function FlatInventoryCard({
   return (
     <article
       className={`rounded-md border p-3 ${
-        isChanged ? "border-amber-200 bg-amber-50/70" : "border-stone-200 bg-white"
+        isSelected
+          ? "border-emerald-700 bg-emerald-50/70"
+          : isChanged
+            ? "border-amber-200 bg-amber-50/70"
+            : "border-stone-200 bg-white"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold text-stone-950">
-            {item.breedOrItem}
-          </h2>
-          <p className="mt-0.5 text-xs text-stone-600">
-            {item.species}
-            {item.typeSex !== "—" ? ` • ${item.typeSex}` : ""}
-          </p>
+        <div className="flex min-w-0 gap-2">
+          <input
+            aria-label={`Select ${item.breedOrItem}`}
+            checked={isSelected}
+            className="mt-0.5 size-6 shrink-0 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
+            type="checkbox"
+            onChange={() => onToggleSelection(item.id)}
+          />
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-semibold text-stone-950">
+              {item.breedOrItem}
+            </h2>
+            <p className="mt-0.5 text-sm text-stone-600">
+              {item.species}
+              {item.typeSex !== "—" ? ` • ${item.typeSex}` : ""}
+            </p>
+          </div>
         </div>
         <AvailabilityPill label={item.availabilityLabel} />
       </div>
@@ -828,7 +1142,7 @@ function FlatInventoryCard({
         <InventoryCardField label="Hatch date" value={formatTableDate(item.hatchDate)} />
         <InventoryCardField label="Age" value={item.ageLabel} />
         <div className="rounded-md bg-stone-50 px-2.5 py-2">
-          <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.05em] text-stone-500">
+          <dt className="text-xs font-semibold uppercase tracking-[0.05em] text-stone-500">
             Available
           </dt>
           <dd className="mt-1">
@@ -863,10 +1177,10 @@ function InventoryCardField({
 }) {
   return (
     <div className="rounded-md bg-stone-50 px-2.5 py-2">
-      <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.05em] text-stone-500">
+      <dt className="text-xs font-semibold uppercase tracking-[0.05em] text-stone-500">
         {label}
       </dt>
-      <dd className="mt-1 text-sm font-semibold text-stone-950">{value}</dd>
+      <dd className="mt-1 text-base font-semibold text-stone-950 sm:text-sm">{value}</dd>
     </div>
   );
 }
@@ -900,7 +1214,7 @@ function AvailableQuantityControl({
     <div className="flex flex-col items-center">
       <input
         aria-label={`Available quantity for ${item.breedOrItem}`}
-        className={`h-8 w-16 rounded-md border px-2 text-center text-sm font-semibold text-stone-950 shadow-sm focus:outline-none focus:ring-2 ${
+        className={`h-11 w-20 rounded-md border px-2 text-center text-base font-semibold text-stone-950 shadow-sm focus:outline-none focus:ring-2 sm:h-8 sm:w-16 sm:text-sm ${
           rowHasInvalidQuantity
             ? "border-red-400 focus:border-red-600 focus:ring-red-600/20"
             : isChanged
@@ -914,7 +1228,7 @@ function AvailableQuantityControl({
         onChange={(event) => updateDraftQuantity(item.row, event.target.value)}
       />
       {isChanged ? (
-        <p className="mt-1 text-[0.68rem] font-semibold text-amber-700">
+        <p className="mt-1 text-xs font-semibold text-amber-700">
           Unsaved
         </p>
       ) : null}
@@ -924,7 +1238,7 @@ function AvailableQuantityControl({
 
 function AvailabilityPill({ label }: { label: string }) {
   return (
-    <span className="inline-flex whitespace-nowrap rounded-full bg-stone-100 px-2 py-0.5 text-[0.72rem] font-semibold text-stone-800">
+    <span className="inline-flex min-h-7 items-center whitespace-nowrap rounded-full bg-stone-100 px-2.5 py-0.5 text-sm font-semibold text-stone-800 sm:min-h-0 sm:px-2 sm:text-[0.72rem]">
       {label}
     </span>
   );

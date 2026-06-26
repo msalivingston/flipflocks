@@ -1295,14 +1295,14 @@ export default function LiveBirdsV2Page() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
-                className="inline-flex min-h-9 items-center rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2"
+                className="inline-flex min-h-11 items-center rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-9"
                 type="button"
                 onClick={() => setIsStartOverDialogOpen(true)}
               >
                 Start over
               </button>
               <span
-                className={`inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold ${
+                className={`inline-flex w-fit rounded-full border px-3 py-1 text-sm font-semibold sm:text-xs ${
                   isPublished
                     ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                     : "border-amber-200 bg-amber-50 text-amber-800"
@@ -1458,14 +1458,14 @@ function StartOverDialog({
         </p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button
-            className="inline-flex min-h-10 items-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2"
+            className="inline-flex min-h-11 items-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-10"
             type="button"
             onClick={onCancel}
           >
             Keep editing
           </button>
           <button
-            className="inline-flex min-h-10 items-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+            className="inline-flex min-h-11 items-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10"
             type="button"
             onClick={onConfirm}
           >
@@ -1517,7 +1517,7 @@ function UnsavedNavigationDialog({
         ) : null}
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button
-            className="inline-flex min-h-10 items-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2"
+            className="inline-flex min-h-11 items-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-10"
             type="button"
             onClick={onLeaveWithoutSaving}
             disabled={saving}
@@ -1525,7 +1525,7 @@ function UnsavedNavigationDialog({
             Leave without saving
           </button>
           <button
-            className="inline-flex min-h-10 items-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2"
+            className="inline-flex min-h-11 items-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-10"
             type="button"
             onClick={onKeepEditing}
             disabled={saving}
@@ -1533,7 +1533,7 @@ function UnsavedNavigationDialog({
             Keep editing
           </button>
           <button
-            className="inline-flex min-h-10 items-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-emerald-800/45"
+            className="inline-flex min-h-11 items-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-emerald-800/45 sm:min-h-10"
             type="button"
             onClick={onSaveDraft}
             disabled={!canSaveDraft || saving}

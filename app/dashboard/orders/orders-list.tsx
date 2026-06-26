@@ -473,11 +473,11 @@ function BulkActions({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-      <span className="text-xs font-medium text-stone-500">
+      <span className="text-sm font-medium text-stone-500 sm:text-xs">
         {selectedCount} selected
       </span>
       <button
-        className="seller-small-button min-h-10 gap-2 rounded-md px-3 disabled:cursor-not-allowed disabled:opacity-60"
+        className="seller-small-button min-h-11 gap-2 rounded-md px-3 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10"
         disabled
         title="Print orders is not wired yet."
         type="button"
@@ -486,7 +486,7 @@ function BulkActions({
         Print orders
       </button>
       <button
-        className="seller-small-button min-h-10 rounded-md px-3 disabled:cursor-not-allowed disabled:opacity-60"
+        className="seller-small-button min-h-11 rounded-md px-3 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10"
         disabled
         title="Bulk actions are not wired yet."
         type="button"
@@ -540,7 +540,7 @@ function OrderRow({
             <input
               aria-label={`Select order ${order.order_number}`}
               checked={isSelected}
-              className="size-5 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
+              className="size-6 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
               type="checkbox"
               onChange={onToggleSelection}
             />
@@ -594,7 +594,7 @@ function OrderRow({
             <div className="grid gap-2 text-sm text-stone-700">
               {order.buyer_phone_snapshot ? (
                 <a
-                  className="inline-flex min-w-0 items-center gap-2 hover:text-emerald-800"
+                  className="inline-flex min-h-11 min-w-0 items-center gap-2 hover:text-emerald-800"
                   href={`tel:${order.buyer_phone_snapshot}`}
                 >
                   <Image src="/glyphs/phone.png" alt="" width={16} height={16} />
@@ -603,7 +603,7 @@ function OrderRow({
               ) : null}
               {order.buyer_email_snapshot ? (
                 <a
-                  className="inline-flex min-w-0 items-center gap-2 hover:text-emerald-800"
+                  className="inline-flex min-h-11 min-w-0 items-center gap-2 hover:text-emerald-800"
                   href={`mailto:${order.buyer_email_snapshot}`}
                 >
                   <Image
@@ -631,7 +631,7 @@ function OrderRow({
 
             <div className="grid gap-2">
               <Link
-                className="inline-flex min-h-10 w-full items-center justify-center gap-1 rounded-md bg-emerald-800 px-3 text-sm font-medium text-white shadow-[0_8px_18px_rgba(4,120,87,0.14)] transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
+                className="inline-flex min-h-11 w-full items-center justify-center gap-1 rounded-md bg-emerald-800 px-3 text-sm font-medium text-white shadow-[0_8px_18px_rgba(4,120,87,0.14)] transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
                 href={`/dashboard/orders/${order.order_id}`}
               >
                 View order
@@ -775,7 +775,7 @@ function OrderItemsQuickview({ items }: { items: SellerOrderItemRow[] }) {
 
   return (
     <div className="grid gap-2">
-      <p className="text-xs font-medium uppercase tracking-[0.08em] text-stone-500">
+      <p className="text-sm font-medium uppercase tracking-[0.08em] text-stone-500 sm:text-xs">
         Items in order
       </p>
       <div className="grid gap-1.5">
@@ -792,7 +792,7 @@ function OrderItemsQuickview({ items }: { items: SellerOrderItemRow[] }) {
                   {item.quantity} &times; {title}
                 </p>
                 {details ? (
-                  <p className="mt-0.5 truncate text-xs text-stone-500">
+                  <p className="mt-0.5 truncate text-sm text-stone-500 sm:text-xs">
                     {details}
                   </p>
                 ) : null}
@@ -836,7 +836,7 @@ function OrderLifecycleFilters({
           >
             {filter.label}
             <span
-              className={`ml-2 rounded-full px-2 py-0.5 text-xs ${
+              className={`ml-2 rounded-full px-2 py-0.5 text-sm sm:text-xs ${
                 isActive ? "bg-white/20 text-white" : "bg-stone-100 text-stone-600"
               }`}
             >
@@ -859,7 +859,7 @@ function OrderContactButtons({
   const buttonClass =
     variant === "desktop"
       ? "seller-small-button size-8 rounded-md p-0"
-      : "seller-small-button min-h-9 rounded-md p-0";
+      : "seller-small-button min-h-11 rounded-md p-0";
 
   return (
     <div
@@ -927,7 +927,7 @@ function OrderLifecycleBadge({
 
   return (
     <span
-      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${tone}`}
+      className={`inline-flex min-h-7 items-center rounded-full px-2.5 py-1 text-sm font-medium sm:min-h-0 sm:text-xs ${tone}`}
     >
       {label}
     </span>

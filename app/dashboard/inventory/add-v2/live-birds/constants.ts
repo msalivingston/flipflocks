@@ -1,13 +1,13 @@
 import type { BirdOffering, BreedOption, SpeciesOption } from "./types";
 
 export const inputClass =
-  "min-h-10 w-full rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20";
+  "min-h-11 w-full rounded-md border border-stone-200 bg-white px-3 text-base font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm";
 
 export const disabledButtonClass =
-  "inline-flex min-h-10 cursor-not-allowed items-center justify-center rounded-md border border-emerald-800/25 bg-emerald-50/40 px-4 text-sm font-semibold text-emerald-900 opacity-65";
+  "inline-flex min-h-11 cursor-not-allowed items-center justify-center rounded-md border border-emerald-800/25 bg-emerald-50/40 px-4 text-sm font-semibold text-emerald-900 opacity-65 sm:min-h-10";
 
 export const mutedTextActionClass =
-  "text-xs font-semibold text-stone-400";
+  "text-sm font-semibold text-stone-500 sm:text-xs sm:text-stone-400";
 
 export const liveBirdsV2DraftMarker = "__add_inventory_v2_live_birds__";
 

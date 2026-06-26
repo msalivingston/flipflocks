@@ -27,7 +27,7 @@ export function AgeBasedPriceChangesCard({
             <p className="text-sm font-medium leading-6 text-stone-600">
               Automatically raise or lower prices after the available date.
             </p>
-            <p className="mt-1 text-xs font-medium leading-5 text-stone-500">
+            <p className="mt-1 text-sm font-medium leading-5 text-stone-500 sm:text-xs">
               Applies to every Birds for Sale group in this hatch. Buyers only
               see the current price.
             </p>
@@ -121,7 +121,7 @@ function PriceDirectionToggle({
 
   return (
     <div>
-      <p className="mb-1.5 block text-xs font-semibold text-stone-600">
+      <p className="mb-1.5 block text-sm font-semibold text-stone-600 sm:text-xs">
         Price direction
       </p>
       <button
@@ -186,7 +186,7 @@ function NumberField({
 }) {
   return (
     <label>
-      <span className="mb-1.5 block text-xs font-semibold text-stone-600">
+      <span className="mb-1.5 block text-sm font-semibold text-stone-600 sm:text-xs">
         {label}
       </span>
       <span className="relative block">
@@ -204,7 +204,7 @@ function NumberField({
           onChange={(event) => onChange(event.target.value)}
         />
         {suffix ? (
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-stone-500">
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-stone-500 sm:text-xs">
             {suffix}
           </span>
         ) : null}
