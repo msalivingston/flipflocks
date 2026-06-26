@@ -150,7 +150,7 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
                 />
               </Link>
               <div className="min-w-0">
-                <p className="truncate text-xs text-stone-600">
+                <p className="truncate text-sm font-semibold text-stone-700">
                   {seller.store_name}
                 </p>
               </div>
@@ -166,23 +166,19 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="min-w-0 flex-1 overflow-x-hidden pb-[calc(5.75rem+env(safe-area-inset-bottom))] lg:pb-0">
+        <main className="min-w-0 flex-1 overflow-x-hidden pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
         </main>
 
         <nav
           aria-label="Seller navigation"
-          className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-200/80 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_20px_rgba(67,55,38,0.08)] lg:hidden"
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-200/80 bg-white pb-[calc(env(safe-area-inset-bottom)+0.35rem)] shadow-[0_-8px_20px_rgba(67,55,38,0.08)] lg:hidden"
         >
-          <div className="overflow-x-auto px-2 py-1.5 pr-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="overflow-x-auto px-2 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="flex gap-1">
               <MobileSellerNavLinks />
             </div>
           </div>
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 right-0 w-9 bg-gradient-to-l from-white via-white/90 to-white/0"
-          />
         </nav>
       </div>
     </div>
@@ -228,8 +224,10 @@ function MobileSellerNavLinks() {
       <Link
         key={item.href}
         href={item.href}
-        className={`flex min-h-14 min-w-[4.75rem] flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-1.5 text-center text-[0.7rem] font-semibold leading-tight ${
-          isActive ? "bg-emerald-100 text-emerald-950" : "text-stone-600"
+        className={`flex min-h-[4.25rem] min-w-[4.55rem] flex-col items-center justify-center gap-1 rounded-2xl px-1.5 py-2 text-center text-[0.78rem] font-bold leading-tight ${
+          isActive
+            ? "bg-emerald-100 text-emerald-950 shadow-sm"
+            : "text-stone-700"
         }`}
       >
         <NavGlyph src={item.glyph} alt="" />

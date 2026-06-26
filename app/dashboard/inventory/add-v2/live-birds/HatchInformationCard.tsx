@@ -30,7 +30,7 @@ export function HatchInformationCard({
 }) {
   return (
     <SectionCard step="1" title="Hatch Information">
-      <p className="text-sm leading-6 text-stone-600">
+      <p className="text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
         Use a separate entry for birds from a different hatch date.
       </p>
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -53,7 +53,7 @@ export function HatchInformationCard({
         />
       </div>
       <div
-        className={`mt-4 rounded-md border px-4 py-3 text-sm font-semibold ${
+        className={`mt-4 rounded-md border px-4 py-3 text-base font-semibold sm:text-sm ${
           ageAtAvailability.status === "warning"
             ? "border-amber-200 bg-amber-50 text-amber-800"
             : "border-emerald-200 bg-emerald-50 text-emerald-900"
@@ -62,18 +62,18 @@ export function HatchInformationCard({
         {ageAtAvailability.message}
       </div>
       {referenceLoading ? (
-        <p className="mt-3 text-sm font-semibold text-stone-500 sm:text-xs">
+        <p className="mt-3 text-sm font-semibold leading-6 text-stone-500">
           Loading species and breed profile options...
         </p>
       ) : null}
       {referenceError ? (
-        <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-5 text-amber-800 sm:text-xs">
+        <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-6 text-amber-800">
           Reference data could not be loaded. Local placeholder options are still
           available for this UI shell.
         </p>
       ) : null}
       {!referenceLoading && !referenceError && usingFallbackSpecies ? (
-        <p className="mt-3 text-sm font-semibold text-stone-500 sm:text-xs">
+        <p className="mt-3 text-sm font-semibold leading-6 text-stone-500">
           Species options are local placeholders until matching reference rows
           are available.
         </p>
@@ -93,7 +93,7 @@ function SpeciesField({
 }) {
   return (
     <label>
-      <span className="mb-1.5 block text-sm font-semibold text-stone-600 sm:text-xs">
+      <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
         Species
       </span>
       <span className="relative block">
@@ -155,7 +155,7 @@ function DateField({
 }) {
   return (
     <label>
-      <span className="mb-1.5 block text-sm font-semibold text-stone-600 sm:text-xs">
+      <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
         {label}
       </span>
       <span className="relative block">

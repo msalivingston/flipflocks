@@ -12,12 +12,12 @@ export function SectionCard({
   title: string;
 }) {
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-3 shadow-sm sm:p-5">
-      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-900 sm:size-8">
+    <section className="rounded-xl border border-transparent bg-white p-4 shadow-none sm:rounded-lg sm:border-stone-200 sm:p-5 sm:shadow-sm">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900 sm:size-8 sm:text-sm">
           {step}
         </span>
-        <h2 className="text-base font-semibold text-stone-950 sm:text-lg">
+        <h2 className="text-xl font-bold text-stone-950 sm:text-lg sm:font-semibold">
           {title}
         </h2>
         {badge ? (

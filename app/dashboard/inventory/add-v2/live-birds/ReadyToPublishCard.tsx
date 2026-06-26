@@ -51,7 +51,7 @@ export function ReadyToPublishCard({
         />
       </div>
       <p
-        className={`mt-5 rounded-md border px-3 py-2 text-sm font-semibold ${
+        className={`mt-5 rounded-md border px-3 py-2 text-base font-semibold sm:text-sm ${
           readyToPublish
             ? "border-emerald-200 bg-emerald-50 text-emerald-800"
             : "border-stone-200 bg-stone-50 text-stone-600"
@@ -86,9 +86,9 @@ function ChecklistRow({
   label: string;
 }) {
   return (
-    <div className="flex items-center gap-3 text-sm text-stone-700">
+    <div className="flex items-center gap-3 text-base font-medium text-stone-700 sm:text-sm">
       <span
-        className={`flex h-5 w-5 items-center justify-center rounded-full ${
+        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full sm:h-5 sm:w-5 ${
           complete
             ? "bg-emerald-600"
             : "border border-stone-300 bg-stone-100"

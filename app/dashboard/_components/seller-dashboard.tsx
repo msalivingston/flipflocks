@@ -296,13 +296,13 @@ function MetricCard({
           />
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-medium leading-snug text-stone-600">
+          <p className="text-base font-medium leading-snug text-stone-600 sm:text-sm">
             {label}
           </p>
           <p className={`mt-0.5 font-serif text-2xl font-bold sm:mt-1 sm:text-3xl ${valueTone}`}>
             {value ?? 0}
           </p>
-          <p className="mt-0.5 text-sm leading-5 text-stone-500 sm:mt-1">
+          <p className="mt-0.5 text-sm leading-6 text-stone-500 sm:mt-1 sm:leading-5">
             {helper}
           </p>
         </div>
@@ -330,7 +330,10 @@ function SectionHeading({
           {title}
         </h2>
       </div>
-      <Link className="text-sm font-semibold text-emerald-800" href={actionHref}>
+      <Link
+        className="inline-flex min-h-11 items-center text-base font-bold text-emerald-800 sm:min-h-0 sm:text-sm sm:font-semibold"
+        href={actionHref}
+      >
         {actionLabel}
       </Link>
     </div>
@@ -380,7 +383,7 @@ function OrderRow({
         </div>
 
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-stone-950">
+          <p className="truncate text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">
             {customerName}
           </p>
           <p className="text-sm text-stone-600 sm:mt-0.5">

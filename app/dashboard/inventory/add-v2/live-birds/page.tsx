@@ -1271,7 +1271,7 @@ export default function LiveBirdsV2Page() {
       <div className="max-w-7xl">
         <header className="mb-5">
           <Link
-            className="inline-flex text-sm font-semibold text-emerald-800 underline-offset-4 hover:underline"
+            className="inline-flex min-h-11 items-center text-base font-bold text-emerald-800 underline-offset-4 hover:underline sm:min-h-0 sm:text-sm sm:font-semibold"
             href="/dashboard/inventory/add-v2"
           >
             Inventory / Add Inventory
@@ -1281,12 +1281,12 @@ export default function LiveBirdsV2Page() {
               <h1 className="text-3xl font-semibold text-stone-950">
                 Add Live Birds
               </h1>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
+              <p className="mt-2 max-w-3xl text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
                 Add birds from one hatch date, then create one or more groups
                 for sale.
               </p>
               {isLoadedDraft ? (
-                <p className="mt-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800">
+                <p className="mt-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold leading-6 text-sky-800">
                   {isPublished
                     ? "Published to storefront."
                     : "Draft loaded. Save draft updates this saved draft."}
@@ -1295,14 +1295,14 @@ export default function LiveBirdsV2Page() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
-                className="inline-flex min-h-11 items-center rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-9"
+                className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-3 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-9 sm:text-sm sm:font-semibold"
                 type="button"
                 onClick={() => setIsStartOverDialogOpen(true)}
               >
                 Start over
               </button>
               <span
-                className={`inline-flex w-fit rounded-full border px-3 py-1 text-sm font-semibold sm:text-xs ${
+                className={`inline-flex min-h-8 w-fit items-center rounded-full border px-3 py-1 text-sm font-semibold sm:min-h-0 sm:text-xs ${
                   isPublished
                     ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                     : "border-amber-200 bg-amber-50 text-amber-800"
@@ -1319,7 +1319,7 @@ export default function LiveBirdsV2Page() {
         </header>
 
         {draftLoading ? (
-          <div className="rounded-lg border border-stone-200 bg-white px-5 py-8 text-sm font-semibold text-stone-600 shadow-sm">
+          <div className="rounded-xl border border-transparent bg-white px-5 py-8 text-base font-semibold text-stone-600 shadow-none sm:rounded-lg sm:border-stone-200 sm:text-sm sm:shadow-sm">
             Loading saved draft...
           </div>
         ) : draftLoadError ? (
@@ -1327,7 +1327,7 @@ export default function LiveBirdsV2Page() {
             <h2 className="text-base font-semibold text-red-950">
               Draft could not be loaded
             </h2>
-            <p className="mt-2 text-sm leading-6 text-red-800">
+            <p className="mt-2 text-base leading-7 text-red-800 sm:text-sm sm:leading-6">
               {draftLoadError}
             </p>
           </div>
@@ -1369,7 +1369,7 @@ export default function LiveBirdsV2Page() {
                 onBreedPhotosChanged={() => void reloadBreedPhotos()}
               />
               {breedPhotoActionMessage ? (
-                <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold leading-5 text-emerald-900">
+                <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold leading-6 text-emerald-900">
                   {breedPhotoActionMessage}
                 </p>
               ) : null}
@@ -1452,20 +1452,20 @@ function StartOverDialog({
     >
       <div className="w-full max-w-md rounded-lg border border-stone-200 bg-white p-5 shadow-xl">
         <h2 className="text-lg font-semibold text-stone-950">Start over?</h2>
-        <p className="mt-2 text-sm leading-6 text-stone-600">
+        <p className="mt-2 text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
           This will clear the information on this page. Saved drafts will not be
           deleted.
         </p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button
-            className="inline-flex min-h-11 items-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-10"
+            className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-4 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-10 sm:text-sm sm:font-semibold"
             type="button"
             onClick={onCancel}
           >
             Keep editing
           </button>
           <button
-            className="inline-flex min-h-11 items-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10"
+            className="inline-flex min-h-12 items-center rounded-md bg-emerald-800 px-4 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:text-sm sm:font-semibold"
             type="button"
             onClick={onConfirm}
           >
@@ -1502,22 +1502,22 @@ function UnsavedNavigationDialog({
         <h2 className="text-lg font-semibold text-stone-950">
           Save this draft?
         </h2>
-        <p className="mt-2 text-sm leading-6 text-stone-600">
+        <p className="mt-2 text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
           This inventory has not been saved. Save it as a draft before leaving?
         </p>
         {message ? (
-          <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold leading-5 text-red-800">
+          <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold leading-6 text-red-800">
             {message}
           </p>
         ) : null}
         {!canSaveDraft ? (
-          <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-5 text-amber-800">
+          <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-6 text-amber-800">
             This draft needs a few more details before it can be saved.
           </p>
         ) : null}
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button
-            className="inline-flex min-h-11 items-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-10"
+            className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-4 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-10 sm:text-sm sm:font-semibold"
             type="button"
             onClick={onLeaveWithoutSaving}
             disabled={saving}
@@ -1525,7 +1525,7 @@ function UnsavedNavigationDialog({
             Leave without saving
           </button>
           <button
-            className="inline-flex min-h-11 items-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-10"
+            className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-4 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-10 sm:text-sm sm:font-semibold"
             type="button"
             onClick={onKeepEditing}
             disabled={saving}
@@ -1533,7 +1533,7 @@ function UnsavedNavigationDialog({
             Keep editing
           </button>
           <button
-            className="inline-flex min-h-11 items-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-emerald-800/45 sm:min-h-10"
+            className="inline-flex min-h-12 items-center rounded-md bg-emerald-800 px-4 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-emerald-800/45 sm:min-h-10 sm:text-sm sm:font-semibold"
             type="button"
             onClick={onSaveDraft}
             disabled={!canSaveDraft || saving}

@@ -248,7 +248,7 @@ function DetailHeader({
         <h1 className="mt-3 truncate text-3xl font-semibold text-stone-950">
           {customerName}
         </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+        <p className="mt-2 max-w-2xl text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
           Review contact details and purchase history for this buyer.
         </p>
       </div>
@@ -269,7 +269,7 @@ function CustomerSummaryCard({
   pickupLocation: string | null;
 }) {
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+    <section className="rounded-xl border border-transparent bg-white p-5 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm">
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] xl:items-center">
         <div className="flex min-w-0 gap-4">
           <InitialsBubble customer={customer} />
@@ -278,11 +278,11 @@ function CustomerSummaryCard({
               {customerName}
             </h2>
             {customer.business_name ? (
-              <p className="mt-1 truncate text-sm font-semibold text-stone-700">
+              <p className="mt-1 truncate text-base font-semibold text-stone-700 sm:text-sm">
                 {customer.business_name}
               </p>
             ) : null}
-            <div className="mt-4 grid min-w-0 gap-2 text-sm text-stone-600">
+            <div className="mt-4 grid min-w-0 gap-2 text-base text-stone-600 sm:text-sm">
               <ContactLine
                 icon="/glyphs/envelope.png"
                 value={customer.email}
@@ -330,14 +330,14 @@ function CustomerSummaryCard({
 
 function OrderHistoryCard({ orders }: { orders: SellerCustomerOrderRow[] }) {
   return (
-    <section className="min-w-0 rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+    <section className="min-w-0 rounded-xl border border-transparent bg-white p-5 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm">
       <div className="flex min-w-0 items-start gap-3">
         <IconBubble src="/glyphs/clipboard.png" />
         <div className="min-w-0">
           <h2 className="text-xl font-semibold text-stone-950">
             Order history
           </h2>
-          <p className="mt-1 text-sm leading-6 text-stone-600">
+          <p className="mt-1 text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
             Previous requests and purchases from this customer.
           </p>
         </div>
@@ -365,7 +365,7 @@ function CustomerOrderCard({ order }: { order: SellerCustomerOrderRow }) {
   const status = formatOrderLifecycle(order);
 
   return (
-    <article className="rounded-lg border border-stone-200 bg-white p-4 shadow-[0_8px_18px_rgba(46,39,25,0.04)]">
+    <article className="rounded-xl border border-transparent bg-stone-50/70 p-4 shadow-none sm:rounded-lg sm:border-stone-200 sm:bg-white sm:shadow-[0_8px_18px_rgba(46,39,25,0.04)]">
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -384,7 +384,7 @@ function CustomerOrderCard({ order }: { order: SellerCustomerOrderRow }) {
           </p>
         </div>
         <Link
-          className="inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-950 transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 sm:min-h-10"
+          className="inline-flex min-h-12 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-stone-300 bg-white px-4 text-base font-bold text-stone-950 transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 sm:min-h-10 sm:text-sm sm:font-semibold"
           href={`/dashboard/orders/${order.order_id}`}
         >
           View order
@@ -472,7 +472,7 @@ function ContactDetailsCard({
   }
 
   return (
-    <section className="min-w-0 rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+    <section className="min-w-0 rounded-xl border border-transparent bg-white p-5 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <IconBubble src="/glyphs/person.png" />
@@ -580,7 +580,7 @@ function CustomerNotesCard({
   }
 
   return (
-    <section className="min-w-0 rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+    <section className="min-w-0 rounded-xl border border-transparent bg-white p-5 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <IconBubble src="/glyphs/clipboard.png" />
@@ -604,7 +604,7 @@ function CustomerNotesCard({
               Notes
             </span>
             <textarea
-              className="min-h-32 w-full resize-y rounded-md border border-stone-300 bg-white px-3 py-2 text-base leading-6 text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100 sm:text-sm"
+              className="min-h-32 w-full resize-y rounded-md border border-stone-300 bg-white px-3 py-2 text-base font-medium leading-6 text-stone-950 shadow-sm outline-none transition placeholder:text-stone-500 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100 sm:text-sm sm:font-normal"
               onChange={(event) => setNotes(event.target.value)}
               value={notes}
             />
@@ -619,7 +619,7 @@ function CustomerNotesCard({
           />
         </form>
       ) : (
-        <p className="mt-5 whitespace-pre-wrap break-words text-sm font-medium leading-6 text-stone-700">
+        <p className="mt-5 whitespace-pre-wrap break-words text-base font-medium leading-7 text-stone-700 sm:text-sm sm:leading-6">
           {customer.internal_notes?.trim() || (
             <span className="font-normal text-stone-500">No notes yet.</span>
           )}
@@ -631,7 +631,7 @@ function CustomerNotesCard({
 
 function WorkingOrdersCard({ count }: { count: number }) {
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+    <section className="rounded-xl border border-transparent bg-white p-5 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm">
       <div className="flex items-center gap-3">
         <IconBubble src="/glyphs/egg-carton.png" />
         <h2 className="text-xl font-semibold text-stone-950">
@@ -639,7 +639,7 @@ function WorkingOrdersCard({ count }: { count: number }) {
         </h2>
       </div>
       <p className="mt-5 text-3xl font-semibold text-stone-950">{count}</p>
-      <p className="mt-3 text-sm leading-6 text-stone-600">
+      <p className="mt-3 text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
         Open orders that may still need pickup coordination.
       </p>
     </section>
@@ -744,7 +744,7 @@ function IconButton({
   return (
     <button
       aria-label={label}
-      className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-600 transition hover:border-emerald-700 hover:bg-emerald-50"
+      className="inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-600 transition hover:border-emerald-700 hover:bg-emerald-50 sm:size-9"
       onClick={onClick}
       title={label}
       type="button"
@@ -766,7 +766,7 @@ function FormActions({
   return (
     <div className="flex flex-wrap justify-end gap-2">
       <button
-        className="inline-flex min-h-11 items-center justify-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-950 transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10"
+        className="inline-flex min-h-12 items-center justify-center rounded-md border border-stone-300 bg-white px-4 text-base font-bold text-stone-950 transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10 sm:text-sm sm:font-semibold"
         disabled={isSaving}
         onClick={onCancel}
         type="button"
@@ -774,7 +774,7 @@ function FormActions({
         Cancel
       </button>
       <button
-        className="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10"
+        className="inline-flex min-h-12 items-center justify-center rounded-md bg-emerald-800 px-4 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10 sm:text-sm sm:font-semibold"
         disabled={isSaving}
         type="submit"
       >
@@ -815,7 +815,7 @@ function InitialsBubble({ customer }: { customer: SellerCustomerDetailRow }) {
 function BackToCustomersLink() {
   return (
     <Link
-      className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-950 shadow-sm transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 sm:min-h-10"
+      className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-md border border-stone-300 bg-white px-4 text-base font-bold text-stone-950 shadow-sm transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 sm:min-h-10 sm:text-sm sm:font-semibold"
       href="/dashboard/customers"
     >
       <ArrowLeft aria-hidden="true" className="size-4" />

@@ -27,10 +27,10 @@ export function ReviewPublishCard({
     <SectionCard step="4" title="Ready to publish?">
       <div className="space-y-4 sm:space-y-6">
         <div className="space-y-2 sm:space-y-3">
-          <p className="text-sm leading-6 text-stone-700">
+          <p className="text-base leading-7 text-stone-700 sm:text-sm sm:leading-6">
             Review the details above, then publish when everything looks right.
           </p>
-          <p className="text-sm leading-6 text-stone-500">
+          <p className="text-base leading-7 text-stone-500 sm:text-sm sm:leading-6">
             Published birds will appear in your storefront inventory.
           </p>
         </div>
@@ -117,7 +117,7 @@ function FinalActionStatus({
     <div className="space-y-2">
       {messages.map((message) => (
         <p
-          className={`rounded-md border px-3 py-2 text-sm font-semibold ${getStatusMessageClass(
+          className={`rounded-md border px-3 py-2 text-base font-semibold sm:text-sm ${getStatusMessageClass(
             message.status,
           )}`}
           key={message.key}
@@ -126,7 +126,7 @@ function FinalActionStatus({
         </p>
       ))}
       {visibleDisabledReason ? (
-        <p className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-semibold text-stone-700">
+        <p className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-base font-semibold text-stone-700 sm:text-sm">
           {visibleDisabledReason}
         </p>
       ) : null}
@@ -139,9 +139,9 @@ function FinalActionStatus({
 
 function PreflightList({ items }: { items: string[] }) {
   return (
-    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-base text-amber-900 sm:text-sm">
       <p className="font-semibold">Finish these details before publishing.</p>
-      <ul className="mt-2 space-y-1 text-sm font-medium leading-5 sm:text-xs">
+      <ul className="mt-2 space-y-1 text-sm font-medium leading-6">
         {items.map((item) => (
           <li key={item}>- {item}</li>
         ))}
@@ -182,7 +182,7 @@ export function SaveDraftButton({
 
   return (
     <button
-      className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-emerald-800/40 bg-white px-5 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:w-auto"
+      className="inline-flex min-h-12 w-full items-center justify-center rounded-md border border-emerald-800/40 bg-white px-5 text-base font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
       onClick={onSaveDraft}
       type="button"
     >
@@ -212,7 +212,7 @@ export function PublishInventoryButton({
   if (disabled) {
     return (
       <button
-        className="inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-5 text-sm font-semibold text-white opacity-65 sm:min-h-10 sm:w-auto"
+        className="inline-flex min-h-12 w-full cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-5 text-base font-bold text-white opacity-65 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
         disabled
         title={publishDisabledReason ?? undefined}
         type="button"
@@ -224,7 +224,7 @@ export function PublishInventoryButton({
 
   return (
     <button
-      className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-800 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:w-auto"
+      className="inline-flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-800 px-5 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
       onClick={onReviewPublish}
       type="button"
     >

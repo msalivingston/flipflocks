@@ -692,10 +692,10 @@ export function InventoryManagement() {
               setAvailabilityFilter(value as AvailabilityFilter)
             }
           />
-          <label className="grid gap-1.5 text-sm font-semibold text-stone-700">
+          <label className="grid gap-1.5 text-base font-bold text-stone-700 sm:text-sm">
             Search
             <input
-              className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-base font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm"
+              className="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base font-semibold text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm sm:font-medium"
               placeholder="Breed or name"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
@@ -787,10 +787,10 @@ function InventorySummaryCard({
         <Image src={glyph} alt="" width={21} height={21} />
       </span>
       <div className="min-w-0">
-        <p className="text-xs font-bold uppercase tracking-[0.05em] text-stone-500 sm:text-[0.68rem]">
+        <p className="text-sm font-bold uppercase tracking-[0.05em] text-stone-500 sm:text-[0.68rem]">
           {label}
         </p>
-        <p className="mt-0.5 text-xl font-semibold leading-none text-stone-950">
+        <p className="mt-0.5 text-2xl font-bold leading-none text-stone-950 sm:text-xl sm:font-semibold">
           {value}
         </p>
       </div>
@@ -882,13 +882,13 @@ function FlatInventoryTable({
     <>
       {selectedCount > 0 ? (
         <div className="hidden border-b border-stone-200 bg-emerald-50/70 px-4 py-3 lg:flex lg:items-center lg:justify-between">
-          <p className="text-sm font-semibold text-emerald-950">
+          <p className="text-base font-bold text-emerald-950 sm:text-sm sm:font-semibold">
             {selectedCount} selected
           </p>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="rounded-md border border-red-700 bg-red-700 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700/25 disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-12 rounded-md border border-red-700 bg-red-700 px-3 py-2 text-base font-bold text-white shadow-sm transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700/25 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0 sm:text-sm sm:font-semibold"
               disabled={isDeleting}
               onClick={onDeleteSelected}
             >
@@ -923,12 +923,12 @@ function FlatInventoryTable({
       {selectedCount > 0 ? (
         <div className="sticky bottom-0 z-30 border-t border-emerald-900/20 bg-white/95 px-3 py-2 shadow-[0_-8px_20px_rgba(0,0,0,0.08)] backdrop-blur lg:hidden">
           <div className="flex items-center gap-2">
-            <p className="min-w-0 flex-1 text-sm font-semibold text-emerald-950">
+            <p className="min-w-0 flex-1 text-base font-bold text-emerald-950 sm:text-sm sm:font-semibold">
               {selectedCount} selected
             </p>
             <button
               type="button"
-              className="min-h-11 rounded-md border border-red-700 bg-red-700 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700/25 disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-12 rounded-md border border-red-700 bg-red-700 px-3 py-2 text-base font-bold text-white shadow-sm transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700/25 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-11 sm:text-sm sm:font-semibold"
               disabled={isDeleting}
               onClick={onDeleteSelected}
             >
@@ -936,7 +936,7 @@ function FlatInventoryTable({
             </button>
             <button
               type="button"
-              className="min-h-11 rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 shadow-sm transition hover:border-emerald-700 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-12 rounded-md border border-stone-300 bg-white px-3 py-2 text-base font-bold text-stone-800 shadow-sm transition hover:border-emerald-700 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-11 sm:text-sm sm:font-semibold"
               disabled={isDeleting}
               onClick={onClearSelection}
             >
@@ -1108,12 +1108,12 @@ function FlatInventoryCard({
 
   return (
     <article
-      className={`rounded-md border p-3 ${
+      className={`rounded-lg border p-4 shadow-sm sm:p-3 ${
         isSelected
           ? "border-emerald-700 bg-emerald-50/70"
           : isChanged
             ? "border-amber-200 bg-amber-50/70"
-            : "border-stone-200 bg-white"
+            : "border-transparent bg-white sm:border-stone-200"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -1121,7 +1121,7 @@ function FlatInventoryCard({
           <input
             aria-label={`Select ${item.breedOrItem}`}
             checked={isSelected}
-            className="mt-0.5 size-6 shrink-0 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
+            className="mt-0.5 size-7 shrink-0 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700 sm:size-6"
             type="checkbox"
             onChange={() => onToggleSelection(item.id)}
           />
@@ -1129,7 +1129,7 @@ function FlatInventoryCard({
             <h2 className="truncate text-base font-semibold text-stone-950">
               {item.breedOrItem}
             </h2>
-            <p className="mt-0.5 text-sm text-stone-600">
+            <p className="mt-0.5 text-sm leading-5 text-stone-600">
               {item.species}
               {item.typeSex !== "—" ? ` • ${item.typeSex}` : ""}
             </p>
@@ -1142,7 +1142,7 @@ function FlatInventoryCard({
         <InventoryCardField label="Hatch date" value={formatTableDate(item.hatchDate)} />
         <InventoryCardField label="Age" value={item.ageLabel} />
         <div className="rounded-md bg-stone-50 px-2.5 py-2">
-          <dt className="text-xs font-semibold uppercase tracking-[0.05em] text-stone-500">
+          <dt className="text-sm font-bold uppercase tracking-[0.05em] text-stone-500 sm:text-xs sm:font-semibold">
             Available
           </dt>
           <dd className="mt-1">
@@ -1177,10 +1177,10 @@ function InventoryCardField({
 }) {
   return (
     <div className="rounded-md bg-stone-50 px-2.5 py-2">
-      <dt className="text-xs font-semibold uppercase tracking-[0.05em] text-stone-500">
+      <dt className="text-sm font-bold uppercase tracking-[0.05em] text-stone-500 sm:text-xs sm:font-semibold">
         {label}
       </dt>
-      <dd className="mt-1 text-base font-semibold text-stone-950 sm:text-sm">{value}</dd>
+      <dd className="mt-1 text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">{value}</dd>
     </div>
   );
 }
@@ -1214,7 +1214,7 @@ function AvailableQuantityControl({
     <div className="flex flex-col items-center">
       <input
         aria-label={`Available quantity for ${item.breedOrItem}`}
-        className={`h-11 w-20 rounded-md border px-2 text-center text-base font-semibold text-stone-950 shadow-sm focus:outline-none focus:ring-2 sm:h-8 sm:w-16 sm:text-sm ${
+        className={`h-12 w-24 rounded-md border px-2 text-center text-lg font-bold text-stone-950 shadow-sm focus:outline-none focus:ring-2 sm:h-8 sm:w-16 sm:text-sm sm:font-semibold ${
           rowHasInvalidQuantity
             ? "border-red-400 focus:border-red-600 focus:ring-red-600/20"
             : isChanged
@@ -1228,7 +1228,7 @@ function AvailableQuantityControl({
         onChange={(event) => updateDraftQuantity(item.row, event.target.value)}
       />
       {isChanged ? (
-        <p className="mt-1 text-xs font-semibold text-amber-700">
+        <p className="mt-1 text-sm font-semibold text-amber-700 sm:text-xs">
           Unsaved
         </p>
       ) : null}
@@ -1382,7 +1382,7 @@ function ProcessedPoultryInventoryCard({
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-2">
         <div className="rounded-md bg-stone-50 px-3 py-2">
-          <dt className="text-xs font-semibold uppercase tracking-[0.06em] text-stone-500">
+          <dt className="text-sm font-bold uppercase tracking-[0.06em] text-stone-500 sm:text-xs sm:font-semibold">
             Quantity
           </dt>
           <dd className="mt-1 text-lg font-semibold text-stone-950">
@@ -1390,7 +1390,7 @@ function ProcessedPoultryInventoryCard({
           </dd>
         </div>
         <div className="rounded-md bg-stone-50 px-3 py-2">
-          <dt className="text-xs font-semibold uppercase tracking-[0.06em] text-stone-500">
+          <dt className="text-sm font-bold uppercase tracking-[0.06em] text-stone-500 sm:text-xs sm:font-semibold">
             Price
           </dt>
           <dd className="mt-1 text-lg font-semibold text-stone-950">

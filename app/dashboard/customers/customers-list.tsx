@@ -450,7 +450,7 @@ function Pagination({
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <button
-          className="inline-flex min-h-10 items-center justify-center rounded-md border border-stone-200 bg-white px-3 font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-45"
+          className="inline-flex min-h-12 items-center justify-center rounded-md border border-stone-200 bg-white px-3 text-base font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-10 sm:text-sm"
           type="button"
           disabled={currentPage === 1}
           onClick={() => onPageChange(currentPage - 1)}
@@ -460,7 +460,7 @@ function Pagination({
         {pages.map((paginationItem, index) =>
           paginationItem === "ellipsis" ? (
             <span
-              className="inline-flex min-h-10 min-w-10 items-center justify-center font-bold text-stone-500"
+              className="inline-flex min-h-12 min-w-12 items-center justify-center text-base font-bold text-stone-500 sm:min-h-10 sm:min-w-10 sm:text-sm"
               key={`ellipsis-${index}`}
             >
               ...

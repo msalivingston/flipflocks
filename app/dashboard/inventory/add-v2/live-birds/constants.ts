@@ -1,10 +1,10 @@
 import type { BirdOffering, BreedOption, SpeciesOption } from "./types";
 
 export const inputClass =
-  "min-h-11 w-full rounded-md border border-stone-200 bg-white px-3 text-base font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm";
+  "min-h-12 w-full rounded-md border border-stone-300 bg-white px-3 text-base font-semibold text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:border-stone-200 sm:text-sm sm:font-medium";
 
 export const disabledButtonClass =
-  "inline-flex min-h-11 cursor-not-allowed items-center justify-center rounded-md border border-emerald-800/25 bg-emerald-50/40 px-4 text-sm font-semibold text-emerald-900 opacity-65 sm:min-h-10";
+  "inline-flex min-h-12 cursor-not-allowed items-center justify-center rounded-md border border-emerald-800/25 bg-emerald-50/40 px-4 text-base font-semibold text-emerald-900 opacity-65 sm:min-h-10 sm:text-sm";
 
 export const mutedTextActionClass =
   "text-sm font-semibold text-stone-500 sm:text-xs sm:text-stone-400";

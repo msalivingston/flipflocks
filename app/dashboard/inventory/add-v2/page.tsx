@@ -143,7 +143,7 @@ function InventoryOptionCard({ option }: { option: InventoryOption }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-lg font-semibold text-stone-950">
+          <h2 className="text-xl font-bold text-stone-950 sm:text-lg sm:font-semibold">
             {option.title}
           </h2>
           {option.href ? null : (
@@ -152,7 +152,7 @@ function InventoryOptionCard({ option }: { option: InventoryOption }) {
             </span>
           )}
         </div>
-        <p className="mt-2 text-sm leading-6 text-stone-600">
+        <p className="mt-2 text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
           {option.description}
         </p>
       </div>
@@ -160,7 +160,7 @@ function InventoryOptionCard({ option }: { option: InventoryOption }) {
   );
 
   const className =
-    "flex min-h-40 gap-4 rounded-lg border border-stone-200 bg-white p-5 text-left shadow-sm transition";
+    "flex min-h-40 gap-4 rounded-xl border border-transparent bg-white p-5 text-left shadow-sm transition sm:rounded-lg sm:border-stone-200";
 
   if (option.href) {
     return (
@@ -195,13 +195,13 @@ function SavedDraftsSection({
   if (isLoading || (!error && drafts.length === 0)) return null;
 
   return (
-    <section className="mt-6 max-w-5xl rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+    <section className="mt-6 max-w-5xl rounded-xl border border-transparent bg-white p-5 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-stone-950">
             Saved drafts
           </h2>
-          <p className="mt-1 text-sm leading-6 text-stone-600">
+          <p className="mt-1 text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
             Hidden Add Inventory drafts that are not published yet.
           </p>
         </div>
@@ -234,7 +234,7 @@ function SavedDraftCard({ draft }: { draft: SavedDraft }) {
               Draft
             </span>
           </div>
-          <div className="mt-3 grid gap-2 text-sm text-stone-600 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-3 grid gap-2 text-base text-stone-600 sm:grid-cols-2 sm:text-sm lg:grid-cols-3">
             <DraftMeta label="Species" value={draft.speciesName} />
             <DraftMeta label="Hatch date" value={formatDate(draft.hatchDate)} />
             <DraftMeta
@@ -258,12 +258,12 @@ function SavedDraftCard({ draft }: { draft: SavedDraft }) {
               value={formatDateTime(draft.lastSavedAt)}
             />
           </div>
-          <p className="mt-3 text-sm leading-6 text-stone-500">
+          <p className="mt-3 text-base leading-7 text-stone-500 sm:text-sm sm:leading-6">
             Not published yet. Continue to finish setup.
           </p>
         </div>
         <Link
-          className="inline-flex min-h-10 items-center justify-center rounded-md border border-emerald-800/30 bg-white px-4 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+          className="inline-flex min-h-12 items-center justify-center rounded-md border border-emerald-800/30 bg-white px-4 text-base font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:text-sm sm:font-semibold"
           href={`/dashboard/inventory/add-v2/live-birds?draftId=${draft.id}`}
         >
           Continue
@@ -282,7 +282,7 @@ function DraftMeta({
 }) {
   return (
     <div>
-      <p className="text-sm font-semibold text-stone-500 sm:text-xs">{label}</p>
+      <p className="text-sm font-bold text-stone-500 sm:text-xs sm:font-semibold">{label}</p>
       <p className="mt-0.5 text-base font-semibold text-stone-800 sm:text-sm">
         {value || "Not set"}
       </p>

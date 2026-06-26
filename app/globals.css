@@ -138,20 +138,21 @@ body {
 
 @media (max-width: 639px) {
   .seller-small-button {
-    min-height: 2.5rem;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.875rem;
+    min-height: 3rem;
+    padding: 0.625rem 0.875rem;
+    font-size: 1rem;
   }
 
   .seller-primary-button,
   .seller-secondary-button {
-    min-height: 2.75rem;
+    min-height: 3rem;
     padding-inline: 1rem;
+    font-size: 1rem;
   }
 
   .seller-form-field,
   .seller-compact-field {
-    min-height: 2.75rem;
+    min-height: 3rem;
     font-size: 1rem;
   }
 }

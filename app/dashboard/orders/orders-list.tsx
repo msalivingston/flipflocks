@@ -412,12 +412,12 @@ function OrdersTableCard({
   return (
     <SellerCard className="overflow-hidden rounded-2xl border-stone-200/80 shadow-[0_16px_38px_rgba(46,39,25,0.05)]">
       <div className="flex flex-col gap-3 border-b border-stone-200/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <label className="flex min-h-10 items-center gap-3 text-sm font-medium text-stone-950">
+        <label className="flex min-h-12 items-center gap-3 text-base font-semibold text-stone-950 sm:min-h-10 sm:text-sm sm:font-medium">
           <input
             ref={selectAllRef}
             aria-label="Select all orders on this page"
             checked={allVisibleSelected}
-            className="size-5 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
+            className="size-6 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700 sm:size-5"
             type="checkbox"
             onChange={onToggleSelectAll}
           />
@@ -473,7 +473,7 @@ function BulkActions({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-      <span className="text-sm font-medium text-stone-500 sm:text-xs">
+      <span className="text-base font-bold text-stone-600 sm:text-xs sm:font-medium sm:text-stone-500">
         {selectedCount} selected
       </span>
       <button
@@ -494,7 +494,7 @@ function BulkActions({
         More actions
       </button>
       <button
-        className="min-h-10 rounded-md px-3 text-sm font-medium text-emerald-800 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+        className="min-h-12 rounded-md px-3 text-base font-bold text-emerald-800 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:min-h-10 sm:text-sm sm:font-medium"
         type="button"
         onClick={onClearSelection}
       >
@@ -536,7 +536,7 @@ function OrderRow({
     <article className="bg-white transition hover:bg-[#fffdf8]">
       <div className="grid gap-3 px-4 py-3 xl:hidden">
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3">
-          <label className="flex min-h-10 items-start pt-1">
+          <label className="flex min-h-12 items-start pt-1">
             <input
               aria-label={`Select order ${order.order_number}`}
               checked={isSelected}
@@ -549,7 +549,7 @@ function OrderRow({
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Link
-                className="text-base font-medium text-stone-950 hover:text-emerald-800"
+                className="text-lg font-bold text-stone-950 hover:text-emerald-800 sm:text-base sm:font-medium"
                 href={`/dashboard/orders/${order.order_id}`}
               >
                 #{order.order_number}
@@ -559,7 +559,7 @@ function OrderRow({
                 lifecycle={lifecycle}
               />
             </div>
-            <p className="mt-1 truncate text-sm text-stone-950">
+            <p className="mt-1 truncate text-base font-semibold text-stone-950 sm:text-sm sm:font-normal">
               {customerName}
             </p>
             <p className="mt-1 text-sm leading-5 text-stone-600">
@@ -576,7 +576,7 @@ function OrderRow({
             aria-label={
               isExpanded ? "Hide order details" : "Show order details"
             }
-            className="flex size-10 items-center justify-center rounded-md border border-stone-200 bg-white text-lg font-medium text-emerald-900 transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+            className="flex size-12 items-center justify-center rounded-md border border-stone-200 bg-white text-xl font-bold text-emerald-900 transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:size-10 sm:text-lg sm:font-medium"
             type="button"
             onClick={onToggleExpanded}
           >
@@ -631,7 +631,7 @@ function OrderRow({
 
             <div className="grid gap-2">
               <Link
-                className="inline-flex min-h-11 w-full items-center justify-center gap-1 rounded-md bg-emerald-800 px-3 text-sm font-medium text-white shadow-[0_8px_18px_rgba(4,120,87,0.14)] transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
+                className="inline-flex min-h-12 w-full items-center justify-center gap-1 rounded-md bg-emerald-800 px-3 text-base font-bold text-white shadow-[0_8px_18px_rgba(4,120,87,0.14)] transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 sm:min-h-11 sm:text-sm sm:font-medium"
                 href={`/dashboard/orders/${order.order_id}`}
               >
                 View order
@@ -825,7 +825,7 @@ function OrderLifecycleFilters({
         return (
           <button
             aria-pressed={isActive}
-            className={`min-h-10 shrink-0 rounded-full border px-3.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-emerald-700/30 ${
+            className={`min-h-12 shrink-0 rounded-full border px-4 text-base font-bold transition focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:min-h-10 sm:px-3.5 sm:text-sm sm:font-medium ${
               isActive
                 ? "border-emerald-800 bg-emerald-800 text-white"
                 : "border-stone-300 bg-white text-stone-700 hover:border-emerald-700 hover:text-emerald-800"

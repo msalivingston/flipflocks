@@ -24,10 +24,10 @@ export function AgeBasedPriceChangesCard({
       <div className="space-y-3 sm:space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium leading-6 text-stone-600">
+            <p className="text-base font-medium leading-7 text-stone-600 sm:text-sm sm:leading-6">
               Automatically raise or lower prices after the available date.
             </p>
-            <p className="mt-1 text-sm font-medium leading-5 text-stone-500 sm:text-xs">
+            <p className="mt-1 text-sm font-medium leading-6 text-stone-500">
               Applies to every Birds for Sale group in this hatch. Buyers only
               see the current price.
             </p>
@@ -39,7 +39,7 @@ export function AgeBasedPriceChangesCard({
                 : "Turn age-based price changes on"
             }
             aria-pressed={priceAdjustment.enabled}
-            className="inline-flex items-center gap-2 rounded-md px-1 py-1 text-sm font-semibold text-stone-700 transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+            className="inline-flex min-h-12 items-center gap-2 rounded-md px-1 py-1 text-base font-bold text-stone-700 transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-0 sm:text-sm sm:font-semibold"
             type="button"
             onClick={() =>
               updatePriceAdjustment({ enabled: !priceAdjustment.enabled })
@@ -51,7 +51,7 @@ export function AgeBasedPriceChangesCard({
         </div>
 
         {priceAdjustment.enabled ? (
-          <div className="space-y-3 rounded-md border border-stone-200 bg-stone-50/60 p-3 sm:space-y-4 sm:p-4">
+          <div className="space-y-3 rounded-lg border border-transparent bg-stone-50/70 p-0 sm:space-y-4 sm:border-stone-200 sm:p-4">
             <div className="grid gap-3 lg:grid-cols-[minmax(260px,1.35fr)_1fr_1fr_1fr]">
               <PriceDirectionToggle
                 direction={priceAdjustment.direction}
@@ -121,7 +121,7 @@ function PriceDirectionToggle({
 
   return (
     <div>
-      <p className="mb-1.5 block text-sm font-semibold text-stone-600 sm:text-xs">
+      <p className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
         Price direction
       </p>
       <button
@@ -131,12 +131,12 @@ function PriceDirectionToggle({
             : "Switch to increase over time"
         }
         aria-pressed={isIncrease}
-        className="group flex min-h-10 w-full items-center justify-start gap-3 rounded-md px-1 text-left transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+        className="group flex min-h-12 w-full items-center justify-start gap-3 rounded-md px-1 text-left transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10"
         type="button"
         onClick={() => onChange(isIncrease ? "decrease" : "increase")}
       >
         <span
-          className={`text-sm font-semibold transition ${
+          className={`text-base font-bold transition sm:text-sm sm:font-semibold ${
             isIncrease ? "text-emerald-800" : "text-stone-400"
           }`}
         >
@@ -144,7 +144,7 @@ function PriceDirectionToggle({
         </span>
         <SwitchTrack enabled={isIncrease} />
         <span
-          className={`text-sm font-semibold transition ${
+          className={`text-base font-bold transition sm:text-sm sm:font-semibold ${
             isIncrease ? "text-stone-400" : "text-emerald-800"
           }`}
         >
@@ -186,12 +186,12 @@ function NumberField({
 }) {
   return (
     <label>
-      <span className="mb-1.5 block text-sm font-semibold text-stone-600 sm:text-xs">
+      <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
         {label}
       </span>
       <span className="relative block">
         {prefix ? (
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-stone-500">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base font-semibold text-stone-500 sm:text-sm">
             {prefix}
           </span>
         ) : null}
@@ -204,7 +204,7 @@ function NumberField({
           onChange={(event) => onChange(event.target.value)}
         />
         {suffix ? (
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-stone-500 sm:text-xs">
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base font-semibold text-stone-500 sm:text-xs">
             {suffix}
           </span>
         ) : null}

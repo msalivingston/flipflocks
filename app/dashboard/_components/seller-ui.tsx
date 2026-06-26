@@ -42,7 +42,7 @@ export function SellerCard({
 }) {
   return (
     <section
-      className={`rounded-lg border border-stone-200 bg-white shadow-sm ${className}`}
+      className={`rounded-lg border border-transparent bg-white shadow-none sm:border-stone-200 sm:shadow-sm ${className}`}
     >
       {children}
     </section>
@@ -231,10 +231,10 @@ export function FilterControl({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="grid gap-1.5 text-sm font-semibold text-stone-700">
+    <label className="grid gap-1.5 text-base font-bold text-stone-700 sm:text-sm">
       {label}
       <select
-        className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-base font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm"
+        className="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base font-semibold text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm sm:font-medium"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >

@@ -57,16 +57,16 @@ export function BirdOfferingsCard({
       step="2"
       title="Birds for Sale"
     >
-      <p className="text-sm leading-6 text-stone-600">
+      <p className="text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
         Add one group for each breed, sex/type, quantity, and price.
       </p>
       {breedOptionsMessage ? (
-        <p className="mt-4 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-semibold leading-5 text-stone-600">
+        <p className="mt-4 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-semibold leading-6 text-stone-600">
           {breedOptionsMessage}
         </p>
       ) : null}
       {duplicateOfferingIds.size > 0 ? (
-        <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-5 text-amber-800">
+        <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-6 text-amber-800">
           This page already has a group for this breed and sex/type. Choose
           a different sex/type or remove the duplicate before saving later.
         </p>
@@ -106,7 +106,7 @@ export function BirdOfferingsCard({
       </div>
 
       <button
-        className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-md border border-emerald-800/30 bg-white px-4 text-sm font-semibold text-emerald-900 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:w-auto"
+        className="mt-3 inline-flex min-h-12 w-full items-center justify-center rounded-md border border-emerald-800/30 bg-white px-4 text-base font-bold text-emerald-900 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
         onClick={addOffering}
         type="button"
       >
@@ -160,19 +160,19 @@ function ExpandedOfferingCard({
     : [];
 
   return (
-    <div className="rounded-lg border border-stone-200 bg-white shadow-sm">
-      <div className="flex items-start justify-between gap-3 border-b border-stone-200 px-3 py-3 sm:px-4">
+    <div className="rounded-xl border border-transparent bg-stone-50/70 shadow-none sm:rounded-lg sm:border-stone-200 sm:bg-white sm:shadow-sm">
+      <div className="flex items-start justify-between gap-3 border-b border-stone-100 px-0 py-3 sm:border-stone-200 sm:px-4">
         <button
-          className="flex min-w-0 flex-1 items-start gap-3 text-left"
+          className="flex min-h-12 min-w-0 flex-1 items-start gap-3 text-left"
           type="button"
           onClick={() => toggleOfferingExpanded(offering.id)}
         >
           <DisclosureChevron expanded />
           <span className="min-w-0">
-            <span className="block break-words text-sm font-semibold text-stone-950">
+            <span className="block break-words text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">
               {title}
             </span>
-            <span className="mt-0.5 block text-sm font-medium text-stone-500 sm:text-xs">
+            <span className="mt-0.5 block text-sm font-medium leading-5 text-stone-500">
               {summary}
             </span>
           </span>
@@ -192,7 +192,7 @@ function ExpandedOfferingCard({
         </div>
       </div>
 
-      <div className="grid gap-3 px-3 py-3 sm:gap-4 sm:px-4 sm:py-4 lg:grid-cols-4">
+      <div className="grid gap-3 px-0 py-4 sm:gap-4 sm:px-4 sm:py-4 lg:grid-cols-4">
         <SelectField
           label="Breed"
           options={breedOptions}
@@ -240,7 +240,7 @@ function ExpandedOfferingCard({
         </p>
       ) : null}
 
-      <div className="border-t border-stone-200 px-3 py-3 sm:px-4 sm:py-4">
+      <div className="border-t border-stone-100 px-0 py-3 sm:border-stone-200 sm:px-4 sm:py-4">
         <div className="lg:hidden">
           <CompactMobilePanel
             actionLabel="Edit photo"
@@ -265,7 +265,7 @@ function ExpandedOfferingCard({
         </div>
       </div>
 
-      <div className="border-t border-stone-200 px-3 py-3 sm:px-4 sm:py-4">
+      <div className="border-t border-stone-100 px-0 py-3 sm:border-stone-200 sm:px-4 sm:py-4">
         <div className="lg:hidden">
           <CompactMobilePanel
             actionLabel="Edit description"
@@ -284,14 +284,14 @@ function ExpandedOfferingCard({
         <div
           className={isMobileDescriptionOpen ? "mt-3 lg:mt-0" : "hidden lg:block"}
         >
-          <h3 className="text-sm font-semibold text-stone-950">
+          <h3 className="text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">
             Breed description
           </h3>
-          <p className="mt-1 max-w-3xl text-sm font-medium leading-5 text-stone-500 sm:text-xs">
+          <p className="mt-1 max-w-3xl text-sm font-medium leading-6 text-stone-500">
             This description is used anywhere this breed appears in your store.
             Changing it updates your personal breed library.
           </p>
-          <p className="mt-3 text-sm font-semibold text-stone-600 sm:text-xs">
+          <p className="mt-3 text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
             Description buyers see
           </p>
           <textarea
@@ -301,7 +301,7 @@ function ExpandedOfferingCard({
               updateBreedDescription(offering.id, event.target.value)
             }
           />
-          <p className="mt-2 text-sm font-medium text-stone-500 sm:text-xs">
+          <p className="mt-2 text-sm font-medium text-stone-500">
             {offering.description.length} / 500
           </p>
         </div>
@@ -338,21 +338,23 @@ function CollapsedOfferingRow({
   return (
     <div
       className={`rounded-lg border bg-white px-3 py-3 shadow-sm sm:px-4 ${
-        hasDuplicateCombination ? "border-amber-200" : "border-stone-200"
+        hasDuplicateCombination
+          ? "border-amber-200"
+          : "border-transparent sm:border-stone-200"
       }`}
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
         <button
-          className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 text-left"
+          className="flex min-h-12 min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 text-left"
           type="button"
           onClick={() => toggleOfferingExpanded(offering.id)}
         >
           <DisclosureChevron />
           <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="break-words font-semibold text-stone-950">
+            <span className="break-words text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">
               {title}
             </span>
-            <span className="text-sm font-medium text-stone-500 sm:text-xs">
+            <span className="text-sm font-medium text-stone-500">
               {summary}
             </span>
           </span>
@@ -390,7 +392,7 @@ function RemoveOfferingControl({
 }) {
   if (!canRemove) {
     return (
-      <span className="cursor-not-allowed text-xs font-semibold text-stone-300">
+      <span className="cursor-not-allowed text-sm font-semibold text-stone-300">
         Remove group
       </span>
     );
@@ -398,7 +400,7 @@ function RemoveOfferingControl({
 
   return (
     <button
-      className="min-h-11 rounded-md px-2 text-sm font-semibold text-red-500 transition hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200 focus:ring-offset-2 sm:min-h-0 sm:px-0 sm:text-red-500"
+      className="min-h-12 rounded-md px-2 text-base font-semibold text-red-500 transition hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200 focus:ring-offset-2 sm:min-h-0 sm:px-0 sm:text-sm sm:text-red-500"
       type="button"
       onClick={() => removeOffering(offeringId)}
     >
@@ -421,16 +423,16 @@ function CompactMobilePanel({
   onToggle: () => void;
 }) {
   return (
-    <div className="rounded-md border border-stone-200 bg-stone-50/70 px-3 py-3">
+    <div className="rounded-lg border border-transparent bg-white/80 px-3 py-3 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-stone-950">{title}</p>
-          <p className="mt-0.5 text-sm font-medium leading-5 text-stone-500 sm:text-xs">
+          <p className="text-base font-bold text-stone-950">{title}</p>
+          <p className="mt-0.5 text-sm font-medium leading-5 text-stone-500">
             {subtext}
           </p>
         </div>
         <button
-          className="min-h-11 shrink-0 rounded-md border border-emerald-800/30 bg-white px-3 py-2 text-sm font-semibold text-emerald-900 shadow-sm sm:min-h-0 sm:text-xs"
+          className="min-h-12 shrink-0 rounded-md border border-emerald-800/30 bg-white px-3 py-2 text-base font-bold text-emerald-900 shadow-sm sm:min-h-0 sm:text-xs sm:font-semibold"
           type="button"
           onClick={onToggle}
         >
@@ -471,7 +473,7 @@ function SelectField({
 
   return (
     <label>
-      <span className="mb-1.5 block text-sm font-semibold text-stone-600 sm:text-xs">
+      <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
         {label}
       </span>
       <span className="relative block">
@@ -529,12 +531,12 @@ function NumberField({
 }) {
   return (
     <label>
-      <span className="mb-1.5 block text-sm font-semibold text-stone-600 sm:text-xs">
+      <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
         {label}
       </span>
       <span className="relative block">
         {prefix ? (
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-stone-500">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base font-semibold text-stone-500 sm:text-sm">
             {prefix}
           </span>
         ) : null}
@@ -602,15 +604,15 @@ function BreedPhotoPanel({
           />
         ) : (
           <div className="rounded-md border border-dashed border-stone-300 bg-stone-50 px-4 py-5">
-            <p className="text-sm font-semibold text-stone-700">
+            <p className="text-base font-bold text-stone-700 sm:text-sm sm:font-semibold">
               This catalog breed is not in your personal breed library yet.
             </p>
-            <p className="mt-2 text-sm font-medium leading-5 text-stone-500 sm:text-xs">
+            <p className="mt-2 text-sm font-medium leading-6 text-stone-500">
               Change breed photo will first add this breed to your personal
               breed library, then save photos there.
             </p>
             <button
-              className="mt-3 min-h-11 rounded-md border border-emerald-800/30 bg-white px-3 py-2 text-sm font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2 sm:min-h-0 sm:text-xs"
+              className="mt-3 min-h-12 rounded-md border border-emerald-800/30 bg-white px-3 py-2 text-base font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2 sm:min-h-0 sm:text-xs sm:font-semibold"
               type="button"
               onClick={() => prepareBreedPhotoProfile(offering.id)}
             >

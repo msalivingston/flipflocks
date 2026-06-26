@@ -11,7 +11,7 @@ export function SavePreviewCard({
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+    <section className="rounded-xl border border-transparent bg-white p-4 shadow-none sm:rounded-lg sm:border-stone-200 sm:p-5 sm:shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-stone-950">
@@ -23,7 +23,7 @@ export function SavePreviewCard({
         </div>
         <button
           aria-expanded={isExpanded}
-          className="inline-flex min-h-11 w-fit items-center justify-center rounded-md border border-stone-200 bg-stone-50 px-3 text-sm font-semibold text-stone-700 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2 sm:min-h-9 sm:text-xs"
+          className="inline-flex min-h-12 w-fit items-center justify-center rounded-md border border-stone-200 bg-stone-50 px-3 text-base font-bold text-stone-700 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2 sm:min-h-9 sm:text-xs sm:font-semibold"
           type="button"
           onClick={() => setIsExpanded((current) => !current)}
         >
@@ -59,7 +59,7 @@ export function SavePreviewCard({
 function PreviewMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-stone-200 bg-stone-50/70 px-3 py-2">
-      <p className="text-sm font-semibold text-stone-500 sm:text-xs">{label}</p>
+      <p className="text-sm font-bold text-stone-500 sm:text-xs sm:font-semibold">{label}</p>
       <p className="mt-1 text-base font-semibold text-stone-950 sm:text-sm">{value}</p>
     </div>
   );

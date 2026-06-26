@@ -101,9 +101,9 @@ type OrderDetailState = {
 };
 
 const orderDetailButtonClass =
-  "inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-emerald-700 bg-white px-3.5 text-sm font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:min-h-9";
+  "inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-emerald-700 bg-white px-3.5 text-base font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:min-h-9 sm:text-sm";
 const orderDetailBackButtonClass =
-  "inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-stone-300 bg-white px-3.5 text-sm font-bold text-stone-950 shadow-sm transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:min-h-9";
+  "inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-stone-300 bg-white px-3.5 text-base font-bold text-stone-950 shadow-sm transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:min-h-9 sm:text-sm";
 const requestedItemsGridClass =
   "grid gap-3 sm:grid-cols-[minmax(0,1fr)_3.25rem_5.75rem_6.5rem]";
 
@@ -644,10 +644,10 @@ function OrderItemRow({
           src={media?.public_url}
         />
         <div className="min-w-0">
-          <h3 className="break-words text-sm font-bold leading-5 text-stone-950 sm:truncate">
+          <h3 className="break-words text-base font-bold leading-6 text-stone-950 sm:truncate sm:text-sm sm:leading-5">
             {itemTitle}
           </h3>
-          <p className="mt-0.5 break-words text-sm leading-5 text-stone-600 sm:truncate">
+          <p className="mt-0.5 break-words text-sm leading-6 text-stone-600 sm:truncate sm:leading-5">
             {details.join(" - ")}
           </p>
           <p className="mt-0.5 break-words text-sm font-medium leading-5 text-stone-500 sm:text-xs">
@@ -1238,7 +1238,7 @@ function CancellationPanel({
         </span>
       </label>
       <button
-        className="mt-4 min-h-11 rounded-md bg-red-700 px-4 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-stone-300 sm:min-h-10"
+        className="mt-4 min-h-12 rounded-md bg-red-700 px-4 text-base font-bold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-stone-300 sm:min-h-10 sm:text-sm sm:font-semibold"
         disabled={isCanceling}
         type="button"
         onClick={onCancel}
@@ -1252,10 +1252,10 @@ function CancellationPanel({
 function MobileAmount({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-lg bg-[#fbfaf6] px-3 py-2 text-left min-[360px]:text-right sm:rounded-none sm:bg-transparent sm:p-0 sm:text-right sm:tabular-nums">
-      <span className="block text-xs font-bold uppercase text-stone-500 sm:hidden">
+      <span className="block text-sm font-bold uppercase text-stone-500 sm:hidden">
         {label}
       </span>
-      <span className="break-words font-bold text-stone-950">{value}</span>
+      <span className="break-words text-base font-bold text-stone-950">{value}</span>
     </div>
   );
 }
