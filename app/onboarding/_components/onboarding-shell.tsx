@@ -6,11 +6,17 @@ const totalSteps = 6;
 type OnboardingShellProps = {
   children: React.ReactNode;
   currentStep: number;
+  headline?: string;
+  subhead?: string;
+  body?: string;
 };
 
 export function OnboardingShell({
   children,
   currentStep,
+  headline = "Let's get started",
+  subhead = "Start your farm store",
+  body = "We'll walk you through a few simple steps to set up your storefront.",
 }: OnboardingShellProps) {
   return (
     <main className="min-h-screen bg-[#fffaf1] text-[#10281c]">
@@ -76,14 +82,13 @@ export function OnboardingShell({
           <div className="relative min-h-[285px] overflow-hidden lg:min-h-full">
             <div className="relative z-10 flex h-full flex-col justify-start px-6 py-6 sm:px-9 sm:py-8 lg:px-9 lg:py-8">
               <h1 className="max-w-xl font-serif text-[clamp(1.95rem,3vw,2.85rem)] font-semibold leading-[1.03] text-[#0c2118]">
-                Let&apos;s get started
+                {headline}
               </h1>
               <p className="mt-2.5 text-[clamp(1.05rem,1.55vw,1.35rem)] font-bold leading-tight text-[#28713a]">
-                Start your farm store
+                {subhead}
               </p>
               <p className="mt-2.5 max-w-sm text-base font-normal leading-7 text-stone-950">
-                We&apos;ll walk you through a few simple steps to set up your
-                storefront.
+                {body}
               </p>
             </div>
           </div>

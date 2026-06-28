@@ -22,6 +22,7 @@ export function SignupForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<SignupErrors>({});
+  const [successMessage, setSuccessMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -39,28 +40,55 @@ export function SignupForm() {
       return;
     }
 
-    setIsSubmitting(true);
     setErrors({});
+    setSuccessMessage("");
+    setIsSubmitting(true);
 
-    const { error } = await supabase.auth.signUp({
-      email: email.trim().toLowerCase(),
-      password,
-      options: {
-        data: {
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
-        },
-      },
-    });
+    try {
+      const { data, error } = await withTimeout(
+        supabase.auth.signUp({
+          email: email.trim().toLowerCase(),
+          password,
+          options: {
+            data: {
+              first_name: firstName.trim(),
+              last_name: lastName.trim(),
+              full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+            },
+          },
+        }),
+        15000,
+      );
 
-    if (error) {
-      setErrors({ form: friendlyAuthError(error.message) });
+      if (error) {
+        setErrors({ form: friendlyAuthError(error.message) });
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (data.user && data.session) {
+        router.push("/onboarding");
+        return;
+      }
+
+      if (data.user && !data.session) {
+        setSuccessMessage(
+          "Account created. Please check your email to confirm your account, then sign in to continue setup.",
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
+      setErrors({
+        form: "We could not confirm that your account was created. Please try again.",
+      });
       setIsSubmitting(false);
-      return;
+    } catch {
+      setErrors({
+        form: "We could not reach the signup service. Please check your connection and try again.",
+      });
+      setIsSubmitting(false);
     }
-
-    router.push("/onboarding");
   }
 
   return (
@@ -122,6 +150,21 @@ export function SignupForm() {
           >
             {errors.form}
           </p>
+        ) : null}
+
+        {successMessage ? (
+          <div
+            className="rounded-lg border border-[#b7d7b9] bg-[#eff8ed] px-3 py-2 text-sm font-semibold leading-6 text-[#16572a]"
+            role="status"
+          >
+            <p>{successMessage}</p>
+            <Link
+              className="mt-1 inline-block font-bold underline underline-offset-2"
+              href="/login"
+            >
+              Sign in
+            </Link>
+          </div>
         ) : null}
 
         <button
@@ -258,4 +301,20 @@ function friendlyAuthError(message: string) {
   }
 
   return message || "We could not create your account. Please try again.";
+}
+
+async function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error("Request timed out."));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
