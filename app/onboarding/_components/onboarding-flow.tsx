@@ -7,17 +7,34 @@ import type { SellerContext } from "@/app/dashboard/_lib/seller-types";
 import { OnboardingShell } from "./onboarding-shell";
 import { Step2FarmBasicsForm } from "./step-2-farm-basics-form";
 import { Step3SellingCategoriesForm } from "./step-3-selling-categories-form";
+import { Step4PickupInstructionsForm } from "./step-4-pickup-instructions-form";
 
-type OnboardingView = "loading" | "redirecting" | "step2" | "step3" | "step4";
+type OnboardingView =
+  | "loading"
+  | "redirecting"
+  | "step2"
+  | "step3"
+  | "step4"
+  | "step5";
 
 type OnboardingProgress = {
   categories_complete: boolean | null;
+  pickup_complete: boolean | null;
+};
+
+type StorePickupSettings = {
+  buyer_contact_email_enabled: boolean | null;
+  buyer_contact_phone_enabled: boolean | null;
+  buyer_contact_text_enabled: boolean | null;
+  pickup_instructions: string | null;
 };
 
 export function OnboardingFlow() {
   const router = useRouter();
   const [view, setView] = useState<OnboardingView>("loading");
   const [seller, setSeller] = useState<SellerContext | null>(null);
+  const [pickupSettings, setPickupSettings] =
+    useState<StorePickupSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -91,7 +108,7 @@ export function OnboardingFlow() {
         const { data: progress, error: progressError } = await withTimeout(
           supabase
             .from("seller_onboarding_state")
-            .select("categories_complete")
+            .select("categories_complete, pickup_complete")
             .eq("store_id", primarySeller.store_id)
             .maybeSingle(),
           8000,
@@ -105,11 +122,34 @@ export function OnboardingFlow() {
           return;
         }
 
-        setView(
-          (progress as OnboardingProgress | null)?.categories_complete
-            ? "step4"
-            : "step3",
+        const onboardingProgress = progress as OnboardingProgress | null;
+
+        if (!onboardingProgress?.categories_complete) {
+          setView("step3");
+          return;
+        }
+
+        const { data: pickupData, error: pickupError } = await withTimeout(
+          supabase
+            .from("stores")
+            .select(
+              "pickup_instructions, buyer_contact_email_enabled, buyer_contact_text_enabled, buyer_contact_phone_enabled",
+            )
+            .eq("id", primarySeller.store_id)
+            .maybeSingle(),
+          8000,
         );
+
+        if (!isMounted) return;
+
+        if (pickupError) {
+          setError(friendlyOnboardingError(pickupError.message));
+          setView("step4");
+          return;
+        }
+
+        setPickupSettings((pickupData as StorePickupSettings | null) ?? null);
+        setView(onboardingProgress.pickup_complete ? "step5" : "step4");
       } catch {
         if (!isMounted) return;
         setError("We could not load your onboarding setup. Please try again.");
@@ -171,12 +211,49 @@ export function OnboardingFlow() {
   if (view === "step4") {
     return (
       <OnboardingShell
-        body="We will use your saved categories to shape pickup details around the products you expect to offer."
+        body="These instructions appear at checkout and again in the buyer's order confirmation email. You can edit them anytime."
         currentStep={4}
-        headline="Set pickup details"
-        subhead="Next we will help customers know how pickup works"
+        headline="Set your pickup instructions"
+        subhead="Make pickup clear from the start"
       >
-        <Step4Placeholder />
+        <div className="space-y-3">
+          {error ? (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+              {error}
+            </p>
+          ) : null}
+          <Step4PickupInstructionsForm
+            initialValues={{
+              buyerContactEmailEnabled:
+                pickupSettings?.buyer_contact_email_enabled,
+              buyerContactPhoneEnabled:
+                pickupSettings?.buyer_contact_phone_enabled,
+              buyerContactTextEnabled: pickupSettings?.buyer_contact_text_enabled,
+              pickupInstructions: pickupSettings?.pickup_instructions,
+            }}
+            onBack={() => {
+              setError(null);
+              setView("step3");
+            }}
+            onComplete={() => {
+              setError(null);
+              setView("step5");
+            }}
+          />
+        </div>
+      </OnboardingShell>
+    );
+  }
+
+  if (view === "step5") {
+    return (
+      <OnboardingShell
+        body="We will use your saved pickup settings as the foundation for plan access."
+        currentStep={5}
+        headline="Set up plan access"
+        subhead="Next we will prepare your seller plan"
+      >
+        <Step5Placeholder />
       </OnboardingShell>
     );
   }
@@ -212,21 +289,21 @@ export function OnboardingFlow() {
   );
 }
 
-function Step4Placeholder() {
+function Step5Placeholder() {
   return (
     <section className="rounded-[0.95rem] bg-white px-5 py-6 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-7 sm:py-7 lg:px-8 lg:py-7">
       <p className="text-sm font-extrabold uppercase text-[#28713a]">
-        Step 4 coming next
+        Step 5 coming next
       </p>
       <h2 className="mt-3 font-serif text-[1.75rem] font-semibold leading-tight text-stone-950 sm:text-[2rem]">
-        Selling categories saved.
+        Pickup instructions saved.
       </h2>
       <p className="mt-3 text-base font-semibold leading-7 text-stone-700">
-        Next we&apos;ll set your pickup instructions.
+        Next we&apos;ll set up your plan access.
       </p>
       <p className="mt-4 text-sm leading-6 text-stone-500">
-        Pickup details, trial access, and final review will be added in the next
-        onboarding passes.
+        Trial access and final review will be added in the next onboarding
+        passes.
       </p>
     </section>
   );
