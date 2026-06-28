@@ -9,6 +9,7 @@ import { Step2FarmBasicsForm } from "./step-2-farm-basics-form";
 import { Step3SellingCategoriesForm } from "./step-3-selling-categories-form";
 import { Step4PickupInstructionsForm } from "./step-4-pickup-instructions-form";
 import { Step5PlanAccessForm } from "./step-5-plan-access-form";
+import { Step6ReviewSetup } from "./step-6-review-setup";
 
 type OnboardingView =
   | "loading"
@@ -22,6 +23,7 @@ type OnboardingView =
 type OnboardingProgress = {
   billing_complete: boolean | null;
   categories_complete: boolean | null;
+  onboarding_complete: boolean | null;
   pickup_complete: boolean | null;
 };
 
@@ -49,7 +51,7 @@ export function OnboardingFlow() {
       try {
         if (!hasPersistedSupabaseSession()) {
           setView("redirecting");
-          router.replace("/login");
+          router.replace("/sign-in");
           return;
         }
 
@@ -68,7 +70,7 @@ export function OnboardingFlow() {
 
         if (!sessionData.session) {
           setView("redirecting");
-          router.replace("/login");
+          router.replace("/sign-in");
           return;
         }
 
@@ -81,7 +83,7 @@ export function OnboardingFlow() {
 
         if (userError || !userData.user) {
           setView("redirecting");
-          router.replace("/login");
+          router.replace("/sign-in");
           return;
         }
 
@@ -111,7 +113,9 @@ export function OnboardingFlow() {
         const { data: progress, error: progressError } = await withTimeout(
           supabase
             .from("seller_onboarding_state")
-            .select("billing_complete, categories_complete, pickup_complete")
+            .select(
+              "billing_complete, categories_complete, onboarding_complete, pickup_complete",
+            )
             .eq("store_id", primarySeller.store_id)
             .maybeSingle(),
           8000,
@@ -148,6 +152,12 @@ export function OnboardingFlow() {
         if (pickupError) {
           setError(friendlyOnboardingError(pickupError.message));
           setView("step4");
+          return;
+        }
+
+        if (onboardingProgress.onboarding_complete) {
+          setView("redirecting");
+          router.replace("/dashboard");
           return;
         }
 
@@ -285,12 +295,26 @@ export function OnboardingFlow() {
   if (view === "step6") {
     return (
       <OnboardingShell
-        body="Your plan access is saved. Next we will review your setup before opening the dashboard."
+        body="Review your setup below. When you're ready, head to your dashboard to add your first listing."
         currentStep={6}
-        headline="Review your setup"
-        subhead="One last look before your store dashboard"
+        headline="You're ready to start"
+        subhead="Your farm store is set up"
       >
-        <Step6Placeholder />
+        {seller?.store_id ? (
+          <Step6ReviewSetup
+            onBack={() => {
+              setError(null);
+              setView("step5");
+            }}
+            storeId={seller.store_id}
+          />
+        ) : (
+          <section className="rounded-[0.95rem] bg-white px-5 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-7 lg:py-6">
+            <p className="text-sm font-bold text-stone-600">
+              Loading your saved setup...
+            </p>
+          </section>
+        )}
       </OnboardingShell>
     );
   }
@@ -323,25 +347,6 @@ export function OnboardingFlow() {
         />
       </div>
     </OnboardingShell>
-  );
-}
-
-function Step6Placeholder() {
-  return (
-    <section className="rounded-[0.95rem] bg-white px-5 py-6 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-7 sm:py-7 lg:px-8 lg:py-7">
-      <p className="text-sm font-extrabold uppercase text-[#28713a]">
-        Step 6 coming next
-      </p>
-      <h2 className="mt-3 font-serif text-[1.75rem] font-semibold leading-tight text-stone-950 sm:text-[2rem]">
-        Plan access saved.
-      </h2>
-      <p className="mt-3 text-base font-semibold leading-7 text-stone-700">
-        Next we&apos;ll review your setup.
-      </p>
-      <p className="mt-4 text-sm leading-6 text-stone-500">
-        The final review screen will be added in the next onboarding pass.
-      </p>
-    </section>
   );
 }
 

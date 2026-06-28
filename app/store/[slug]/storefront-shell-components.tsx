@@ -81,7 +81,7 @@ export function StorefrontHeader({ store }: { store: StorefrontHome }) {
           <Link
             aria-label="Account"
             className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-            href="/login"
+            href="/sign-in"
           >
             <User aria-hidden="true" className="h-6 w-6" strokeWidth={2} />
           </Link>

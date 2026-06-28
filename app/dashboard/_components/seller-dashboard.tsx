@@ -125,6 +125,9 @@ export function SellerDashboard() {
     data.home?.storefront_enabled ?? seller?.storefront_enabled ?? false;
   const storefrontHref = `/store/${seller?.store_slug ?? ""}`;
   const sellerDisplayName = getSellerDisplayName(seller?.store_name);
+  const hasListings =
+    (data.home?.active_listing_count ?? data.inventory.length) > 0;
+  const showFirstListingPrompt = !isLoading && !error && !hasListings;
   const welcomeMessage = storefrontIsLive
     ? `Good morning${sellerDisplayName ? `, ${sellerDisplayName}` : ""} - your storefront is live.`
     : "Your storefront is ready for setup.";
@@ -145,38 +148,42 @@ export function SellerDashboard() {
   return (
     <div className="min-h-screen bg-[#fbfaf6]">
       <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4 px-4 py-4 sm:gap-5 sm:px-8 sm:py-5 lg:px-10 lg:py-6">
-        <section className="flex flex-col gap-2.5 rounded-xl border border-emerald-950/5 bg-[#f4f8ef] px-3 py-2.5 shadow-[0_12px_32px_rgba(46,39,25,0.04)] sm:gap-3 sm:px-5 sm:py-3 lg:min-h-14 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-900/10 sm:size-10">
-              <Image
-                src="/glyphs/checkmark.png"
-                alt=""
-                width={20}
-                height={20}
-              />
-            </span>
-            <p className="text-sm font-medium text-stone-950 sm:text-base">
-              {welcomeMessage}
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <PrimaryActionLink href="/dashboard/inventory/add-v2">
-              <span aria-hidden="true" className="mr-2 text-xl leading-none">
-                +
+        {showFirstListingPrompt ? (
+          <FirstListingWelcomeCard />
+        ) : (
+          <section className="flex flex-col gap-2.5 rounded-xl border border-emerald-950/5 bg-[#f4f8ef] px-3 py-2.5 shadow-[0_12px_32px_rgba(46,39,25,0.04)] sm:gap-3 sm:px-5 sm:py-3 lg:min-h-14 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-900/10 sm:size-10">
+                <Image
+                  src="/glyphs/checkmark.png"
+                  alt=""
+                  width={20}
+                  height={20}
+                />
               </span>
-              Add Inventory
-            </PrimaryActionLink>
-            <Link
-              className="seller-secondary-button gap-2"
-              href={storefrontHref}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              <Image src="/glyphs/storefront.png" alt="" width={20} height={20} />
-              View Storefront
-            </Link>
-          </div>
-        </section>
+              <p className="text-sm font-medium text-stone-950 sm:text-base">
+                {welcomeMessage}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <PrimaryActionLink href="/dashboard/inventory/add-v2">
+                <span aria-hidden="true" className="mr-2 text-xl leading-none">
+                  +
+                </span>
+                Add Inventory
+              </PrimaryActionLink>
+              <Link
+                className="seller-secondary-button gap-2"
+                href={storefrontHref}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                <Image src="/glyphs/storefront.png" alt="" width={20} height={20} />
+                View Storefront
+              </Link>
+            </div>
+          </section>
+        )}
 
         <header>
           <h1 className="font-serif text-3xl font-bold tracking-normal text-stone-950 sm:text-4xl">
@@ -190,8 +197,8 @@ export function SellerDashboard() {
           <ErrorState
             message={error}
             action={
-              <Link className="seller-secondary-button" href="/login">
-                Return to login
+              <Link className="seller-secondary-button" href="/sign-in">
+                Return to sign in
               </Link>
             }
           />
@@ -264,6 +271,60 @@ export function SellerDashboard() {
         ) : null}
       </div>
     </div>
+  );
+}
+
+function FirstListingWelcomeCard() {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[#d8e5cf] bg-[#f4f8ef] shadow-[0_18px_44px_rgba(46,39,25,0.08)]">
+      <div className="grid gap-5 px-4 py-5 sm:px-6 sm:py-6 lg:grid-cols-[1fr_auto] lg:items-center lg:px-7">
+        <div className="flex min-w-0 gap-4">
+          <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-[#d8e5cf] sm:size-16">
+            <Image
+              src="/glyphs/storefront.png"
+              alt=""
+              width={34}
+              height={34}
+              className="sm:h-10 sm:w-10"
+            />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-extrabold uppercase tracking-wide text-[#246f38]">
+              Onboarding complete
+            </p>
+            <h2 className="mt-1 font-serif text-2xl font-bold leading-tight text-stone-950 sm:text-3xl">
+              Your store is ready. Add your first listing.
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-stone-700 sm:text-base">
+              Listings are what buyers see on your storefront. Start with
+              whatever you have available now, and you can add more later.
+            </p>
+            <p className="mt-2 text-sm font-semibold text-[#246f38]">
+              Your storefront stays private until you&apos;re ready to publish.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2 lg:min-w-64 lg:grid-cols-1">
+          <Link
+            className="inline-flex min-h-12 items-center justify-center rounded-lg bg-emerald-800 px-5 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
+            href="/dashboard/listings/new"
+          >
+            <span aria-hidden="true" className="mr-2 text-xl leading-none">
+              +
+            </span>
+            Add your first listing
+          </Link>
+          <Link
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-[#b7d7b9] bg-white px-5 text-base font-bold text-emerald-900 shadow-sm transition hover:border-emerald-800 hover:bg-[#fffaf1] focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
+            href="/dashboard/store-admin"
+          >
+            <Image src="/glyphs/storefront.png" alt="" width={20} height={20} />
+            Open Store Admin
+          </Link>
+        </div>
+      </div>
+    </section>
   );
 }
 

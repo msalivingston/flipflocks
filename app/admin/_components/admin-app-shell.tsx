@@ -32,7 +32,7 @@ export function AdminAppShell({ children }: { children: React.ReactNode }) {
 
   async function signOut() {
     await supabase.auth.signOut();
-    router.replace("/login");
+    router.replace("/sign-in");
   }
 
   return (

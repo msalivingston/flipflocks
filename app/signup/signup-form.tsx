@@ -160,7 +160,7 @@ export function SignupForm() {
             <p>{successMessage}</p>
             <Link
               className="mt-1 inline-block font-bold underline underline-offset-2"
-              href="/login"
+              href="/sign-in"
             >
               Sign in
             </Link>
@@ -197,7 +197,7 @@ export function SignupForm() {
           Already have an account?{" "}
           <Link
             className="font-bold text-[#1f6f38] underline underline-offset-2"
-            href="/login"
+            href="/sign-in"
           >
             Sign in
           </Link>

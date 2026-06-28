@@ -49,7 +49,7 @@ export function SellerContextProvider({
       }
 
       if (!userData.user) {
-        router.replace("/login");
+        router.replace("/sign-in");
         return;
       }
 

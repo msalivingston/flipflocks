@@ -51,7 +51,7 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
 
   async function handleSignOut() {
     await supabase.auth.signOut();
-    router.replace("/login");
+    router.replace("/sign-in");
   }
 
   if (isLoading) {
