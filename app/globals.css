@@ -176,3 +176,25 @@ input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
+
+@keyframes onboarding-card-enter {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.onboarding-card-transition {
+  animation: onboarding-card-enter 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-card-transition {
+    animation: none;
+  }
+}

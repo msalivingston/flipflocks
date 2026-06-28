@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -51,6 +52,10 @@ export default function LoginPage() {
       </form>
 
       {message && <p>{message}</p>}
+
+      <p style={{ marginTop: "1.5rem" }}>
+        Need an account? <Link href="/signup">Sign up</Link>
+      </p>
     </main>
   );
 }

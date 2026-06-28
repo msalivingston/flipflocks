@@ -73,12 +73,14 @@ const farmBullets = [
 function PlaceholderLink({
   children,
   className,
+  href = placeholderHref,
 }: Readonly<{
   children: React.ReactNode;
   className?: string;
+  href?: string;
 }>) {
   return (
-    <Link href={placeholderHref} className={className}>
+    <Link href={href} className={className}>
       {children}
     </Link>
   );
@@ -138,13 +140,16 @@ export default function Home() {
               <PlaceholderLink className="transition hover:text-white">
                 Pricing
               </PlaceholderLink>
-              <PlaceholderLink className="transition hover:text-white">
+              <PlaceholderLink className="transition hover:text-white" href="/login">
                 Sign in
               </PlaceholderLink>
             </nav>
 
             <div className="flex justify-start md:justify-end">
-              <PlaceholderLink className="inline-flex min-h-12 items-center justify-center rounded-md bg-[#075f38] px-6 text-[18px] font-normal text-white shadow-sm shadow-black/15 transition hover:bg-[#064a2d]">
+              <PlaceholderLink
+                className="inline-flex min-h-12 items-center justify-center rounded-md bg-[#075f38] px-6 text-[18px] font-normal text-white shadow-sm shadow-black/15 transition hover:bg-[#064a2d]"
+                href="/signup"
+              >
                 Sign up now
               </PlaceholderLink>
             </div>
@@ -274,7 +279,7 @@ export default function Home() {
             alt=""
             width={2172}
             height={724}
-            className="mx-auto hidden max-h-16 w-full max-w-[215px] object-contain object-left opacity-64 mix-blend-multiply md:block"
+            className="mx-auto hidden max-h-28 w-full max-w-[330px] object-contain object-left opacity-64 mix-blend-multiply md:block"
           />
           <div>
             <h2 className="font-serif text-[1.7rem] font-bold leading-tight text-[#0e4a2d] md:whitespace-nowrap md:text-[1.95rem]">
@@ -283,14 +288,23 @@ export default function Home() {
             <p className="mt-1 text-[16px] text-[#303830]">
               Join FlockFront and start selling with confidence.
             </p>
-            <PlaceholderLink className="mt-3 inline-flex min-h-11 items-center justify-center gap-3 rounded-md bg-[#08633c] px-7 text-[17px] font-bold text-white shadow-sm transition hover:bg-[#064b2f]">
+            <PlaceholderLink
+              className="mt-3 inline-flex min-h-11 items-center justify-center gap-3 rounded-md bg-[#08633c] px-7 text-[17px] font-bold text-white shadow-sm transition hover:bg-[#064b2f]"
+              href="/signup"
+            >
               Sign up now
               <span aria-hidden="true" className="text-xl leading-none">
                 &rarr;
               </span>
             </PlaceholderLink>
           </div>
-          <div className="hidden md:block" />
+          <Image
+            src="/landing-page/pickup-truck-flipped.png"
+            alt=""
+            width={2172}
+            height={724}
+            className="mx-auto hidden max-h-28 w-full max-w-[330px] object-contain object-right opacity-64 mix-blend-multiply md:block"
+          />
         </div>
       </section>
 
@@ -312,7 +326,7 @@ export default function Home() {
             <PlaceholderLink className="hover:text-[#0e4a2d]">
               Pricing
             </PlaceholderLink>
-            <PlaceholderLink className="hover:text-[#0e4a2d]">
+            <PlaceholderLink className="hover:text-[#0e4a2d]" href="/login">
               Sign in
             </PlaceholderLink>
             <PlaceholderLink className="hover:text-[#0e4a2d]">
