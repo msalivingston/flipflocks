@@ -8,6 +8,7 @@ import { OnboardingShell } from "./onboarding-shell";
 import { Step2FarmBasicsForm } from "./step-2-farm-basics-form";
 import { Step3SellingCategoriesForm } from "./step-3-selling-categories-form";
 import { Step4PickupInstructionsForm } from "./step-4-pickup-instructions-form";
+import { Step5PlanAccessForm } from "./step-5-plan-access-form";
 
 type OnboardingView =
   | "loading"
@@ -15,9 +16,11 @@ type OnboardingView =
   | "step2"
   | "step3"
   | "step4"
-  | "step5";
+  | "step5"
+  | "step6";
 
 type OnboardingProgress = {
+  billing_complete: boolean | null;
   categories_complete: boolean | null;
   pickup_complete: boolean | null;
 };
@@ -108,7 +111,7 @@ export function OnboardingFlow() {
         const { data: progress, error: progressError } = await withTimeout(
           supabase
             .from("seller_onboarding_state")
-            .select("categories_complete, pickup_complete")
+            .select("billing_complete, categories_complete, pickup_complete")
             .eq("store_id", primarySeller.store_id)
             .maybeSingle(),
           8000,
@@ -149,7 +152,12 @@ export function OnboardingFlow() {
         }
 
         setPickupSettings((pickupData as StorePickupSettings | null) ?? null);
-        setView(onboardingProgress.pickup_complete ? "step5" : "step4");
+        if (!onboardingProgress.pickup_complete) {
+          setView("step4");
+          return;
+        }
+
+        setView(onboardingProgress.billing_complete ? "step6" : "step5");
       } catch {
         if (!isMounted) return;
         setError("We could not load your onboarding setup. Please try again.");
@@ -248,12 +256,41 @@ export function OnboardingFlow() {
   if (view === "step5") {
     return (
       <OnboardingShell
-        body="We will use your saved pickup settings as the foundation for plan access."
+        body="Try FlockFront free for 7 days. After your trial, the Seller Plan is $29/month. Beta sellers can enter a promo code for free access during beta."
         currentStep={5}
-        headline="Set up plan access"
-        subhead="Next we will prepare your seller plan"
+        headline="Choose your plan"
+        subhead="Start with a 7-day free trial"
       >
-        <Step5Placeholder />
+        <div className="space-y-3">
+          {error ? (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+              {error}
+            </p>
+          ) : null}
+          <Step5PlanAccessForm
+            onBack={() => {
+              setError(null);
+              setView("step4");
+            }}
+            onComplete={() => {
+              setError(null);
+              setView("step6");
+            }}
+          />
+        </div>
+      </OnboardingShell>
+    );
+  }
+
+  if (view === "step6") {
+    return (
+      <OnboardingShell
+        body="Your plan access is saved. Next we will review your setup before opening the dashboard."
+        currentStep={6}
+        headline="Review your setup"
+        subhead="One last look before your store dashboard"
+      >
+        <Step6Placeholder />
       </OnboardingShell>
     );
   }
@@ -289,21 +326,20 @@ export function OnboardingFlow() {
   );
 }
 
-function Step5Placeholder() {
+function Step6Placeholder() {
   return (
     <section className="rounded-[0.95rem] bg-white px-5 py-6 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-7 sm:py-7 lg:px-8 lg:py-7">
       <p className="text-sm font-extrabold uppercase text-[#28713a]">
-        Step 5 coming next
+        Step 6 coming next
       </p>
       <h2 className="mt-3 font-serif text-[1.75rem] font-semibold leading-tight text-stone-950 sm:text-[2rem]">
-        Pickup instructions saved.
+        Plan access saved.
       </h2>
       <p className="mt-3 text-base font-semibold leading-7 text-stone-700">
-        Next we&apos;ll set up your plan access.
+        Next we&apos;ll review your setup.
       </p>
       <p className="mt-4 text-sm leading-6 text-stone-500">
-        Trial access and final review will be added in the next onboarding
-        passes.
+        The final review screen will be added in the next onboarding pass.
       </p>
     </section>
   );
