@@ -6,8 +6,13 @@ import { supabase } from "@/lib/supabase";
 import type { SellerContext } from "@/app/dashboard/_lib/seller-types";
 import { OnboardingShell } from "./onboarding-shell";
 import { Step2FarmBasicsForm } from "./step-2-farm-basics-form";
+import { Step3SellingCategoriesForm } from "./step-3-selling-categories-form";
 
-type OnboardingView = "loading" | "redirecting" | "step2" | "step3";
+type OnboardingView = "loading" | "redirecting" | "step2" | "step3" | "step4";
+
+type OnboardingProgress = {
+  categories_complete: boolean | null;
+};
 
 export function OnboardingFlow() {
   const router = useRouter();
@@ -77,7 +82,34 @@ export function OnboardingFlow() {
         const primarySeller = rows[0] ?? null;
 
         setSeller(primarySeller);
-        setView(primarySeller?.profile_complete ? "step3" : "step2");
+
+        if (!primarySeller?.profile_complete) {
+          setView("step2");
+          return;
+        }
+
+        const { data: progress, error: progressError } = await withTimeout(
+          supabase
+            .from("seller_onboarding_state")
+            .select("categories_complete")
+            .eq("store_id", primarySeller.store_id)
+            .maybeSingle(),
+          8000,
+        );
+
+        if (!isMounted) return;
+
+        if (progressError) {
+          setError(friendlyOnboardingError(progressError.message));
+          setView("step3");
+          return;
+        }
+
+        setView(
+          (progress as OnboardingProgress | null)?.categories_complete
+            ? "step4"
+            : "step3",
+        );
       } catch {
         if (!isMounted) return;
         setError("We could not load your onboarding setup. Please try again.");
@@ -112,12 +144,39 @@ export function OnboardingFlow() {
   if (view === "step3") {
     return (
       <OnboardingShell
-        body="We will use your saved farm profile as the foundation for the rest of setup."
+        body="Select all that apply. You can change this later."
         currentStep={3}
-        headline="Choose what you sell"
-        subhead="Next we will shape your storefront around your products."
+        headline="What do you plan to sell?"
+        subhead="Choose the categories that fit your farm"
       >
-        <Step3Placeholder />
+        <div className="space-y-3">
+          {error ? (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+              {error}
+            </p>
+          ) : null}
+          <Step3SellingCategoriesForm
+            initialValues={{
+              equipmentSuppliesEnabled: seller?.equipment_supplies_enabled,
+              hatchingEggsEnabled: seller?.hatching_eggs_enabled,
+              processedPoultryEnabled: seller?.processed_poultry_enabled,
+            }}
+            onComplete={() => setView("step4")}
+          />
+        </div>
+      </OnboardingShell>
+    );
+  }
+
+  if (view === "step4") {
+    return (
+      <OnboardingShell
+        body="We will use your saved categories to shape pickup details around the products you expect to offer."
+        currentStep={4}
+        headline="Set pickup details"
+        subhead="Next we will help customers know how pickup works"
+      >
+        <Step4Placeholder />
       </OnboardingShell>
     );
   }
@@ -143,28 +202,31 @@ export function OnboardingFlow() {
             state: seller?.public_state,
             storeName: seller?.store_name,
           }}
-          onComplete={() => setView("step3")}
+          onComplete={() => {
+            setError(null);
+            setView("step3");
+          }}
         />
       </div>
     </OnboardingShell>
   );
 }
 
-function Step3Placeholder() {
+function Step4Placeholder() {
   return (
     <section className="rounded-[0.95rem] bg-white px-5 py-6 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-7 sm:py-7 lg:px-8 lg:py-7">
       <p className="text-sm font-extrabold uppercase text-[#28713a]">
-        Step 3 coming next
+        Step 4 coming next
       </p>
       <h2 className="mt-3 font-serif text-[1.75rem] font-semibold leading-tight text-stone-950 sm:text-[2rem]">
-        Farm details saved.
+        Selling categories saved.
       </h2>
       <p className="mt-3 text-base font-semibold leading-7 text-stone-700">
-        Next we&apos;ll choose what you plan to sell.
+        Next we&apos;ll set your pickup instructions.
       </p>
       <p className="mt-4 text-sm leading-6 text-stone-500">
-        Selling categories, pickup details, trial access, and final review will
-        be added in the next onboarding passes.
+        Pickup details, trial access, and final review will be added in the next
+        onboarding passes.
       </p>
     </section>
   );
