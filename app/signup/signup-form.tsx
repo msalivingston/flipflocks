@@ -167,6 +167,12 @@ export function SignupForm() {
           </div>
         ) : null}
 
+        <p className="rounded-lg border border-[#dbe8d8] bg-[#fffaf1] px-3 py-2 text-xs font-semibold leading-5 text-stone-600 sm:text-[13px]">
+          Plans start at $5/month. Full Flock is $29/month for active
+          sellers who need more room and more sale types. You&apos;ll choose
+          your plan after setting up your farm basics.
+        </p>
+
         <button
           className="flex min-h-10 w-full items-center justify-center rounded-md bg-[#246f38] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#1c5c2d] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:text-[15px]"
           disabled={isSubmitting}

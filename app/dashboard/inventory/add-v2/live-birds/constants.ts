@@ -99,6 +99,7 @@ export const soldAsOptions = [
   "Female",
   "Male",
   "Straight run",
+  "Unsexed",
   "Pair",
   "Trio",
   "Flock",

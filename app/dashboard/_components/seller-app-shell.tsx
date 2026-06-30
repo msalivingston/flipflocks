@@ -104,7 +104,7 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2.5">
+        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2.5 pt-1">
           <SellerNavLinks />
         </nav>
 

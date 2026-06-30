@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import {
+  getPlanCapabilities,
+  type LockedPlanFeature,
+} from "@/lib/plan-capabilities";
 import { supabase } from "@/lib/supabase";
+import {
+  FullFlockPill,
+  PlanUpgradeDialog,
+} from "../_components/plan-upgrade-prompt";
 import { useSellerContext } from "../_components/seller-context";
 import {
   ErrorState,
@@ -138,6 +146,10 @@ const blankForm: StoreAdminForm = {
 
 export function StoreAdmin() {
   const { seller, reload } = useSellerContext();
+  const plan = getPlanCapabilities(seller?.plan_key);
+  const [lockedFeature, setLockedFeature] = useState<LockedPlanFeature | null>(
+    null,
+  );
   const [form, setForm] = useState<StoreAdminForm>(blankForm);
   const [initialForm, setInitialForm] = useState<StoreAdminForm>(blankForm);
   const [pickupOptions, setPickupOptions] = useState<PickupOptionDraft[]>([]);
@@ -743,19 +755,27 @@ export function StoreAdmin() {
                 />
                 <ModuleCard
                   action={
-                    <ToggleField
-                      checked={form.hatching_eggs_enabled}
-                      label={
-                        form.hatching_eggs_enabled ? "Enabled" : "Disabled"
-                      }
-                      onChange={(value) =>
-                        updateField("hatching_eggs_enabled", value)
-                      }
-                    />
+                    plan.hatchingEggsEnabled ? (
+                      <ToggleField
+                        checked={form.hatching_eggs_enabled}
+                        label={
+                          form.hatching_eggs_enabled ? "Enabled" : "Disabled"
+                        }
+                        onChange={(value) =>
+                          updateField("hatching_eggs_enabled", value)
+                        }
+                      />
+                    ) : (
+                      <LockedModuleButton
+                        onClick={() => setLockedFeature("hatching_eggs")}
+                      />
+                    )
                   }
                   description="Sell breed-based hatching egg inventory without hatch dates."
                   status={
-                    form.hatching_eggs_enabled
+                    !plan.hatchingEggsEnabled
+                      ? "Available on Full Flock."
+                      : form.hatching_eggs_enabled
                       ? "Available in Create Listing."
                       : "Hidden from Create Listing."
                   }
@@ -763,45 +783,61 @@ export function StoreAdmin() {
                 />
                 <ModuleCard
                   action={
-                    <ToggleField
-                      checked={form.processed_poultry_enabled}
-                      label={
-                        form.processed_poultry_enabled
-                          ? "Enabled"
-                          : "Disabled"
-                      }
-                      onChange={(value) =>
-                        updateField("processed_poultry_enabled", value)
-                      }
-                    />
+                    plan.processedPoultryEnabled ? (
+                      <ToggleField
+                        checked={form.processed_poultry_enabled}
+                        label={
+                          form.processed_poultry_enabled
+                            ? "Enabled"
+                            : "Disabled"
+                        }
+                        onChange={(value) =>
+                          updateField("processed_poultry_enabled", value)
+                        }
+                      />
+                    ) : (
+                      <LockedModuleButton
+                        onClick={() => setLockedFeature("processed_poultry")}
+                      />
+                    )
                   }
                   description="Sell simple local-pickup poultry products by product name, type, quantity, and price."
                   status={
-                    form.processed_poultry_enabled
-                      ? "Available in Create Listing."
-                      : "Hidden from Create Listing."
+                    !plan.processedPoultryEnabled
+                      ? "Available on Full Flock."
+                      : form.processed_poultry_enabled
+                        ? "Available in Create Listing."
+                        : "Hidden from Create Listing."
                   }
                   title="Processed Poultry"
                 />
                 <ModuleCard
                   action={
-                    <ToggleField
-                      checked={form.equipment_supplies_enabled}
-                      label={
-                        form.equipment_supplies_enabled
-                          ? "Enabled"
-                          : "Disabled"
-                      }
-                      onChange={(value) =>
-                        updateField("equipment_supplies_enabled", value)
-                      }
-                    />
+                    plan.equipmentSuppliesEnabled ? (
+                      <ToggleField
+                        checked={form.equipment_supplies_enabled}
+                        label={
+                          form.equipment_supplies_enabled
+                            ? "Enabled"
+                            : "Disabled"
+                        }
+                        onChange={(value) =>
+                          updateField("equipment_supplies_enabled", value)
+                        }
+                      />
+                    ) : (
+                      <LockedModuleButton
+                        onClick={() => setLockedFeature("equipment_supplies")}
+                      />
+                    )
                   }
                   description="Sell basic farm equipment and supplies with simple quantity and price inventory."
                   status={
-                    form.equipment_supplies_enabled
-                      ? "Available in Create Listing."
-                      : "Hidden from Create Listing."
+                    !plan.equipmentSuppliesEnabled
+                      ? "Available on Full Flock."
+                      : form.equipment_supplies_enabled
+                        ? "Available in Create Listing."
+                        : "Hidden from Create Listing."
                   }
                   title="Equipment & Supplies"
                 />
@@ -983,6 +1019,12 @@ export function StoreAdmin() {
           </div>
         </div>
       </div>
+      {lockedFeature ? (
+        <PlanUpgradeDialog
+          feature={lockedFeature}
+          onClose={() => setLockedFeature(null)}
+        />
+      ) : null}
     </>
   );
 }
@@ -1058,6 +1100,18 @@ function ModuleCard({
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
     </div>
+  );
+}
+
+function LockedModuleButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      className="inline-flex min-h-10 items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+      type="button"
+      onClick={onClick}
+    >
+      <FullFlockPill />
+    </button>
   );
 }
 

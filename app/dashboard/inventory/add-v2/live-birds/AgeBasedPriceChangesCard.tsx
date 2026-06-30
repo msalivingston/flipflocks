@@ -1,4 +1,5 @@
 import { inputClass } from "./constants";
+import { PlanUpgradePrompt } from "../../../_components/plan-upgrade-prompt";
 import {
   formatPriceAdjustmentSummary,
   getPriceAdjustmentIssues,
@@ -10,10 +11,12 @@ export function AgeBasedPriceChangesCard({
   offerings,
   priceAdjustment,
   updatePriceAdjustment,
+  locked = false,
 }: {
   offerings: BirdOffering[];
   priceAdjustment: PriceAdjustmentState;
   updatePriceAdjustment: (updates: Partial<PriceAdjustmentState>) => void;
+  locked?: boolean;
 }) {
   const issues = getPriceAdjustmentIssues({ offerings, priceAdjustment });
   const stopPriceLabel =
@@ -39,18 +42,23 @@ export function AgeBasedPriceChangesCard({
                 : "Turn age-based price changes on"
             }
             aria-pressed={priceAdjustment.enabled}
-            className="inline-flex min-h-12 items-center gap-2 rounded-md px-1 py-1 text-base font-bold text-stone-700 transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-0 sm:text-sm sm:font-semibold"
+            className="inline-flex min-h-12 items-center gap-2 rounded-md px-1 py-1 text-base font-bold text-stone-700 transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0 sm:text-sm sm:font-semibold"
             type="button"
+            disabled={locked}
             onClick={() =>
               updatePriceAdjustment({ enabled: !priceAdjustment.enabled })
             }
           >
             <SwitchTrack enabled={priceAdjustment.enabled} />
-            <span>{priceAdjustment.enabled ? "On" : "Off"}</span>
+            <span>{locked ? "Full Flock" : priceAdjustment.enabled ? "On" : "Off"}</span>
           </button>
         </div>
 
-        {priceAdjustment.enabled ? (
+        {locked ? (
+          <PlanUpgradePrompt compact feature="age_based_pricing" />
+        ) : null}
+
+        {priceAdjustment.enabled && !locked ? (
           <div className="space-y-3 rounded-lg border border-transparent bg-stone-50/70 p-0 sm:space-y-4 sm:border-stone-200 sm:p-4">
             <div className="grid gap-3 lg:grid-cols-[minmax(260px,1.35fr)_1fr_1fr_1fr]">
               <PriceDirectionToggle

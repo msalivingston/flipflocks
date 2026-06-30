@@ -3,7 +3,9 @@
 import Link from "next/link";
 import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { supabase } from "@/lib/supabase";
+import { PlanUpgradePrompt } from "../../_components/plan-upgrade-prompt";
 import { useSellerContext } from "../../_components/seller-context";
 import {
   EmptyState,
@@ -131,6 +133,7 @@ export function ListingDetail({
 }) {
   const isInventoryExperience = experience === "inventory";
   const { seller } = useSellerContext();
+  const plan = getPlanCapabilities(seller?.plan_key);
   const storeId = seller?.store_id ?? "";
   const [rows, setRows] = useState<SellerInventoryManagementRow[]>([]);
   const [breedProfiles, setBreedProfiles] = useState<SellerBreedProfileRead[]>(
@@ -473,29 +476,32 @@ export function ListingDetail({
     listingBatchId: string,
     basics: EditBasicsState,
   ) {
+    const effectiveBasics = plan.ageBasedPricingEnabled
+      ? basics
+      : { ...basics, autoPriceAdjustmentEnabled: false };
     const result = await supabase.rpc("seller_set_listing_batch_price_adjustment", {
       p_listing_batch_id: listingBatchId,
-      p_auto_price_adjustment_enabled: basics.autoPriceAdjustmentEnabled,
-      p_price_adjustment_direction: basics.autoPriceAdjustmentEnabled
-        ? basics.priceAdjustmentDirection
+      p_auto_price_adjustment_enabled: effectiveBasics.autoPriceAdjustmentEnabled,
+      p_price_adjustment_direction: effectiveBasics.autoPriceAdjustmentEnabled
+        ? effectiveBasics.priceAdjustmentDirection
         : null,
-      p_price_adjustment_amount: basics.autoPriceAdjustmentEnabled
-        ? Number(basics.priceAdjustmentAmount)
+      p_price_adjustment_amount: effectiveBasics.autoPriceAdjustmentEnabled
+        ? Number(effectiveBasics.priceAdjustmentAmount)
         : null,
-      p_price_adjustment_interval_weeks: basics.autoPriceAdjustmentEnabled
-        ? Number(basics.priceAdjustmentIntervalWeeks)
+      p_price_adjustment_interval_weeks: effectiveBasics.autoPriceAdjustmentEnabled
+        ? Number(effectiveBasics.priceAdjustmentIntervalWeeks)
         : null,
       p_price_adjustment_max_price:
-        basics.autoPriceAdjustmentEnabled &&
-        basics.priceAdjustmentDirection === "increase" &&
-        basics.priceAdjustmentMaxPrice.trim()
-          ? Number(basics.priceAdjustmentMaxPrice)
+        effectiveBasics.autoPriceAdjustmentEnabled &&
+        effectiveBasics.priceAdjustmentDirection === "increase" &&
+        effectiveBasics.priceAdjustmentMaxPrice.trim()
+          ? Number(effectiveBasics.priceAdjustmentMaxPrice)
           : null,
       p_price_adjustment_min_price:
-        basics.autoPriceAdjustmentEnabled &&
-        basics.priceAdjustmentDirection === "decrease" &&
-        basics.priceAdjustmentMinPrice.trim()
-          ? Number(basics.priceAdjustmentMinPrice)
+        effectiveBasics.autoPriceAdjustmentEnabled &&
+        effectiveBasics.priceAdjustmentDirection === "decrease" &&
+        effectiveBasics.priceAdjustmentMinPrice.trim()
+          ? Number(effectiveBasics.priceAdjustmentMinPrice)
           : null,
     });
 
@@ -505,7 +511,10 @@ export function ListingDetail({
   async function saveEdits(currentListing: ListingDetailSummary) {
     if (!editBasics || !canUseSetupTools) return;
 
-    const errors = validateEditForm(editBasics, editRows, currentListing);
+    const effectiveBasics = plan.ageBasedPricingEnabled
+      ? editBasics
+      : { ...editBasics, autoPriceAdjustmentEnabled: false };
+    const errors = validateEditForm(effectiveBasics, editRows, currentListing);
     setValidationErrors(errors);
     setSaveError(null);
     setSuccessMessage(null);
@@ -518,15 +527,15 @@ export function ListingDetail({
       p_listing_batch_id: listingBatchId,
       p_origin_date:
         currentListing.batchType === "hatching_eggs"
-          ? editBasics.availableDate
-          : editBasics.originDate,
-      p_available_date: editBasics.availableDate,
-      p_base_price: Number(editBasics.basePrice),
+          ? effectiveBasics.availableDate
+          : effectiveBasics.originDate,
+      p_available_date: effectiveBasics.availableDate,
+      p_base_price: Number(effectiveBasics.basePrice),
       p_auto_price_increase_enabled: false,
       p_auto_price_increase_amount: null,
       p_auto_price_increase_max_price: null,
-      p_internal_batch_label: editBasics.internalLabel.trim() || null,
-      p_seller_notes: editBasics.sellerNotes.trim() || null,
+      p_internal_batch_label: effectiveBasics.internalLabel.trim() || null,
+      p_seller_notes: effectiveBasics.sellerNotes.trim() || null,
     });
 
     if (batchResult.error) {
@@ -537,7 +546,7 @@ export function ListingDetail({
 
     const priceAdjustmentResult = await savePriceAdjustment(
       listingBatchId,
-      editBasics,
+      effectiveBasics,
     );
 
     if (priceAdjustmentResult) {
@@ -548,7 +557,7 @@ export function ListingDetail({
 
     const breedProfileResult = await updateListingBreedDescriptions(
       currentListing,
-      editBasics.publicDescription,
+      effectiveBasics.publicDescription,
     );
 
     if (breedProfileResult) {
@@ -1034,6 +1043,7 @@ export function ListingDetail({
                 editBasics={editBasics}
                 editRows={editRows}
                 experience={experience}
+                ageBasedPricingEnabled={plan.ageBasedPricingEnabled}
                 isSaving={isSaving}
                 listing={listing}
                 saveError={saveError}
@@ -1834,6 +1844,7 @@ function ArchiveListingAction({
 }
 
 function EditListingForm({
+  ageBasedPricingEnabled,
   editBasics,
   editRows,
   experience,
@@ -1846,6 +1857,7 @@ function EditListingForm({
   setEditRows,
   validationErrors,
 }: {
+  ageBasedPricingEnabled: boolean;
   editBasics: EditBasicsState;
   editRows: EditInventoryRow[];
   experience: DetailExperience;
@@ -1998,6 +2010,7 @@ function EditListingForm({
               <input
                 checked={editBasics.autoPriceAdjustmentEnabled}
                 className="mt-1 h-4 w-4 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
+                disabled={!ageBasedPricingEnabled}
                 type="checkbox"
                 onChange={(event) =>
                   updateBasics({
@@ -2006,11 +2019,16 @@ function EditListingForm({
                 }
               />
               <span>
-                Automatically adjust this batch price after the available date
+                Automatically adjust this batch price after the available date{" "}
+                {!ageBasedPricingEnabled ? "(Full Flock)" : ""}
               </span>
             </label>
 
-            {editBasics.autoPriceAdjustmentEnabled ? (
+            {!ageBasedPricingEnabled ? (
+              <PlanUpgradePrompt compact feature="age_based_pricing" />
+            ) : null}
+
+            {editBasics.autoPriceAdjustmentEnabled && ageBasedPricingEnabled ? (
               <div className="grid gap-3">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="grid gap-1 text-sm font-semibold text-stone-700">

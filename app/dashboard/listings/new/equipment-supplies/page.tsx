@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { supabase } from "@/lib/supabase";
+import { PlanUpgradePrompt } from "../../../_components/plan-upgrade-prompt";
 import { useSellerContext } from "../../../_components/seller-context";
 import {
   ErrorState,
@@ -39,9 +41,9 @@ const emptyForm = {
 export default function EquipmentSuppliesCreatePage() {
   const router = useRouter();
   const { seller, isLoading } = useSellerContext();
-  const equipmentSuppliesEnabled = Boolean(
-    seller?.equipment_supplies_enabled,
-  );
+  const plan = getPlanCapabilities(seller?.plan_key);
+  const equipmentSuppliesEnabled =
+    Boolean(seller?.equipment_supplies_enabled) && plan.equipmentSuppliesEnabled;
   const [form, setForm] = useState(emptyForm);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -164,13 +166,19 @@ export default function EquipmentSuppliesCreatePage() {
 
         <main className="mx-auto w-full max-w-3xl px-5 py-5 sm:px-7">
           <SellerCard className="p-5">
-            <h2 className="text-xl font-semibold text-stone-950">
-              Equipment & Supplies is turned off for this store.
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-stone-600">
-              Turn it on from Store Admin when you want this creation option to
-              appear.
-            </p>
+            {!plan.equipmentSuppliesEnabled ? (
+              <PlanUpgradePrompt feature="equipment_supplies" />
+            ) : (
+              <>
+                <h2 className="text-xl font-semibold text-stone-950">
+                  Equipment & Supplies is turned off for this store.
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-stone-600">
+                  Turn it on from Store Admin when you want this creation option
+                  to appear.
+                </p>
+              </>
+            )}
             <div className="mt-5 flex flex-wrap gap-2">
               <Link
                 className="seller-primary-button"

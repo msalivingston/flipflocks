@@ -27,6 +27,7 @@ export type SellerContext = {
   npip_number: string | null;
   show_npip: boolean;
   order_notification_email: string | null;
+  plan_key: string | null;
   billing_plan: string | null;
   subscription_status: string | null;
   storefront_access_until: string | null;

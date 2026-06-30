@@ -308,7 +308,7 @@ function FirstListingWelcomeCard() {
         <div className="grid gap-2 sm:grid-cols-2 lg:min-w-64 lg:grid-cols-1">
           <Link
             className="inline-flex min-h-12 items-center justify-center rounded-lg bg-emerald-800 px-5 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
-            href="/dashboard/listings/new"
+            href="/dashboard/inventory/add-v2/live-birds"
           >
             <span aria-hidden="true" className="mr-2 text-xl leading-none">
               +

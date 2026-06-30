@@ -38,6 +38,10 @@ export function OnboardingFlow() {
   const router = useRouter();
   const [view, setView] = useState<OnboardingView>("loading");
   const [seller, setSeller] = useState<SellerContext | null>(null);
+  const [onboardingStoreId, setOnboardingStoreId] = useState<string | null>(
+    null,
+  );
+  const [selectedPlanKey, setSelectedPlanKey] = useState<string | null>(null);
   const [pickupSettings, setPickupSettings] =
     useState<StorePickupSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +108,8 @@ export function OnboardingFlow() {
         const primarySeller = rows[0] ?? null;
 
         setSeller(primarySeller);
+        setOnboardingStoreId(primarySeller?.store_id ?? null);
+        setSelectedPlanKey(primarySeller?.plan_key ?? null);
 
         if (!primarySeller?.profile_complete) {
           setView("step2");
@@ -131,8 +137,19 @@ export function OnboardingFlow() {
 
         const onboardingProgress = progress as OnboardingProgress | null;
 
-        if (!onboardingProgress?.categories_complete) {
+        if (onboardingProgress?.onboarding_complete) {
+          setView("redirecting");
+          router.replace("/dashboard");
+          return;
+        }
+
+        if (!onboardingProgress?.billing_complete) {
           setView("step3");
+          return;
+        }
+
+        if (!onboardingProgress.categories_complete) {
+          setView("step4");
           return;
         }
 
@@ -151,23 +168,17 @@ export function OnboardingFlow() {
 
         if (pickupError) {
           setError(friendlyOnboardingError(pickupError.message));
-          setView("step4");
-          return;
-        }
-
-        if (onboardingProgress.onboarding_complete) {
-          setView("redirecting");
-          router.replace("/dashboard");
+          setView("step5");
           return;
         }
 
         setPickupSettings((pickupData as StorePickupSettings | null) ?? null);
         if (!onboardingProgress.pickup_complete) {
-          setView("step4");
+          setView("step5");
           return;
         }
 
-        setView(onboardingProgress.billing_complete ? "step6" : "step5");
+        setView("step6");
       } catch {
         if (!isMounted) return;
         setError("We could not load your onboarding setup. Please try again.");
@@ -202,8 +213,42 @@ export function OnboardingFlow() {
   if (view === "step3") {
     return (
       <OnboardingShell
-        body="Select all that apply. You can change this later."
+        body="Try FlockFront free for 7 days. Small Flock starts at $5/month. Full Flock is $29/month for active sellers who need more room and more sale types."
         currentStep={3}
+        headline="Choose your plan"
+        subhead="Start with a 7-day free trial"
+      >
+        <div className="space-y-3">
+          {error ? (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+              {error}
+            </p>
+          ) : null}
+          <Step5PlanAccessForm
+            initialPlanKey={selectedPlanKey ?? seller?.plan_key}
+            onBack={() => {
+              setError(null);
+              setView("step2");
+            }}
+            onComplete={(planKey) => {
+              setError(null);
+              setSelectedPlanKey(planKey);
+              setSeller((current) =>
+                current ? { ...current, plan_key: planKey } : current,
+              );
+              setView("step4");
+            }}
+          />
+        </div>
+      </OnboardingShell>
+    );
+  }
+
+  if (view === "step4") {
+    return (
+      <OnboardingShell
+        body="Select all that apply. You can change this later."
+        currentStep={4}
         headline="What do you plan to sell?"
         subhead="Choose the categories that fit your farm"
       >
@@ -219,18 +264,31 @@ export function OnboardingFlow() {
               hatchingEggsEnabled: seller?.hatching_eggs_enabled,
               processedPoultryEnabled: seller?.processed_poultry_enabled,
             }}
-            onComplete={() => setView("step4")}
+            onChooseFullFlock={() => {
+              setError(null);
+              setSelectedPlanKey("full_flock");
+              setView("step3");
+            }}
+            onBack={() => {
+              setError(null);
+              setView("step3");
+            }}
+            onComplete={() => {
+              setError(null);
+              setView("step5");
+            }}
+            planKey={selectedPlanKey ?? seller?.plan_key}
           />
         </div>
       </OnboardingShell>
     );
   }
 
-  if (view === "step4") {
+  if (view === "step5") {
     return (
       <OnboardingShell
         body="These instructions appear at checkout and again in the buyer's order confirmation email. You can edit them anytime."
-        currentStep={4}
+        currentStep={5}
         headline="Set your pickup instructions"
         subhead="Make pickup clear from the start"
       >
@@ -249,35 +307,6 @@ export function OnboardingFlow() {
               buyerContactTextEnabled: pickupSettings?.buyer_contact_text_enabled,
               pickupInstructions: pickupSettings?.pickup_instructions,
             }}
-            onBack={() => {
-              setError(null);
-              setView("step3");
-            }}
-            onComplete={() => {
-              setError(null);
-              setView("step5");
-            }}
-          />
-        </div>
-      </OnboardingShell>
-    );
-  }
-
-  if (view === "step5") {
-    return (
-      <OnboardingShell
-        body="Try FlockFront free for 7 days. After your trial, the Seller Plan is $29/month. Beta sellers can enter a promo code for free access during beta."
-        currentStep={5}
-        headline="Choose your plan"
-        subhead="Start with a 7-day free trial"
-      >
-        <div className="space-y-3">
-          {error ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
-              {error}
-            </p>
-          ) : null}
-          <Step5PlanAccessForm
             onBack={() => {
               setError(null);
               setView("step4");
@@ -300,13 +329,13 @@ export function OnboardingFlow() {
         headline="You're ready to start"
         subhead="Your farm store is set up"
       >
-        {seller?.store_id ? (
+        {seller?.store_id || onboardingStoreId ? (
           <Step6ReviewSetup
             onBack={() => {
               setError(null);
               setView("step5");
             }}
-            storeId={seller.store_id}
+            storeId={(seller?.store_id ?? onboardingStoreId) as string}
           />
         ) : (
           <section className="rounded-[0.95rem] bg-white px-5 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-7 lg:py-6">
@@ -340,8 +369,19 @@ export function OnboardingFlow() {
             state: seller?.public_state,
             storeName: seller?.store_name,
           }}
-          onComplete={() => {
+          onComplete={(store) => {
             setError(null);
+            setOnboardingStoreId(store.storeId);
+            setSeller((current) =>
+              current
+                ? {
+                    ...current,
+                    store_id: store.storeId,
+                    store_name: store.storeName ?? current.store_name,
+                    profile_complete: true,
+                  }
+                : current,
+            );
             setView("step3");
           }}
         />

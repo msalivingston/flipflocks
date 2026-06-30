@@ -1,6 +1,5 @@
-import { CreateListingStart } from "./create-listing-start";
+import { redirect } from "next/navigation";
 
 export default function NewSellerListingPage() {
-  return <CreateListingStart />;
+  redirect("/dashboard/inventory/add-v2");
 }
-

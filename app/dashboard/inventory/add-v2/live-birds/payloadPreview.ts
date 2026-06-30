@@ -5,6 +5,7 @@ export type InventoryTypePreview =
   | "female"
   | "male"
   | "straight_run"
+  | "unsexed"
   | "pair"
   | "trio"
   | "other"
@@ -100,6 +101,8 @@ export function mapSoldAsToInventoryType(soldAs: string): InventoryTypePreview {
       return "male";
     case "Straight run":
       return "straight_run";
+    case "Unsexed":
+      return "unsexed";
     case "Pair":
       return "pair";
     case "Trio":
@@ -126,6 +129,8 @@ export function mapInventoryTypeToSoldAs(
       return "Male";
     case "straight_run":
       return "Straight run";
+    case "unsexed":
+      return "Unsexed";
     case "pair":
       return "Pair";
     case "trio":

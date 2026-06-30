@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { supabase } from "@/lib/supabase";
 import { restoreCatalogDefaultPhotoBestEffort } from "../../../../breeds/breed-data";
 import { useSellerContext } from "../../../../_components/seller-context";
@@ -12,6 +13,7 @@ import {
   SellerCard,
   SellerPageHeader,
 } from "../../../../_components/seller-ui";
+import { PlanUpgradePrompt } from "../../../../_components/plan-upgrade-prompt";
 import type {
   ReferenceBreed,
   ReferenceBreedAlias,
@@ -99,7 +101,10 @@ const steps = [
 export function HatchingEggsForm() {
   const { seller } = useSellerContext();
   const router = useRouter();
+  const plan = getPlanCapabilities(seller?.plan_key);
   const storeId = seller?.store_id ?? "";
+  const hatchingEggsEnabled =
+    Boolean(seller?.hatching_eggs_enabled) && plan.hatchingEggsEnabled;
   const [species, setSpecies] = useState<ReferenceSpecies[]>([]);
   const [breeds, setBreeds] = useState<ReferenceBreed[]>([]);
   const [breedAliases, setBreedAliases] = useState<ReferenceBreedAlias[]>([]);
@@ -128,7 +133,7 @@ export function HatchingEggsForm() {
   const [mediaItems, setMediaItems] = useState<ListingPhotoItem[]>([]);
 
   useEffect(() => {
-    if (!storeId || !seller?.hatching_eggs_enabled) return;
+    if (!storeId || !hatchingEggsEnabled) return;
 
     let isMounted = true;
 
@@ -203,7 +208,7 @@ export function HatchingEggsForm() {
     return () => {
       isMounted = false;
     };
-  }, [seller?.hatching_eggs_enabled, storeId]);
+  }, [hatchingEggsEnabled, storeId]);
 
   const breedChoices = useMemo(
     () => buildBreedChoices(form.speciesId, breeds, sellerProfiles, breedAliases),
@@ -603,7 +608,7 @@ export function HatchingEggsForm() {
     );
   }
 
-  if (!seller?.hatching_eggs_enabled) {
+  if (!hatchingEggsEnabled) {
     return (
       <>
         <SellerPageHeader
@@ -612,13 +617,19 @@ export function HatchingEggsForm() {
         />
         <main className="mx-auto w-full max-w-3xl px-5 py-5 sm:px-7">
           <SellerCard className="p-5">
-            <h2 className="text-lg font-semibold text-stone-950">
-              Hatching Eggs is turned off for this store.
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-stone-600">
-              Turn it on in Store Admin when you want to create new hatching
-              egg listings.
-            </p>
+            {!plan.hatchingEggsEnabled ? (
+              <PlanUpgradePrompt feature="hatching_eggs" />
+            ) : (
+              <>
+                <h2 className="text-lg font-semibold text-stone-950">
+                  Hatching Eggs is turned off for this store.
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-stone-600">
+                  Turn it on in Store Admin when you want to create new hatching
+                  egg listings.
+                </p>
+              </>
+            )}
             <div className="mt-5">
               <Link
                 className="seller-secondary-button"

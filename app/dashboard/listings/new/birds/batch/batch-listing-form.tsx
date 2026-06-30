@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { Dispatch, SetStateAction } from "react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { supabase } from "@/lib/supabase";
 import { restoreCatalogDefaultPhotoBestEffort } from "../../../../breeds/breed-data";
 import { useSellerContext } from "../../../../_components/seller-context";
@@ -174,6 +175,7 @@ export function GroupListingForm({
 }) {
   const { seller } = useSellerContext();
   const router = useRouter();
+  const plan = getPlanCapabilities(seller?.plan_key);
   const storeId = seller?.store_id ?? "";
   const [species, setSpecies] = useState<ReferenceSpecies[]>([]);
   const [breeds, setBreeds] = useState<ReferenceBreed[]>([]);
@@ -432,7 +434,9 @@ export function GroupListingForm({
 
     const nextErrors = [
       ...validateRows(rows, breedChoices),
-      ...validatePriceAdjustment(priceAdjustment),
+      ...validatePriceAdjustment(
+        plan.ageBasedPricingEnabled ? priceAdjustment : emptyPriceAdjustmentState,
+      ),
     ];
     setValidationErrors(nextErrors);
 
@@ -748,31 +752,34 @@ export function GroupListingForm({
     currentListingBatchId: string,
     onError: (message: string) => void = setDraftError,
   ) {
+    const effectivePriceAdjustment = plan.ageBasedPricingEnabled
+      ? priceAdjustment
+      : emptyPriceAdjustmentState;
     const { error: adjustmentError } = await supabase.rpc(
       "seller_set_listing_batch_price_adjustment",
       {
         p_listing_batch_id: currentListingBatchId,
-        p_auto_price_adjustment_enabled: priceAdjustment.enabled,
-        p_price_adjustment_direction: priceAdjustment.enabled
-          ? priceAdjustment.direction
+        p_auto_price_adjustment_enabled: effectivePriceAdjustment.enabled,
+        p_price_adjustment_direction: effectivePriceAdjustment.enabled
+          ? effectivePriceAdjustment.direction
           : null,
-        p_price_adjustment_amount: priceAdjustment.enabled
-          ? Number(priceAdjustment.amount)
+        p_price_adjustment_amount: effectivePriceAdjustment.enabled
+          ? Number(effectivePriceAdjustment.amount)
           : null,
-        p_price_adjustment_interval_weeks: priceAdjustment.enabled
-          ? Number(priceAdjustment.intervalWeeks)
+        p_price_adjustment_interval_weeks: effectivePriceAdjustment.enabled
+          ? Number(effectivePriceAdjustment.intervalWeeks)
           : null,
         p_price_adjustment_max_price:
-          priceAdjustment.enabled &&
-          priceAdjustment.direction === "increase" &&
-          priceAdjustment.maxPrice.trim()
-            ? Number(priceAdjustment.maxPrice)
+          effectivePriceAdjustment.enabled &&
+          effectivePriceAdjustment.direction === "increase" &&
+          effectivePriceAdjustment.maxPrice.trim()
+            ? Number(effectivePriceAdjustment.maxPrice)
             : null,
         p_price_adjustment_min_price:
-          priceAdjustment.enabled &&
-          priceAdjustment.direction === "decrease" &&
-          priceAdjustment.minPrice.trim()
-            ? Number(priceAdjustment.minPrice)
+          effectivePriceAdjustment.enabled &&
+          effectivePriceAdjustment.direction === "decrease" &&
+          effectivePriceAdjustment.minPrice.trim()
+            ? Number(effectivePriceAdjustment.minPrice)
             : null,
       },
     );
@@ -1050,7 +1057,14 @@ export function GroupListingForm({
     }
 
     if (
-      [...validateRows(rows, breedChoices), ...validatePriceAdjustment(priceAdjustment)]
+      [
+        ...validateRows(rows, breedChoices),
+        ...validatePriceAdjustment(
+          plan.ageBasedPricingEnabled
+            ? priceAdjustment
+            : emptyPriceAdjustmentState,
+        ),
+      ]
         .length > 0
     ) {
       window.setTimeout(() => setStep("inventory"), 0);
@@ -1224,7 +1238,14 @@ export function GroupListingForm({
     if (validateDetails(form).length > 0) return "details";
 
     if (
-      [...validateRows(rows, breedChoices), ...validatePriceAdjustment(priceAdjustment)]
+      [
+        ...validateRows(rows, breedChoices),
+        ...validatePriceAdjustment(
+          plan.ageBasedPricingEnabled
+            ? priceAdjustment
+            : emptyPriceAdjustmentState,
+        ),
+      ]
         .length > 0
     ) {
       return "inventory";
@@ -1496,6 +1517,7 @@ export function GroupListingForm({
 
         {step === "inventory" ? (
           <InventoryStep
+            ageBasedPricingEnabled={plan.ageBasedPricingEnabled}
             aliasSearchError={breedAliasError}
             breedChoices={breedChoices}
             isPreparingDraft={isPreparingDraft}
@@ -2041,6 +2063,7 @@ function RowPhoto({ photo }: { photo?: ListingPhotoItem | null }) {
 }
 
 function InventoryStep({
+  ageBasedPricingEnabled,
   aliasSearchError,
   breedChoices,
   isPreparingDraft,
@@ -2054,6 +2077,7 @@ function InventoryStep({
   setRows,
   validationErrors,
 }: {
+  ageBasedPricingEnabled: boolean;
   aliasSearchError: string | null;
   breedChoices: BreedChoice[];
   isPreparingDraft: boolean;
@@ -2212,6 +2236,7 @@ function InventoryStep({
         </div>
 
         <PriceAdjustmentFields
+          locked={!ageBasedPricingEnabled}
           value={priceAdjustment}
           onChange={onPriceAdjustmentChange}
         />

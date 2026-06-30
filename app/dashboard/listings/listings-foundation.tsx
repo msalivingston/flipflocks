@@ -73,6 +73,8 @@ type BreedSummary = {
 
 type LifecycleCounts = Record<ListingStatusFilter, number>;
 
+const addInventoryHref = "/dashboard/inventory/add-v2/live-birds";
+
 const lifecycleFilterOptions: { label: string; value: ListingStatusFilter }[] = [
   { label: "Current", value: "current" },
   { label: "Live", value: "active" },
@@ -202,7 +204,7 @@ export function ListingsFoundation() {
         title="Listings"
         description="Manage your available birds by hatch group or by breed, with prices, quantities, and storefront status in one place."
         action={
-          <PrimaryActionLink href="/dashboard/listings/new">
+          <PrimaryActionLink href={addInventoryHref}>
             Create Listing
           </PrimaryActionLink>
         }
@@ -355,7 +357,7 @@ function ListingsEmptyState({ hasFilters }: { hasFilters: boolean }) {
       }
       action={
         hasFilters ? null : (
-          <PrimaryActionLink href="/dashboard/listings/new">
+          <PrimaryActionLink href={addInventoryHref}>
             Create Listing
           </PrimaryActionLink>
         )
@@ -427,7 +429,7 @@ function ListingBatchCard({ listing }: { listing: ListingBatchSummary }) {
           >
             {lifecycleStatus === "hidden" ? "Continue Setup" : "View Details"}
           </Link>
-          <Link className="seller-small-button" href="/dashboard/listings/new">
+          <Link className="seller-small-button" href={addInventoryHref}>
             Create similar
           </Link>
         </div>
@@ -525,7 +527,7 @@ function ListingBatchTable({
                   >
                     {lifecycleStatus === "hidden" ? "Continue Setup" : "Open"}
                   </Link>
-                  <Link className="seller-small-button" href="/dashboard/listings/new">
+                  <Link className="seller-small-button" href={addInventoryHref}>
                     Create similar
                   </Link>
                 </div>

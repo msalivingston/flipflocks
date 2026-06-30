@@ -1,5 +1,12 @@
 import { useState } from "react";
 import {
+  getPlanCapabilities,
+  type PlanCapabilities,
+} from "@/lib/plan-capabilities";
+import {
+  PlanUpgradePrompt,
+} from "../../../_components/plan-upgrade-prompt";
+import {
   inputClass,
   mutedTextActionClass,
   soldAsOptions,
@@ -28,6 +35,7 @@ export function BirdOfferingsCard({
   updateOffering,
   updateOfferingBreed,
   onBreedPhotosChanged,
+  planKey,
 }: {
   addOffering: () => void;
   breedMediaItemsByProfileId: Record<string, ListingPhotoItem[]>;
@@ -46,8 +54,10 @@ export function BirdOfferingsCard({
   ) => void;
   updateOfferingBreed: (offeringId: string, option: BreedOption) => void;
   onBreedPhotosChanged: () => void;
+  planKey?: string | null;
 }) {
   const birdsForSaleGroupCount = getBirdsForSaleGroupCount(offerings);
+  const plan = getPlanCapabilities(planKey);
 
   return (
     <SectionCard
@@ -90,6 +100,7 @@ export function BirdOfferingsCard({
               updateOffering={updateOffering}
               updateOfferingBreed={updateOfferingBreed}
               onBreedPhotosChanged={onBreedPhotosChanged}
+              plan={plan}
             />
           ) : (
             <CollapsedOfferingRow
@@ -131,6 +142,7 @@ function ExpandedOfferingCard({
   updateOffering,
   updateOfferingBreed,
   onBreedPhotosChanged,
+  plan,
 }: {
   breedMediaItemsByProfileId: Record<string, ListingPhotoItem[]>;
   breedOptions: BreedOption[];
@@ -149,6 +161,7 @@ function ExpandedOfferingCard({
   ) => void;
   updateOfferingBreed: (offeringId: string, option: BreedOption) => void;
   onBreedPhotosChanged: () => void;
+  plan: PlanCapabilities;
 }) {
   const selectedBreedOption = findSelectedBreedOption(breedOptions, offering);
   const title = getBirdsForSaleTitle(offering, index);
@@ -217,6 +230,9 @@ function ExpandedOfferingCard({
           value={offering.soldAs}
           selectedBreedId={null}
           selectedId={offering.soldAs}
+          disabledOptionLabels={
+            plan.flockGroupListingsEnabled ? [] : ["Flock"]
+          }
           onChange={(option) =>
             updateOffering(offering.id, { soldAs: option.label })
           }
@@ -233,6 +249,13 @@ function ExpandedOfferingCard({
           onChange={(value) => updateOffering(offering.id, { price: value })}
         />
       </div>
+      {!plan.flockGroupListingsEnabled ? (
+        <PlanUpgradePrompt
+          className="mx-0 mb-4 sm:mx-4"
+          compact
+          feature="flock_group"
+        />
+      ) : null}
       {hasDuplicateCombination ? (
         <p className="mx-4 mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-5 text-amber-800">
           Duplicate breed and sex/type combination. Choose a different sex/type
@@ -444,6 +467,7 @@ function CompactMobilePanel({
 }
 
 function SelectField({
+  disabledOptionLabels = [],
   label,
   onChange,
   options,
@@ -451,6 +475,7 @@ function SelectField({
   selectedId,
   value,
 }: {
+  disabledOptionLabels?: string[];
   label: string;
   onChange: (value: BreedOption) => void;
   options: BreedOption[];
@@ -495,10 +520,13 @@ function SelectField({
           ) : null}
           {options.map((option) => (
             <option
+              disabled={disabledOptionLabels.includes(option.label)}
               key={getBreedOptionValue(option)}
               value={getBreedOptionValue(option)}
             >
-              {option.label}
+              {disabledOptionLabels.includes(option.label)
+                ? `${option.label} - Full Flock`
+                : option.label}
             </option>
           ))}
         </select>

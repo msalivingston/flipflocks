@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { supabase } from "@/lib/supabase";
 import { restoreCatalogDefaultPhotoBestEffort } from "../../../../breeds/breed-data";
 import { useSellerContext } from "../../../../_components/seller-context";
@@ -143,6 +144,7 @@ export function SimpleListingForm({
 }) {
   const { seller } = useSellerContext();
   const router = useRouter();
+  const plan = getPlanCapabilities(seller?.plan_key);
   const storeId = seller?.store_id ?? "";
   const [species, setSpecies] = useState<ReferenceSpecies[]>([]);
   const [breeds, setBreeds] = useState<ReferenceBreed[]>([]);
@@ -492,7 +494,9 @@ export function SimpleListingForm({
 
     const nextErrors = [
       ...validateInventory(inventory),
-      ...validatePriceAdjustment(priceAdjustment),
+      ...validatePriceAdjustment(
+        plan.ageBasedPricingEnabled ? priceAdjustment : emptyPriceAdjustmentState,
+      ),
     ];
     setValidationErrors(nextErrors);
 
@@ -633,31 +637,34 @@ export function SimpleListingForm({
     currentListingBatchId: string,
     onError: (message: string) => void = setDraftError,
   ) {
+    const effectivePriceAdjustment = plan.ageBasedPricingEnabled
+      ? priceAdjustment
+      : emptyPriceAdjustmentState;
     const { error: adjustmentError } = await supabase.rpc(
       "seller_set_listing_batch_price_adjustment",
       {
         p_listing_batch_id: currentListingBatchId,
-        p_auto_price_adjustment_enabled: priceAdjustment.enabled,
-        p_price_adjustment_direction: priceAdjustment.enabled
-          ? priceAdjustment.direction
+        p_auto_price_adjustment_enabled: effectivePriceAdjustment.enabled,
+        p_price_adjustment_direction: effectivePriceAdjustment.enabled
+          ? effectivePriceAdjustment.direction
           : null,
-        p_price_adjustment_amount: priceAdjustment.enabled
-          ? Number(priceAdjustment.amount)
+        p_price_adjustment_amount: effectivePriceAdjustment.enabled
+          ? Number(effectivePriceAdjustment.amount)
           : null,
-        p_price_adjustment_interval_weeks: priceAdjustment.enabled
-          ? Number(priceAdjustment.intervalWeeks)
+        p_price_adjustment_interval_weeks: effectivePriceAdjustment.enabled
+          ? Number(effectivePriceAdjustment.intervalWeeks)
           : null,
         p_price_adjustment_max_price:
-          priceAdjustment.enabled &&
-          priceAdjustment.direction === "increase" &&
-          priceAdjustment.maxPrice.trim()
-            ? Number(priceAdjustment.maxPrice)
+          effectivePriceAdjustment.enabled &&
+          effectivePriceAdjustment.direction === "increase" &&
+          effectivePriceAdjustment.maxPrice.trim()
+            ? Number(effectivePriceAdjustment.maxPrice)
             : null,
         p_price_adjustment_min_price:
-          priceAdjustment.enabled &&
-          priceAdjustment.direction === "decrease" &&
-          priceAdjustment.minPrice.trim()
-            ? Number(priceAdjustment.minPrice)
+          effectivePriceAdjustment.enabled &&
+          effectivePriceAdjustment.direction === "decrease" &&
+          effectivePriceAdjustment.minPrice.trim()
+            ? Number(effectivePriceAdjustment.minPrice)
             : null,
       },
     );
@@ -919,7 +926,9 @@ export function SimpleListingForm({
     if (
       [
         ...validateInventory(inventory),
-        ...validatePriceAdjustment(priceAdjustment),
+        ...validatePriceAdjustment(
+          plan.ageBasedPricingEnabled ? priceAdjustment : emptyPriceAdjustmentState,
+        ),
       ].length > 0
     ) {
       window.setTimeout(() => setStep("inventory"), 0);
@@ -1098,7 +1107,9 @@ export function SimpleListingForm({
     if (
       [
         ...validateInventory(inventory),
-        ...validatePriceAdjustment(priceAdjustment),
+        ...validatePriceAdjustment(
+          plan.ageBasedPricingEnabled ? priceAdjustment : emptyPriceAdjustmentState,
+        ),
       ].length > 0
     ) {
       return "inventory";
@@ -1357,6 +1368,7 @@ export function SimpleListingForm({
               ) : null}
 
               <PriceAdjustmentFields
+                locked={!plan.ageBasedPricingEnabled}
                 value={priceAdjustment}
                 onChange={(nextValue) => {
                   setPriceAdjustment(nextValue);

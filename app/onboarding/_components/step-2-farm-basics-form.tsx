@@ -46,7 +46,7 @@ type Step2FormProps = {
     storeName?: string | null;
     aboutText?: string | null;
   };
-  onComplete: () => void;
+  onComplete: (store: { storeId: string; storeName: string | null }) => void;
 };
 
 const starterFarmDescription = `We’re a local farm offering poultry and farm goods for backyard flock owners, homesteaders, and small farms.
@@ -163,7 +163,10 @@ export function Step2FarmBasicsForm({
       }
     }
 
-    onComplete();
+    onComplete({
+      storeId,
+      storeName: rows[0]?.store_name ?? storeName.trim(),
+    });
   }
 
   function handleStarterDescriptionChange(checked: boolean) {

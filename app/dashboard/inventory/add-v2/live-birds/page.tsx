@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { useSellerContext } from "../../../_components/seller-context";
 import { DashboardPageContent } from "../../../_components/seller-ui";
 import {
@@ -122,6 +123,7 @@ export default function LiveBirdsV2Page() {
   const searchParams = useSearchParams();
   const draftId = searchParams.get("draftId");
   const { seller } = useSellerContext();
+  const plan = getPlanCapabilities(seller?.plan_key);
   const nextOfferingId = useRef(initialOfferings.length + 1);
   const [species, setSpecies] = useState<SpeciesOption>(
     fallbackSpeciesOptions[0],
@@ -241,10 +243,19 @@ export default function LiveBirdsV2Page() {
         availableDate,
         hatchDate,
         offerings,
-        priceAdjustment,
+        priceAdjustment: plan.ageBasedPricingEnabled
+          ? priceAdjustment
+          : defaultPriceAdjustment,
         species,
       }),
-    [availableDate, hatchDate, offerings, priceAdjustment, species],
+    [
+      availableDate,
+      hatchDate,
+      offerings,
+      plan.ageBasedPricingEnabled,
+      priceAdjustment,
+      species,
+    ],
   );
   const hasMeaningfulUnsavedChanges =
     publishedListingBatchId === null &&
@@ -256,7 +267,9 @@ export default function LiveBirdsV2Page() {
         availableDate,
         hatchDate,
         offerings,
-        priceAdjustment,
+        priceAdjustment: plan.ageBasedPricingEnabled
+          ? priceAdjustment
+          : defaultPriceAdjustment,
         species,
         usingFallbackBreeds,
         usingFallbackSpecies,
@@ -265,6 +278,7 @@ export default function LiveBirdsV2Page() {
       availableDate,
       hatchDate,
       offerings,
+      plan.ageBasedPricingEnabled,
       priceAdjustment,
       species,
       usingFallbackBreeds,
@@ -865,29 +879,32 @@ export default function LiveBirdsV2Page() {
   }
 
   async function savePriceAdjustmentForBatch(listingBatchId: string) {
+    const effectivePriceAdjustment = plan.ageBasedPricingEnabled
+      ? priceAdjustment
+      : defaultPriceAdjustment;
     const { error } = await supabase.rpc(
       "seller_set_listing_batch_price_adjustment",
       {
         p_listing_batch_id: listingBatchId,
-        p_auto_price_adjustment_enabled: priceAdjustment.enabled,
-        p_price_adjustment_direction: priceAdjustment.enabled
-          ? priceAdjustment.direction
+        p_auto_price_adjustment_enabled: effectivePriceAdjustment.enabled,
+        p_price_adjustment_direction: effectivePriceAdjustment.enabled
+          ? effectivePriceAdjustment.direction
           : null,
-        p_price_adjustment_amount: priceAdjustment.enabled
-          ? Number(priceAdjustment.amount)
+        p_price_adjustment_amount: effectivePriceAdjustment.enabled
+          ? Number(effectivePriceAdjustment.amount)
           : null,
-        p_price_adjustment_interval_weeks: priceAdjustment.enabled
-          ? Number(priceAdjustment.intervalWeeks)
+        p_price_adjustment_interval_weeks: effectivePriceAdjustment.enabled
+          ? Number(effectivePriceAdjustment.intervalWeeks)
           : null,
         p_price_adjustment_max_price:
-          priceAdjustment.enabled &&
-          priceAdjustment.direction === "increase"
-            ? Number(priceAdjustment.maxPrice)
+          effectivePriceAdjustment.enabled &&
+          effectivePriceAdjustment.direction === "increase"
+            ? Number(effectivePriceAdjustment.maxPrice)
             : null,
         p_price_adjustment_min_price:
-          priceAdjustment.enabled &&
-          priceAdjustment.direction === "decrease"
-            ? Number(priceAdjustment.minPrice)
+          effectivePriceAdjustment.enabled &&
+          effectivePriceAdjustment.direction === "decrease"
+            ? Number(effectivePriceAdjustment.minPrice)
             : null,
       },
     );
@@ -1367,6 +1384,7 @@ export default function LiveBirdsV2Page() {
                 updateOffering={updateOffering}
                 updateOfferingBreed={updateOfferingBreed}
                 onBreedPhotosChanged={() => void reloadBreedPhotos()}
+                planKey={seller?.plan_key}
               />
               {breedPhotoActionMessage ? (
                 <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold leading-6 text-emerald-900">
@@ -1376,6 +1394,7 @@ export default function LiveBirdsV2Page() {
               <AgeBasedPriceChangesCard
                 offerings={offerings}
                 priceAdjustment={priceAdjustment}
+                locked={!plan.ageBasedPricingEnabled}
                 updatePriceAdjustment={updatePriceAdjustment}
               />
               <ReviewPublishCard

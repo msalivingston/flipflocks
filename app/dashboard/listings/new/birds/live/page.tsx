@@ -1,5 +1,5 @@
-import { LiveBirdsBranchSelection } from "../../create-listing-start";
+import { redirect } from "next/navigation";
 
 export default function LiveBirdsListingPage() {
-  return <LiveBirdsBranchSelection />;
+  redirect("/dashboard/inventory/add-v2/live-birds");
 }

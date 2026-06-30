@@ -2,10 +2,16 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  PLAN_CAPABILITIES,
+  type PlanId,
+  normalizePlanId,
+} from "@/lib/plan-capabilities";
 
 type Step5PlanAccessFormProps = {
+  initialPlanKey?: string | null;
   onBack: () => void;
-  onComplete: () => void;
+  onComplete: (planKey: PlanId) => void;
 };
 
 type PromoState = {
@@ -15,19 +21,50 @@ type PromoState = {
 
 const acceptedBetaPromoCode = "FOUNDINGFLOCK";
 
-const planIncludes = [
-  "Farm storefront",
-  "Live birds, hatching eggs, poultry products, and equipment listings",
-  "Inventory management",
-  "Customer orders",
-  "Pickup instructions and store policies",
-  "Seller dashboard",
+const planCards: Array<{
+  badge?: string;
+  cta: string;
+  id: PlanId;
+  includes: string[];
+  purpose: string;
+}> = [
+  {
+    id: "small_flock",
+    cta: "Choose Small Flock",
+    purpose:
+      "For occasional sellers, off-season farms, and keeping your storefront active with a few birds.",
+    includes: [
+      "Live birds only",
+      "Single birds, pairs, and trios",
+      "Up to 5 active birds for sale",
+      "Simple fixed pricing",
+      "Farm storefront stays active",
+    ],
+  },
+  {
+    id: "full_flock",
+    badge: "Best for active sellers",
+    cta: "Choose Full Flock",
+    purpose: "For active poultry sellers who need more room and more sale types.",
+    includes: [
+      "Unlimited live bird quantities",
+      "Flock/group listings",
+      "Hatching eggs",
+      "Poultry products",
+      "Equipment or supplies",
+      "Age-Based Pricing",
+    ],
+  },
 ];
 
 export function Step5PlanAccessForm({
+  initialPlanKey,
   onBack,
   onComplete,
 }: Step5PlanAccessFormProps) {
+  const [selectedPlan, setSelectedPlan] = useState<PlanId>(
+    normalizePlanId(initialPlanKey),
+  );
   const [promoCode, setPromoCode] = useState("");
   const [promo, setPromo] = useState<PromoState>({
     appliedCode: null,
@@ -35,6 +72,7 @@ export function Step5PlanAccessForm({
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const selectedPlanConfig = PLAN_CAPABILITIES[selectedPlan];
 
   function normalizePromoCode(value: string) {
     return value.trim().toUpperCase();
@@ -84,6 +122,7 @@ export function Step5PlanAccessForm({
 
     const { error } = await supabase.rpc("seller_save_onboarding_plan_access", {
       p_plan: {
+        plan_key: selectedPlan,
         promo_code: appliedCode,
       },
     });
@@ -94,46 +133,32 @@ export function Step5PlanAccessForm({
       return;
     }
 
-    onComplete();
+    onComplete(selectedPlan);
   }
 
   const hasBetaAccess = promo.appliedCode === acceptedBetaPromoCode;
 
   return (
     <section className="rounded-[0.95rem] bg-white px-5 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-7 lg:py-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-serif text-[1.45rem] font-semibold leading-tight text-stone-950 sm:text-[1.7rem]">
-            FlockFront Seller Plan
-          </h2>
-          <p className="mt-1 text-lg font-extrabold text-[#246f38]">
-            $29/month after trial
-          </p>
-        </div>
-        <span className="rounded-full bg-[#eff8ed] px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-[#246f38] ring-1 ring-[#b7d7b9]">
-          7-day free trial
-        </span>
-      </div>
+      <h2 className="font-serif text-[1.45rem] font-semibold leading-tight text-stone-950 sm:text-[1.7rem]">
+        Choose your plan
+      </h2>
+      <p className="mt-2 text-sm font-medium leading-6 text-stone-600">
+        Pick the plan that fits how you sell right now. You can change plans
+        later.
+      </p>
 
       <form className="mt-4 space-y-4" onSubmit={handleSubmit} noValidate>
-        <div className="rounded-lg border border-stone-200 bg-[#fffaf1] px-4 py-3">
-          <p className="text-sm font-extrabold text-stone-950">
-            Plan includes
-          </p>
-          <ul className="mt-2 space-y-1.5">
-            {planIncludes.map((item) => (
-              <li
-                className="flex gap-2 text-sm font-medium leading-5 text-stone-700"
-                key={item}
-              >
-                <span
-                  className="mt-2 size-1.5 shrink-0 rounded-full bg-[#246f38]"
-                  aria-hidden="true"
-                />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
+        <div className="grid gap-3">
+          {planCards.map((plan) => (
+            <PlanCard
+              isSelected={selectedPlan === plan.id}
+              isSubmitting={isSubmitting}
+              key={plan.id}
+              onSelect={() => setSelectedPlan(plan.id)}
+              plan={plan}
+            />
+          ))}
         </div>
 
         <div>
@@ -194,6 +219,7 @@ export function Step5PlanAccessForm({
           </p>
           {hasBetaAccess ? (
             <dl className="mt-2 space-y-1 text-sm font-medium text-stone-700">
+              <SummaryRow label="Plan" value={selectedPlanConfig.displayName} />
               <SummaryRow label="Promo" value="Beta access applied" />
               <SummaryRow label="Due today" value="$0" />
               <SummaryRow
@@ -203,9 +229,13 @@ export function Step5PlanAccessForm({
             </dl>
           ) : (
             <dl className="mt-2 space-y-1 text-sm font-medium text-stone-700">
+              <SummaryRow label="Plan" value={selectedPlanConfig.displayName} />
               <SummaryRow label="Trial" value="7 days free" />
               <SummaryRow label="Due today" value="$0" />
-              <SummaryRow label="After trial" value="$29/month" />
+              <SummaryRow
+                label="After trial"
+                value={`$${selectedPlanConfig.monthlyPrice}/month`}
+              />
             </dl>
           )}
         </div>
@@ -233,11 +263,80 @@ export function Step5PlanAccessForm({
             disabled={isSubmitting}
             type="submit"
           >
-            {isSubmitting ? "Saving plan access..." : "Continue"}
+            {isSubmitting ? "Saving plan..." : "Continue"}
           </button>
         </div>
       </form>
     </section>
+  );
+}
+
+function PlanCard({
+  isSelected,
+  isSubmitting,
+  onSelect,
+  plan,
+}: {
+  isSelected: boolean;
+  isSubmitting: boolean;
+  onSelect: () => void;
+  plan: (typeof planCards)[number];
+}) {
+  const capabilities = PLAN_CAPABILITIES[plan.id];
+
+  return (
+    <button
+      className={`rounded-xl border px-4 py-4 text-left transition focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed ${
+        isSelected
+          ? "border-[#246f38] bg-[#eff8ed] shadow-sm"
+          : "border-stone-200 bg-white hover:border-[#b7d7b9] hover:bg-[#fffaf1]"
+      }`}
+      disabled={isSubmitting}
+      onClick={onSelect}
+      type="button"
+    >
+      <span className="flex flex-wrap items-start justify-between gap-2">
+        <span>
+          <span className="block font-serif text-xl font-semibold leading-tight text-stone-950">
+            {capabilities.displayName}
+          </span>
+          <span className="mt-1 block text-lg font-extrabold text-[#246f38]">
+            ${capabilities.monthlyPrice}/month
+          </span>
+        </span>
+        {plan.badge ? (
+          <span className="rounded-full bg-[#246f38] px-2.5 py-1 text-xs font-extrabold uppercase tracking-wide text-white">
+            {plan.badge}
+          </span>
+        ) : null}
+      </span>
+      <span className="mt-2 block text-sm font-medium leading-6 text-stone-600">
+        {plan.purpose}
+      </span>
+      <span className="mt-3 grid gap-1.5">
+        {plan.includes.map((item) => (
+          <span
+            className="flex gap-2 text-sm font-medium leading-5 text-stone-700"
+            key={item}
+          >
+            <span
+              className="mt-2 size-1.5 shrink-0 rounded-full bg-[#246f38]"
+              aria-hidden="true"
+            />
+            <span>{item}</span>
+          </span>
+        ))}
+      </span>
+      <span
+        className={`mt-3 inline-flex min-h-9 items-center justify-center rounded-md px-3 text-sm font-bold ${
+          isSelected
+            ? "bg-[#246f38] text-white"
+            : "border border-[#b7d7b9] bg-white text-[#246f38]"
+        }`}
+      >
+        {isSelected ? "Selected" : plan.cta}
+      </span>
+    </button>
   );
 }
 
@@ -251,13 +350,17 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 }
 
 function friendlyPlanAccessError(message: string) {
-  if (message.toLowerCase().includes("pickup")) {
-    return "Please finish pickup instructions before saving plan access.";
+  if (message.toLowerCase().includes("farm basics")) {
+    return "Please finish farm basics before choosing a plan.";
+  }
+
+  if (message.toLowerCase().includes("plan")) {
+    return "Choose Small Flock or Full Flock before continuing.";
   }
 
   if (message.toLowerCase().includes("promo")) {
     return "That promo code is not valid right now.";
   }
 
-  return message || "We could not save your plan access. Please try again.";
+  return message || "We could not save your plan. Please try again.";
 }

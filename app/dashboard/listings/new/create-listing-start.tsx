@@ -1,6 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { getPlanCapabilities, type LockedPlanFeature } from "@/lib/plan-capabilities";
+import {
+  FullFlockPill,
+  PlanUpgradeDialog,
+} from "../../_components/plan-upgrade-prompt";
 import { useSellerContext } from "../../_components/seller-context";
 import {
   SellerCard,
@@ -14,6 +20,8 @@ type ChoiceCardProps = {
   badge?: string;
   details: string[];
   disabled?: boolean;
+  lockedFeature?: LockedPlanFeature;
+  onLockedClick?: (feature: LockedPlanFeature) => void;
 };
 
 /**
@@ -25,11 +33,16 @@ type ChoiceCardProps = {
  */
 export function CreateListingStart() {
   const { seller } = useSellerContext();
-  const hatchingEggsEnabled = Boolean(seller?.hatching_eggs_enabled);
-  const equipmentSuppliesEnabled = Boolean(
-    seller?.equipment_supplies_enabled,
+  const plan = getPlanCapabilities(seller?.plan_key);
+  const [lockedFeature, setLockedFeature] = useState<LockedPlanFeature | null>(
+    null,
   );
-  const processedPoultryEnabled = Boolean(seller?.processed_poultry_enabled);
+  const hatchingEggsEnabled =
+    Boolean(seller?.hatching_eggs_enabled) && plan.hatchingEggsEnabled;
+  const equipmentSuppliesEnabled =
+    Boolean(seller?.equipment_supplies_enabled) && plan.equipmentSuppliesEnabled;
+  const processedPoultryEnabled =
+    Boolean(seller?.processed_poultry_enabled) && plan.processedPoultryEnabled;
 
   return (
     <>
@@ -63,41 +76,52 @@ export function CreateListingStart() {
                   ]
             }
           />
-          {equipmentSuppliesEnabled ? (
-            <ChoiceCard
-              title="Equipment & Supplies"
-              description={
-                "Feeders, brooders, supplies, and non-living local-pickup inventory."
-              }
-              href="/dashboard/listings/new/equipment-supplies"
-              details={[
-                "Simple quantity and price inventory",
-                "Local pickup only for V1",
-                "Creates a buyer-facing store item",
-              ]}
-            />
-          ) : null}
-          {processedPoultryEnabled ? (
-            <ChoiceCard
-              title="Processed Poultry"
-              description="Simple local-pickup poultry products by product name, type, quantity, and price."
-              href="/dashboard/listings/new/processed-poultry"
-              details={[
-                "No hatch dates or breed setup",
-                "Quantity and price are required",
-                "Creates a buyer-facing store item",
-              ]}
-            />
-          ) : null}
+          <ChoiceCard
+            title="Equipment & Supplies"
+            description={
+              "Feeders, brooders, supplies, and non-living local-pickup inventory."
+            }
+            href={equipmentSuppliesEnabled ? "/dashboard/listings/new/equipment-supplies" : undefined}
+            details={[
+              "Simple quantity and price inventory",
+              "Local pickup only for V1",
+              "Creates a buyer-facing store item",
+            ]}
+            lockedFeature={equipmentSuppliesEnabled ? undefined : "equipment_supplies"}
+            onLockedClick={setLockedFeature}
+          />
+          <ChoiceCard
+            title="Processed Poultry"
+            description="Simple local-pickup poultry products by product name, type, quantity, and price."
+            href={processedPoultryEnabled ? "/dashboard/listings/new/processed-poultry" : undefined}
+            details={[
+              "No hatch dates or breed setup",
+              "Quantity and price are required",
+              "Creates a buyer-facing store item",
+            ]}
+            lockedFeature={processedPoultryEnabled ? undefined : "processed_poultry"}
+            onLockedClick={setLockedFeature}
+          />
         </section>
       </main>
+      {lockedFeature ? (
+        <PlanUpgradeDialog
+          feature={lockedFeature}
+          onClose={() => setLockedFeature(null)}
+        />
+      ) : null}
     </>
   );
 }
 
 export function BirdsBranchSelection() {
   const { seller } = useSellerContext();
-  const hatchingEggsEnabled = Boolean(seller?.hatching_eggs_enabled);
+  const plan = getPlanCapabilities(seller?.plan_key);
+  const [lockedFeature, setLockedFeature] = useState<LockedPlanFeature | null>(
+    null,
+  );
+  const hatchingEggsEnabled =
+    Boolean(seller?.hatching_eggs_enabled) && plan.hatchingEggsEnabled;
 
   return (
     <>
@@ -129,27 +153,39 @@ export function BirdsBranchSelection() {
               "Keeps age-based setup available",
             ]}
           />
-          {hatchingEggsEnabled ? (
-            <ChoiceCard
-              title="Hatching Eggs"
-              description={
-                "Eggs available for local pickup, organized by breed, quantity, and price per egg."
-              }
-              href="/dashboard/listings/new/birds/hatching-eggs"
-              details={[
-                "No hatch date required",
-                "Breed, available date, quantity, and price per egg",
-                "Local pickup only for V1",
-              ]}
-            />
-          ) : null}
+          <ChoiceCard
+            title="Hatching Eggs"
+            description={
+              "Eggs available for local pickup, organized by breed, quantity, and price per egg."
+            }
+            href={hatchingEggsEnabled ? "/dashboard/listings/new/birds/hatching-eggs" : undefined}
+            details={[
+              "No hatch date required",
+              "Breed, available date, quantity, and price per egg",
+              "Local pickup only for V1",
+            ]}
+            lockedFeature={hatchingEggsEnabled ? undefined : "hatching_eggs"}
+            onLockedClick={setLockedFeature}
+          />
         </section>
       </main>
+      {lockedFeature ? (
+        <PlanUpgradeDialog
+          feature={lockedFeature}
+          onClose={() => setLockedFeature(null)}
+        />
+      ) : null}
     </>
   );
 }
 
 export function LiveBirdsBranchSelection() {
+  const { seller } = useSellerContext();
+  const plan = getPlanCapabilities(seller?.plan_key);
+  const [lockedFeature, setLockedFeature] = useState<LockedPlanFeature | null>(
+    null,
+  );
+
   return (
     <>
       <SellerPageHeader
@@ -182,15 +218,29 @@ export function LiveBirdsBranchSelection() {
           <ChoiceCard
             title="Group Listing"
             description="I'm selling multiple types or breeds from the same hatch date."
-            href="/dashboard/listings/new/birds/batch"
+            href={
+              plan.groupListingRouteEnabled
+                ? "/dashboard/listings/new/birds/batch"
+                : undefined
+            }
             details={[
               "One shared hatch date",
               "Multiple inventory rows",
               "Good for hatchery-style availability lists",
             ]}
+            lockedFeature={
+              plan.groupListingRouteEnabled ? undefined : "group_listing"
+            }
+            onLockedClick={setLockedFeature}
           />
         </section>
       </main>
+      {lockedFeature ? (
+        <PlanUpgradeDialog
+          feature={lockedFeature}
+          onClose={() => setLockedFeature(null)}
+        />
+      ) : null}
     </>
   );
 }
@@ -257,11 +307,14 @@ function ChoiceCard({
   badge,
   details,
   disabled = false,
+  lockedFeature,
+  onLockedClick,
 }: ChoiceCardProps) {
+  const isLocked = Boolean(lockedFeature);
   const content = (
     <SellerCard
       className={`h-full p-5 transition ${
-        disabled
+        disabled || isLocked
           ? "bg-stone-50 opacity-80"
           : "hover:border-emerald-700 hover:shadow-md"
       }`}
@@ -285,6 +338,7 @@ function ChoiceCard({
               {badge}
             </span>
           ) : null}
+          {isLocked ? <FullFlockPill /> : null}
         </div>
 
         <ul className="grid gap-2 text-sm text-stone-700">
@@ -299,13 +353,15 @@ function ChoiceCard({
         </ul>
 
         <div className="mt-auto pt-2">
-          {disabled ? (
+          {disabled || isLocked ? (
             <button
-              className="seller-secondary-button w-full cursor-not-allowed opacity-70"
+              className="seller-secondary-button w-full"
               type="button"
-              disabled
+              onClick={() => {
+                if (lockedFeature) onLockedClick?.(lockedFeature);
+              }}
             >
-              Coming Later
+              {isLocked ? "Full Flock" : "Coming Later"}
             </button>
           ) : (
             <span className="inline-flex min-h-10 w-full items-center justify-center rounded-md bg-stone-950 px-4 text-sm font-semibold text-white">
@@ -317,7 +373,7 @@ function ChoiceCard({
     </SellerCard>
   );
 
-  if (!href || disabled) return content;
+  if (!href || disabled || isLocked) return content;
 
   return (
     <Link

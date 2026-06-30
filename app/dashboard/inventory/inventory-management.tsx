@@ -1275,7 +1275,7 @@ function ProcessedPoultryInventorySection({
           </div>
           <Link
             className="seller-secondary-button"
-            href="/dashboard/listings/new/processed-poultry"
+            href="/dashboard/inventory/add-v2"
           >
             Add Processed Poultry
           </Link>

@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { PLAN_CAPABILITIES, normalizePlanId } from "@/lib/plan-capabilities";
 
 type Step6ReviewSetupProps = {
   onBack: () => void;
@@ -32,6 +33,7 @@ type StoreReview = {
 type BillingReview = {
   applied_promo_code: string | null;
   billing_plan: string | null;
+  plan_key: string | null;
   subscription_status: string | null;
   trial_ends_at: string | null;
 };
@@ -74,7 +76,7 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
             supabase
               .from("seller_billing_status")
               .select(
-                "billing_plan, subscription_status, trial_ends_at, applied_promo_code",
+                "plan_key, billing_plan, subscription_status, trial_ends_at, applied_promo_code",
               )
               .eq("store_id", storeId)
               .maybeSingle<BillingReview>(),
@@ -250,7 +252,7 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
         </ReviewSection>
 
         <ReviewSection title="Plan access">
-          <ReviewRow label="Plan" value="FlockFront Seller Plan" />
+          <ReviewRow label="Plan" value={formatPlanName(billing)} />
           <ReviewRow label="Access" value={formatPlanAccess(billing)} />
           {billing?.applied_promo_code ? (
             <ReviewRow
@@ -400,6 +402,7 @@ function formatBuyerLocation(store: StoreReview | null) {
 
 function formatPlanAccess(billing: BillingReview | null) {
   if (!billing) return "Not saved";
+  const plan = PLAN_CAPABILITIES[normalizePlanId(billing.plan_key)];
 
   if (
     billing.subscription_status === "comped" ||
@@ -408,7 +411,13 @@ function formatPlanAccess(billing: BillingReview | null) {
     return "Beta access applied, no payment required during beta";
   }
 
-  return "7-day free trial, then $29/month";
+  return `7-day free trial, then $${plan.monthlyPrice}/month`;
+}
+
+function formatPlanName(billing: BillingReview | null) {
+  if (!billing) return "Not saved";
+
+  return PLAN_CAPABILITIES[normalizePlanId(billing.plan_key)].displayName;
 }
 
 function friendlyReviewError(message: string) {

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { PlanUpgradePrompt } from "../../../_components/plan-upgrade-prompt";
 import { SellerCard } from "../../../_components/seller-ui";
 import {
   ListingPhotosSection,
@@ -23,6 +24,7 @@ export type InventoryType =
   | "female"
   | "male"
   | "straight_run"
+  | "unsexed"
   | "pair"
   | "trio"
   | "other";
@@ -31,6 +33,7 @@ export const inventoryTypeOptions: { label: string; value: InventoryType }[] = [
   { label: "Female", value: "female" },
   { label: "Male", value: "male" },
   { label: "Straight Run", value: "straight_run" },
+  { label: "Unsexed", value: "unsexed" },
   { label: "Pair", value: "pair" },
   { label: "Trio", value: "trio" },
   { label: "Other", value: "other" },
@@ -396,9 +399,11 @@ export function ListingCreationPhotosStep({
 }
 
 export function PriceAdjustmentFields({
+  locked = false,
   onChange,
   value,
 }: {
+  locked?: boolean;
   onChange: (value: PriceAdjustmentState) => void;
   value: PriceAdjustmentState;
 }) {
@@ -415,11 +420,12 @@ export function PriceAdjustmentFields({
         <input
           checked={value.enabled}
           className="mt-1 h-4 w-4 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
+          disabled={locked}
           type="checkbox"
           onChange={(event) => updateField("enabled", event.target.checked)}
         />
         <span>
-          Adjust price as birds age
+          Adjust price as birds age {locked ? "(Full Flock)" : ""}
           <span className="mt-1 block text-sm font-normal leading-6 text-stone-600">
             Set one automatic price change for this hatch date. It applies to
             each available bird price in this listing.
@@ -427,7 +433,15 @@ export function PriceAdjustmentFields({
         </span>
       </label>
 
-      {value.enabled ? (
+      {locked ? (
+        <PlanUpgradePrompt
+          className="mt-4"
+          compact
+          feature="age_based_pricing"
+        />
+      ) : null}
+
+      {value.enabled && !locked ? (
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="grid gap-1 text-sm font-semibold text-stone-700">
             Price change
