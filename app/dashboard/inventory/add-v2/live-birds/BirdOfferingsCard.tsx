@@ -121,19 +121,13 @@ export function BirdOfferingsCard({
         )}
       </div>
 
-      {isEditMode ? (
-        <p className="mt-3 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-semibold leading-6 text-stone-600">
-          Adding groups to an existing listing is coming soon.
-        </p>
-      ) : (
-        <button
-          className="mt-3 inline-flex min-h-12 w-full items-center justify-center rounded-md border border-emerald-800/30 bg-white px-4 text-base font-bold text-emerald-900 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
-          onClick={addOffering}
-          type="button"
-        >
-          + Add another group
-        </button>
-      )}
+      <button
+        className="mt-3 inline-flex min-h-12 w-full items-center justify-center rounded-md border border-emerald-800/30 bg-white px-4 text-base font-bold text-emerald-900 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
+        onClick={addOffering}
+        type="button"
+      >
+        + Add another group
+      </button>
     </SectionCard>
   );
 }
@@ -223,7 +217,7 @@ function ExpandedOfferingCard({
 
       <div className="grid gap-3 px-0 py-4 sm:gap-4 sm:px-4 sm:py-4 lg:grid-cols-4">
         <SelectField
-          disabled={isEditMode}
+          disabled={isEditMode && Boolean(offering.inventoryItemId)}
           label="Breed"
           options={breedOptions}
           value={offering.breed}

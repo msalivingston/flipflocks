@@ -323,6 +323,7 @@ export function LiveBirdsListingForm({
               ? priceAdjustment
               : defaultPriceAdjustment,
             species,
+            sellerBreedProfiles,
           })
         : [],
     [
@@ -334,6 +335,7 @@ export function LiveBirdsListingForm({
       plan.ageBasedPricingEnabled,
       priceAdjustment,
       species,
+      sellerBreedProfiles,
     ],
   );
   const isLoadedDraft = loadedDraftId !== null;
@@ -1224,6 +1226,7 @@ export function LiveBirdsListingForm({
       offerings,
       reservationMap: reservationResult.reservationMap,
       speciesId: species.id,
+      sellerBreedProfiles,
     });
 
     if (editValidationIssue) {
@@ -1274,6 +1277,7 @@ export function LiveBirdsListingForm({
     const syncResult = await syncExistingEditOfferings({
       basePrice,
       currentRows,
+      listingBatchId,
       offerings,
     });
 
@@ -2034,6 +2038,7 @@ function getEditSaveBlockingIssues({
   offerings,
   priceAdjustment,
   species,
+  sellerBreedProfiles,
 }: {
   availableDate: string;
   hatchDate: string;
@@ -2041,10 +2046,14 @@ function getEditSaveBlockingIssues({
   offerings: BirdOffering[];
   priceAdjustment: PriceAdjustmentState;
   species: SpeciesOption;
+  sellerBreedProfiles: SellerBreedProfile[];
 }) {
   const issues: string[] = [];
   const parsedHatchDate = parseDateValue(hatchDate);
   const parsedAvailableDate = parseDateValue(availableDate);
+  const breedProfileSpeciesById = new Map(
+    sellerBreedProfiles.map((profile) => [profile.id, profile.species_id] as const),
+  );
 
   if (!species.id) {
     issues.push("Species is missing.");
@@ -2079,12 +2088,13 @@ function getEditSaveBlockingIssues({
     const quantity = Number(offering.quantity);
     const price = Number(offering.price);
 
-    if (!offering.inventoryItemId) {
-      issues.push("Adding groups to an existing listing is coming soon.");
-    }
-
     if (!offering.sellerBreedProfileId) {
       issues.push(`${label} needs a breed.`);
+    } else if (
+      species.id &&
+      breedProfileSpeciesById.get(offering.sellerBreedProfileId) !== species.id
+    ) {
+      issues.push(`${label} breed must belong to this listing species.`);
     }
 
     if (!offering.soldAs.trim()) {
@@ -2177,12 +2187,14 @@ function getEditCurrentRowsValidationIssue({
   offerings,
   reservationMap,
   speciesId,
+  sellerBreedProfiles,
 }: {
   currentRows: DraftInventoryRow[];
   loadedSpeciesId: string | null;
   offerings: BirdOffering[];
   reservationMap: Map<string, number>;
   speciesId: string | null;
+  sellerBreedProfiles: SellerBreedProfile[];
 }) {
   const activeRows = getActiveInventoryRows(currentRows);
   const activeInventoryIds = new Set(
@@ -2193,13 +2205,12 @@ function getEditCurrentRowsValidationIssue({
       .map((offering) => offering.inventoryItemId)
       .filter((value): value is string => Boolean(value)),
   );
+  const breedProfileSpeciesById = new Map(
+    sellerBreedProfiles.map((profile) => [profile.id, profile.species_id] as const),
+  );
 
   if (loadedSpeciesId && speciesId !== loadedSpeciesId) {
     return "Species cannot be changed for this listing.";
-  }
-
-  if (offerings.some((offering) => !offering.inventoryItemId)) {
-    return "Adding groups to an existing listing is coming soon.";
   }
 
   if (
@@ -2218,6 +2229,14 @@ function getEditCurrentRowsValidationIssue({
   }
 
   for (const offering of offerings) {
+    if (
+      offering.sellerBreedProfileId &&
+      speciesId &&
+      breedProfileSpeciesById.get(offering.sellerBreedProfileId) !== speciesId
+    ) {
+      return "Breed must belong to this listing species.";
+    }
+
     if (!offering.inventoryItemId) continue;
 
     const reservedQuantity = reservationMap.get(offering.inventoryItemId) ?? 0;
@@ -2234,10 +2253,12 @@ function getEditCurrentRowsValidationIssue({
 async function syncExistingEditOfferings({
   basePrice,
   currentRows,
+  listingBatchId,
   offerings,
 }: {
   basePrice: number;
   currentRows: DraftInventoryRow[];
+  listingBatchId: string;
   offerings: BirdOffering[];
 }): Promise<{ ok: true } | { ok: false; message: string }> {
   const activeRowsByInventoryId = new Map(
@@ -2245,13 +2266,110 @@ async function syncExistingEditOfferings({
       (row) => [row.inventory_item_id, row] as const,
     ),
   );
+  const breedIdByProfileId = new Map<string, string>();
+  const breedStatusById = new Map<string, string>();
+
+  currentRows.forEach((row) => {
+    if (!breedIdByProfileId.has(row.seller_breed_profile_id)) {
+      breedIdByProfileId.set(
+        row.seller_breed_profile_id,
+        row.listing_batch_breed_id,
+      );
+    }
+
+    breedStatusById.set(
+      row.listing_batch_breed_id,
+      row.listing_batch_breed_visibility_status,
+    );
+  });
 
   for (const [index, offering] of offerings.entries()) {
-    if (!offering.inventoryItemId) {
+    const inventoryType = mapSoldAsToInventoryType(offering.soldAs);
+    const customInventoryLabel = getCustomInventoryLabelForSoldAs(offering.soldAs);
+
+    if (!offering.sellerBreedProfileId) {
       return {
         ok: false,
-        message: "Adding groups to an existing listing is coming soon.",
+        message: `Group ${index + 1} is missing a breed.`,
       };
+    }
+
+    if (inventoryType === "unknown") {
+      return {
+        ok: false,
+        message: `Group ${index + 1} has an unsupported sold-as type.`,
+      };
+    }
+
+    if (!offering.inventoryItemId) {
+      let listingBatchBreedId = breedIdByProfileId.get(
+        offering.sellerBreedProfileId,
+      );
+
+      if (!listingBatchBreedId) {
+        const breedResult = await supabase.rpc("seller_add_listing_batch_breed", {
+          p_listing_batch_id: listingBatchId,
+          p_seller_breed_profile_id: offering.sellerBreedProfileId,
+          p_seller_notes: null,
+          p_sort_order: index,
+          p_visibility_status: "active",
+        });
+
+        if (breedResult.error) {
+          return { ok: false, message: breedResult.error.message };
+        }
+
+        const createdBreed = breedResult.data as BatchBreedResult | null;
+        listingBatchBreedId = createdBreed?.id;
+
+        if (!listingBatchBreedId) {
+          return {
+            ok: false,
+            message: `Group ${index + 1} could not be prepared.`,
+          };
+        }
+
+        breedIdByProfileId.set(
+          offering.sellerBreedProfileId,
+          listingBatchBreedId,
+        );
+        breedStatusById.set(listingBatchBreedId, "active");
+      } else if (breedStatusById.get(listingBatchBreedId) !== "active") {
+        const restoreBreedResult = await supabase.rpc(
+          "seller_set_listing_batch_breed_visibility",
+          {
+            p_listing_batch_breed_id: listingBatchBreedId,
+            p_visibility_status: "active",
+            p_note: "Restored from Edit Live Birds Listing.",
+          },
+        );
+
+        if (restoreBreedResult.error) {
+          return { ok: false, message: restoreBreedResult.error.message };
+        }
+
+        breedStatusById.set(listingBatchBreedId, "active");
+      }
+
+      const createItemResult = await supabase.rpc("seller_create_inventory_item", {
+        p_listing_batch_breed_id: listingBatchBreedId,
+        p_inventory_type: inventoryType,
+        p_custom_inventory_label: customInventoryLabel,
+        p_quantity_available: getNumberInputValue(offering.quantity),
+        p_price_override:
+          getNumberInputValue(offering.price) === basePrice
+            ? null
+            : getNumberInputValue(offering.price),
+        p_sort_order: index,
+        p_visibility_status: "active",
+        p_seller_notes: null,
+      });
+
+      if (createItemResult.error) {
+        return { ok: false, message: createItemResult.error.message };
+      }
+
+      continue;
     }
 
     const currentRow = activeRowsByInventoryId.get(offering.inventoryItemId);
@@ -2259,7 +2377,7 @@ async function syncExistingEditOfferings({
     if (!currentRow) {
       return {
         ok: false,
-        message: "Adding groups to an existing listing is coming soon.",
+        message: "This group is not currently active on the listing.",
       };
     }
 
@@ -2270,16 +2388,6 @@ async function syncExistingEditOfferings({
       return {
         ok: false,
         message: "Changing a group's breed is coming soon.",
-      };
-    }
-
-    const inventoryType = mapSoldAsToInventoryType(offering.soldAs);
-    const customInventoryLabel = getCustomInventoryLabelForSoldAs(offering.soldAs);
-
-    if (inventoryType === "unknown") {
-      return {
-        ok: false,
-        message: `Group ${index + 1} has an unsupported sold-as type.`,
       };
     }
 
