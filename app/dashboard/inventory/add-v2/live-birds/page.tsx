@@ -1401,9 +1401,8 @@ export function LiveBirdsListingForm({
             <main className="space-y-4">
               {isEditMode && birdsForSaleGroupCount > 1 ? (
                 <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold leading-6 text-sky-900">
-                  This listing includes multiple bird groups. Changes to hatch
-                  date, available date, and age-based pricing apply to all
-                  groups in this listing.
+                  This listing includes multiple bird groups. Hatch date and
+                  available date apply to all groups in this listing.
                 </p>
               ) : null}
               <HatchInformationCard
@@ -1460,7 +1459,7 @@ export function LiveBirdsListingForm({
                 updatePriceAdjustment={updatePriceAdjustment}
                 introText={
                   isEditMode
-                    ? "These price changes apply to every bird group in this listing."
+                    ? "These price changes apply to this listing."
                     : undefined
                 }
               />
