@@ -6,7 +6,9 @@ import type { AgeAtAvailabilityResult, SpeciesOption } from "./types";
 export function HatchInformationCard({
   ageAtAvailability,
   availableDate,
+  availableDateHelpText,
   hatchDate,
+  introText,
   referenceError,
   referenceLoading,
   setAvailableDate,
@@ -18,7 +20,9 @@ export function HatchInformationCard({
 }: {
   ageAtAvailability: AgeAtAvailabilityResult;
   availableDate: string;
+  availableDateHelpText?: string;
   hatchDate: string;
+  introText?: string;
   referenceError: string | null;
   referenceLoading: boolean;
   setAvailableDate: (value: string) => void;
@@ -31,7 +35,7 @@ export function HatchInformationCard({
   return (
     <SectionCard step="1" title="Hatch Information">
       <p className="text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
-        Use a separate entry for birds from a different hatch date.
+        {introText ?? "Use a separate entry for birds from a different hatch date."}
       </p>
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <SpeciesField
@@ -50,6 +54,7 @@ export function HatchInformationCard({
           label="Available date"
           value={availableDate}
           onChange={setAvailableDate}
+          helpText={availableDateHelpText}
         />
       </div>
       <div
@@ -144,11 +149,13 @@ function getSpeciesOptionValue(option: SpeciesOption) {
 
 function DateField({
   glyph,
+  helpText,
   label,
   onChange,
   value,
 }: {
   glyph: string;
+  helpText?: string;
   label: string;
   onChange: (value: string) => void;
   value: string;
@@ -173,6 +180,11 @@ function DateField({
           onChange={(event) => onChange(event.target.value)}
         />
       </span>
+      {helpText ? (
+        <span className="mt-1.5 block text-sm font-medium leading-5 text-stone-500">
+          {helpText}
+        </span>
+      ) : null}
     </label>
   );
 }

@@ -52,6 +52,7 @@ import { ReviewPublishCard } from "./ReviewPublishCard";
 import type { PublishStatus, SaveDraftStatus } from "./ReviewPublishCard";
 import { getSaveDraftPreflight } from "./saveDraftPreflight";
 import { SavePreviewCard } from "./SavePreviewCard";
+import { SidebarCard } from "./SidebarCard";
 import type {
   BirdOffering,
   BreedOption,
@@ -118,10 +119,24 @@ const showDeveloperSavePreview =
   process.env.NODE_ENV === "development" &&
   process.env.NEXT_PUBLIC_SHOW_ADD_INVENTORY_V2_SAVE_PREVIEW === "true";
 
+type LiveBirdsListingFormProps = {
+  listingBatchId?: string;
+  mode: "create" | "edit";
+};
+
 export default function LiveBirdsV2Page() {
+  return <LiveBirdsListingForm mode="create" />;
+}
+
+export function LiveBirdsListingForm({
+  listingBatchId,
+  mode,
+}: LiveBirdsListingFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const draftId = searchParams.get("draftId");
+  const draftId =
+    mode === "create" ? searchParams.get("draftId") : listingBatchId ?? null;
+  const isEditMode = mode === "edit";
   const { seller } = useSellerContext();
   const plan = getPlanCapabilities(seller?.plan_key);
   const nextOfferingId = useRef(initialOfferings.length + 1);
@@ -389,8 +404,9 @@ export default function LiveBirdsV2Page() {
       }
 
       const draftRows = draftId
-        ? await loadDraftRows({
-            draftId,
+        ? await loadListingRows({
+            listingBatchId: draftId,
+            mode,
             storeId: seller.store_id,
           })
         : null;
@@ -494,10 +510,10 @@ export default function LiveBirdsV2Page() {
     return () => {
       isMounted = false;
     };
-  }, [draftId, seller]);
+  }, [draftId, mode, seller]);
 
   useEffect(() => {
-    if (!hasMeaningfulUnsavedChanges) return;
+    if (isEditMode || !hasMeaningfulUnsavedChanges) return;
 
     function handleBeforeUnload(event: BeforeUnloadEvent) {
       event.preventDefault();
@@ -509,11 +525,12 @@ export default function LiveBirdsV2Page() {
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [hasMeaningfulUnsavedChanges]);
+  }, [hasMeaningfulUnsavedChanges, isEditMode]);
 
   useEffect(() => {
     function handleDocumentClick(event: MouseEvent) {
       if (
+        isEditMode ||
         !hasMeaningfulUnsavedChanges ||
         event.defaultPrevented ||
         event.button !== 0 ||
@@ -566,7 +583,7 @@ export default function LiveBirdsV2Page() {
     return () => {
       document.removeEventListener("click", handleDocumentClick, true);
     };
-  }, [hasMeaningfulUnsavedChanges]);
+  }, [hasMeaningfulUnsavedChanges, isEditMode]);
 
   function createLocalOfferingId() {
     const offeringId = `offering-${nextOfferingId.current}`;
@@ -981,7 +998,11 @@ export default function LiveBirdsV2Page() {
     draftId: string;
     storeId: string;
   }): Promise<{ ok: true; listingBatchId: string } | { ok: false; message: string }> {
-    const draftRowsResult = await loadDraftRows({ draftId, storeId });
+    const draftRowsResult = await loadListingRows({
+      listingBatchId: draftId,
+      mode: "create",
+      storeId,
+    });
 
     if ("error" in draftRowsResult) {
       return { ok: false, message: draftRowsResult.error };
@@ -1043,7 +1064,11 @@ export default function LiveBirdsV2Page() {
       };
     }
 
-    const refreshedRows = await loadDraftRows({ draftId, storeId });
+    const refreshedRows = await loadListingRows({
+      listingBatchId: draftId,
+      mode: "create",
+      storeId,
+    });
 
     if ("rows" in refreshedRows) {
       const loadedOfferings = alignOfferingsToBreedOptions(
@@ -1289,20 +1314,21 @@ export default function LiveBirdsV2Page() {
         <header className="mb-5">
           <Link
             className="inline-flex min-h-11 items-center text-base font-bold text-emerald-800 underline-offset-4 hover:underline sm:min-h-0 sm:text-sm sm:font-semibold"
-            href="/dashboard/inventory/add-v2"
+            href={isEditMode ? "/dashboard/inventory" : "/dashboard/inventory/add-v2"}
           >
-            Inventory / Add Inventory
+            {isEditMode ? "Inventory" : "Inventory / Add Inventory"}
           </Link>
           <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h1 className="text-3xl font-semibold text-stone-950">
-                Add Live Birds
+                {isEditMode ? "Edit Live Birds Listing" : "Add Live Birds"}
               </h1>
               <p className="mt-2 max-w-3xl text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
-                Add birds from one hatch date, then create one or more groups
-                for sale.
+                {isEditMode
+                  ? "Update the hatch information, bird groups, pricing, and buyer content for this listing."
+                  : "Add birds from one hatch date, then create one or more groups for sale."}
               </p>
-              {isLoadedDraft ? (
+              {!isEditMode && isLoadedDraft ? (
                 <p className="mt-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold leading-6 text-sky-800">
                   {isPublished
                     ? "Published to storefront."
@@ -1311,25 +1337,42 @@ export default function LiveBirdsV2Page() {
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-3 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-9 sm:text-sm sm:font-semibold"
-                type="button"
-                onClick={() => setIsStartOverDialogOpen(true)}
-              >
-                Start over
-              </button>
+              {isEditMode ? (
+                <Link
+                  className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-3 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-9 sm:text-sm sm:font-semibold"
+                  href="/dashboard/inventory"
+                >
+                  Cancel
+                </Link>
+              ) : (
+                <button
+                  className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-3 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-9 sm:text-sm sm:font-semibold"
+                  type="button"
+                  onClick={() => setIsStartOverDialogOpen(true)}
+                >
+                  Start over
+                </button>
+              )}
               <span
                 className={`inline-flex min-h-8 w-fit items-center rounded-full border px-3 py-1 text-sm font-semibold sm:min-h-0 sm:text-xs ${
-                  isPublished
+                  isEditMode && hasMeaningfulUnsavedChanges
+                    ? "border-amber-200 bg-amber-50 text-amber-800"
+                    : isEditMode
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                      : isPublished
                     ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                     : "border-amber-200 bg-amber-50 text-amber-800"
                 }`}
               >
-                {isPublished
-                  ? "Published"
-                  : isLoadedDraft
-                    ? "Loaded draft"
-                    : "Draft not saved yet"}
+                {isEditMode
+                  ? hasMeaningfulUnsavedChanges
+                    ? "Unsaved changes"
+                    : "Changes saved"
+                  : isPublished
+                    ? "Published"
+                    : isLoadedDraft
+                      ? "Loaded draft"
+                      : "Draft not saved yet"}
               </span>
             </div>
           </div>
@@ -1337,12 +1380,14 @@ export default function LiveBirdsV2Page() {
 
         {draftLoading ? (
           <div className="rounded-xl border border-transparent bg-white px-5 py-8 text-base font-semibold text-stone-600 shadow-none sm:rounded-lg sm:border-stone-200 sm:text-sm sm:shadow-sm">
-            Loading saved draft...
+            {isEditMode ? "Loading Live Birds listing..." : "Loading saved draft..."}
           </div>
         ) : draftLoadError ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-5 shadow-sm">
             <h2 className="text-base font-semibold text-red-950">
-              Draft could not be loaded
+              {isEditMode
+                ? "Live Birds listing could not be loaded"
+                : "Draft could not be loaded"}
             </h2>
             <p className="mt-2 text-base leading-7 text-red-800 sm:text-sm sm:leading-6">
               {draftLoadError}
@@ -1354,6 +1399,13 @@ export default function LiveBirdsV2Page() {
             key={formResetKey}
           >
             <main className="space-y-4">
+              {isEditMode && birdsForSaleGroupCount > 1 ? (
+                <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold leading-6 text-sky-900">
+                  This listing includes multiple bird groups. Changes to hatch
+                  date, available date, and age-based pricing apply to all
+                  groups in this listing.
+                </p>
+              ) : null}
               <HatchInformationCard
                 ageAtAvailability={ageAtAvailability}
                 availableDate={availableDate}
@@ -1366,6 +1418,16 @@ export default function LiveBirdsV2Page() {
                 setSpecies={selectSpecies}
                 speciesOptions={speciesOptions}
                 usingFallbackSpecies={usingFallbackSpecies}
+                availableDateHelpText={
+                  isEditMode
+                    ? "This available date applies to every bird group in this listing."
+                    : undefined
+                }
+                introText={
+                  isEditMode
+                    ? "Use a separate listing for birds with a different hatch date."
+                    : undefined
+                }
               />
               <BirdOfferingsCard
                 addOffering={addOffering}
@@ -1396,18 +1458,27 @@ export default function LiveBirdsV2Page() {
                 priceAdjustment={priceAdjustment}
                 locked={!plan.ageBasedPricingEnabled}
                 updatePriceAdjustment={updatePriceAdjustment}
+                introText={
+                  isEditMode
+                    ? "These price changes apply to every bird group in this listing."
+                    : undefined
+                }
               />
-              <ReviewPublishCard
-                onSaveDraft={handleSaveDraft}
-                onReviewPublish={handleReviewPublish}
-                publishDisabledReason={publishDisabledReason}
-                publishMessage={publishMessage}
-                publishStatus={publishStatus}
-                saveDraftMessage={saveDraftMessage}
-                saveDraftDisabledReason={saveDraftDisabledReason}
-                saveDraftPreflight={saveDraftPreflight}
-                saveDraftStatus={saveDraftStatus}
-              />
+              {isEditMode ? (
+                <EditModeActionsCard />
+              ) : (
+                <ReviewPublishCard
+                  onSaveDraft={handleSaveDraft}
+                  onReviewPublish={handleReviewPublish}
+                  publishDisabledReason={publishDisabledReason}
+                  publishMessage={publishMessage}
+                  publishStatus={publishStatus}
+                  saveDraftMessage={saveDraftMessage}
+                  saveDraftDisabledReason={saveDraftDisabledReason}
+                  saveDraftPreflight={saveDraftPreflight}
+                  saveDraftStatus={saveDraftStatus}
+                />
+              )}
               {showDeveloperSavePreview ? (
                 <SavePreviewCard payloadPreview={savePayloadPreview} />
               ) : null}
@@ -1419,27 +1490,31 @@ export default function LiveBirdsV2Page() {
                 hatchDate={hatchDate}
                 offeringCount={birdsForSaleGroupCount}
               />
-              <ReadyToPublishCard
-                onReviewPublish={handleReviewPublish}
-                onSaveDraft={handleSaveDraft}
-                publishDisabledReason={publishDisabledReason}
-                publishStatus={publishStatus}
-                readiness={readiness}
-                saveDraftDisabledReason={saveDraftDisabledReason}
-                saveDraftPreflight={saveDraftPreflight}
-                saveDraftStatus={saveDraftStatus}
-              />
+              {isEditMode ? (
+                <EditModeSidebarCard />
+              ) : (
+                <ReadyToPublishCard
+                  onReviewPublish={handleReviewPublish}
+                  onSaveDraft={handleSaveDraft}
+                  publishDisabledReason={publishDisabledReason}
+                  publishStatus={publishStatus}
+                  readiness={readiness}
+                  saveDraftDisabledReason={saveDraftDisabledReason}
+                  saveDraftPreflight={saveDraftPreflight}
+                  saveDraftStatus={saveDraftStatus}
+                />
+              )}
             </aside>
           </div>
         )}
       </div>
-      {isStartOverDialogOpen ? (
+      {!isEditMode && isStartOverDialogOpen ? (
         <StartOverDialog
           onCancel={() => setIsStartOverDialogOpen(false)}
           onConfirm={confirmStartOver}
         />
       ) : null}
-      {pendingNavigationHref ? (
+      {!isEditMode && pendingNavigationHref ? (
         <UnsavedNavigationDialog
           canSaveDraft={saveDraftPreflight.canSaveDraft}
           message={navigationSaveMessage}
@@ -1493,6 +1568,55 @@ function StartOverDialog({
         </div>
       </div>
     </div>
+  );
+}
+
+function EditModeActionsCard() {
+  return (
+    <section className="rounded-xl border border-transparent bg-white p-5 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm">
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-stone-950">
+            Ready to save?
+          </h2>
+          <p className="mt-1 text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
+            Save Changes will be enabled after the edit mutation is wired.
+          </p>
+        </div>
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <Link
+            className="inline-flex min-h-12 items-center justify-center rounded-md border border-stone-300 bg-white px-5 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-10 sm:text-sm sm:font-semibold"
+            href="/dashboard/inventory"
+          >
+            Cancel
+          </Link>
+          <button
+            className="inline-flex min-h-12 cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-5 text-base font-bold text-white opacity-65 sm:min-h-10 sm:text-sm sm:font-semibold"
+            disabled
+            type="button"
+          >
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function EditModeSidebarCard() {
+  return (
+    <SidebarCard title="Ready to Save">
+      <p className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-base font-semibold text-stone-600 sm:text-sm">
+        Save Changes is not wired yet.
+      </p>
+      <button
+        className="mt-6 inline-flex min-h-12 w-full cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-5 text-base font-bold text-white opacity-65 sm:min-h-10 sm:text-sm sm:font-semibold"
+        disabled
+        type="button"
+      >
+        Save Changes
+      </button>
+    </SidebarCard>
   );
 }
 
@@ -1775,23 +1899,31 @@ async function syncDraftOfferings({
   return { ok: true };
 }
 
-async function loadDraftRows({
-  draftId,
+async function loadListingRows({
+  listingBatchId,
+  mode,
   storeId,
 }: {
-  draftId: string;
+  listingBatchId: string;
+  mode: "create" | "edit";
   storeId: string;
 }): Promise<{ rows: DraftInventoryRow[] } | { error: string }> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("seller_inventory_management")
     .select(
       "listing_batch_id, listing_batch_breed_id, inventory_item_id, species_id, species_name, species_slug, seller_breed_profile_id, breed_display_name, batch_type, origin_date, available_date, base_price, auto_price_adjustment_enabled, price_adjustment_direction, price_adjustment_amount, price_adjustment_interval_weeks, price_adjustment_max_price, price_adjustment_min_price, internal_batch_label, listing_batch_visibility_status, listing_batch_breed_sort_order, listing_batch_breed_visibility_status, inventory_type, custom_inventory_label, quantity_available, price_override, inventory_item_sort_order, inventory_visibility_status",
     )
     .eq("store_id", storeId)
-    .eq("listing_batch_id", draftId)
-    .eq("batch_type", "live_animals")
-    .eq("listing_batch_visibility_status", "hidden")
-    .eq("internal_batch_label", liveBirdsV2DraftMarker)
+    .eq("listing_batch_id", listingBatchId)
+    .eq("batch_type", "live_animals");
+
+  if (mode === "create") {
+    query = query
+      .eq("listing_batch_visibility_status", "hidden")
+      .eq("internal_batch_label", liveBirdsV2DraftMarker);
+  }
+
+  const { data, error } = await query
     .order("listing_batch_breed_sort_order", { ascending: true })
     .order("inventory_item_sort_order", { ascending: true })
     .returns<DraftInventoryRow[]>();
@@ -1803,7 +1935,9 @@ async function loadDraftRows({
   if (!data || data.length === 0) {
     return {
       error:
-        "This draft was not found, is not a hidden Live Birds v2 draft, or is not available for this store.",
+        mode === "create"
+          ? "This draft was not found, is not a hidden Live Birds v2 draft, or is not available for this store."
+          : "This Live Birds listing was not found or is not available for this store.",
     };
   }
 

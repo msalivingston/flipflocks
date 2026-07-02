@@ -1084,7 +1084,7 @@ function FlatInventoryTableRow({
           className="text-xs font-semibold text-emerald-800 hover:text-emerald-950"
           href={item.manageHref}
         >
-          Manage
+          {item.kind === "bird" ? "Edit" : "Manage"}
         </Link>
       </td>
     </tr>
@@ -1162,7 +1162,7 @@ function FlatInventoryCard({
       </dl>
 
       <Link className="seller-small-button mt-4 inline-flex" href={item.manageHref}>
-        Manage
+        {item.kind === "bird" ? "Edit" : "Manage"}
       </Link>
     </article>
   );
@@ -1450,7 +1450,7 @@ function buildFlatInventoryItems({
         price: row.effective_unit_price,
         availabilityLabel: availability.label,
         availabilityValue: availability.value,
-        manageHref: `/dashboard/inventory/${row.listing_batch_id}`,
+        manageHref: `/dashboard/inventory/${row.listing_batch_id}/edit`,
         row,
         searchText: [
           row.breed_display_name,

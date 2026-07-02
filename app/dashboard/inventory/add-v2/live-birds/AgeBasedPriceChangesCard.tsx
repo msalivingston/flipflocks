@@ -8,11 +8,13 @@ import { SectionCard } from "./SectionCard";
 import type { BirdOffering, PriceAdjustmentState } from "./types";
 
 export function AgeBasedPriceChangesCard({
+  introText,
   offerings,
   priceAdjustment,
   updatePriceAdjustment,
   locked = false,
 }: {
+  introText?: string;
   offerings: BirdOffering[];
   priceAdjustment: PriceAdjustmentState;
   updatePriceAdjustment: (updates: Partial<PriceAdjustmentState>) => void;
@@ -28,7 +30,8 @@ export function AgeBasedPriceChangesCard({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-base font-medium leading-7 text-stone-600 sm:text-sm sm:leading-6">
-              Automatically raise or lower prices after the available date.
+              {introText ??
+                "Automatically raise or lower prices after the available date."}
             </p>
             <p className="mt-1 text-sm font-medium leading-6 text-stone-500">
               Applies to every Birds for Sale group in this hatch. Buyers only
