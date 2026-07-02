@@ -45,6 +45,7 @@ import {
 } from "./payloadPreview";
 import {
   defaultPriceAdjustment,
+  getPriceAdjustmentIssues,
   hydratePriceAdjustment,
 } from "./priceAdjustment";
 import { ReadyToPublishCard } from "./ReadyToPublishCard";
@@ -111,9 +112,16 @@ type InventoryItemResult = {
   id: string;
 };
 
+type ReservationRow = {
+  inventory_item_id: string | null;
+  remaining_unfulfilled_quantity: number | null;
+};
+
 type BreedProfileUpsertResult = {
   seller_breed_profile_id?: string | null;
 };
+
+type EditSaveStatus = "idle" | "saving" | "success" | "error";
 
 const showDeveloperSavePreview =
   process.env.NODE_ENV === "development" &&
@@ -172,6 +180,9 @@ export function LiveBirdsListingForm({
     useState<SaveDraftStatus>("idle");
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
   const [publishStatus, setPublishStatus] = useState<PublishStatus>("idle");
+  const [editSaveMessage, setEditSaveMessage] = useState<string | null>(null);
+  const [editSaveStatus, setEditSaveStatus] =
+    useState<EditSaveStatus>("idle");
   const [publishedListingBatchId, setPublishedListingBatchId] = useState<
     string | null
   >(null);
@@ -300,6 +311,31 @@ export function LiveBirdsListingForm({
       usingFallbackSpecies,
     ],
   );
+  const editSaveBlockingIssues = useMemo(
+    () =>
+      isEditMode
+        ? getEditSaveBlockingIssues({
+            availableDate,
+            hatchDate,
+            loadedSpeciesId: loadedDraftSpeciesId,
+            offerings,
+            priceAdjustment: plan.ageBasedPricingEnabled
+              ? priceAdjustment
+              : defaultPriceAdjustment,
+            species,
+          })
+        : [],
+    [
+      availableDate,
+      hatchDate,
+      isEditMode,
+      loadedDraftSpeciesId,
+      offerings,
+      plan.ageBasedPricingEnabled,
+      priceAdjustment,
+      species,
+    ],
+  );
   const isLoadedDraft = loadedDraftId !== null;
   const currentSavedDraftId = loadedDraftId ?? savedListingBatchId;
   const loadedDraftSpeciesDisabledReason = isLoadedDraft
@@ -318,6 +354,13 @@ export function LiveBirdsListingForm({
     preflightCanSaveDraft: saveDraftPreflight.canSaveDraft,
     readyToPublish: areAllReadinessChecksComplete(readiness),
     saveDraftStatus,
+  });
+  const editSaveDisabledReason = getEditSaveDisabledReason({
+    blockingIssues: editSaveBlockingIssues,
+    draftLoading,
+    hasMeaningfulUnsavedChanges,
+    isEditMode,
+    saveStatus: editSaveStatus,
   });
 
   useEffect(() => {
@@ -471,6 +514,8 @@ export function LiveBirdsListingForm({
         setSaveDraftMessage(null);
         setPublishStatus("idle");
         setPublishMessage(null);
+        setEditSaveStatus("idle");
+        setEditSaveMessage(null);
         setPublishedListingBatchId(null);
         setSavedListingBatchId(null);
       } else {
@@ -497,6 +542,8 @@ export function LiveBirdsListingForm({
         setSaveDraftMessage(null);
         setPublishStatus("idle");
         setPublishMessage(null);
+        setEditSaveStatus("idle");
+        setEditSaveMessage(null);
         setPublishedListingBatchId(null);
         setSavedListingBatchId(null);
       }
@@ -1086,6 +1133,161 @@ export function LiveBirdsListingForm({
     return { ok: true, listingBatchId: draftId };
   }
 
+  async function refreshEditListingState({
+    storeId,
+    updateSnapshot,
+  }: {
+    storeId: string;
+    updateSnapshot: boolean;
+  }) {
+    if (!listingBatchId) return;
+
+    const refreshedRows = await loadListingRows({
+      listingBatchId,
+      mode: "edit",
+      storeId,
+    });
+
+    if ("error" in refreshedRows) {
+      setDraftLoadError(refreshedRows.error);
+      return;
+    }
+
+    const loadedOfferings = alignOfferingsToBreedOptions(
+      getOfferingsFromDraftRows(refreshedRows.rows),
+      breedOptions,
+    );
+    const loadedHatchDate = refreshedRows.rows[0]?.origin_date ?? "";
+    const loadedAvailableDate = refreshedRows.rows[0]?.available_date ?? "";
+    const loadedPriceAdjustment = hydratePriceAdjustment(refreshedRows.rows[0]);
+
+    setOfferings(loadedOfferings);
+    nextOfferingId.current = loadedOfferings.length + 1;
+    setHatchDate(loadedHatchDate);
+    setAvailableDate(loadedAvailableDate);
+    setPriceAdjustment(loadedPriceAdjustment);
+    setLoadedDraftSpeciesId(refreshedRows.rows[0]?.species_id ?? null);
+
+    if (updateSnapshot) {
+      setSavedFormSnapshot(
+        getLiveBirdsFormSnapshot({
+          availableDate: loadedAvailableDate,
+          hatchDate: loadedHatchDate,
+          offerings: loadedOfferings,
+          priceAdjustment: loadedPriceAdjustment,
+          species,
+        }),
+      );
+    }
+  }
+
+  async function saveEditedListing({
+    storeId,
+  }: {
+    storeId: string;
+  }): Promise<
+    | { ok: true }
+    | { ok: false; message: string; shouldReloadListing?: boolean }
+  > {
+    if (!listingBatchId) {
+      return { ok: false, message: "The listing ID is missing." };
+    }
+
+    const blockingIssue = editSaveBlockingIssues[0];
+
+    if (blockingIssue) {
+      return { ok: false, message: blockingIssue };
+    }
+
+    const currentRowsResult = await loadListingRows({
+      listingBatchId,
+      mode: "edit",
+      storeId,
+    });
+
+    if ("error" in currentRowsResult) {
+      return { ok: false, message: currentRowsResult.error };
+    }
+
+    const currentRows = currentRowsResult.rows;
+    const reservationResult = await loadActiveReservationMap(
+      currentRows.map((row) => row.inventory_item_id),
+    );
+
+    if (!reservationResult.ok) {
+      return { ok: false, message: reservationResult.message };
+    }
+
+    const editValidationIssue = getEditCurrentRowsValidationIssue({
+      currentRows,
+      loadedSpeciesId: loadedDraftSpeciesId,
+      offerings,
+      reservationMap: reservationResult.reservationMap,
+      speciesId: species.id,
+    });
+
+    if (editValidationIssue) {
+      return { ok: false, message: editValidationIssue };
+    }
+
+    const descriptionResult = await saveBreedDescriptionsToLibrary({ storeId });
+
+    if (!descriptionResult.ok) {
+      return {
+        ok: false,
+        message: `Breed description could not be updated. ${descriptionResult.message}`,
+      };
+    }
+
+    const firstRow = currentRows[0];
+    const basePrice = getBasePriceForOfferings(offerings);
+    const batchResult = await supabase.rpc("seller_update_listing_batch", {
+      p_listing_batch_id: listingBatchId,
+      p_origin_date: hatchDate,
+      p_available_date: availableDate,
+      p_base_price: basePrice,
+      p_auto_price_increase_enabled: false,
+      p_auto_price_increase_amount: null,
+      p_auto_price_increase_max_price: null,
+      p_internal_batch_label: firstRow?.internal_batch_label ?? null,
+      p_seller_notes: null,
+    });
+
+    if (batchResult.error) {
+      return {
+        ok: false,
+        message: batchResult.error.message,
+        shouldReloadListing: true,
+      };
+    }
+
+    const priceAdjustmentResult = await savePriceAdjustmentForBatch(listingBatchId);
+
+    if (!priceAdjustmentResult.ok) {
+      return {
+        ok: false,
+        message: `Age-based price changes could not be saved. ${priceAdjustmentResult.message}`,
+        shouldReloadListing: true,
+      };
+    }
+
+    const syncResult = await syncExistingEditOfferings({
+      basePrice,
+      currentRows,
+      offerings,
+    });
+
+    if (!syncResult.ok) {
+      return {
+        ok: false,
+        message: syncResult.message,
+        shouldReloadListing: true,
+      };
+    }
+
+    return { ok: true };
+  }
+
   async function saveCurrentHiddenDraft({
     draftId,
     storeId,
@@ -1165,6 +1367,41 @@ export function LiveBirdsListingForm({
     await saveDraftFromCurrentForm({
       errorPrefix: `Draft could not be ${currentSavedDraftId ? "updated" : "saved"}.`,
     });
+  }
+
+  async function handleSaveEdit() {
+    if (editSaveDisabledReason || editSaveStatus === "saving") return;
+
+    if (!seller?.store_id) {
+      setEditSaveStatus("error");
+      setEditSaveMessage("The store context is missing. Changes were not saved.");
+      return;
+    }
+
+    setEditSaveStatus("saving");
+    setEditSaveMessage(null);
+
+    const saveResult = await saveEditedListing({ storeId: seller.store_id });
+
+    if (!saveResult.ok) {
+      if (saveResult.shouldReloadListing) {
+        await refreshEditListingState({
+          storeId: seller.store_id,
+          updateSnapshot: false,
+        });
+      }
+
+      setEditSaveStatus("error");
+      setEditSaveMessage(`Changes could not be saved. ${saveResult.message}`);
+      return;
+    }
+
+    await refreshEditListingState({
+      storeId: seller.store_id,
+      updateSnapshot: true,
+    });
+    setEditSaveStatus("success");
+    setEditSaveMessage("Changes saved");
   }
 
   async function handleReviewPublish() {
@@ -1415,6 +1652,7 @@ export function LiveBirdsListingForm({
                 setAvailableDate={setAvailableDate}
                 setHatchDate={setHatchDate}
                 setSpecies={selectSpecies}
+                speciesReadOnly={isEditMode}
                 speciesOptions={speciesOptions}
                 usingFallbackSpecies={usingFallbackSpecies}
                 availableDateHelpText={
@@ -1446,6 +1684,7 @@ export function LiveBirdsListingForm({
                 updateOfferingBreed={updateOfferingBreed}
                 onBreedPhotosChanged={() => void reloadBreedPhotos()}
                 planKey={seller?.plan_key}
+                mode={mode}
               />
               {breedPhotoActionMessage ? (
                 <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold leading-6 text-emerald-900">
@@ -1464,7 +1703,17 @@ export function LiveBirdsListingForm({
                 }
               />
               {isEditMode ? (
-                <EditModeActionsCard />
+                <EditModeActionsCard
+                  disabledReason={editSaveDisabledReason}
+                  message={
+                    hasMeaningfulUnsavedChanges &&
+                    editSaveStatus === "success"
+                      ? null
+                      : editSaveMessage
+                  }
+                  onSave={handleSaveEdit}
+                  status={editSaveStatus}
+                />
               ) : (
                 <ReviewPublishCard
                   onSaveDraft={handleSaveDraft}
@@ -1490,7 +1739,17 @@ export function LiveBirdsListingForm({
                 offeringCount={birdsForSaleGroupCount}
               />
               {isEditMode ? (
-                <EditModeSidebarCard />
+                <EditModeSidebarCard
+                  disabledReason={editSaveDisabledReason}
+                  message={
+                    hasMeaningfulUnsavedChanges &&
+                    editSaveStatus === "success"
+                      ? null
+                      : editSaveMessage
+                  }
+                  onSave={handleSaveEdit}
+                  status={editSaveStatus}
+                />
               ) : (
                 <ReadyToPublishCard
                   onReviewPublish={handleReviewPublish}
@@ -1570,7 +1829,20 @@ function StartOverDialog({
   );
 }
 
-function EditModeActionsCard() {
+function EditModeActionsCard({
+  disabledReason,
+  message,
+  onSave,
+  status,
+}: {
+  disabledReason: string | null;
+  message: string | null;
+  onSave: () => void;
+  status: EditSaveStatus;
+}) {
+  const isSaving = status === "saving";
+  const isDisabled = Boolean(disabledReason) || isSaving;
+
   return (
     <section className="rounded-xl border border-transparent bg-white p-5 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm">
       <div className="space-y-4">
@@ -1579,9 +1851,24 @@ function EditModeActionsCard() {
             Ready to save?
           </h2>
           <p className="mt-1 text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
-            Save Changes will be enabled after the edit mutation is wired.
+            Save listing-level details and updates to existing bird groups.
           </p>
         </div>
+        {message ? (
+          <p
+            className={`rounded-md border px-3 py-2 text-sm font-semibold leading-6 ${
+              status === "error"
+                ? "border-red-200 bg-red-50 text-red-800"
+                : "border-emerald-200 bg-emerald-50 text-emerald-900"
+            }`}
+          >
+            {message}
+          </p>
+        ) : disabledReason ? (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-6 text-amber-800">
+            {disabledReason}
+          </p>
+        ) : null}
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <Link
             className="inline-flex min-h-12 items-center justify-center rounded-md border border-stone-300 bg-white px-5 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-10 sm:text-sm sm:font-semibold"
@@ -1590,11 +1877,12 @@ function EditModeActionsCard() {
             Cancel
           </Link>
           <button
-            className="inline-flex min-h-12 cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-5 text-base font-bold text-white opacity-65 sm:min-h-10 sm:text-sm sm:font-semibold"
-            disabled
+            className="inline-flex min-h-12 items-center justify-center rounded-md bg-emerald-800 px-5 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-emerald-800/45 sm:min-h-10 sm:text-sm sm:font-semibold"
+            disabled={isDisabled}
+            onClick={onSave}
             type="button"
           >
-            Save Changes
+            {isSaving ? "Saving..." : "Save Changes"}
           </button>
         </div>
       </div>
@@ -1602,18 +1890,48 @@ function EditModeActionsCard() {
   );
 }
 
-function EditModeSidebarCard() {
+function EditModeSidebarCard({
+  disabledReason,
+  message,
+  onSave,
+  status,
+}: {
+  disabledReason: string | null;
+  message: string | null;
+  onSave: () => void;
+  status: EditSaveStatus;
+}) {
+  const isSaving = status === "saving";
+  const isDisabled = Boolean(disabledReason) || isSaving;
+
   return (
     <SidebarCard title="Ready to Save">
-      <p className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-base font-semibold text-stone-600 sm:text-sm">
-        Save Changes is not wired yet.
-      </p>
+      {message ? (
+        <p
+          className={`rounded-md border px-3 py-2 text-base font-semibold sm:text-sm ${
+            status === "error"
+              ? "border-red-200 bg-red-50 text-red-800"
+              : "border-emerald-200 bg-emerald-50 text-emerald-900"
+          }`}
+        >
+          {message}
+        </p>
+      ) : disabledReason ? (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-base font-semibold text-amber-800 sm:text-sm">
+          {disabledReason}
+        </p>
+      ) : (
+        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-base font-semibold text-emerald-900 sm:text-sm">
+          Ready to save.
+        </p>
+      )}
       <button
-        className="mt-6 inline-flex min-h-12 w-full cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-5 text-base font-bold text-white opacity-65 sm:min-h-10 sm:text-sm sm:font-semibold"
-        disabled
+        className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-800 px-5 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-emerald-800/45 sm:min-h-10 sm:text-sm sm:font-semibold"
+        disabled={isDisabled}
+        onClick={onSave}
         type="button"
       >
-        Save Changes
+        {isSaving ? "Saving..." : "Save Changes"}
       </button>
     </SidebarCard>
   );
@@ -1686,6 +2004,342 @@ function UnsavedNavigationDialog({
       </div>
     </div>
   );
+}
+
+function getEditSaveDisabledReason({
+  blockingIssues,
+  draftLoading,
+  hasMeaningfulUnsavedChanges,
+  isEditMode,
+  saveStatus,
+}: {
+  blockingIssues: string[];
+  draftLoading: boolean;
+  hasMeaningfulUnsavedChanges: boolean;
+  isEditMode: boolean;
+  saveStatus: EditSaveStatus;
+}) {
+  if (!isEditMode) return null;
+  if (draftLoading) return "Listing is still loading.";
+  if (saveStatus === "saving") return "Save is already in progress.";
+  if (!hasMeaningfulUnsavedChanges) return "No unsaved changes.";
+
+  return blockingIssues[0] ?? null;
+}
+
+function getEditSaveBlockingIssues({
+  availableDate,
+  hatchDate,
+  loadedSpeciesId,
+  offerings,
+  priceAdjustment,
+  species,
+}: {
+  availableDate: string;
+  hatchDate: string;
+  loadedSpeciesId: string | null;
+  offerings: BirdOffering[];
+  priceAdjustment: PriceAdjustmentState;
+  species: SpeciesOption;
+}) {
+  const issues: string[] = [];
+  const parsedHatchDate = parseDateValue(hatchDate);
+  const parsedAvailableDate = parseDateValue(availableDate);
+
+  if (!species.id) {
+    issues.push("Species is missing.");
+  }
+
+  if (loadedSpeciesId && species.id && loadedSpeciesId !== species.id) {
+    issues.push("Species cannot be changed for this listing.");
+  }
+
+  if (!parsedHatchDate) {
+    issues.push("Choose a hatch date.");
+  }
+
+  if (!parsedAvailableDate) {
+    issues.push("Choose an available date.");
+  }
+
+  if (
+    parsedHatchDate &&
+    parsedAvailableDate &&
+    parsedAvailableDate.getTime() < parsedHatchDate.getTime()
+  ) {
+    issues.push("Available date cannot be before hatch date.");
+  }
+
+  if (offerings.length === 0) {
+    issues.push("This listing needs at least one bird group.");
+  }
+
+  offerings.forEach((offering, index) => {
+    const label = `Group ${index + 1}`;
+    const quantity = Number(offering.quantity);
+    const price = Number(offering.price);
+
+    if (!offering.inventoryItemId) {
+      issues.push("Adding groups to an existing listing is coming soon.");
+    }
+
+    if (!offering.sellerBreedProfileId) {
+      issues.push(`${label} needs a breed.`);
+    }
+
+    if (!offering.soldAs.trim()) {
+      issues.push(`${label} needs a sold-as type.`);
+    }
+
+    if (mapSoldAsToInventoryType(offering.soldAs) === "unknown") {
+      issues.push(`${label} needs a supported sold-as type.`);
+    }
+
+    if (!offering.quantity.trim()) {
+      issues.push(`${label} needs a quantity.`);
+    } else if (!Number.isInteger(quantity) || quantity < 0) {
+      issues.push(`${label} quantity must be a whole number of 0 or more.`);
+    }
+
+    if (!offering.price.trim()) {
+      issues.push(`${label} needs a price.`);
+    } else if (!Number.isFinite(price) || price < 0) {
+      issues.push(`${label} price cannot be negative.`);
+    }
+  });
+
+  return [
+    ...issues,
+    ...getDuplicateEditOfferingIssues(offerings),
+    ...getPriceAdjustmentIssues({ offerings, priceAdjustment }),
+  ];
+}
+
+function getDuplicateEditOfferingIssues(offerings: BirdOffering[]) {
+  const offeringLabelsByCombination = new Map<string, string[]>();
+
+  offerings.forEach((offering, index) => {
+    if (!offering.sellerBreedProfileId) return;
+
+    const inventoryType = mapSoldAsToInventoryType(offering.soldAs);
+
+    if (inventoryType === "unknown") return;
+
+    const combinationKey = `${offering.sellerBreedProfileId}:${inventoryType}`;
+    offeringLabelsByCombination.set(combinationKey, [
+      ...(offeringLabelsByCombination.get(combinationKey) ?? []),
+      `Group ${index + 1}`,
+    ]);
+  });
+
+  return Array.from(offeringLabelsByCombination.values())
+    .filter((offeringLabels) => offeringLabels.length > 1)
+    .map(
+      (offeringLabels) =>
+        `${offeringLabels.join(" and ")} use the same breed and sold-as type.`,
+    );
+}
+
+async function loadActiveReservationMap(inventoryItemIds: string[]) {
+  const uniqueInventoryItemIds = Array.from(new Set(inventoryItemIds));
+  const reservationMap = new Map<string, number>();
+
+  if (uniqueInventoryItemIds.length === 0) {
+    return { ok: true as const, reservationMap };
+  }
+
+  const { data, error } = await supabase
+    .from("seller_order_item_detail")
+    .select("inventory_item_id, remaining_unfulfilled_quantity")
+    .in("inventory_item_id", uniqueInventoryItemIds)
+    .returns<ReservationRow[]>();
+
+  if (error) {
+    return { ok: false as const, message: error.message };
+  }
+
+  (data ?? []).forEach((row) => {
+    if (!row.inventory_item_id) return;
+
+    reservationMap.set(
+      row.inventory_item_id,
+      (reservationMap.get(row.inventory_item_id) ?? 0) +
+        Math.max(row.remaining_unfulfilled_quantity ?? 0, 0),
+    );
+  });
+
+  return { ok: true as const, reservationMap };
+}
+
+function getEditCurrentRowsValidationIssue({
+  currentRows,
+  loadedSpeciesId,
+  offerings,
+  reservationMap,
+  speciesId,
+}: {
+  currentRows: DraftInventoryRow[];
+  loadedSpeciesId: string | null;
+  offerings: BirdOffering[];
+  reservationMap: Map<string, number>;
+  speciesId: string | null;
+}) {
+  const activeRows = getActiveInventoryRows(currentRows);
+  const activeInventoryIds = new Set(
+    activeRows.map((row) => row.inventory_item_id),
+  );
+  const offeringInventoryIds = new Set(
+    offerings
+      .map((offering) => offering.inventoryItemId)
+      .filter((value): value is string => Boolean(value)),
+  );
+
+  if (loadedSpeciesId && speciesId !== loadedSpeciesId) {
+    return "Species cannot be changed for this listing.";
+  }
+
+  if (offerings.some((offering) => !offering.inventoryItemId)) {
+    return "Adding groups to an existing listing is coming soon.";
+  }
+
+  if (
+    offerings.some(
+      (offering) =>
+        offering.inventoryItemId && !activeInventoryIds.has(offering.inventoryItemId),
+    )
+  ) {
+    return "Adding groups to an existing listing is coming soon.";
+  }
+
+  if (
+    activeRows.some((row) => !offeringInventoryIds.has(row.inventory_item_id))
+  ) {
+    return "Group removal is not available yet. Set quantity to 0 to stop selling this group.";
+  }
+
+  for (const offering of offerings) {
+    if (!offering.inventoryItemId) continue;
+
+    const reservedQuantity = reservationMap.get(offering.inventoryItemId) ?? 0;
+    const nextQuantity = Number(offering.quantity);
+
+    if (nextQuantity < reservedQuantity) {
+      return "Quantity cannot be lower than the number already reserved in active orders.";
+    }
+  }
+
+  return null;
+}
+
+async function syncExistingEditOfferings({
+  basePrice,
+  currentRows,
+  offerings,
+}: {
+  basePrice: number;
+  currentRows: DraftInventoryRow[];
+  offerings: BirdOffering[];
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const activeRowsByInventoryId = new Map(
+    getActiveInventoryRows(currentRows).map(
+      (row) => [row.inventory_item_id, row] as const,
+    ),
+  );
+
+  for (const [index, offering] of offerings.entries()) {
+    if (!offering.inventoryItemId) {
+      return {
+        ok: false,
+        message: "Adding groups to an existing listing is coming soon.",
+      };
+    }
+
+    const currentRow = activeRowsByInventoryId.get(offering.inventoryItemId);
+
+    if (!currentRow) {
+      return {
+        ok: false,
+        message: "Adding groups to an existing listing is coming soon.",
+      };
+    }
+
+    if (
+      offering.sellerBreedProfileId !== currentRow.seller_breed_profile_id ||
+      offering.listingBatchBreedId !== currentRow.listing_batch_breed_id
+    ) {
+      return {
+        ok: false,
+        message: "Changing a group's breed is coming soon.",
+      };
+    }
+
+    const inventoryType = mapSoldAsToInventoryType(offering.soldAs);
+    const customInventoryLabel = getCustomInventoryLabelForSoldAs(offering.soldAs);
+
+    if (inventoryType === "unknown") {
+      return {
+        ok: false,
+        message: `Group ${index + 1} has an unsupported sold-as type.`,
+      };
+    }
+
+    const inventoryResult = await supabase.rpc("seller_update_inventory_item", {
+      p_inventory_item_id: currentRow.inventory_item_id,
+      p_inventory_type: inventoryType,
+      p_custom_inventory_label: customInventoryLabel,
+      p_price_override:
+        getNumberInputValue(offering.price) === basePrice
+          ? null
+          : getNumberInputValue(offering.price),
+      p_sort_order: index,
+      p_seller_notes: null,
+    });
+
+    if (inventoryResult.error) {
+      return { ok: false, message: inventoryResult.error.message };
+    }
+
+    if (getNumberInputValue(offering.quantity) !== currentRow.quantity_available) {
+      const quantityResult = await supabase.rpc("seller_adjust_inventory_quantity", {
+        p_inventory_item_id: currentRow.inventory_item_id,
+        p_quantity_available: getNumberInputValue(offering.quantity),
+        p_quantity_delta: null,
+        p_note: "Updated from Edit Live Birds Listing.",
+      });
+
+      if (quantityResult.error) {
+        return { ok: false, message: quantityResult.error.message };
+      }
+    }
+  }
+
+  return { ok: true };
+}
+
+function getActiveInventoryRows(rows: DraftInventoryRow[]) {
+  return rows.filter(
+    (row) =>
+      row.inventory_visibility_status === "active" &&
+      row.listing_batch_breed_visibility_status === "active",
+  );
+}
+
+function parseDateValue(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+
+  if (!year || !month || !day) return null;
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return date;
 }
 
 async function syncDraftOfferings({

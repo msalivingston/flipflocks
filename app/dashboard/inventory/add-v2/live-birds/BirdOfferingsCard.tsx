@@ -36,6 +36,7 @@ export function BirdOfferingsCard({
   updateOfferingBreed,
   onBreedPhotosChanged,
   planKey,
+  mode = "create",
 }: {
   addOffering: () => void;
   breedMediaItemsByProfileId: Record<string, ListingPhotoItem[]>;
@@ -55,9 +56,11 @@ export function BirdOfferingsCard({
   updateOfferingBreed: (offeringId: string, option: BreedOption) => void;
   onBreedPhotosChanged: () => void;
   planKey?: string | null;
+  mode?: "create" | "edit";
 }) {
   const birdsForSaleGroupCount = getBirdsForSaleGroupCount(offerings);
   const plan = getPlanCapabilities(planKey);
+  const isEditMode = mode === "edit";
 
   return (
     <SectionCard
@@ -88,8 +91,9 @@ export function BirdOfferingsCard({
               key={offering.id}
               breedMediaItemsByProfileId={breedMediaItemsByProfileId}
               breedOptions={breedOptions}
-              canRemove={offerings.length > 1}
+              canRemove={!isEditMode && offerings.length > 1}
               hasDuplicateCombination={duplicateOfferingIds.has(offering.id)}
+              isEditMode={isEditMode}
               index={index}
               offering={offering}
               prepareBreedPhotoProfile={prepareBreedPhotoProfile}
@@ -105,8 +109,9 @@ export function BirdOfferingsCard({
           ) : (
             <CollapsedOfferingRow
               key={offering.id}
-              canRemove={offerings.length > 1}
+              canRemove={!isEditMode && offerings.length > 1}
               hasDuplicateCombination={duplicateOfferingIds.has(offering.id)}
+              isEditMode={isEditMode}
               index={index}
               offering={offering}
               removeOffering={removeOffering}
@@ -116,13 +121,19 @@ export function BirdOfferingsCard({
         )}
       </div>
 
-      <button
-        className="mt-3 inline-flex min-h-12 w-full items-center justify-center rounded-md border border-emerald-800/30 bg-white px-4 text-base font-bold text-emerald-900 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
-        onClick={addOffering}
-        type="button"
-      >
-        + Add another group
-      </button>
+      {isEditMode ? (
+        <p className="mt-3 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-semibold leading-6 text-stone-600">
+          Adding groups to an existing listing is coming soon.
+        </p>
+      ) : (
+        <button
+          className="mt-3 inline-flex min-h-12 w-full items-center justify-center rounded-md border border-emerald-800/30 bg-white px-4 text-base font-bold text-emerald-900 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
+          onClick={addOffering}
+          type="button"
+        >
+          + Add another group
+        </button>
+      )}
     </SectionCard>
   );
 }
@@ -132,6 +143,7 @@ function ExpandedOfferingCard({
   breedOptions,
   canRemove,
   hasDuplicateCombination,
+  isEditMode,
   index,
   offering,
   prepareBreedPhotoProfile,
@@ -148,6 +160,7 @@ function ExpandedOfferingCard({
   breedOptions: BreedOption[];
   canRemove: boolean;
   hasDuplicateCombination: boolean;
+  isEditMode: boolean;
   index: number;
   offering: BirdOffering;
   prepareBreedPhotoProfile: (offeringId: string) => void;
@@ -193,6 +206,9 @@ function ExpandedOfferingCard({
         <div className="hidden shrink-0 items-center gap-3 sm:flex">
           <RemoveOfferingControl
             canRemove={canRemove}
+            disabledText={
+              isEditMode ? "Set quantity to 0 to stop selling this group." : undefined
+            }
             offeringId={offering.id}
             removeOffering={removeOffering}
           />
@@ -207,6 +223,7 @@ function ExpandedOfferingCard({
 
       <div className="grid gap-3 px-0 py-4 sm:gap-4 sm:px-4 sm:py-4 lg:grid-cols-4">
         <SelectField
+          disabled={isEditMode}
           label="Breed"
           options={breedOptions}
           value={offering.breed}
@@ -331,6 +348,9 @@ function ExpandedOfferingCard({
         <div className="mt-3 flex justify-end sm:hidden">
           <RemoveOfferingControl
             canRemove={canRemove}
+            disabledText={
+              isEditMode ? "Set quantity to 0 to stop selling this group." : undefined
+            }
             offeringId={offering.id}
             removeOffering={removeOffering}
           />
@@ -343,6 +363,7 @@ function ExpandedOfferingCard({
 function CollapsedOfferingRow({
   canRemove,
   hasDuplicateCombination,
+  isEditMode,
   index,
   offering,
   removeOffering,
@@ -350,6 +371,7 @@ function CollapsedOfferingRow({
 }: {
   canRemove: boolean;
   hasDuplicateCombination: boolean;
+  isEditMode: boolean;
   index: number;
   offering: BirdOffering;
   removeOffering: (offeringId: string) => void;
@@ -391,6 +413,9 @@ function CollapsedOfferingRow({
         </button>
         <RemoveOfferingControl
           canRemove={canRemove}
+          disabledText={
+            isEditMode ? "Set quantity to 0 to stop selling this group." : undefined
+          }
           offeringId={offering.id}
           removeOffering={removeOffering}
         />
@@ -406,17 +431,19 @@ function CollapsedOfferingRow({
 
 function RemoveOfferingControl({
   canRemove,
+  disabledText,
   offeringId,
   removeOffering,
 }: {
   canRemove: boolean;
+  disabledText?: string;
   offeringId: string;
   removeOffering: (offeringId: string) => void;
 }) {
   if (!canRemove) {
     return (
       <span className="cursor-not-allowed text-sm font-semibold text-stone-300">
-        Remove group
+        {disabledText ?? "Remove group"}
       </span>
     );
   }
@@ -467,6 +494,7 @@ function CompactMobilePanel({
 }
 
 function SelectField({
+  disabled = false,
   disabledOptionLabels = [],
   label,
   onChange,
@@ -475,6 +503,7 @@ function SelectField({
   selectedId,
   value,
 }: {
+  disabled?: boolean;
   disabledOptionLabels?: string[];
   label: string;
   onChange: (value: BreedOption) => void;
@@ -503,7 +532,8 @@ function SelectField({
       </span>
       <span className="relative block">
         <select
-          className={`${inputClass} appearance-none pr-9`}
+          className={`${inputClass} appearance-none pr-9 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500`}
+          disabled={disabled}
           value={selectedValue}
           onChange={(event) => {
             const nextOption = options.find(
@@ -532,9 +562,16 @@ function SelectField({
         </select>
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute right-3 top-1/2 h-2 w-2 -translate-y-1/2 rotate-45 border-b-2 border-r-2 border-emerald-800/70"
+          className={`pointer-events-none absolute right-3 top-1/2 h-2 w-2 -translate-y-1/2 rotate-45 border-b-2 border-r-2 ${
+            disabled ? "border-stone-400" : "border-emerald-800/70"
+          }`}
         />
       </span>
+      {disabled && label === "Breed" ? (
+        <span className="mt-1.5 block text-sm font-medium leading-5 text-stone-500">
+          Breed changes for existing groups are coming soon.
+        </span>
+      ) : null}
     </label>
   );
 }

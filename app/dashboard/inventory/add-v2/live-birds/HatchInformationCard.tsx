@@ -15,6 +15,7 @@ export function HatchInformationCard({
   setHatchDate,
   setSpecies,
   species,
+  speciesReadOnly = false,
   speciesOptions,
   usingFallbackSpecies,
 }: {
@@ -29,6 +30,7 @@ export function HatchInformationCard({
   setHatchDate: (value: string) => void;
   setSpecies: (value: SpeciesOption) => void;
   species: SpeciesOption;
+  speciesReadOnly?: boolean;
   speciesOptions: SpeciesOption[];
   usingFallbackSpecies: boolean;
 }) {
@@ -39,6 +41,7 @@ export function HatchInformationCard({
       </p>
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <SpeciesField
+          disabled={speciesReadOnly}
           options={speciesOptions}
           value={species}
           onChange={setSpecies}
@@ -88,10 +91,12 @@ export function HatchInformationCard({
 }
 
 function SpeciesField({
+  disabled = false,
   onChange,
   options,
   value,
 }: {
+  disabled?: boolean;
   onChange: (value: SpeciesOption) => void;
   options: SpeciesOption[];
   value: SpeciesOption;
@@ -110,7 +115,8 @@ function SpeciesField({
           height={18}
         />
         <select
-          className={`${inputClass} appearance-none pl-10 pr-9`}
+          className={`${inputClass} appearance-none pl-10 pr-9 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500`}
+          disabled={disabled}
           value={getSpeciesOptionValue(value)}
           onChange={(event) => {
             const nextOption = options.find(
@@ -136,9 +142,16 @@ function SpeciesField({
         </select>
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute right-3 top-1/2 h-2 w-2 -translate-y-1/2 rotate-45 border-b-2 border-r-2 border-emerald-800/70"
+          className={`pointer-events-none absolute right-3 top-1/2 h-2 w-2 -translate-y-1/2 rotate-45 border-b-2 border-r-2 ${
+            disabled ? "border-stone-400" : "border-emerald-800/70"
+          }`}
         />
       </span>
+      {disabled ? (
+        <span className="mt-1.5 block text-sm font-medium leading-5 text-stone-500">
+          Species cannot be changed for this listing.
+        </span>
+      ) : null}
     </label>
   );
 }
