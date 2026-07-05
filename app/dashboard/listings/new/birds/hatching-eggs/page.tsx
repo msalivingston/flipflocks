@@ -1,5 +1,5 @@
-import { HatchingEggsForm } from "./hatching-eggs-form";
+import { HatchingEggsOnePageForm } from "./hatching-eggs-one-page-form";
 
 export default function HatchingEggsListingPage() {
-  return <HatchingEggsForm />;
+  return <HatchingEggsOnePageForm />;
 }

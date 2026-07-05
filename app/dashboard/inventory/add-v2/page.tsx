@@ -27,18 +27,21 @@ const inventoryOptions: InventoryOption[] = [
   },
   {
     title: "Hatching Eggs",
-    description: "Create egg inventory for pickup or shipping once v2 is ready.",
+    description: "Create hatching egg inventory by breed, available date, quantity, and price per egg.",
     glyph: "/glyphs/egg-carton.png",
+    href: "/dashboard/listings/new/birds/hatching-eggs",
   },
   {
     title: "Processed Poultry",
-    description: "Add local pickup poultry products in a future v2 flow.",
+    description: "Create simple local-pickup inventory for processed poultry products.",
     glyph: "/glyphs/chicken-leg.png",
+    href: "/dashboard/listings/new/processed-poultry",
   },
   {
     title: "Equipment & Supplies",
-    description: "List brooders, incubators, feed, and supplies later.",
+    description: "Create simple local-pickup inventory for equipment and supplies.",
     glyph: "/glyphs/feed-sack.png",
+    href: "/dashboard/listings/new/equipment-supplies",
   },
 ];
 

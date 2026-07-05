@@ -32,8 +32,10 @@ export function PhotoManager({
   description,
   emptyDescription,
   error,
+  fillEmptySlots = false,
   helperText = "Drag photos to reorder. The first photo is the featured storefront photo.",
   isUploading = false,
+  allowCropEdit = true,
   maxFileSizeMb,
   maxPhotos,
   onAddPhotos,
@@ -51,8 +53,10 @@ export function PhotoManager({
   description?: string;
   emptyDescription?: string;
   error?: PhotoManagerError | null;
+  fillEmptySlots?: boolean;
   helperText?: string;
   isUploading?: boolean;
+  allowCropEdit?: boolean;
   maxFileSizeMb: number;
   maxPhotos: number;
   onAddPhotos: (files: FileList | null) => void;
@@ -96,6 +100,11 @@ export function PhotoManager({
   } | null>(null);
   const tileRefs = useRef(new Map<string, HTMLElement>());
   const canAddPhotos = canManage && photos.length < maxPhotos;
+  const addSlotCount = fillEmptySlots
+    ? Math.max(maxPhotos - photos.length, 0)
+    : canAddPhotos
+      ? 1
+      : 0;
   const visiblePhotos = draggingId ? draftPhotos : photos;
   const featuredPhoto = visiblePhotos[0] ?? null;
   const secondaryPhotos = visiblePhotos.slice(1);
@@ -312,10 +321,14 @@ export function PhotoManager({
               registerTile={setTileRef}
               variant="featured"
               onBeginDrag={beginDrag}
-              onEdit={() => {
-                setEditingPhoto(featuredPhoto);
-                setOpenMenuId(null);
-              }}
+              onEdit={
+                allowCropEdit
+                  ? () => {
+                      setEditingPhoto(featuredPhoto);
+                      setOpenMenuId(null);
+                    }
+                  : undefined
+              }
               onEndDrag={endDrag}
               onMakeFeatured={() => {
                 void onSetFeaturedPhoto(featuredPhoto);
@@ -346,10 +359,14 @@ export function PhotoManager({
                   registerTile={setTileRef}
                   variant="secondary"
                   onBeginDrag={beginDrag}
-                  onEdit={() => {
-                    setEditingPhoto(photo);
-                    setOpenMenuId(null);
-                  }}
+                  onEdit={
+                    allowCropEdit
+                      ? () => {
+                          setEditingPhoto(photo);
+                          setOpenMenuId(null);
+                        }
+                      : undefined
+                  }
                   onEndDrag={endDrag}
                   onMakeFeatured={() => {
                     void onSetFeaturedPhoto(photo);
@@ -371,24 +388,28 @@ export function PhotoManager({
                   canMoveForward={index < secondaryPhotos.length - 1}
                 />
               ))}
-              {canAddPhotos ? (
+              {Array.from({ length: addSlotCount }).map((_, index) => (
                 <AddPhotoTile
                   acceptedTypes={acceptedTypes}
                   isUploading={isUploading}
+                  key={`add-photo-${index}`}
                   maxFileSizeMb={maxFileSizeMb}
                   onAddPhotos={onAddPhotos}
                 />
-              ) : null}
+              ))}
             </div>
           </div>
         ) : canAddPhotos ? (
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            <AddPhotoTile
-              acceptedTypes={acceptedTypes}
-              isUploading={isUploading}
-              maxFileSizeMb={maxFileSizeMb}
-              onAddPhotos={onAddPhotos}
-            />
+            {Array.from({ length: addSlotCount }).map((_, index) => (
+              <AddPhotoTile
+                acceptedTypes={acceptedTypes}
+                isUploading={isUploading}
+                key={`add-photo-${index}`}
+                maxFileSizeMb={maxFileSizeMb}
+                onAddPhotos={onAddPhotos}
+              />
+            ))}
           </div>
         ) : null}
 
@@ -457,7 +478,7 @@ function PhotoTile({
   isFeatured: boolean;
   isMenuOpen: boolean;
   onBeginDrag: (photoId: string, event: React.PointerEvent<HTMLDivElement>) => void;
-  onEdit: () => void;
+  onEdit?: () => void;
   onEndDrag: (event: React.PointerEvent<HTMLDivElement>) => void;
   onMakeFeatured: () => void;
   onMenuToggle: () => void;
@@ -524,22 +545,24 @@ function PhotoTile({
               x
             </button>
             <div className="absolute bottom-2 right-2 flex items-center gap-1">
-              <button
-                aria-label={`Edit crop for ${photo.filename || photo.label}`}
-                className="flex size-8 items-center justify-center rounded-md border border-white/70 bg-white/90 shadow-sm transition hover:bg-white"
-                data-photo-action
-                type="button"
-                onClick={onEdit}
-                onPointerDown={(event) => event.stopPropagation()}
-              >
-                <Image
-                  alt=""
-                  className="size-4 opacity-75"
-                  height={16}
-                  src="/glyphs/pencil.png"
-                  width={16}
-                />
-              </button>
+              {onEdit ? (
+                <button
+                  aria-label={`Edit crop for ${photo.filename || photo.label}`}
+                  className="flex size-8 items-center justify-center rounded-md border border-white/70 bg-white/90 shadow-sm transition hover:bg-white"
+                  data-photo-action
+                  type="button"
+                  onClick={onEdit}
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  <Image
+                    alt=""
+                    className="size-4 opacity-75"
+                    height={16}
+                    src="/glyphs/pencil.png"
+                    width={16}
+                  />
+                </button>
+              ) : null}
               <button
                 aria-expanded={isMenuOpen}
                 aria-label={`Photo actions for ${photo.filename || photo.label}`}
@@ -561,9 +584,11 @@ function PhotoTile({
           data-photo-action
           onPointerDown={(event) => event.stopPropagation()}
         >
-          <button className="photo-menu-button" type="button" onClick={onEdit}>
-            Edit crop
-          </button>
+          {onEdit ? (
+            <button className="photo-menu-button" type="button" onClick={onEdit}>
+              Edit crop
+            </button>
+          ) : null}
           {!isFeatured ? (
             <button
               className="photo-menu-button"
