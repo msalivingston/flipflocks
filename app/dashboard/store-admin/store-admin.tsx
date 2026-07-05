@@ -1,21 +1,18 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getPlanCapabilities,
   type LockedPlanFeature,
 } from "@/lib/plan-capabilities";
 import { supabase } from "@/lib/supabase";
-import {
-  FullFlockPill,
-  PlanUpgradeDialog,
-} from "../_components/plan-upgrade-prompt";
+import { PlanUpgradeDialog } from "../_components/plan-upgrade-prompt";
 import { useSellerContext } from "../_components/seller-context";
 import {
   ErrorState,
   LoadingState,
-  SellerCard,
   SellerPageHeader,
 } from "../_components/seller-ui";
 
@@ -79,6 +76,26 @@ type PickupOptionDraft = {
 
 type SaveState = "idle" | "saved" | "error";
 
+type StoreSetupTab =
+  | "storefront"
+  | "about"
+  | "photos"
+  | "what-you-sell"
+  | "pickup"
+  | "policies"
+  | "preview";
+
+type ModulePreferenceField =
+  | "hatching_eggs_enabled"
+  | "processed_poultry_enabled"
+  | "equipment_supplies_enabled";
+
+type ModuleDisableDialogState = {
+  field: ModulePreferenceField;
+  message: string;
+  title: string;
+};
+
 type LaunchReadinessItem = {
   item_type: "required" | "warning";
   item_key: string;
@@ -114,6 +131,16 @@ type SellerLaunchItem = {
 
 const unsavedWarning =
   "You have unsaved Store Admin changes. Save or discard before leaving.";
+
+const storeSetupTabs: Array<{ id: StoreSetupTab; label: string }> = [
+  { id: "storefront", label: "Storefront" },
+  { id: "about", label: "About" },
+  { id: "photos", label: "Photos" },
+  { id: "what-you-sell", label: "What You Sell" },
+  { id: "pickup", label: "Pickup" },
+  { id: "policies", label: "Policies" },
+  { id: "preview", label: "Preview" },
+];
 
 const blankForm: StoreAdminForm = {
   store_name: "",
@@ -167,6 +194,12 @@ export function StoreAdmin() {
   const [readinessError, setReadinessError] = useState<string | null>(null);
   const [isReadinessLoading, setIsReadinessLoading] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
+  const [activeTab, setActiveTab] = useState<StoreSetupTab>("storefront");
+  const [moduleDisableDialog, setModuleDisableDialog] =
+    useState<ModuleDisableDialogState | null>(null);
+  const [pendingNavigationUrl, setPendingNavigationUrl] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -253,7 +286,11 @@ export function StoreAdmin() {
     [form, initialForm, initialPickupOptions, pickupOptions],
   );
 
-  useUnsavedWarning(hasUnsavedChanges);
+  const openUnsavedNavigationDialog = useCallback((nextUrl: string) => {
+    setPendingNavigationUrl(nextUrl);
+  }, []);
+
+  useUnsavedWarning(hasUnsavedChanges, openUnsavedNavigationDialog);
 
   function updateField<TKey extends keyof StoreAdminForm>(
     key: TKey,
@@ -262,6 +299,55 @@ export function StoreAdmin() {
     setSaveState("idle");
     setSaveMessage(null);
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateModulePreference(
+    field: ModulePreferenceField,
+    value: boolean,
+  ) {
+    if (!value && form[field]) {
+      const warningByField: Record<
+        ModulePreferenceField,
+        { message: string; title: string }
+      > = {
+        hatching_eggs_enabled: {
+          message:
+            "Turning off Hatching Eggs will hide hatching egg listings from your public storefront. Your inventory will be saved, and you can turn this back on later.",
+          title: "Turn off Hatching Eggs?",
+        },
+        processed_poultry_enabled: {
+          message:
+            "Turning off Processed Poultry will hide processed poultry items from your public storefront. Your inventory will be saved, and you can turn this back on later.",
+          title: "Turn off Processed Poultry?",
+        },
+        equipment_supplies_enabled: {
+          message:
+            "Turning off Equipment & Supplies will hide those items from your public storefront. Your inventory will be saved, and you can turn this back on later.",
+          title: "Turn off Equipment & Supplies?",
+        },
+      };
+
+      setModuleDisableDialog({
+        field,
+        ...warningByField[field],
+      });
+      return;
+    }
+
+    updateField(field, value);
+  }
+
+  function confirmModuleDisable() {
+    if (!moduleDisableDialog) return;
+
+    updateField(moduleDisableDialog.field, false);
+    setModuleDisableDialog(null);
+  }
+
+  function continuePendingNavigation() {
+    if (!pendingNavigationUrl) return;
+
+    window.location.href = pendingNavigationUrl;
   }
 
   function updatePickupOption(
@@ -563,11 +649,11 @@ export function StoreAdmin() {
     return (
       <>
         <SellerPageHeader
-          title="Store Admin"
+          title="Store Setup"
           description="Manage your store setup, public details, pickup information, policies, notifications, and storefront preview."
         />
         <div className="mx-auto w-full max-w-7xl px-5 py-5 sm:px-7">
-          <LoadingState label="Loading Store Admin" />
+          <LoadingState label="Loading Store Setup" />
         </div>
       </>
     );
@@ -576,10 +662,10 @@ export function StoreAdmin() {
   if (loadError || !seller) {
     return (
       <>
-        <SellerPageHeader title="Store Admin" />
+        <SellerPageHeader title="Store Setup" />
         <div className="mx-auto w-full max-w-7xl px-5 py-5 sm:px-7">
           <ErrorState
-            message={loadError ?? "Store Admin could not be loaded."}
+            message={loadError ?? "Store Setup could not be loaded."}
           />
         </div>
       </>
@@ -606,8 +692,8 @@ export function StoreAdmin() {
     <>
       <SellerPageHeader
         eyebrow={seller.store_name}
-        title="Store Admin"
-        description="Business setup for your public store, pickup flow, policies, notifications, and preview link."
+        title="Store Setup"
+        description="Manage your public storefront setup, pickup flow, policies, and preview link."
         action={
           <div className="flex flex-wrap gap-2">
             <button
@@ -649,36 +735,38 @@ export function StoreAdmin() {
           </div>
         ) : null}
 
-        <SellerCard>
-          <div className="grid gap-5 p-5">
-            {isStoreLive ? (
-              <StoreStatusCardContent
-                form={form}
-                isVisibleToCustomers={isVisibleToCustomers}
-                onVisibilityChange={(value) =>
-                  updateField("storefront_enabled", value)
-                }
-                storeUrl={storeUrl}
-              />
-            ) : (
-              <LaunchStoreCardContent
-                hasUnsavedChanges={hasUnsavedChanges}
-                isLaunching={isLaunching}
-                isReadinessLoading={isReadinessLoading}
-                launchAllowed={launchAllowed}
-                onLaunch={() => void launchStore()}
-                platformReviewNeeded={platformReviewNeeded}
-                readinessError={readinessError}
-                requiredItems={sellerRequiredItems}
-                sellerStatus={seller.store_status}
-                warningItems={sellerWarningItems}
-              />
-            )}
-          </div>
-        </SellerCard>
+        <div className="grid gap-0">
+          <StoreSetupTabs
+            activeTab={activeTab}
+            onChange={setActiveTab}
+          />
+          <div className="rounded-b-xl rounded-tr-xl border border-stone-200 bg-white p-5 shadow-sm">
+            {activeTab === "storefront" ? (
+              <div className="grid gap-6">
+                {isStoreLive ? (
+                  <StoreStatusCardContent
+                    form={form}
+                    isVisibleToCustomers={isVisibleToCustomers}
+                    onVisibilityChange={(value) =>
+                      updateField("storefront_enabled", value)
+                    }
+                    storeUrl={storeUrl}
+                  />
+                ) : (
+                  <LaunchStoreCardContent
+                    hasUnsavedChanges={hasUnsavedChanges}
+                    isLaunching={isLaunching}
+                    isReadinessLoading={isReadinessLoading}
+                    launchAllowed={launchAllowed}
+                    onLaunch={() => void launchStore()}
+                    platformReviewNeeded={platformReviewNeeded}
+                    readinessError={readinessError}
+                    requiredItems={sellerRequiredItems}
+                    sellerStatus={seller.store_status}
+                    warningItems={sellerWarningItems}
+                  />
+                )}
 
-        <div className="grid gap-5">
-          <div className="grid gap-5">
             <SettingsSection
               description="Core public identity for this seller store."
               title="Store Profile"
@@ -724,162 +812,224 @@ export function StoreAdmin() {
                   value={form.website_url}
                 />
               </div>
-              <TextAreaField
-                label="About text"
-                onChange={(value) => updateField("about_text", value)}
-                value={form.about_text}
-              />
-              <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-                <TextField
-                  label="NPIP number"
-                  onChange={(value) => updateField("npip_number", value)}
-                  value={form.npip_number}
-                />
-                <ToggleField
-                  checked={form.show_npip}
-                  label="Show NPIP"
-                  onChange={(value) => updateField("show_npip", value)}
-                />
-              </div>
             </SettingsSection>
 
+                <SettingsSection
+                  description="Operational notification destination for new order email."
+                  title="Notifications"
+                >
+                  <TextField
+                    label="Order notification email"
+                    onChange={(value) =>
+                      updateField("order_notification_email", value)
+                    }
+                    value={form.order_notification_email}
+                  />
+                </SettingsSection>
+              </div>
+            ) : null}
+
+            {activeTab === "about" ? (
+              <div className="grid gap-6">
+                <SettingsSection
+                  description="Public story, certifications, and buyer-facing contact details."
+                  title="About"
+                >
+                  <TextAreaField
+                    label="About text"
+                    onChange={(value) => updateField("about_text", value)}
+                    value={form.about_text}
+                  />
+                  <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+                    <TextField
+                      label="NPIP number"
+                      onChange={(value) => updateField("npip_number", value)}
+                      value={form.npip_number}
+                    />
+                    <ToggleField
+                      checked={form.show_npip}
+                      label="Show NPIP"
+                      onChange={(value) => updateField("show_npip", value)}
+                    />
+                  </div>
+                </SettingsSection>
+
+                <SettingsSection
+                  description="Choose which contact details are public and which email is used inside seller workflows."
+                  title="Contact Information"
+                >
+                  <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+                    <TextField
+                      label="Public email"
+                      onChange={(value) => updateField("public_email", value)}
+                      value={form.public_email}
+                    />
+                    <ToggleField
+                      checked={form.show_public_email}
+                      label="Show email"
+                      onChange={(value) =>
+                        updateField("show_public_email", value)
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+                    <TextField
+                      label="Public phone"
+                      onChange={(value) => updateField("public_phone", value)}
+                      value={form.public_phone}
+                    />
+                    <ToggleField
+                      checked={form.show_public_phone}
+                      label="Show phone"
+                      onChange={(value) =>
+                        updateField("show_public_phone", value)
+                      }
+                    />
+                  </div>
+                  <TextField
+                    helper="Used for seller workflows when different from public contact details."
+                    label="Communication email"
+                    onChange={(value) =>
+                      updateField("communication_email", value)
+                    }
+                    value={form.communication_email}
+                  />
+                </SettingsSection>
+              </div>
+            ) : null}
+
+            {activeTab === "photos" ? (
+              <SettingsSection
+                description="Store-level photo controls are not wired into Store Admin yet. Existing logo, hero, and gallery media stay preserved."
+                title="Photos"
+              >
+                <div className="rounded-lg border border-dashed border-stone-300 bg-stone-50 px-4 py-6 text-sm font-medium leading-6 text-stone-600">
+                  No Store Admin photo fields exist in this screen yet.
+                </div>
+              </SettingsSection>
+            ) : null}
+
+            {activeTab === "what-you-sell" ? (
             <SettingsSection
-              description="Turn on only the selling options you use. You can change these later."
+              description="Start with the products you sell now. You can turn on more options later if they're included in your plan."
               title="What You Sell"
             >
-              <div className="grid gap-3 md:grid-cols-2">
-                <ModuleCard
-                  badge="Always Enabled"
-                  description="This is the core inventory workflow for chicks, started birds, pullets, pairs, trios, and other live bird inventory."
+              <div className="grid gap-3">
+                <ModuleOptionCard
+                  description="Chicks, pullets, started birds, breeding groups, and other live poultry."
+                  glyph="/glyphs/hen.png"
+                  state="always"
+                  status="Always included"
                   title="Live Birds"
                 />
-                <ModuleCard
+                <ModuleOptionCard
                   action={
                     plan.hatchingEggsEnabled ? (
-                      <ToggleField
+                      <ModuleToggle
                         checked={form.hatching_eggs_enabled}
-                        label={
-                          form.hatching_eggs_enabled ? "Enabled" : "Disabled"
-                        }
                         onChange={(value) =>
-                          updateField("hatching_eggs_enabled", value)
+                          updateModulePreference("hatching_eggs_enabled", value)
                         }
                       />
                     ) : (
-                      <LockedModuleButton
+                      <LockedModuleAction
                         onClick={() => setLockedFeature("hatching_eggs")}
                       />
                     )
                   }
-                  description="Sell breed-based hatching egg inventory without hatch dates."
+                  description="Let customers order breed-based hatching eggs for local pickup."
+                  glyph="/glyphs/egg-carton.png"
+                  state={
+                    !plan.hatchingEggsEnabled
+                      ? "locked"
+                      : form.hatching_eggs_enabled
+                        ? "enabled"
+                        : "disabled"
+                  }
                   status={
                     !plan.hatchingEggsEnabled
-                      ? "Available on Full Flock."
-                      : form.hatching_eggs_enabled
-                      ? "Available in Create Listing."
-                      : "Hidden from Create Listing."
+                      ? "Not included in your current plan."
+                      : undefined
                   }
                   title="Hatching Eggs"
                 />
-                <ModuleCard
+                <ModuleOptionCard
                   action={
                     plan.processedPoultryEnabled ? (
-                      <ToggleField
+                      <ModuleToggle
                         checked={form.processed_poultry_enabled}
-                        label={
-                          form.processed_poultry_enabled
-                            ? "Enabled"
-                            : "Disabled"
-                        }
                         onChange={(value) =>
-                          updateField("processed_poultry_enabled", value)
+                          updateModulePreference(
+                            "processed_poultry_enabled",
+                            value,
+                          )
                         }
                       />
                     ) : (
-                      <LockedModuleButton
+                      <LockedModuleAction
                         onClick={() => setLockedFeature("processed_poultry")}
                       />
                     )
                   }
-                  description="Sell simple local-pickup poultry products by product name, type, quantity, and price."
+                  description="Sell simple local-pickup poultry products by item, quantity, and price."
+                  glyph="/glyphs/chicken-leg.png"
+                  state={
+                    !plan.processedPoultryEnabled
+                      ? "locked"
+                      : form.processed_poultry_enabled
+                        ? "enabled"
+                        : "disabled"
+                  }
                   status={
                     !plan.processedPoultryEnabled
-                      ? "Available on Full Flock."
-                      : form.processed_poultry_enabled
-                        ? "Available in Create Listing."
-                        : "Hidden from Create Listing."
+                      ? "Not included in your current plan."
+                      : undefined
                   }
                   title="Processed Poultry"
                 />
-                <ModuleCard
+                <ModuleOptionCard
                   action={
                     plan.equipmentSuppliesEnabled ? (
-                      <ToggleField
+                      <ModuleToggle
                         checked={form.equipment_supplies_enabled}
-                        label={
-                          form.equipment_supplies_enabled
-                            ? "Enabled"
-                            : "Disabled"
-                        }
                         onChange={(value) =>
-                          updateField("equipment_supplies_enabled", value)
+                          updateModulePreference(
+                            "equipment_supplies_enabled",
+                            value,
+                          )
                         }
                       />
                     ) : (
-                      <LockedModuleButton
+                      <LockedModuleAction
                         onClick={() => setLockedFeature("equipment_supplies")}
                       />
                     )
                   }
-                  description="Sell basic farm equipment and supplies with simple quantity and price inventory."
+                  description="Sell basic farm equipment, supplies, and reusable farm items."
+                  glyph="/glyphs/incubator.png"
+                  state={
+                    !plan.equipmentSuppliesEnabled
+                      ? "locked"
+                      : form.equipment_supplies_enabled
+                        ? "enabled"
+                        : "disabled"
+                  }
                   status={
                     !plan.equipmentSuppliesEnabled
-                      ? "Available on Full Flock."
-                      : form.equipment_supplies_enabled
-                        ? "Available in Create Listing."
-                        : "Hidden from Create Listing."
+                      ? "Not included in your current plan."
+                      : undefined
                   }
                   title="Equipment & Supplies"
                 />
               </div>
+              <p className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs font-medium leading-5 text-emerald-900">
+                You can change these anytime. Updates may take a few minutes to
+                appear on your storefront.
+              </p>
             </SettingsSection>
+            ) : null}
 
-            <SettingsSection
-              description="Choose which contact details are public and which email is used inside seller workflows."
-              title="Contact Information"
-            >
-              <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-                <TextField
-                  label="Public email"
-                  onChange={(value) => updateField("public_email", value)}
-                  value={form.public_email}
-                />
-                <ToggleField
-                  checked={form.show_public_email}
-                  label="Show email"
-                  onChange={(value) => updateField("show_public_email", value)}
-                />
-              </div>
-              <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-                <TextField
-                  label="Public phone"
-                  onChange={(value) => updateField("public_phone", value)}
-                  value={form.public_phone}
-                />
-                <ToggleField
-                  checked={form.show_public_phone}
-                  label="Show phone"
-                  onChange={(value) => updateField("show_public_phone", value)}
-                />
-              </div>
-              <TextField
-                helper="Used for seller workflows when different from public contact details."
-                label="Communication email"
-                onChange={(value) => updateField("communication_email", value)}
-                value={form.communication_email}
-              />
-            </SettingsSection>
-
+            {activeTab === "pickup" ? (
             <SettingsSection
               description="Reusable pickup details shown in checkout and seller order workflows."
               title="Pickup & Fulfillment"
@@ -982,7 +1132,9 @@ export function StoreAdmin() {
                 )}
               </div>
             </SettingsSection>
+            ) : null}
 
+            {activeTab === "policies" ? (
             <SettingsSection
               description="Public policy text reused on storefront and listing pages."
               title="Policies"
@@ -1003,19 +1155,32 @@ export function StoreAdmin() {
                 value={form.other_policies}
               />
             </SettingsSection>
+            ) : null}
 
-            <SettingsSection
-              description="Operational notification destination for new order email."
-              title="Notifications"
-            >
-              <TextField
-                label="Order notification email"
-                onChange={(value) =>
-                  updateField("order_notification_email", value)
-                }
-                value={form.order_notification_email}
-              />
-            </SettingsSection>
+            {activeTab === "preview" ? (
+              <SettingsSection
+                description="Open or copy the current public storefront URL."
+                title="Preview"
+              >
+                <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                  Public store URL
+                  <input
+                    className="seller-form-field text-xs"
+                    readOnly
+                    value={storeUrl}
+                  />
+                </label>
+                <div>
+                  <Link
+                    className="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-800 px-5 text-sm font-semibold text-white transition hover:bg-emerald-900"
+                    href={`/store/${form.store_slug}`}
+                    target="_blank"
+                  >
+                    View Store
+                  </Link>
+                </div>
+              </SettingsSection>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1025,7 +1190,58 @@ export function StoreAdmin() {
           onClose={() => setLockedFeature(null)}
         />
       ) : null}
+      {moduleDisableDialog ? (
+        <ModuleDisableDialog
+          message={moduleDisableDialog.message}
+          onCancel={() => setModuleDisableDialog(null)}
+          onConfirm={confirmModuleDisable}
+          title={moduleDisableDialog.title}
+        />
+      ) : null}
+      {pendingNavigationUrl ? (
+        <UnsavedChangesDialog
+          onCancel={() => setPendingNavigationUrl(null)}
+          onConfirm={continuePendingNavigation}
+        />
+      ) : null}
     </>
+  );
+}
+
+function StoreSetupTabs({
+  activeTab,
+  onChange,
+}: {
+  activeTab: StoreSetupTab;
+  onChange: (tab: StoreSetupTab) => void;
+}) {
+  return (
+    <div
+      aria-label="Store setup sections"
+      className="flex gap-1 overflow-x-auto border-b border-stone-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      role="tablist"
+    >
+      {storeSetupTabs.map((tab) => {
+        const isActive = activeTab === tab.id;
+
+        return (
+          <button
+            aria-selected={isActive}
+            className={`relative mb-[-1px] min-h-11 shrink-0 rounded-t-lg border px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 ${
+              isActive
+                ? "border-stone-200 border-b-white bg-white text-stone-950 shadow-[0_-1px_0_rgba(0,0,0,0.02)]"
+                : "border-transparent bg-stone-100/70 text-stone-600 hover:bg-white hover:text-stone-950"
+            }`}
+            key={tab.id}
+            onClick={() => onChange(tab.id)}
+            role="tab"
+            type="button"
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1039,78 +1255,243 @@ function SettingsSection({
   title: string;
 }) {
   return (
-    <SellerCard>
-      <div className="grid gap-4 p-5">
-        <div>
-          <h2 className="text-lg font-semibold text-stone-950">{title}</h2>
-          <p className="mt-1 text-sm leading-6 text-stone-600">
-            {description}
-          </p>
-        </div>
-        <div className="grid gap-4">{children}</div>
+    <section className="grid gap-4 border-b border-stone-200 pb-6 last:border-b-0 last:pb-0">
+      <div>
+        <h2 className="text-lg font-semibold text-stone-950">{title}</h2>
+        <p className="mt-1 text-sm leading-6 text-stone-600">
+          {description}
+        </p>
       </div>
-    </SellerCard>
+      <div className="grid gap-4">{children}</div>
+    </section>
   );
 }
 
-function ModuleCard({
+function ModuleOptionCard({
   action,
-  badge,
   description,
-  muted = false,
+  glyph,
+  state,
   status,
   title,
 }: {
   action?: React.ReactNode;
-  badge?: string;
   description: string;
-  muted?: boolean;
+  glyph: string;
+  state: "always" | "enabled" | "disabled" | "locked";
   status?: string;
   title: string;
 }) {
+  const isLocked = state === "locked";
+  const isAlways = state === "always";
+
   return (
     <div
-      className={`rounded-lg border border-stone-200 p-4 ${
-        muted ? "bg-stone-50" : "bg-white"
+      className={`grid gap-2.5 rounded-lg border p-2.5 transition sm:grid-cols-[minmax(0,1fr)_13.5rem] sm:items-center ${
+        isAlways
+          ? "border-emerald-100 bg-emerald-50/40"
+          : isLocked
+            ? "border-stone-200 bg-stone-50"
+            : "border-stone-200 bg-white"
       }`}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex min-w-0 gap-2.5">
+        <span
+          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-stone-100 ring-1 ring-stone-200"
+        >
+          <Image
+            alt=""
+            className="object-contain"
+            height={28}
+            src={glyph}
+            width={28}
+          />
+        </span>
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-stone-950">{title}</h3>
-          <p className="mt-1 text-sm leading-6 text-stone-600">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-stone-950">{title}</h3>
+          </div>
+          <p className="mt-0.5 text-sm leading-5 text-stone-600">
             {description}
           </p>
-          {status ? (
-            <p className="mt-3 text-xs font-semibold text-stone-500">
-              {status}
-            </p>
-          ) : null}
         </div>
-        {badge ? (
-          <span
-            className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
-              muted
-                ? "bg-stone-200 text-stone-700"
-                : "bg-emerald-100 text-emerald-800"
-            }`}
-          >
-            {badge}
-          </span>
-        ) : null}
-        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+
+      <div className="grid gap-2 border-stone-200 sm:border-l sm:pl-3">
+        <div className="flex items-center justify-end gap-3">
+          {status ? (
+            state === "always" ? (
+              <div className="flex items-center gap-2">
+                <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-emerald-700 text-xs font-bold text-emerald-800">
+                  &#10003;
+                </span>
+                <p className="text-sm font-semibold leading-5 text-stone-800">
+                  {status}
+                </p>
+              </div>
+            ) : (
+              <p
+                className={`text-sm font-semibold leading-5 ${
+                  isLocked ? "text-stone-600" : "text-stone-800"
+                }`}
+              >
+                {status}
+              </p>
+            )
+          ) : null}
+          {action ? <div className="shrink-0">{action}</div> : null}
+        </div>
       </div>
     </div>
   );
 }
 
-function LockedModuleButton({ onClick }: { onClick: () => void }) {
+function ModuleToggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-stone-700">
+      <span>{checked ? "Enabled" : "Disabled"}</span>
+      <span
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+          checked ? "bg-emerald-700" : "bg-stone-300"
+        }`}
+      >
+        <input
+          checked={Boolean(checked)}
+          className="sr-only"
+          onChange={(event) => onChange(event.target.checked)}
+          type="checkbox"
+        />
+        <span
+          className={`absolute size-5 rounded-full bg-white shadow-sm transition ${
+            checked ? "translate-x-5" : "translate-x-0.5"
+          }`}
+        />
+      </span>
+    </label>
+  );
+}
+
+function ModuleDisableDialog({
+  message,
+  onCancel,
+  onConfirm,
+  title,
+}: {
+  message: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+  title: string;
+}) {
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 px-4 py-6"
+      role="dialog"
+    >
+      <div className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-5 shadow-2xl">
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-lg font-bold text-amber-800"
+          >
+            !
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold leading-6 text-stone-950">
+              {title}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-stone-700">
+              {message}
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            className="seller-secondary-button"
+            type="button"
+            onClick={onCancel}
+          >
+            Keep showing it
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+            type="button"
+            onClick={onConfirm}
+          >
+            Turn off
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UnsavedChangesDialog({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 px-4 py-6"
+      role="dialog"
+    >
+      <div className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-5 shadow-2xl">
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-emerald-100 bg-emerald-50 text-lg font-bold text-emerald-800"
+          >
+            !
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold leading-6 text-stone-950">
+              Save changes before leaving?
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-stone-700">
+              You have unsaved Store Setup changes. Save or discard your changes
+              before leaving this page.
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            className="seller-secondary-button"
+            type="button"
+            onClick={onConfirm}
+          >
+            Leave without saving
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+            type="button"
+            onClick={onCancel}
+          >
+            Stay here
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LockedModuleAction({ onClick }: { onClick: () => void }) {
   return (
     <button
-      className="inline-flex min-h-10 items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+      className="inline-flex min-h-8 items-center rounded-md border border-stone-300 bg-white px-2.5 text-xs font-semibold text-emerald-900 transition hover:border-emerald-700 hover:text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
       type="button"
       onClick={onClick}
     >
-      <FullFlockPill />
+      View plans
     </button>
   );
 }
@@ -1566,7 +1947,10 @@ function validateForm(form: StoreAdminForm, pickupOptions: PickupOptionDraft[]) 
   return null;
 }
 
-function useUnsavedWarning(hasUnsavedChanges: boolean) {
+function useUnsavedWarning(
+  hasUnsavedChanges: boolean,
+  onBlockedNavigation: (nextUrl: string) => void,
+) {
   useEffect(() => {
     if (!hasUnsavedChanges) return;
 
@@ -1593,10 +1977,9 @@ function useUnsavedWarning(hasUnsavedChanges: boolean) {
 
       if (nextUrl.href === window.location.href) return;
 
-      if (!window.confirm(unsavedWarning)) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
+      event.preventDefault();
+      event.stopPropagation();
+      onBlockedNavigation(nextUrl.href);
     }
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -1606,5 +1989,5 @@ function useUnsavedWarning(hasUnsavedChanges: boolean) {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       document.removeEventListener("click", handleLinkClick, true);
     };
-  }, [hasUnsavedChanges]);
+  }, [hasUnsavedChanges, onBlockedNavigation]);
 }
