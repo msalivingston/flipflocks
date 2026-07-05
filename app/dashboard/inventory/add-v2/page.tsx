@@ -32,8 +32,8 @@ const inventoryOptions: InventoryOption[] = [
     href: "/dashboard/listings/new/birds/hatching-eggs",
   },
   {
-    title: "Processed Poultry",
-    description: "Create simple local-pickup inventory for processed poultry products.",
+    title: "Poultry Products",
+    description: "Create simple local-pickup inventory for eggs, meat, broth, feathers, or other poultry products.",
     glyph: "/glyphs/chicken-leg.png",
     href: "/dashboard/listings/new/processed-poultry",
   },

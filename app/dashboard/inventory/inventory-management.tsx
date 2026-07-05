@@ -1318,7 +1318,7 @@ function ProcessedPoultryInventorySection({
                     <td className="px-5 py-4 align-top">
                       <Link
                         className="font-semibold text-stone-950 underline-offset-4 hover:underline"
-                        href={`/dashboard/inventory/processed-poultry/${row.processed_poultry_inventory_item_id}`}
+                        href={getProcessedPoultryManageHref(row)}
                       >
                         {row.product_name}
                       </Link>
@@ -1348,7 +1348,7 @@ function ProcessedPoultryInventorySection({
                     <td className="px-5 py-4 text-right align-top">
                       <Link
                         className="seller-small-button"
-                        href={`/dashboard/inventory/processed-poultry/${row.processed_poultry_inventory_item_id}`}
+                        href={getProcessedPoultryManageHref(row)}
                       >
                         Manage
                       </Link>
@@ -1403,7 +1403,7 @@ function ProcessedPoultryInventoryCard({
       </p>
       <Link
         className="seller-small-button mt-4 inline-flex"
-        href={`/dashboard/inventory/processed-poultry/${row.processed_poultry_inventory_item_id}`}
+        href={getProcessedPoultryManageHref(row)}
       >
         Manage
       </Link>
@@ -1416,6 +1416,14 @@ function deriveProcessedPoultryBadge(row: ProcessedPoultryInventoryRow) {
   if (row.visibility_status === "active") return "live";
 
   return row.visibility_status;
+}
+
+function getProcessedPoultryManageHref(row: ProcessedPoultryInventoryRow) {
+  if (row.visibility_status === "hidden") {
+    return `/dashboard/listings/new/processed-poultry/${row.processed_poultry_inventory_item_id}`;
+  }
+
+  return `/dashboard/inventory/processed-poultry/${row.processed_poultry_inventory_item_id}`;
 }
 
 function buildFlatInventoryItems({
