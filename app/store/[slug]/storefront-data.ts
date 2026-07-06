@@ -1,5 +1,13 @@
 import { publicSupabase } from "@/lib/public-supabase";
 
+export type StorefrontHeroCropMetadata = {
+  aspect: number;
+  x: number;
+  y: number;
+  zoom: number;
+  rotation: 0 | 90 | 180 | 270;
+};
+
 export type StorefrontHome = {
   store_id: string;
   store_slug: string;
@@ -20,6 +28,8 @@ export type StorefrontHome = {
   npip_number: string | null;
   hero_image_url: string | null;
   hero_image_alt_text: string | null;
+  hero_crop_metadata: StorefrontHeroCropMetadata | null;
+  hero_image_layout: "full" | "right" | string | null;
   logo_image_url: string | null;
   logo_image_alt_text: string | null;
   public_inventory_item_count: number;

@@ -62,6 +62,8 @@ export default async function StorefrontAboutPage({
   const photos = galleryResult.data.filter(
     (image) => image.display_context !== "logo",
   );
+  const aboutPhoto = photos[0] ?? null;
+  const remainingPhotos = photos.slice(1);
   const aboutText =
     store.about_text?.trim() ||
     `${store.store_name} has not added a full story yet. Products and pickup information are available throughout this storefront.`;
@@ -69,7 +71,7 @@ export default async function StorefrontAboutPage({
   return (
     <StorefrontChrome categories={chromeResult.categories} store={store}>
       <StorefrontPage className="gap-7">
-        <StorefrontCard className="grid gap-8 bg-[#fffdf8] p-6 lg:grid-cols-[1fr_20rem]">
+        <StorefrontCard className="grid gap-8 bg-[#fffdf8] p-6 lg:grid-cols-[1fr_22rem]">
           <div>
             <div className="flex items-center gap-4">
               <StoreLogo store={store} />
@@ -92,25 +94,37 @@ export default async function StorefrontAboutPage({
             </p>
           </div>
 
-          <aside className="grid h-fit gap-4 rounded-lg border border-[#e7decd] bg-white p-4">
-            <Fact label="Location" value={formatLocation(store)} />
-            <Fact
-              label="Pickup region"
-              value={
-                store.pickup_instructions
-                  ? "Details available"
-                  : "Shared after order"
-              }
-            />
-            {store.npip_number ? (
-              <Fact label="NPIP" value={store.npip_number} />
+          <aside className="grid h-fit gap-4">
+            {aboutPhoto ? (
+              <Image
+                alt={aboutPhoto.alt_text || `${store.store_name} farm photo`}
+                className="aspect-[4/3] w-full rounded-xl border border-[#ded7c8] object-cover"
+                height={360}
+                src={toPublicImageUrl(aboutPhoto.public_url)}
+                unoptimized
+                width={480}
+              />
             ) : null}
+            <div className="grid gap-4 rounded-lg border border-[#e7decd] bg-white p-4">
+              <Fact label="Location" value={formatLocation(store)} />
+              <Fact
+                label="Pickup region"
+                value={
+                  store.pickup_instructions
+                    ? "Details available"
+                    : "Shared after order"
+                }
+              />
+              {store.npip_number ? (
+                <Fact label="NPIP" value={store.npip_number} />
+              ) : null}
+            </div>
           </aside>
         </StorefrontCard>
 
-        {photos.length > 0 ? (
-          <PhotoStrip photos={photos} storeName={store.store_name} />
-        ) : (
+        {remainingPhotos.length > 0 ? (
+          <PhotoStrip photos={remainingPhotos} storeName={store.store_name} />
+        ) : photos.length === 0 ? (
           <StorefrontCard className="border-dashed border-[#d8cebd] bg-[linear-gradient(135deg,#fffdf8,#eef4e8)] px-5 py-10 text-center">
             <h2 className="text-xl font-semibold text-stone-950">
               Farm photos coming soon
@@ -120,7 +134,7 @@ export default async function StorefrontAboutPage({
               and pickup details will show where available.
             </p>
           </StorefrontCard>
-        )}
+        ) : null}
       </StorefrontPage>
     </StorefrontChrome>
   );

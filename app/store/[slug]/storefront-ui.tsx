@@ -39,6 +39,40 @@ export function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+export const storefrontHeroTypography = {
+  eyebrow: "text-xs font-semibold uppercase tracking-[0.12em] text-emerald-800",
+  title:
+    "mt-3 font-serif text-4xl font-semibold leading-[1.08] text-stone-950 sm:text-5xl",
+  body: "mt-5 text-base leading-7 text-stone-700",
+};
+
+export const storefrontHeroFrame = {
+  aspectClass: "aspect-[7/3]",
+  aspectRatio: 7 / 3,
+  publicClass:
+    "relative overflow-hidden rounded-2xl border border-[#ded7c8] bg-white aspect-[7/3] min-h-[30rem]",
+  setupPreviewScale: 0.72,
+  setupPreviewClass:
+    "relative mx-auto aspect-[7/3] w-full max-w-[50rem] overflow-hidden rounded-lg border border-stone-200 bg-stone-100",
+};
+
+export function storefrontButtonClass({
+  className,
+  variant = "primary",
+}: {
+  className?: string;
+  variant?: "primary" | "secondary";
+} = {}) {
+  return cx(
+    "inline-flex min-h-11 items-center justify-center rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-white",
+    storefrontTheme.focus,
+    variant === "primary"
+      ? storefrontTheme.primary
+      : "border border-[#cfc7b8] bg-white text-stone-800 hover:bg-[#fbf7ef]",
+    className,
+  );
+}
+
 export function StorefrontShell({ children }: { children: React.ReactNode }) {
   return (
     <div
@@ -114,7 +148,7 @@ export function StorefrontSection({
 
 export function StorefrontEyebrow({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-800">
+    <p className={storefrontHeroTypography.eyebrow}>
       {children}
     </p>
   );
@@ -199,14 +233,7 @@ export function StorefrontButton({
   type?: "button" | "submit";
   variant?: "primary" | "secondary";
 }) {
-  const buttonClass = cx(
-    "inline-flex min-h-11 items-center justify-center rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-white",
-    storefrontTheme.focus,
-    variant === "primary"
-      ? storefrontTheme.primary
-      : "border border-[#cfc7b8] bg-white text-stone-800 hover:bg-[#fbf7ef]",
-    className,
-  );
+  const buttonClass = storefrontButtonClass({ className, variant });
 
   if (href) {
     return (
@@ -651,7 +678,7 @@ export function toPublicImageUrl(publicUrl: string) {
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-  if (publicUrl.startsWith("/") && supabaseUrl) {
+  if (publicUrl.startsWith("/storage/") && supabaseUrl) {
     return `${supabaseUrl}${publicUrl}`;
   }
 

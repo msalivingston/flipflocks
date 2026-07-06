@@ -2,7 +2,15 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   getPlanCapabilities,
   type LockedPlanFeature,
@@ -15,6 +23,17 @@ import {
   LoadingState,
   SellerPageHeader,
 } from "../_components/seller-ui";
+import {
+  getCropImageStyle,
+  normalizeCrop,
+  type PhotoCropMetadata,
+} from "../_components/photo-crop-editor";
+import {
+  cx,
+  storefrontButtonClass,
+  storefrontHeroFrame,
+  storefrontHeroTypography,
+} from "@/app/store/[slug]/storefront-ui";
 
 type StoreAdminForm = {
   store_name: string;
@@ -83,6 +102,50 @@ type PickupOptionDraft = {
   isNew?: boolean;
 };
 
+type StoreMediaItem = {
+  media_asset_id: string;
+  media_link_id: string;
+  store_id: string;
+  entity_type: string;
+  entity_id: string;
+  display_context: "logo" | "hero" | "gallery" | string;
+  public_url: string;
+  alt_text: string | null;
+  caption: string | null;
+  sort_order: number | null;
+  is_featured: boolean;
+  crop_metadata?: PhotoCropMetadata | null;
+  moderation_status: string;
+  asset_status: string;
+  visibility_status: string;
+  original_filename: string | null;
+  content_type: string;
+  file_size_bytes: number;
+  width_px: number | null;
+  height_px: number | null;
+  source_type?: string | null;
+  source_image_url?: string | null;
+  hero_layout?: string | null;
+  draft_file?: File;
+  draft_status?: "new" | "remove";
+  preview_url?: string;
+};
+
+type StoreMediaRole = "logo" | "hero" | "about";
+
+type HeroLibraryImage = {
+  label: string;
+  path: string;
+};
+
+type UploadResponse = {
+  media?: StoreMediaItem | null;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+};
+
 type SaveState = "idle" | "saved" | "error";
 
 type StoreSetupTab =
@@ -141,6 +204,47 @@ type SellerLaunchItem = {
 const unsavedWarning =
   "You have unsaved Store Admin changes. Save or discard before leaving.";
 
+const STORE_MEDIA_SELECT =
+  "media_asset_id, media_link_id, store_id, entity_type, entity_id, display_context, public_url, alt_text, caption, sort_order, is_featured, crop_metadata, hero_layout, moderation_status, asset_status, visibility_status, original_filename, content_type, file_size_bytes, width_px, height_px, source_type, source_image_url";
+
+const acceptedStoreImageTypes = ["image/jpeg", "image/png", "image/webp"];
+const maxStoreImageSizeBytes = 8 * 1024 * 1024;
+
+const heroLayoutOptions: Array<{
+  label: string;
+  value: HeroLayout;
+}> = [
+  {
+    label: "Full Width Photo",
+    value: "full",
+  },
+  {
+    label: "Left Fade",
+    value: "right",
+  },
+];
+
+const heroLibraryImages: HeroLibraryImage[] = [
+  { label: "Sunlit pasture flock", path: "/storefront-heroes/sunlit-pasture-flock.png" },
+  { label: "Barnyard golden hour", path: "/storefront-heroes/barnyard-golden-hour.png" },
+  { label: "Open field chickens", path: "/storefront-heroes/open-field-chickens.png" },
+  { label: "Mountain farm flock", path: "/storefront-heroes/mountain-farm-flock.png" },
+  { label: "Coop pathway morning", path: "/storefront-heroes/coop-pathway-morning.png" },
+  { label: "Pasture hens wide", path: "/storefront-heroes/pasture-hens-wide.png" },
+  { label: "Farmhouse flock sunset", path: "/storefront-heroes/farmhouse-flock-sunset.png" },
+  { label: "Green meadow chickens", path: "/storefront-heroes/green-meadow-chickens.png" },
+  { label: "Country barn flock", path: "/storefront-heroes/country-barn-flock.png" },
+  { label: "Fence line poultry", path: "/storefront-heroes/fence-line-poultry.png" },
+  { label: "Orchard hens", path: "/storefront-heroes/orchard-hens.png" },
+  { label: "Prairie coop flock", path: "/storefront-heroes/prairie-coop-flock.png" },
+  { label: "Homestead chickens", path: "/storefront-heroes/homestead-chickens.png" },
+  { label: "Rolling hills flock", path: "/storefront-heroes/rolling-hills-flock.png" },
+  { label: "Warm coop yard", path: "/storefront-heroes/warm-coop-yard.png" },
+  { label: "Family farm pasture", path: "/storefront-heroes/family-farm-pasture.png" },
+  { label: "Wide farmstead flock", path: "/storefront-heroes/wide-farmstead-flock.png" },
+  { label: "Quiet country coop", path: "/storefront-heroes/quiet-country-coop.png" },
+];
+
 const storeSetupTabs: Array<{ id: StoreSetupTab; label: string }> = [
   { id: "storefront", label: "Storefront" },
   { id: "about", label: "About" },
@@ -194,6 +298,14 @@ export function StoreAdmin() {
   const [initialPickupOptions, setInitialPickupOptions] = useState<
     PickupOptionDraft[]
   >([]);
+  const [storeMediaItems, setStoreMediaItems] = useState<StoreMediaItem[]>([]);
+  const [initialStoreMediaItems, setInitialStoreMediaItems] = useState<
+    StoreMediaItem[]
+  >([]);
+  const [isMediaUploading, setIsMediaUploading] = useState<StoreMediaRole | null>(
+    null,
+  );
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -246,7 +358,7 @@ export function StoreAdmin() {
       setSaveMessage(null);
       setSaveState("idle");
 
-      const [defaultsResult, pickupOptionsResult, readinessResult] =
+      const [defaultsResult, pickupOptionsResult, readinessResult, mediaResult] =
         await Promise.all([
           supabase
             .from("seller_store_defaults")
@@ -266,11 +378,25 @@ export function StoreAdmin() {
           supabase.rpc("seller_get_store_launch_readiness", {
             p_store_id: seller.store_id,
           }),
+          supabase
+            .from("seller_media_management")
+            .select(STORE_MEDIA_SELECT)
+            .eq("store_id", seller.store_id)
+            .eq("entity_type", "store")
+            .eq("entity_id", seller.store_id)
+            .in("display_context", ["logo", "hero", "gallery"])
+            .eq("visibility_status", "active")
+            .eq("asset_status", "active")
+            .eq("moderation_status", "approved")
+            .order("is_featured", { ascending: false })
+            .order("sort_order", { ascending: true })
+            .returns<StoreMediaItem[]>(),
         ]);
 
       if (!isMounted) return;
 
-      const firstError = defaultsResult.error ?? pickupOptionsResult.error;
+      const firstError =
+        defaultsResult.error ?? pickupOptionsResult.error ?? mediaResult.error;
 
       if (firstError) {
         setLoadError(firstError.message);
@@ -288,6 +414,8 @@ export function StoreAdmin() {
       setInitialForm(nextForm);
       setPickupOptions(nextPickupOptions);
       setInitialPickupOptions(nextPickupOptions);
+      setStoreMediaItems(sortStoreMedia(mediaResult.data ?? []));
+      setInitialStoreMediaItems(sortStoreMedia(mediaResult.data ?? []));
       setReadinessItems(
         readinessResult.error
           ? []
@@ -316,8 +444,17 @@ export function StoreAdmin() {
     () =>
       JSON.stringify(form) !== JSON.stringify(initialForm) ||
       JSON.stringify(normalizePickupOptionDrafts(pickupOptions)) !==
-        JSON.stringify(normalizePickupOptionDrafts(initialPickupOptions)),
-    [form, initialForm, initialPickupOptions, pickupOptions],
+        JSON.stringify(normalizePickupOptionDrafts(initialPickupOptions)) ||
+      JSON.stringify(toMediaDirtySignature(storeMediaItems)) !==
+        JSON.stringify(toMediaDirtySignature(initialStoreMediaItems)),
+    [
+      form,
+      initialForm,
+      initialPickupOptions,
+      initialStoreMediaItems,
+      pickupOptions,
+      storeMediaItems,
+    ],
   );
 
   const openUnsavedNavigationDialog = useCallback((nextUrl: string) => {
@@ -333,6 +470,476 @@ export function StoreAdmin() {
     setSaveState("idle");
     setSaveMessage(null);
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function reloadStoreMedia() {
+    if (!seller) return;
+
+    const result = await loadStoreMediaItems();
+
+    if (result.ok) {
+      setStoreMediaItems(result.mediaItems);
+      return;
+    }
+
+    setMediaError(result.message);
+  }
+
+  async function loadStoreMediaItems(): Promise<
+    | { ok: true; mediaItems: StoreMediaItem[] }
+    | { ok: false; message: string }
+  > {
+    if (!seller) {
+      return { ok: true, mediaItems: [] };
+    }
+
+    const { data, error } = await supabase
+      .from("seller_media_management")
+      .select(STORE_MEDIA_SELECT)
+      .eq("store_id", seller.store_id)
+      .eq("entity_type", "store")
+      .eq("entity_id", seller.store_id)
+      .in("display_context", ["logo", "hero", "gallery"])
+      .eq("visibility_status", "active")
+      .eq("asset_status", "active")
+      .eq("moderation_status", "approved")
+      .order("is_featured", { ascending: false })
+      .order("sort_order", { ascending: true })
+      .returns<StoreMediaItem[]>();
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+
+    return { ok: true, mediaItems: sortStoreMedia(data ?? []) };
+  }
+
+  async function uploadStoreMedia(role: StoreMediaRole, files: FileList | null) {
+    if (!seller || !files || files.length === 0) return;
+
+    const file = files[0];
+    const validationError = validateStoreMediaFile(file);
+
+    setMediaError(null);
+
+    if (validationError) {
+      setMediaError(validationError);
+      return;
+    }
+
+    if (role === "hero") {
+      const previewUrl = URL.createObjectURL(file);
+      const draftMedia: StoreMediaItem = {
+        media_asset_id: `draft-asset-${crypto.randomUUID()}`,
+        media_link_id: `draft-link-${crypto.randomUUID()}`,
+        store_id: seller.store_id,
+        entity_type: "store",
+        entity_id: seller.store_id,
+        display_context: "hero",
+        public_url: previewUrl,
+        alt_text: `${form.store_name || seller.store_name} farm photo`,
+        caption: null,
+        sort_order: 0,
+        is_featured: true,
+        crop_metadata: null,
+        moderation_status: "approved",
+        asset_status: "active",
+        visibility_status: "active",
+        original_filename: file.name,
+        content_type: file.type,
+        file_size_bytes: file.size,
+        width_px: null,
+        height_px: null,
+        hero_layout: getStoreMediaByRole(storeMediaItems, "hero")?.hero_layout ?? "full",
+        draft_file: file,
+        draft_status: "new",
+        preview_url: previewUrl,
+      };
+      const draftWithCrop = {
+        ...draftMedia,
+        crop_metadata: buildHeroInitialCrop(draftMedia),
+      };
+
+      setSaveState("idle");
+      setSaveMessage(null);
+      setStoreMediaItems((current) =>
+        sortStoreMedia([
+          ...current.filter((item) => item.display_context !== "hero"),
+          draftWithCrop,
+        ]),
+      );
+      return;
+    }
+
+    setIsMediaUploading(role);
+
+    const { data: sessionData, error: sessionError } =
+      await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (sessionError || !accessToken) {
+      setMediaError("Please sign in again and try uploading the photo.");
+      setIsMediaUploading(null);
+      return;
+    }
+
+    const displayContext = role === "about" ? "gallery" : role;
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("store_id", seller.store_id);
+    formData.append("entity_type", "store");
+    formData.append("entity_id", seller.store_id);
+    formData.append("display_context", displayContext);
+    formData.append("sort_order", "0");
+    formData.append("is_featured", String(role !== "about"));
+    formData.append(
+      "alt_text",
+      role === "logo"
+        ? `${form.store_name || seller.store_name} logo`
+        : `${form.store_name || seller.store_name} farm photo`,
+    );
+
+    const { data, error: uploadError } =
+      await supabase.functions.invoke<UploadResponse>("seller-media-upload", {
+        body: formData,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+    if (uploadError || data?.error || !data?.media) {
+      setMediaError(
+        data?.error?.message || uploadError?.message || "Photo upload failed.",
+      );
+      setIsMediaUploading(null);
+      return;
+    }
+
+    const uploadedMedia = data.media as StoreMediaItem;
+
+    setStoreMediaItems((current) =>
+      sortStoreMedia([
+        ...current.filter((item) =>
+          role === "about"
+            ? item.display_context !== "gallery"
+            : item.display_context !== role,
+        ),
+        uploadedMedia,
+      ]),
+    );
+    setIsMediaUploading(null);
+    void reloadStoreMedia();
+  }
+
+  async function selectHeroLibraryImage(image: HeroLibraryImage) {
+    if (!seller) return;
+
+    setMediaError(null);
+    setSaveState("idle");
+    setSaveMessage(null);
+
+    const currentHero = getStoreMediaByRole(storeMediaItems, "hero");
+    const draftMedia: StoreMediaItem = {
+      media_asset_id: `draft-asset-${crypto.randomUUID()}`,
+      media_link_id: `draft-link-${crypto.randomUUID()}`,
+      store_id: seller?.store_id ?? "",
+      entity_type: "store",
+      entity_id: seller?.store_id ?? "",
+      display_context: "hero",
+      public_url: image.path,
+      alt_text: `${form.store_name || seller?.store_name || "Store"} farm hero image`,
+      caption: null,
+      sort_order: 0,
+      is_featured: true,
+      crop_metadata: null,
+      moderation_status: "approved",
+      asset_status: "active",
+      visibility_status: "active",
+      original_filename: image.path.split("/").at(-1) ?? null,
+      content_type: "image/png",
+      file_size_bytes: 0,
+      width_px: null,
+      height_px: null,
+      source_type: "storefront_hero_library",
+      source_image_url: image.path,
+      hero_layout: currentHero?.hero_layout ?? "full",
+      draft_status: "new",
+    };
+    const draftWithCrop = {
+      ...draftMedia,
+      crop_metadata: buildHeroInitialCrop(draftMedia),
+    };
+
+    setStoreMediaItems((current) =>
+      sortStoreMedia([
+        ...current.filter((item) => item.display_context !== "hero"),
+        draftWithCrop,
+      ]),
+    );
+  }
+
+  async function removeStoreMedia(item: StoreMediaItem | null) {
+    if (!item) return;
+
+    setMediaError(null);
+
+    if (item.display_context === "hero") {
+      setSaveState("idle");
+      setSaveMessage(null);
+      setStoreMediaItems((current) =>
+        sortStoreMedia(
+          current.map((media) =>
+            media.media_link_id === item.media_link_id
+              ? { ...media, draft_status: "remove" }
+              : media,
+          ),
+        ),
+      );
+      return;
+    }
+
+    const { error } = await supabase.rpc("seller_archive_media_link", {
+      p_media_link_id: item.media_link_id,
+    });
+
+    if (error) {
+      setMediaError("The photo was not removed. Please try again.");
+      return;
+    }
+
+    setStoreMediaItems((current) =>
+      current.filter((media) => media.media_link_id !== item.media_link_id),
+    );
+    void reloadStoreMedia();
+  }
+
+  function saveHeroCrop(crop: PhotoCropMetadata | null) {
+    const hero = getStoreMediaByRole(storeMediaItems, "hero");
+
+    if (!hero) return;
+
+    setSaveState("idle");
+    setSaveMessage(null);
+    setStoreMediaItems((current) =>
+      current.map((item) =>
+        item.media_link_id === hero.media_link_id
+          ? { ...item, crop_metadata: crop }
+          : item,
+      ),
+    );
+  }
+
+  function saveHeroLayout(layout: HeroLayout) {
+    const hero = getStoreMediaByRole(storeMediaItems, "hero");
+
+    if (!hero) return;
+
+    setSaveState("idle");
+    setSaveMessage(null);
+    setStoreMediaItems((current) =>
+      current.map((item) =>
+        item.media_link_id === hero.media_link_id
+          ? { ...item, hero_layout: layout }
+          : item,
+      ),
+    );
+  }
+
+  async function saveStoreMediaChanges(): Promise<
+    | { ok: true; mediaItems: StoreMediaItem[] }
+    | { ok: false; message: string }
+  > {
+    const initialHero = getStoreMediaByRole(initialStoreMediaItems, "hero");
+    const currentHero = findStoreMediaByContext(storeMediaItems, "hero");
+
+    if (currentHero?.draft_status === "remove") {
+      if (initialHero) {
+        const { error } = await supabase.rpc("seller_archive_media_link", {
+          p_media_link_id: initialHero.media_link_id,
+        });
+
+        if (error) {
+          return {
+            ok: false,
+            message: "The hero image was not removed. Please try again.",
+          };
+        }
+      }
+    } else if (currentHero?.draft_status === "new") {
+      const savedHero = currentHero.draft_file
+        ? await uploadDraftHeroMedia(currentHero)
+        : await selectDraftHeroLibraryImage(currentHero);
+
+      if (!savedHero.ok) return savedHero;
+
+      const cropResult = await persistHeroCrop(
+        savedHero.media.media_link_id,
+        currentHero.crop_metadata ?? buildHeroInitialCrop(currentHero),
+      );
+
+      if (!cropResult.ok) return cropResult;
+
+      const layoutResult = await persistHeroLayout(
+        savedHero.media.media_link_id,
+        normalizeHeroLayout(currentHero.hero_layout),
+      );
+
+      if (!layoutResult.ok) return layoutResult;
+    } else if (currentHero && initialHero) {
+      if (
+        JSON.stringify(normalizeCrop(currentHero.crop_metadata)) !==
+        JSON.stringify(normalizeCrop(initialHero.crop_metadata))
+      ) {
+        const cropResult = await persistHeroCrop(
+          currentHero.media_link_id,
+          currentHero.crop_metadata ?? null,
+        );
+
+        if (!cropResult.ok) return cropResult;
+      }
+
+      if (
+        normalizeHeroLayout(currentHero.hero_layout) !==
+        normalizeHeroLayout(initialHero.hero_layout)
+      ) {
+        const layoutResult = await persistHeroLayout(
+          currentHero.media_link_id,
+          normalizeHeroLayout(currentHero.hero_layout),
+        );
+
+        if (!layoutResult.ok) return layoutResult;
+      }
+    }
+
+    const refreshedMedia = await loadStoreMediaItems();
+
+    if (!refreshedMedia.ok) return refreshedMedia;
+
+    return { ok: true, mediaItems: refreshedMedia.mediaItems };
+  }
+
+  async function uploadDraftHeroMedia(media: StoreMediaItem): Promise<
+    | { ok: true; media: StoreMediaItem }
+    | { ok: false; message: string }
+  > {
+    if (!seller || !media.draft_file) {
+      return { ok: false, message: "The hero image was not ready to upload." };
+    }
+
+    const { data: sessionData, error: sessionError } =
+      await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (sessionError || !accessToken) {
+      return {
+        ok: false,
+        message: "Please sign in again and try uploading the photo.",
+      };
+    }
+
+    const formData = new FormData();
+    formData.append("file", media.draft_file);
+    formData.append("store_id", seller.store_id);
+    formData.append("entity_type", "store");
+    formData.append("entity_id", seller.store_id);
+    formData.append("display_context", "hero");
+    formData.append("sort_order", "0");
+    formData.append("is_featured", "true");
+    formData.append(
+      "alt_text",
+      media.alt_text ?? `${form.store_name || seller.store_name} farm photo`,
+    );
+
+    const { data, error } =
+      await supabase.functions.invoke<UploadResponse>("seller-media-upload", {
+        body: formData,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+    if (error || data?.error || !data?.media) {
+      return {
+        ok: false,
+        message: data?.error?.message || error?.message || "Photo upload failed.",
+      };
+    }
+
+    return { ok: true, media: data.media as StoreMediaItem };
+  }
+
+  async function selectDraftHeroLibraryImage(media: StoreMediaItem): Promise<
+    | { ok: true; media: StoreMediaItem }
+    | { ok: false; message: string }
+  > {
+    if (!seller || !media.source_image_url) {
+      return { ok: false, message: "The stock hero image was not ready to save." };
+    }
+
+    const { data, error } = await supabase.rpc("seller_select_store_hero_library", {
+      p_store_id: seller.store_id,
+      p_source_image_url: media.source_image_url,
+      p_alt_text:
+        media.alt_text ?? `${form.store_name || seller.store_name} farm hero image`,
+    });
+
+    if (error) {
+      return {
+        ok: false,
+        message: "The stock hero image was not saved. Please try again.",
+      };
+    }
+
+    const selected = Array.isArray(data)
+      ? (data[0] as StoreMediaItem | undefined)
+      : (data as StoreMediaItem | null);
+
+    if (!selected) {
+      return {
+        ok: false,
+        message: "The stock hero image was not saved. Please try again.",
+      };
+    }
+
+    return { ok: true, media: selected };
+  }
+
+  async function persistHeroCrop(
+    mediaLinkId: string,
+    crop: PhotoCropMetadata | null,
+  ): Promise<{ ok: true } | { ok: false; message: string }> {
+    const { error } = await supabase.rpc("seller_update_media_crop", {
+      p_crop_metadata: crop,
+      p_media_link_id: mediaLinkId,
+    });
+
+    if (error) {
+      return {
+        ok: false,
+        message: "The hero image position was not saved. Please try again.",
+      };
+    }
+
+    return { ok: true };
+  }
+
+  async function persistHeroLayout(
+    mediaLinkId: string,
+    layout: HeroLayout,
+  ): Promise<{ ok: true } | { ok: false; message: string }> {
+    const { error } = await supabase.rpc("seller_update_store_hero_layout", {
+      p_hero_layout: layout,
+      p_media_link_id: mediaLinkId,
+    });
+
+    if (error) {
+      return {
+        ok: false,
+        message: "The hero image layout was not saved. Please try again.",
+      };
+    }
+
+    return { ok: true };
   }
 
   function addCustomPolicy() {
@@ -745,6 +1352,7 @@ export function StoreAdmin() {
   function discardChanges() {
     setForm(initialForm);
     setPickupOptions(initialPickupOptions);
+    setStoreMediaItems(initialStoreMediaItems);
     pendingPickupOptionFocusId.current = null;
     setSaveState("idle");
     setSaveMessage("Changes discarded.");
@@ -909,6 +1517,15 @@ export function StoreAdmin() {
       return;
     }
 
+    const mediaSaveResult = await saveStoreMediaChanges();
+
+    if (!mediaSaveResult.ok) {
+      setIsSaving(false);
+      setSaveState("error");
+      setSaveMessage(mediaSaveResult.message);
+      return;
+    }
+
     const savedForm = {
       ...form,
       store_name: form.store_name.trim(),
@@ -950,6 +1567,8 @@ export function StoreAdmin() {
     setInitialForm(savedForm);
     setPickupOptions(sortedOptions);
     setInitialPickupOptions(sortedOptions);
+    setStoreMediaItems(mediaSaveResult.mediaItems);
+    setInitialStoreMediaItems(mediaSaveResult.mediaItems);
     setIsSaving(false);
     setSaveState("saved");
     setSaveMessage("Store Admin saved.");
@@ -1272,14 +1891,21 @@ export function StoreAdmin() {
             ) : null}
 
             {activeTab === "photos" ? (
-              <SettingsSection
-                description="Store-level photo controls are not wired into Store Admin yet. Existing logo, hero, and gallery media stay preserved."
-                title="Photos"
-              >
-                <div className="rounded-lg border border-dashed border-stone-300 bg-stone-50 px-4 py-6 text-sm font-medium leading-6 text-stone-600">
-                  No Store Admin photo fields exist in this screen yet.
-                </div>
-              </SettingsSection>
+              <PhotosTab
+                aboutPhoto={getStoreMediaByRole(storeMediaItems, "about")}
+                heroImage={getStoreMediaByRole(storeMediaItems, "hero")}
+                isUploading={isMediaUploading}
+                logo={getStoreMediaByRole(storeMediaItems, "logo")}
+                mediaError={mediaError}
+                onRemove={removeStoreMedia}
+                onSaveHeroCrop={(crop) => void saveHeroCrop(crop)}
+                onSaveHeroLayout={(layout) => void saveHeroLayout(layout)}
+                onSelectHeroLibrary={(image) => void selectHeroLibraryImage(image)}
+                onUpload={(role, files) => void uploadStoreMedia(role, files)}
+                storeName={form.store_name || "Your farm"}
+                tagline={form.store_tagline}
+                aboutText={form.about_text}
+              />
             ) : null}
 
             {activeTab === "what-you-sell" ? (
@@ -1616,6 +2242,760 @@ function StoreSetupTabs({
       })}
     </div>
   );
+}
+
+function PhotosTab({
+  aboutPhoto,
+  aboutText,
+  heroImage,
+  isUploading,
+  logo,
+  mediaError,
+  onRemove,
+  onSaveHeroCrop,
+  onSaveHeroLayout,
+  onSelectHeroLibrary,
+  onUpload,
+  storeName,
+  tagline,
+}: {
+  aboutPhoto: StoreMediaItem | null;
+  aboutText: string;
+  heroImage: StoreMediaItem | null;
+  isUploading: StoreMediaRole | null;
+  logo: StoreMediaItem | null;
+  mediaError: string | null;
+  onRemove: (item: StoreMediaItem | null) => void;
+  onSaveHeroCrop: (crop: PhotoCropMetadata | null) => void;
+  onSaveHeroLayout: (layout: HeroLayout) => void;
+  onSelectHeroLibrary: (image: HeroLibraryImage) => void;
+  onUpload: (role: StoreMediaRole, files: FileList | null) => void;
+  storeName: string;
+  tagline: string;
+}) {
+  return (
+    <div className="grid gap-3">
+      <div>
+        <h2 className="text-xl font-semibold text-stone-950">Photos</h2>
+        <p className="mt-1 text-sm leading-5 text-stone-600">
+          Add or update photos that represent your farm and brand. These appear
+          on your storefront.
+        </p>
+      </div>
+
+      {mediaError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
+          {mediaError}
+        </div>
+      ) : null}
+
+      <LogoPhotoSection
+        isUploading={isUploading === "logo"}
+        logo={logo}
+        onRemove={() => onRemove(logo)}
+        onUpload={(files) => onUpload("logo", files)}
+      />
+
+      <HeroPhotoSection
+        key={heroImage?.media_link_id ?? "default-hero"}
+        heroImage={heroImage}
+        isUploading={isUploading === "hero"}
+        onRemove={() => onRemove(heroImage)}
+        onSaveCrop={onSaveHeroCrop}
+        onSaveLayout={onSaveHeroLayout}
+        onSelectLibrary={onSelectHeroLibrary}
+        onUpload={(files) => onUpload("hero", files)}
+        storeName={storeName}
+        tagline={tagline}
+        aboutText={aboutText}
+      />
+
+      <AboutPhotoSection
+        aboutPhoto={aboutPhoto}
+        isUploading={isUploading === "about"}
+        onRemove={() => onRemove(aboutPhoto)}
+        onUpload={(files) => onUpload("about", files)}
+      />
+
+      <p className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm leading-5 text-stone-700">
+        Logo and About photos are optional. Your storefront always has a hero
+        image: use one from the library or upload your own.
+      </p>
+    </div>
+  );
+}
+
+function LogoPhotoSection({
+  isUploading,
+  logo,
+  onRemove,
+  onUpload,
+}: {
+  isUploading: boolean;
+  logo: StoreMediaItem | null;
+  onRemove: () => void;
+  onUpload: (files: FileList | null) => void;
+}) {
+  return (
+    <section className="rounded-lg border border-stone-200 bg-white p-3">
+      <div>
+        <h3 className="text-base font-semibold text-stone-950">Store logo</h3>
+        <p className="mt-1 text-sm leading-5 text-stone-600">
+          Your logo appears in the top left of your storefront.
+        </p>
+      </div>
+      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex size-28 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-stone-50">
+          {logo ? (
+            <Image
+              alt={logo.alt_text || "Store logo"}
+              className="h-full w-full object-contain"
+              height={128}
+              src={toStoreAdminImageUrl(logo.public_url)}
+              unoptimized
+              width={128}
+            />
+          ) : (
+            <Image alt="" height={48} src="/branding/logo-no-words.png" width={48} />
+          )}
+        </div>
+        <div className="grid gap-2 sm:min-w-56">
+          <UploadButton
+            isUploading={isUploading}
+            label="Upload new logo"
+            onUpload={onUpload}
+          />
+          {logo ? (
+            <button
+              className="seller-secondary-button border-red-200 text-red-700 hover:bg-red-50"
+              type="button"
+              onClick={onRemove}
+            >
+              Remove logo
+            </button>
+          ) : null}
+          <p className="text-xs font-medium leading-4 text-stone-500">
+            Recommended: square image, JPG or PNG, at least 512x512.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+type HeroLayout = "full" | "right";
+
+function HeroPhotoSection({
+  aboutText,
+  heroImage,
+  isUploading,
+  onRemove,
+  onSaveCrop,
+  onSaveLayout,
+  onSelectLibrary,
+  onUpload,
+  storeName,
+  tagline,
+}: {
+  aboutText: string;
+  heroImage: StoreMediaItem | null;
+  isUploading: boolean;
+  onRemove: () => void;
+  onSaveCrop: (crop: PhotoCropMetadata | null) => void;
+  onSaveLayout: (layout: HeroLayout) => void;
+  onSelectLibrary: (image: HeroLibraryImage) => void;
+  onUpload: (files: FileList | null) => void;
+  storeName: string;
+  tagline: string;
+}) {
+  const [layout, setLayout] = useState<HeroLayout>(
+    normalizeHeroLayout(heroImage?.hero_layout),
+  );
+  const [draftCrop, setDraftCrop] = useState<PhotoCropMetadata>(
+    buildHeroInitialCrop(heroImage),
+  );
+  const dragStartRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  function updateDraftCrop(updates: Partial<PhotoCropMetadata>) {
+    const nextCrop = { ...draftCrop, ...updates };
+    setDraftCrop(nextCrop);
+    return nextCrop;
+  }
+
+  function commitCrop(crop = draftCrop) {
+    if (heroImage) onSaveCrop(crop);
+  }
+
+  function chooseLayout(nextLayout: HeroLayout) {
+    setLayout(nextLayout);
+    if (heroImage) onSaveLayout(nextLayout);
+  }
+
+  function beginDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (!heroImage) return;
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragStartRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      x: draftCrop.x,
+      y: draftCrop.y,
+    };
+  }
+
+  function moveImage(event: React.PointerEvent<HTMLDivElement>) {
+    const start = dragStartRef.current;
+
+    if (!start || start.pointerId !== event.pointerId) return;
+
+    setDraftCrop({
+      x: Math.round(
+        start.x +
+          (event.clientX - start.startX) / storefrontHeroFrame.setupPreviewScale,
+      ),
+      y: Math.round(
+        start.y +
+          (event.clientY - start.startY) / storefrontHeroFrame.setupPreviewScale,
+      ),
+      aspect: draftCrop.aspect,
+      zoom: draftCrop.zoom,
+      rotation: draftCrop.rotation,
+    });
+  }
+
+  function endDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (dragStartRef.current?.pointerId === event.pointerId) {
+      dragStartRef.current = null;
+      commitCrop();
+    }
+  }
+
+  const defaultLibraryImage = heroLibraryImages[0];
+  const imageUrl = heroImage
+    ? toStoreAdminMediaImageUrl(heroImage)
+    : defaultLibraryImage.path;
+  const selectedLibraryPath =
+    heroImage?.source_type === "storefront_hero_library"
+      ? heroImage.source_image_url ?? heroImage.public_url
+      : null;
+
+  return (
+    <section className="rounded-lg border border-stone-200 bg-white p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-base font-semibold text-stone-950">Hero image</h3>
+        <span className="rounded-full bg-stone-950 px-2 py-0.5 text-xs font-semibold text-white">
+          Required
+        </span>
+      </div>
+      <p className="mt-1 text-sm leading-5 text-stone-600">
+        This wide image appears at the top of your storefront behind your title
+        and intro text.
+      </p>
+      <div className="mt-3">
+        <TipsPanel
+          tone="blue"
+          title="Hero image tips"
+          tips={[
+            "Text appears on the left side of your storefront hero.",
+            "Wide landscape photos work better than close-ups.",
+            "Choose from the library or upload your own.",
+          ]}
+        />
+      </div>
+
+      <div className="mt-3 grid gap-3">
+        <div className="grid gap-2">
+          <div>
+            <p className="text-sm font-semibold text-stone-800">Hero layout</p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {heroLayoutOptions.map((option) => (
+                <button
+                  className={`rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 ${
+                    layout === option.value
+                      ? "border-emerald-700 bg-emerald-50 text-emerald-950"
+                      : "border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+                  }`}
+                  key={option.value}
+                  type="button"
+                  onClick={() => chooseLayout(option.value)}
+                >
+                  <span className="block text-sm font-semibold">
+                    {option.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div
+            className={storefrontHeroFrame.setupPreviewClass}
+            onPointerCancel={endDrag}
+            onPointerDown={beginDrag}
+            onPointerMove={moveImage}
+            onPointerUp={endDrag}
+          >
+            <div
+              className="absolute left-0 top-0 h-[calc(100%/var(--hero-preview-scale))] w-[calc(100%/var(--hero-preview-scale))] origin-top-left scale-[var(--hero-preview-scale)]"
+              style={
+                {
+                  "--hero-preview-scale": storefrontHeroFrame.setupPreviewScale,
+                } as CSSProperties
+              }
+            >
+              {layout === "right" ? (
+                <Image
+                  alt=""
+                  aria-hidden="true"
+                  className="h-full w-full scale-110 select-none object-cover blur-2xl saturate-110"
+                  draggable={false}
+                  fill
+                  sizes="(max-width: 1280px) 100vw, 760px"
+                  src={imageUrl}
+                  style={{
+                    filter: "blur(26px) brightness(0.62) saturate(1.12)",
+                  }}
+                  unoptimized
+                />
+              ) : null}
+              <Image
+                alt={heroImage?.alt_text || "Storefront hero preview"}
+                className="h-full w-full select-none object-contain object-center"
+                draggable={false}
+                fill
+                sizes="(max-width: 1280px) 100vw, 760px"
+                src={imageUrl}
+                style={{
+                  ...(heroImage ? getCropImageStyle(draftCrop) : {}),
+                  transformOrigin: "center center",
+                  ...(layout === "right"
+                    ? {
+                        WebkitMaskImage:
+                          "linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.2) 18%, black 34%, black 100%)",
+                        maskImage:
+                          "linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.2) 18%, black 34%, black 100%)",
+                      }
+                    : {}),
+                }}
+                unoptimized
+              />
+              <HeroFade layout={layout} />
+              <div
+                className={`relative z-10 flex h-full max-w-md flex-col justify-center gap-6 p-5 sm:p-7 ${
+                  layout === "right" ? "text-white" : "text-stone-950"
+                }`}
+              >
+                <div>
+                  <p
+                    className={cx(
+                      storefrontHeroTypography.eyebrow,
+                      layout === "right" && "text-white",
+                    )}
+                  >
+                    Local farm storefront
+                  </p>
+                  <h4
+                    className={cx(
+                      storefrontHeroTypography.title,
+                      layout === "right" && "text-white",
+                    )}
+                  >
+                    {tagline || storeName}
+                  </h4>
+                  <p
+                    className={cx(
+                      storefrontHeroTypography.body,
+                      layout === "right" && "text-white",
+                    )}
+                  >
+                    {previewStoreText(aboutText)}
+                  </p>
+                </div>
+                <span className={storefrontButtonClass({ className: "w-fit" })}>
+                  View available birds
+                </span>
+              </div>
+            </div>
+            {heroImage ? (
+              <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full bg-stone-950/70 px-3 py-1 text-xs font-semibold text-white">
+                Drag to reposition
+              </div>
+            ) : null}
+          </div>
+
+          <div className="grid gap-2">
+            <div className="grid gap-2">
+              <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                Zoom
+                <input
+                  className="accent-emerald-800"
+                  disabled={!heroImage}
+                  max="3"
+                  min="0.5"
+                  step="0.05"
+                  type="range"
+                  value={draftCrop.zoom}
+                  onChange={(event) =>
+                    updateDraftCrop({ zoom: Number(event.target.value) })
+                  }
+                  onKeyUp={() => commitCrop()}
+                  onPointerUp={() => commitCrop()}
+                />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <UploadButton
+                  isUploading={isUploading}
+                  label="Upload new image"
+                  onUpload={onUpload}
+                />
+                <LibraryMenu
+                  isBusy={isUploading}
+                  selectedPath={selectedLibraryPath}
+                  onSelect={onSelectLibrary}
+                />
+                {heroImage ? (
+                  <>
+                    <button
+                      className="seller-secondary-button"
+                      type="button"
+                      onClick={() => {
+                        const resetCrop = buildHeroDefaultCrop(heroImage);
+                        setDraftCrop(resetCrop);
+                        onSaveCrop(resetCrop);
+                      }}
+                    >
+                      Reset
+                    </button>
+                    <button
+                      className="seller-secondary-button border-red-200 text-red-700 hover:bg-red-50"
+                      type="button"
+                      onClick={onRemove}
+                    >
+                      Remove image
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  );
+}
+
+function LibraryMenu({
+  isBusy,
+  onSelect,
+  selectedPath,
+}: {
+  isBusy: boolean;
+  onSelect: (image: HeroLibraryImage) => void;
+  selectedPath: string | null;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const titleId = useId();
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsOpen(false);
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [isOpen]);
+
+  return (
+    <>
+      <button
+        className="seller-secondary-button flex items-center justify-center gap-2"
+        disabled={isBusy}
+        type="button"
+        onClick={() => setIsOpen(true)}
+      >
+        <Image alt="" height={16} src="/glyphs/farmhouse.png" width={16} />
+        Choose a stock photo
+      </button>
+
+      {isOpen ? (
+        <div
+          aria-labelledby={titleId}
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 p-4"
+          role="dialog"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setIsOpen(false);
+          }}
+        >
+          <div className="grid max-h-[min(44rem,calc(100vh-2rem))] w-full max-w-5xl overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-stone-200 px-5 py-4">
+              <div>
+                <h4
+                  className="text-base font-semibold text-stone-950"
+                  id={titleId}
+                >
+                  Choose a stock photo
+                </h4>
+                <p className="mt-1 text-sm text-stone-600">
+                  Pick a hero image for your storefront preview.
+                </p>
+              </div>
+              <button
+                className="seller-secondary-button px-3"
+                type="button"
+                onClick={() => setIsOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="grid gap-3 overflow-auto p-4 sm:grid-cols-2 lg:grid-cols-3">
+              {heroLibraryImages.map((image) => {
+                const isSelected = selectedPath === image.path;
+
+                return (
+                  <button
+                    aria-label={`Choose ${image.label}`}
+                    className={`rounded-lg border p-2 transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 ${
+                      isSelected
+                        ? "border-emerald-700 bg-emerald-50"
+                        : "border-stone-200 bg-white"
+                    }`}
+                    disabled={isBusy}
+                    key={image.path}
+                    type="button"
+                    onClick={() => {
+                      onSelect(image);
+                      setIsOpen(false);
+                    }}
+                  >
+                    <span className="relative block aspect-[7/3] w-full overflow-hidden rounded-md bg-stone-100">
+                      <Image
+                        alt=""
+                        className="object-cover"
+                        fill
+                        sizes="(max-width: 1024px) 50vw, 300px"
+                        src={image.path}
+                      />
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function AboutPhotoSection({
+  aboutPhoto,
+  isUploading,
+  onRemove,
+  onUpload,
+}: {
+  aboutPhoto: StoreMediaItem | null;
+  isUploading: boolean;
+  onRemove: () => void;
+  onUpload: (files: FileList | null) => void;
+}) {
+  return (
+    <section className="rounded-lg border border-stone-200 bg-white p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-base font-semibold text-stone-950">About photo</h3>
+        <OptionalBadge />
+      </div>
+      <p className="mt-1 text-sm leading-5 text-stone-600">
+        Shown with your farm story on the About section of your storefront.
+      </p>
+
+      <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_15rem]">
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="relative aspect-[16/9] w-full overflow-hidden rounded-lg border border-stone-200 bg-stone-50 sm:max-w-[24rem]">
+            {aboutPhoto ? (
+              <Image
+                alt={aboutPhoto.alt_text || "About photo"}
+                className="h-full w-full object-cover"
+                fill
+                sizes="416px"
+              src={toStoreAdminMediaImageUrl(aboutPhoto)}
+                unoptimized
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm font-semibold text-stone-500">
+                No about photo yet
+              </div>
+            )}
+          </div>
+
+          <div className="grid h-fit gap-2 sm:min-w-56">
+            <UploadButton
+              isUploading={isUploading}
+              label="Upload new photo"
+              onUpload={onUpload}
+            />
+            {aboutPhoto ? (
+              <button
+                className="seller-secondary-button border-red-200 text-red-700 hover:bg-red-50"
+                type="button"
+                onClick={onRemove}
+              >
+                Remove photo
+              </button>
+            ) : null}
+            <p className="text-xs font-medium leading-4 text-stone-500">
+              Recommended: landscape image, JPG or PNG, at least 1200px wide.
+            </p>
+          </div>
+        </div>
+
+        <TipsPanel
+          tone="amber"
+          title="About photo tips"
+          tips={[
+            "Use a medium image, not a banner.",
+            "Great for you, your family, your flock, coop, chicks, or farm details.",
+            "This appears alongside your farm story.",
+          ]}
+        />
+      </div>
+    </section>
+  );
+}
+
+function UploadButton({
+  isUploading,
+  label,
+  onUpload,
+}: {
+  isUploading: boolean;
+  label: string;
+  onUpload: (files: FileList | null) => void;
+}) {
+  const inputId = useIdForUpload(label);
+
+  return (
+    <label
+      className={`seller-secondary-button inline-flex cursor-pointer items-center justify-center gap-2 ${
+        isUploading ? "pointer-events-none opacity-70" : ""
+      }`}
+      htmlFor={inputId}
+    >
+      <Image alt="" height={16} src="/glyphs/camera.png" width={16} />
+      {isUploading ? "Uploading..." : label}
+      <input
+        accept="image/jpeg,image/png,image/webp"
+        className="sr-only"
+        id={inputId}
+        type="file"
+        onChange={(event) => {
+          onUpload(event.target.files);
+          event.target.value = "";
+        }}
+      />
+    </label>
+  );
+}
+
+function OptionalBadge() {
+  return (
+    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-100">
+      Optional
+    </span>
+  );
+}
+
+function TipsPanel({
+  tips,
+  title,
+  tone,
+}: {
+  tips: string[];
+  title: string;
+  tone: "amber" | "blue";
+}) {
+  const toneClass =
+    tone === "blue"
+      ? "border-blue-100 bg-blue-50/70 text-blue-950"
+      : "border-amber-100 bg-amber-50/60 text-amber-950";
+
+  return (
+    <aside className={`rounded-lg border p-3 ${toneClass}`}>
+      <h4 className="text-sm font-semibold">{title}</h4>
+      <ul className="mt-2 grid gap-1.5 text-sm font-medium leading-[1.2]">
+        {tips.map((tip) => (
+          <li className="flex gap-2" key={tip}>
+            <span aria-hidden="true" className="mt-1.5 size-1.5 shrink-0 rounded-full bg-current" />
+            <span>{tip}</span>
+          </li>
+        ))}
+      </ul>
+    </aside>
+  );
+}
+
+function HeroFade({ layout }: { layout: HeroLayout }) {
+  if (layout === "full") return null;
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(90deg,rgba(28,25,23,0.46)_0%,rgba(28,25,23,0.34)_36%,rgba(28,25,23,0.04)_72%)]" />
+  );
+}
+
+function normalizeHeroLayout(value: string | null | undefined): HeroLayout {
+  return value === "right" ? "right" : "full";
+}
+
+function buildHeroInitialCrop(media: StoreMediaItem | null | undefined) {
+  if (media?.crop_metadata) return normalizeCrop(media.crop_metadata);
+
+  return buildHeroDefaultCrop(media);
+}
+
+function buildHeroDefaultCrop(media: StoreMediaItem | null | undefined) {
+  return {
+    ...normalizeCrop(null),
+    aspect: storefrontHeroFrame.aspectRatio,
+    zoom: getHeroCoverZoom(media),
+  };
+}
+
+function getHeroCoverZoom(media: StoreMediaItem | null | undefined) {
+  const fallbackZoom = 1.35;
+  const width = media?.width_px ?? 0;
+  const height = media?.height_px ?? 0;
+
+  if (width <= 0 || height <= 0) return fallbackZoom;
+
+  const imageRatio = width / height;
+  const frameRatio = storefrontHeroFrame.aspectRatio;
+  const zoom = Math.max(1, imageRatio / frameRatio, frameRatio / imageRatio);
+
+  return Math.round(zoom * 100) / 100;
+}
+
+function previewStoreText(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) return "Healthy birds from our family farm to yours.";
+
+  return trimmed.length > 92 ? `${trimmed.slice(0, 89).trim()}...` : trimmed;
+}
+
+function useIdForUpload(label: string) {
+  const id = useId();
+  return `${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${id}`;
 }
 
 function PoliciesTab({
@@ -2835,6 +4215,111 @@ function normalizeCustomPoliciesForSave(policies: CustomPolicyDraft[]) {
     }))
     .filter((policy) => policy.title || policy.body)
     .slice(0, 4);
+}
+
+function getStoreMediaByRole(
+  items: StoreMediaItem[],
+  role: StoreMediaRole,
+): StoreMediaItem | null {
+  const context = role === "about" ? "gallery" : role;
+
+  return (
+    sortStoreMedia(items).find(
+      (item) =>
+        item.display_context === context &&
+        item.draft_status !== "remove" &&
+        item.visibility_status === "active" &&
+        item.asset_status === "active" &&
+        item.moderation_status === "approved",
+    ) ?? null
+  );
+}
+
+function findStoreMediaByContext(
+  items: StoreMediaItem[],
+  context: "hero" | "logo" | "gallery",
+) {
+  return (
+    sortStoreMedia(items).find((item) => item.display_context === context) ??
+    null
+  );
+}
+
+function toMediaDirtySignature(items: StoreMediaItem[]) {
+  return sortStoreMedia(items).map((item) => ({
+    context: item.display_context,
+    crop: item.crop_metadata ?? null,
+    draftStatus: item.draft_status ?? null,
+    filename: item.draft_file?.name ?? item.original_filename ?? null,
+    heroLayout: item.hero_layout ?? null,
+    id: item.media_link_id,
+    publicUrl: item.preview_url ?? item.public_url,
+    sourceImageUrl: item.source_image_url ?? null,
+    sourceType: item.source_type ?? null,
+  }));
+}
+
+function sortStoreMedia(items: StoreMediaItem[]) {
+  return [...items].sort((first, second) => {
+    const contextCompare = mediaContextWeight(first.display_context) - mediaContextWeight(second.display_context);
+
+    if (contextCompare !== 0) return contextCompare;
+
+    if (first.is_featured !== second.is_featured) {
+      return first.is_featured ? -1 : 1;
+    }
+
+    const firstSort = first.sort_order ?? 0;
+    const secondSort = second.sort_order ?? 0;
+
+    if (firstSort !== secondSort) return firstSort - secondSort;
+
+    return first.media_link_id.localeCompare(second.media_link_id);
+  });
+}
+
+function mediaContextWeight(context: string) {
+  if (context === "logo") return 0;
+  if (context === "hero") return 1;
+  if (context === "gallery") return 2;
+  return 3;
+}
+
+function validateStoreMediaFile(file: File) {
+  if (!acceptedStoreImageTypes.includes(file.type)) {
+    return "Use a JPG, PNG, or WebP photo.";
+  }
+
+  if (file.size <= 0 || file.size > maxStoreImageSizeBytes) {
+    return "Use a photo under 8 MB.";
+  }
+
+  return null;
+}
+
+function toStoreAdminImageUrl(publicUrl: string) {
+  if (publicUrl.startsWith("http")) return publicUrl;
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+  if (publicUrl.startsWith("/") && supabaseUrl) {
+    return `${supabaseUrl}${publicUrl}`;
+  }
+
+  return publicUrl;
+}
+
+function toStoreAdminMediaImageUrl(media: StoreMediaItem) {
+  if (media.preview_url) return media.preview_url;
+
+  if (
+    media.source_type === "storefront_hero_library" &&
+    media.source_image_url
+  ) {
+    return media.source_image_url;
+  }
+
+  return toStoreAdminImageUrl(media.public_url);
 }
 
 function buildLaunchSummary(

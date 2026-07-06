@@ -1,12 +1,14 @@
 import { House, MapPin } from "lucide-react";
+import Image from "next/image";
 import {
   EmptyStorefront,
-  HeroImage,
-  StorefrontButton,
-  StorefrontEyebrow,
   StorefrontShell,
   formatCurrency,
   formatLocation,
+  storefrontButtonClass,
+  storefrontHeroFrame,
+  storefrontHeroTypography,
+  toPublicImageUrl,
 } from "./storefront-ui";
 import {
   StorefrontListingCard,
@@ -18,6 +20,7 @@ import {
   StorefrontEquipmentItem,
   StorefrontInventoryItem,
   StorefrontProcessedPoultryItem,
+  StorefrontHeroCropMetadata,
   groupInventoryByProduct,
   loadStorefrontEquipment,
   loadStorefrontHome,
@@ -29,6 +32,8 @@ import {
   StorefrontChrome,
   getStorefrontCategoryAvailability,
 } from "./storefront-shell-components";
+
+type StorefrontHeroLayout = "full" | "right";
 
 export default async function StorefrontHomePage({
   params,
@@ -111,32 +116,51 @@ export default async function StorefrontHomePage({
     livePoultryCount: livePoultryProducts.length,
     processedPoultryCount: processedPoultry.length,
   });
+  const heroLayout = store.hero_image_layout === "right" ? "right" : "full";
+  const heroIsLeftFade = heroLayout === "right";
 
   return (
     <StorefrontChrome categories={categories} store={store}>
       <main className="mx-auto grid max-w-[70rem] gap-8 px-5 py-7 sm:px-7 lg:gap-9">
-        <section className="relative overflow-hidden rounded-2xl border border-[#ded7c8] bg-white lg:min-h-[30rem]">
-          <div className="lg:absolute lg:inset-y-0 lg:left-[34%] lg:right-0">
-            <HeroImage
-              alt={store.hero_image_alt_text || `${store.store_name} farm photo`}
-              src={store.hero_image_url}
-            />
-          </div>
-          <div className="pointer-events-none hidden lg:absolute lg:inset-0 lg:block lg:bg-[linear-gradient(90deg,#ffffff_0%,#ffffff_34%,rgba(255,255,255,0.88)_45%,rgba(255,255,255,0)_68%)]" />
-          <div className="relative z-10 flex min-h-[19rem] max-w-[31rem] flex-col justify-center gap-6 p-6 sm:p-9 lg:min-h-[27rem] lg:p-10">
+        <section className={storefrontHeroFrame.publicClass}>
+          <HeroBackdrop
+            alt={store.hero_image_alt_text || `${store.store_name} farm photo`}
+            crop={store.hero_crop_metadata}
+            layout={heroLayout}
+            src={store.hero_image_url}
+          />
+          <div
+            className={`relative z-10 flex min-h-[19rem] max-w-[31rem] flex-col justify-center gap-6 p-6 sm:p-9 lg:min-h-[27rem] lg:p-10 ${
+              heroIsLeftFade ? "text-white" : "text-stone-950"
+            }`}
+          >
             <div>
-              <StorefrontEyebrow>Local farm storefront</StorefrontEyebrow>
-              <h1 className="mt-3 font-serif text-4xl font-semibold leading-[1.08] text-stone-950 sm:text-5xl">
+              <p
+                className={`${storefrontHeroTypography.eyebrow} ${
+                  heroIsLeftFade ? "text-white" : ""
+                }`}
+              >
+                Local farm storefront
+              </p>
+              <h1
+                className={`${storefrontHeroTypography.title} ${
+                  heroIsLeftFade ? "text-white" : ""
+                }`}
+              >
                 {heroTitle}
               </h1>
-              <p className="mt-5 text-base leading-7 text-stone-700">
+              <p
+                className={`${storefrontHeroTypography.body} ${
+                  heroIsLeftFade ? "text-white" : ""
+                }`}
+              >
                 {aboutPreview}
               </p>
             </div>
             <div>
-              <StorefrontButton href="#shop-listings">
+              <a className={storefrontButtonClass()} href="#shop-listings">
                 Shop Live Poultry
-              </StorefrontButton>
+              </a>
             </div>
           </div>
         </section>
@@ -169,6 +193,100 @@ export default async function StorefrontHomePage({
       </main>
     </StorefrontChrome>
   );
+}
+
+function HeroBackdrop({
+  alt,
+  crop,
+  layout,
+  src,
+}: {
+  alt: string;
+  crop: StorefrontHeroCropMetadata | null;
+  layout: StorefrontHeroLayout;
+  src: string | null;
+}) {
+  if (!src) {
+    return (
+      <div className="absolute inset-0 overflow-hidden bg-[linear-gradient(135deg,#f6ead8_0%,#d9e6cf_45%,#8fae72_100%)]">
+        <div className="absolute inset-x-0 bottom-0 h-28 bg-[linear-gradient(180deg,transparent,#5e7d3d)] opacity-45" />
+        <div className="absolute bottom-0 left-[46%] h-24 w-44 rounded-t-lg bg-[#8d3f20] shadow-[22px_-42px_0_-18px_#7d341c,140px_-34px_0_-14px_#f4dfbf]" />
+        <div className="absolute bottom-0 right-[8%] h-32 w-20 rounded-t-full bg-[#d8c9aa] shadow-[-34px_4px_0_-8px_#c6b796]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_24%_20%,rgba(255,255,255,0.7),transparent_26%),linear-gradient(90deg,rgba(255,255,255,0.72)_0%,rgba(255,255,255,0.22)_38%,rgba(255,255,255,0)_66%)]" />
+      </div>
+    );
+  }
+
+  const cropStyle = getHeroCropStyle(crop);
+  const imageUrl = toPublicImageUrl(src);
+
+  if (layout === "right") {
+    return (
+      <>
+        <Image
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl saturate-110"
+          fill
+          priority
+          sizes="(max-width: 1024px) 100vw, 70rem"
+          src={imageUrl}
+          style={{ filter: "blur(26px) brightness(0.62) saturate(1.12)" }}
+          unoptimized
+        />
+        <Image
+          alt={alt}
+          className={`absolute inset-0 h-full w-full object-center ${
+            crop ? "object-contain" : "object-cover"
+          }`}
+          fill
+          priority
+          sizes="(max-width: 1024px) 100vw, 70rem"
+          src={imageUrl}
+          style={{
+            ...cropStyle,
+            WebkitMaskImage:
+              "linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.2) 18%, black 34%, black 100%)",
+            maskImage:
+              "linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.2) 18%, black 34%, black 100%)",
+          }}
+          unoptimized
+        />
+        <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(90deg,rgba(28,25,23,0.46)_0%,rgba(28,25,23,0.34)_36%,rgba(28,25,23,0.04)_72%)]" />
+      </>
+    );
+  }
+
+  return (
+    <Image
+      alt={alt}
+      className={`absolute inset-0 h-full w-full object-center ${
+        crop ? "object-contain" : "object-cover"
+      }`}
+      fill
+      priority
+      sizes="(max-width: 1024px) 100vw, 70rem"
+      src={imageUrl}
+      style={cropStyle}
+      unoptimized
+    />
+  );
+}
+
+function getHeroCropStyle(crop: StorefrontHeroCropMetadata | null) {
+  if (!crop) return undefined;
+
+  const zoom = Number.isFinite(crop.zoom) && crop.zoom > 0 ? crop.zoom : 1;
+  const x = Number.isFinite(crop.x) ? Math.round(crop.x) : 0;
+  const y = Number.isFinite(crop.y) ? Math.round(crop.y) : 0;
+  const rotation = [0, 90, 180, 270].includes(crop.rotation)
+    ? crop.rotation
+    : 0;
+
+  return {
+    transform: `translate(${x}px, ${y}px) scale(${zoom}) rotate(${rotation}deg)`,
+    transformOrigin: "center center",
+  };
 }
 
 function buildListingSections({
