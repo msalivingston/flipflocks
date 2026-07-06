@@ -39,11 +39,18 @@ type StoreAdminForm = {
   pickup_policy: string;
   cancellation_policy: string;
   other_policies: string;
+  custom_policies: CustomPolicyDraft[];
   order_notification_email: string;
   storefront_enabled: boolean;
   hatching_eggs_enabled: boolean;
   equipment_supplies_enabled: boolean;
   processed_poultry_enabled: boolean;
+};
+
+type CustomPolicyDraft = {
+  id: string;
+  title: string;
+  body: string;
 };
 
 type StoreDefaults = {
@@ -167,6 +174,7 @@ const blankForm: StoreAdminForm = {
   pickup_policy: "",
   cancellation_policy: "",
   other_policies: "",
+  custom_policies: [],
   order_notification_email: "",
   storefront_enabled: false,
   hatching_eggs_enabled: false,
@@ -207,6 +215,17 @@ export function StoreAdmin() {
     string | null
   >(null);
   const [pickupOptionDragPreview, setPickupOptionDragPreview] = useState<{
+    label: string;
+    width: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  const customPolicyRowRefs = useRef(new Map<string, HTMLElement>());
+  const customPolicyDragChangedRef = useRef(false);
+  const [draggingCustomPolicyId, setDraggingCustomPolicyId] = useState<
+    string | null
+  >(null);
+  const [customPolicyDragPreview, setCustomPolicyDragPreview] = useState<{
     label: string;
     width: number;
     x: number;
@@ -314,6 +333,152 @@ export function StoreAdmin() {
     setSaveState("idle");
     setSaveMessage(null);
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function addCustomPolicy() {
+    if (form.custom_policies.length >= 4) return;
+
+    updateField("custom_policies", [
+      ...form.custom_policies,
+      {
+        id: `custom-policy-${crypto.randomUUID()}`,
+        title: "",
+        body: "",
+      },
+    ]);
+  }
+
+  function updateCustomPolicy(
+    policyId: string,
+    updates: Partial<CustomPolicyDraft>,
+  ) {
+    updateField(
+      "custom_policies",
+      form.custom_policies.map((policy) =>
+        policy.id === policyId ? { ...policy, ...updates } : policy,
+      ),
+    );
+  }
+
+  function removeCustomPolicy(policyId: string) {
+    updateField(
+      "custom_policies",
+      form.custom_policies.filter((policy) => policy.id !== policyId),
+    );
+  }
+
+  function reorderCustomPolicyToTarget(policyId: string, targetId: string) {
+    setSaveState("idle");
+    setSaveMessage(null);
+    setForm((current) => {
+      const fromIndex = current.custom_policies.findIndex(
+        (policy) => policy.id === policyId,
+      );
+      const toIndex = current.custom_policies.findIndex(
+        (policy) => policy.id === targetId,
+      );
+
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+        return current;
+      }
+
+      const nextPolicies = [...current.custom_policies];
+      const [movedPolicy] = nextPolicies.splice(fromIndex, 1);
+      nextPolicies.splice(toIndex, 0, movedPolicy);
+
+      return {
+        ...current,
+        custom_policies: nextPolicies,
+      };
+    });
+  }
+
+  function beginCustomPolicyDrag(
+    policyId: string,
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) {
+    const row = customPolicyRowRefs.current.get(policyId);
+    const rect = row?.getBoundingClientRect();
+    const policy = form.custom_policies.find((item) => item.id === policyId);
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    customPolicyDragChangedRef.current = false;
+    setCustomPolicyDragPreview({
+      label: policy?.title.trim() || "Custom policy",
+      width: Math.min(rect?.width ?? 300, 560),
+      x: event.clientX + 12,
+      y: event.clientY + 12,
+    });
+    setDraggingCustomPolicyId(policyId);
+  }
+
+  function moveCustomPolicyDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    if (!draggingCustomPolicyId) return;
+
+    setCustomPolicyDragPreview((current) =>
+      current
+        ? {
+            ...current,
+            x: event.clientX + 12,
+            y: event.clientY + 12,
+          }
+        : current,
+    );
+
+    const targetId = findCustomPolicyIdAtPoint(event.clientX, event.clientY);
+
+    if (!targetId || targetId === draggingCustomPolicyId) return;
+
+    customPolicyDragChangedRef.current = true;
+    reorderCustomPolicyToTarget(draggingCustomPolicyId, targetId);
+  }
+
+  function endCustomPolicyDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    if (!draggingCustomPolicyId) return;
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    if (customPolicyDragChangedRef.current) {
+      setSaveState("idle");
+      setSaveMessage(null);
+    }
+
+    customPolicyDragChangedRef.current = false;
+    setCustomPolicyDragPreview(null);
+    setDraggingCustomPolicyId(null);
+  }
+
+  function findCustomPolicyIdAtPoint(clientX: number, clientY: number) {
+    for (const policy of form.custom_policies) {
+      const row = customPolicyRowRefs.current.get(policy.id);
+      if (!row) continue;
+
+      const rect = row.getBoundingClientRect();
+
+      if (
+        clientX >= rect.left &&
+        clientX <= rect.right &&
+        clientY >= rect.top &&
+        clientY <= rect.bottom
+      ) {
+        return policy.id;
+      }
+    }
+
+    return null;
+  }
+
+  function registerCustomPolicyRow(
+    policyId: string,
+    element: HTMLElement | null,
+  ) {
+    if (element) {
+      customPolicyRowRefs.current.set(policyId, element);
+    } else {
+      customPolicyRowRefs.current.delete(policyId);
+    }
   }
 
   function updateModulePreference(
@@ -625,6 +790,9 @@ export function StoreAdmin() {
 
     const idMap = new Map<string, string>();
     const persistedOptions: PickupOptionDraft[] = [];
+    const normalizedCustomPolicies = normalizeCustomPoliciesForSave(
+      form.custom_policies,
+    );
 
     for (const option of normalizePickupOptionsForSave(pickupOptions)) {
       const normalizedOption = {
@@ -701,6 +869,7 @@ export function StoreAdmin() {
       pickup_policy: form.pickup_policy,
       cancellation_policy: form.cancellation_policy,
       other_policies: form.other_policies,
+      custom_policies: normalizedCustomPolicies,
       storefront_enabled: form.storefront_enabled,
       hatching_eggs_enabled: form.hatching_eggs_enabled,
       equipment_supplies_enabled: form.equipment_supplies_enabled,
@@ -760,6 +929,10 @@ export function StoreAdmin() {
       pickup_policy: form.pickup_policy.trim(),
       cancellation_policy: form.cancellation_policy.trim(),
       other_policies: form.other_policies.trim(),
+      custom_policies: normalizedCustomPolicies.map((policy) => ({
+        id: `custom-policy-${crypto.randomUUID()}`,
+        ...policy,
+      })),
       order_notification_email: form.order_notification_email
         .trim()
         .toLowerCase(),
@@ -1339,26 +1512,22 @@ export function StoreAdmin() {
             ) : null}
 
             {activeTab === "policies" ? (
-            <SettingsSection
-              description="Public policy text reused on storefront and listing pages."
-              title="Policies"
-            >
-              <TextAreaField
-                label="Pickup policy"
-                onChange={(value) => updateField("pickup_policy", value)}
-                value={form.pickup_policy}
+              <PoliciesTab
+                customPolicyDragPreview={customPolicyDragPreview}
+                customPolicies={form.custom_policies}
+                draggingCustomPolicyId={draggingCustomPolicyId}
+                onAddCustomPolicy={addCustomPolicy}
+                onBeginCustomPolicyDrag={beginCustomPolicyDrag}
+                onEndCustomPolicyDrag={endCustomPolicyDrag}
+                onMoveCustomPolicyDrag={moveCustomPolicyDrag}
+                onPickupPolicyChange={(value) =>
+                  updateField("pickup_policy", value)
+                }
+                onRegisterCustomPolicyRow={registerCustomPolicyRow}
+                onRemoveCustomPolicy={removeCustomPolicy}
+                onUpdateCustomPolicy={updateCustomPolicy}
+                pickupPolicy={form.pickup_policy}
               />
-              <TextAreaField
-                label="Cancellation policy"
-                onChange={(value) => updateField("cancellation_policy", value)}
-                value={form.cancellation_policy}
-              />
-              <TextAreaField
-                label="Other policies"
-                onChange={(value) => updateField("other_policies", value)}
-                value={form.other_policies}
-              />
-            </SettingsSection>
             ) : null}
 
             {activeTab === "preview" ? (
@@ -1445,6 +1614,243 @@ function StoreSetupTabs({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function PoliciesTab({
+  customPolicyDragPreview,
+  customPolicies,
+  draggingCustomPolicyId,
+  onAddCustomPolicy,
+  onBeginCustomPolicyDrag,
+  onEndCustomPolicyDrag,
+  onMoveCustomPolicyDrag,
+  onPickupPolicyChange,
+  onRegisterCustomPolicyRow,
+  onRemoveCustomPolicy,
+  onUpdateCustomPolicy,
+  pickupPolicy,
+}: {
+  customPolicyDragPreview: {
+    label: string;
+    width: number;
+    x: number;
+    y: number;
+  } | null;
+  customPolicies: CustomPolicyDraft[];
+  draggingCustomPolicyId: string | null;
+  onAddCustomPolicy: () => void;
+  onBeginCustomPolicyDrag: (
+    policyId: string,
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) => void;
+  onEndCustomPolicyDrag: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onMoveCustomPolicyDrag: (
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) => void;
+  onPickupPolicyChange: (value: string) => void;
+  onRegisterCustomPolicyRow: (
+    policyId: string,
+    element: HTMLElement | null,
+  ) => void;
+  onRemoveCustomPolicy: (policyId: string) => void;
+  onUpdateCustomPolicy: (
+    policyId: string,
+    updates: Partial<CustomPolicyDraft>,
+  ) => void;
+  pickupPolicy: string;
+}) {
+  const canAddPolicy = customPolicies.length < 4;
+
+  return (
+    <div className="grid gap-6">
+      <section className="grid gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-stone-950">Policies</h2>
+          <p className="mt-1 text-sm leading-6 text-stone-600">
+            These appear on your storefront to help buyers understand pickup
+            expectations and any other important terms.
+          </p>
+        </div>
+        <div className="rounded-lg border border-emerald-100 bg-emerald-50/25 p-4">
+          <div className="flex items-start gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-stone-100 ring-1 ring-stone-200">
+              <Image
+                alt=""
+                className="object-contain"
+                height={24}
+                src="/glyphs/truck.png"
+                width={24}
+              />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-base font-semibold text-stone-950">
+                Pickup policy
+              </h3>
+              <p className="mt-1 text-sm leading-6 text-stone-600">
+                Explain pickup expectations, timing, and what buyers should
+                bring.
+              </p>
+              <div className="mt-4">
+                <TextAreaField
+                  compact
+                  helper="Examples: Pickup is at our farm in Hotchkiss, CO. Bring a clean carrier or box. Please arrive on time."
+                  label="Pickup policy"
+                  onChange={onPickupPolicyChange}
+                  rows={4}
+                  value={pickupPolicy}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 border-t border-stone-200 pt-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-stone-950">
+              Custom policies
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-stone-600">
+              Add up to 4 extra policy sections if your farm has specific terms
+              buyers should know.
+            </p>
+            <p className="mt-2 text-xs font-medium leading-5 text-stone-500">
+              Examples: Cancellation policy, Deposit policy, Minimum order
+              policy, Health policy, Biosecurity policy, Livestock guarantee.
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+            <span className="text-sm font-semibold text-stone-600">
+              {customPolicies.length} of 4 added
+            </span>
+            <button
+              className="seller-small-button w-full sm:w-auto"
+              disabled={!canAddPolicy}
+              onClick={onAddCustomPolicy}
+              type="button"
+            >
+              + Add custom policy
+            </button>
+          </div>
+        </div>
+
+        {customPolicies.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-stone-300 bg-stone-50 px-4 py-4 text-sm leading-6 text-stone-600">
+            No custom policies yet.
+          </p>
+        ) : (
+          <div className="grid overflow-hidden rounded-lg border border-stone-200 bg-white">
+            {customPolicies.map((policy) => (
+              <CustomPolicyCard
+                isDragging={draggingCustomPolicyId === policy.id}
+                key={policy.id}
+                onBeginDrag={(event) => onBeginCustomPolicyDrag(policy.id, event)}
+                onChange={(updates) => onUpdateCustomPolicy(policy.id, updates)}
+                onEndDrag={onEndCustomPolicyDrag}
+                onMoveDrag={onMoveCustomPolicyDrag}
+                onRemove={() => onRemoveCustomPolicy(policy.id)}
+                policy={policy}
+                rowRef={(element) => onRegisterCustomPolicyRow(policy.id, element)}
+              />
+            ))}
+          </div>
+        )}
+
+        {customPolicies.length > 0 && canAddPolicy ? (
+          <button
+            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-dashed border-stone-300 bg-white px-4 text-sm font-semibold text-emerald-900 transition hover:border-emerald-200 hover:bg-emerald-50/30"
+            onClick={onAddCustomPolicy}
+            type="button"
+          >
+            + Add another custom policy (up to 4 total)
+          </button>
+        ) : null}
+
+        {!canAddPolicy ? (
+          <p className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-medium leading-5 text-stone-600">
+            You can add up to 4 custom policies for now.
+          </p>
+        ) : null}
+      </section>
+
+      <p className="rounded-lg border border-stone-200 bg-stone-50/80 px-3 py-3 text-sm leading-6 text-stone-700">
+        Clear, upfront policies help build trust and prevent
+        misunderstandings.
+      </p>
+      {customPolicyDragPreview ? (
+        <SortableRowDragPreview preview={customPolicyDragPreview} />
+      ) : null}
+    </div>
+  );
+}
+
+function CustomPolicyCard({
+  isDragging,
+  onBeginDrag,
+  onChange,
+  onEndDrag,
+  onMoveDrag,
+  onRemove,
+  policy,
+  rowRef,
+}: {
+  isDragging: boolean;
+  onBeginDrag: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onChange: (updates: Partial<CustomPolicyDraft>) => void;
+  onEndDrag: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onMoveDrag: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onRemove: () => void;
+  policy: CustomPolicyDraft;
+  rowRef: (element: HTMLDivElement | null) => void;
+}) {
+  return (
+    <div
+      className={`border-b border-stone-200 px-3 py-3 transition last:border-b-0 ${
+        isDragging ? "bg-emerald-50/40" : "bg-white"
+      }`}
+      ref={rowRef}
+    >
+      <div className="grid gap-3 md:grid-cols-[2.25rem_minmax(12rem,0.42fr)_minmax(0,1fr)_auto] md:items-start">
+        <button
+          aria-label="Drag to reorder custom policy"
+          className="mt-6 inline-flex size-9 touch-none cursor-grab items-center justify-center rounded-md text-lg font-semibold leading-none text-stone-400 transition hover:bg-stone-50 hover:text-stone-600 active:cursor-grabbing active:bg-emerald-50 active:text-emerald-800"
+          onPointerCancel={onEndDrag}
+          onPointerDown={onBeginDrag}
+          onPointerMove={onMoveDrag}
+          onPointerUp={onEndDrag}
+          type="button"
+        >
+          ⋮⋮
+        </button>
+        <label className="grid gap-1 text-sm font-semibold text-stone-700">
+          Policy title
+          <input
+            className="seller-form-field min-h-10"
+            onChange={(event) => onChange({ title: event.target.value })}
+            placeholder="Cancellation policy"
+            value={policy.title}
+          />
+        </label>
+        <label className="grid gap-1 text-sm font-semibold text-stone-700">
+          Policy text
+          <textarea
+            className="seller-form-field min-h-16 resize-y py-3"
+            onChange={(event) => onChange({ body: event.target.value })}
+            rows={2}
+            value={policy.body}
+          />
+        </label>
+        <button
+          className="mt-6 inline-flex min-h-10 items-center justify-center rounded-md border border-red-100 bg-white px-3 text-sm font-semibold text-red-700 transition hover:bg-red-50"
+          onClick={onRemove}
+          type="button"
+        >
+          Remove
+        </button>
+      </div>
     </div>
   );
 }
@@ -1704,12 +2110,12 @@ function ManualPickupChoiceBuilder({
           ))}
         </div>
       )}
-      {dragPreview ? <PickupChoiceDragPreview preview={dragPreview} /> : null}
+      {dragPreview ? <SortableRowDragPreview preview={dragPreview} /> : null}
     </div>
   );
 }
 
-function PickupChoiceDragPreview({
+function SortableRowDragPreview({
   preview,
 }: {
   preview: {
@@ -2367,6 +2773,7 @@ function buildInitialForm(
     pickup_policy: seller.pickup_policy ?? "",
     cancellation_policy: seller.cancellation_policy ?? "",
     other_policies: seller.other_policies ?? "",
+    custom_policies: toCustomPolicyDrafts(seller.custom_policies),
     order_notification_email:
       defaults?.order_notification_email ?? seller.order_notification_email ?? "",
     storefront_enabled: Boolean(seller.storefront_enabled),
@@ -2395,6 +2802,39 @@ function normalizePickupOptionDrafts(options: PickupOptionDraft[]) {
     is_active: option.is_active,
     isNew: option.isNew ?? false,
   }));
+}
+
+function toCustomPolicyDrafts(value: unknown): CustomPolicyDraft[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((policy) => {
+      if (!policy || typeof policy !== "object") return null;
+
+      const record = policy as Record<string, unknown>;
+      const title = typeof record.title === "string" ? record.title : "";
+      const body = typeof record.body === "string" ? record.body : "";
+
+      if (!title.trim() && !body.trim()) return null;
+
+      return {
+        id: `custom-policy-${crypto.randomUUID()}`,
+        title,
+        body,
+      };
+    })
+    .filter((policy): policy is CustomPolicyDraft => Boolean(policy))
+    .slice(0, 4);
+}
+
+function normalizeCustomPoliciesForSave(policies: CustomPolicyDraft[]) {
+  return policies
+    .map((policy) => ({
+      title: policy.title.trim(),
+      body: policy.body.trim(),
+    }))
+    .filter((policy) => policy.title || policy.body)
+    .slice(0, 4);
 }
 
 function buildLaunchSummary(
@@ -2498,6 +2938,19 @@ function validateForm(form: StoreAdminForm, pickupOptions: PickupOptionDraft[]) 
   for (const option of pickupOptions) {
     if (option.is_active && !option.isNew && !option.label.trim()) {
       return "Each visible pickup choice needs a label.";
+    }
+  }
+
+  for (const policy of form.custom_policies) {
+    const hasTitle = Boolean(policy.title.trim());
+    const hasBody = Boolean(policy.body.trim());
+
+    if (hasTitle && !hasBody) {
+      return "Each custom policy with a title needs policy text.";
+    }
+
+    if (hasBody && !hasTitle) {
+      return "Each custom policy with text needs a title.";
     }
   }
 

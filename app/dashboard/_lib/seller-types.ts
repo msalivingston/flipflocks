@@ -17,6 +17,7 @@ export type SellerContext = {
   pickup_policy: string | null;
   cancellation_policy: string | null;
   other_policies: string | null;
+  custom_policies: StoreCustomPolicy[] | null;
   pickup_instructions: string | null;
   public_email: string | null;
   public_phone: string | null;
@@ -40,6 +41,11 @@ export type SellerContext = {
   launched_at: string | null;
   role: string | null;
   is_admin: boolean;
+};
+
+export type StoreCustomPolicy = {
+  title: string;
+  body: string;
 };
 
 export type SellerDashboardHome = {
