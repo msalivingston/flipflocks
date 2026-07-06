@@ -12,6 +12,7 @@ export type StorefrontHome = {
   pickup_policy: string | null;
   cancellation_policy: string | null;
   pickup_instructions: string | null;
+  pickup_method: "notes" | "manual_options" | string | null;
   public_email: string | null;
   public_phone: string | null;
   website_url: string | null;
@@ -28,6 +29,15 @@ export type StorefrontHome = {
   total_quantity_available: number;
   next_available_date: string | null;
   has_public_inventory: boolean;
+};
+
+export type StorefrontPickupOption = {
+  store_id: string;
+  store_slug: string;
+  pickup_option_id: string;
+  label: string;
+  description: string | null;
+  sort_order: number;
 };
 
 export type StorefrontInventoryItem = {
@@ -235,6 +245,20 @@ export async function loadStorefrontProcessedPoultryItem(
 
   return {
     data: data as StorefrontProcessedPoultryItem | null,
+    error,
+  };
+}
+
+export async function loadStorefrontPickupOptions(slug: string) {
+  const { data, error } = await publicSupabase
+    .from("public_storefront_pickup_options")
+    .select("*")
+    .eq("store_slug", slug)
+    .order("sort_order", { ascending: true })
+    .order("label", { ascending: true });
+
+  return {
+    data: (data ?? []) as StorefrontPickupOption[],
     error,
   };
 }

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getPlanCapabilities,
   type LockedPlanFeature,
@@ -32,6 +32,7 @@ type StoreAdminForm = {
   public_phone: string;
   show_public_phone: boolean;
   communication_email: string;
+  pickup_method: "notes" | "manual_options";
   pickup_location_text: string;
   pickup_instructions: string;
   default_pickup_option_id: string;
@@ -47,6 +48,7 @@ type StoreAdminForm = {
 
 type StoreDefaults = {
   store_id: string;
+  pickup_method: "notes" | "manual_options" | null;
   pickup_instructions: string | null;
   pickup_location_text: string | null;
   default_pickup_option_id: string | null;
@@ -158,6 +160,7 @@ const blankForm: StoreAdminForm = {
   public_phone: "",
   show_public_phone: false,
   communication_email: "",
+  pickup_method: "notes",
   pickup_location_text: "",
   pickup_instructions: "",
   default_pickup_option_id: "",
@@ -197,6 +200,18 @@ export function StoreAdmin() {
   const [activeTab, setActiveTab] = useState<StoreSetupTab>("storefront");
   const [moduleDisableDialog, setModuleDisableDialog] =
     useState<ModuleDisableDialogState | null>(null);
+  const pendingPickupOptionFocusId = useRef<string | null>(null);
+  const pickupOptionRowRefs = useRef(new Map<string, HTMLElement>());
+  const pickupOptionDragChangedRef = useRef(false);
+  const [draggingPickupOptionId, setDraggingPickupOptionId] = useState<
+    string | null
+  >(null);
+  const [pickupOptionDragPreview, setPickupOptionDragPreview] = useState<{
+    label: string;
+    width: number;
+    x: number;
+    y: number;
+  } | null>(null);
   const [pendingNavigationUrl, setPendingNavigationUrl] = useState<
     string | null
   >(null);
@@ -217,7 +232,7 @@ export function StoreAdmin() {
           supabase
             .from("seller_store_defaults")
             .select(
-              "store_id, pickup_instructions, pickup_location_text, default_pickup_option_id, default_pickup_option_label, communication_email, order_notification_email, currency",
+              "store_id, pickup_method, pickup_instructions, pickup_location_text, default_pickup_option_id, default_pickup_option_label, communication_email, order_notification_email, currency",
             )
             .eq("store_id", seller.store_id)
             .maybeSingle()
@@ -288,7 +303,7 @@ export function StoreAdmin() {
 
   const openUnsavedNavigationDialog = useCallback((nextUrl: string) => {
     setPendingNavigationUrl(nextUrl);
-  }, []);
+  }, [setPendingNavigationUrl]);
 
   useUnsavedWarning(hasUnsavedChanges, openUnsavedNavigationDialog);
 
@@ -363,25 +378,209 @@ export function StoreAdmin() {
     );
   }
 
+  function sortPickupOptions(options: PickupOptionDraft[]) {
+    return [...options].sort(
+      (first, second) =>
+        (first.sort_order ?? 0) - (second.sort_order ?? 0) ||
+        first.label.localeCompare(second.label),
+    );
+  }
+
+  function getVisiblePickupOptions(options: PickupOptionDraft[]) {
+    return sortPickupOptions(options).filter((option) => option.is_active);
+  }
+
+  function normalizePickupOptionsForSave(options: PickupOptionDraft[]) {
+    const visibleOptions = getVisiblePickupOptions(options);
+    const visibleSortOrderById = new Map(
+      visibleOptions.map((option, index) => [option.id, index]),
+    );
+    let inactiveSortOrder = visibleOptions.length;
+
+    return sortPickupOptions(options).map((option) => {
+      if (option.is_active) {
+        return {
+          ...option,
+          sort_order: visibleSortOrderById.get(option.id) ?? option.sort_order,
+        };
+      }
+
+      const sortOrder = inactiveSortOrder;
+      inactiveSortOrder += 1;
+
+      return {
+        ...option,
+        sort_order: sortOrder,
+      };
+    });
+  }
+
+  function removePickupOption(optionId: string) {
+    setSaveState("idle");
+    setSaveMessage(null);
+    setPickupOptions((current) =>
+      current
+        .filter((option) => !(option.id === optionId && option.isNew))
+        .map((option) =>
+          option.id === optionId ? { ...option, is_active: false } : option,
+        ),
+    );
+    if (form.default_pickup_option_id === optionId) {
+      updateField("default_pickup_option_id", "");
+    }
+  }
+
+  function reorderPickupOptionToTarget(optionId: string, targetId: string) {
+    setSaveState("idle");
+    setSaveMessage(null);
+    setPickupOptions((current) => {
+      const ordered = getVisiblePickupOptions(current);
+      const fromIndex = ordered.findIndex((option) => option.id === optionId);
+      const toIndex = ordered.findIndex((option) => option.id === targetId);
+
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+        return current;
+      }
+
+      const [moved] = ordered.splice(fromIndex, 1);
+      ordered.splice(toIndex, 0, moved);
+      const sortOrderById = new Map(
+        ordered.map((option, index) => [option.id, index]),
+      );
+      const nextInactiveSortOrder = ordered.length;
+
+      return sortPickupOptions(
+        current.map((option) => ({
+          ...option,
+          sort_order: option.is_active
+            ? (sortOrderById.get(option.id) ?? option.sort_order)
+            : Math.max(option.sort_order, nextInactiveSortOrder),
+        })),
+      );
+    });
+  }
+
+  function beginPickupOptionDrag(
+    optionId: string,
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) {
+    const row = pickupOptionRowRefs.current.get(optionId);
+    const rect = row?.getBoundingClientRect();
+    const option = pickupOptions.find((item) => item.id === optionId);
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    pickupOptionDragChangedRef.current = false;
+    setPickupOptionDragPreview({
+      label: option?.label.trim() || "Pickup choice",
+      width: Math.min(rect?.width ?? 280, 520),
+      x: event.clientX + 12,
+      y: event.clientY + 12,
+    });
+    setDraggingPickupOptionId(optionId);
+  }
+
+  function movePickupOptionDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    if (!draggingPickupOptionId) return;
+
+    setPickupOptionDragPreview((current) =>
+      current
+        ? {
+            ...current,
+            x: event.clientX + 12,
+            y: event.clientY + 12,
+          }
+        : current,
+    );
+
+    const targetId = findPickupOptionIdAtPoint(event.clientX, event.clientY);
+
+    if (!targetId || targetId === draggingPickupOptionId) return;
+
+    pickupOptionDragChangedRef.current = true;
+    reorderPickupOptionToTarget(draggingPickupOptionId, targetId);
+  }
+
+  function endPickupOptionDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    if (!draggingPickupOptionId) return;
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    if (pickupOptionDragChangedRef.current) {
+      setSaveState("idle");
+      setSaveMessage(null);
+    }
+
+    pickupOptionDragChangedRef.current = false;
+    setPickupOptionDragPreview(null);
+    setDraggingPickupOptionId(null);
+  }
+
+  function findPickupOptionIdAtPoint(clientX: number, clientY: number) {
+    for (const option of getVisiblePickupOptions(pickupOptions)) {
+      const row = pickupOptionRowRefs.current.get(option.id);
+      if (!row) continue;
+
+      const rect = row.getBoundingClientRect();
+
+      if (
+        clientX >= rect.left &&
+        clientX <= rect.right &&
+        clientY >= rect.top &&
+        clientY <= rect.bottom
+      ) {
+        return option.id;
+      }
+    }
+
+    return null;
+  }
+
+  function registerPickupOptionRow(
+    optionId: string,
+    element: HTMLElement | null,
+  ) {
+    if (element) {
+      pickupOptionRowRefs.current.set(optionId, element);
+    } else {
+      pickupOptionRowRefs.current.delete(optionId);
+    }
+  }
+
   function addPickupOption() {
     const tempId = `new-${crypto.randomUUID()}`;
 
+    pendingPickupOptionFocusId.current = tempId;
+    setSaveState("idle");
+    setSaveMessage(null);
     setPickupOptions((current) => [
       ...current,
       {
         id: tempId,
         label: "",
         description: "",
-        sort_order: current.length,
+        sort_order: getVisiblePickupOptions(current).length,
         is_active: true,
         isNew: true,
       },
     ]);
   }
 
+  function handlePickupOptionInputRef(
+    optionId: string,
+    element: HTMLInputElement | null,
+  ) {
+    if (!element || pendingPickupOptionFocusId.current !== optionId) return;
+
+    element.focus();
+    pendingPickupOptionFocusId.current = null;
+  }
+
   function discardChanges() {
     setForm(initialForm);
     setPickupOptions(initialPickupOptions);
+    pendingPickupOptionFocusId.current = null;
     setSaveState("idle");
     setSaveMessage("Changes discarded.");
   }
@@ -427,7 +626,7 @@ export function StoreAdmin() {
     const idMap = new Map<string, string>();
     const persistedOptions: PickupOptionDraft[] = [];
 
-    for (const option of pickupOptions) {
+    for (const option of normalizePickupOptionsForSave(pickupOptions)) {
       const normalizedOption = {
         ...option,
         label: option.label.trim(),
@@ -509,6 +708,7 @@ export function StoreAdmin() {
     };
 
     const defaultsPayload = {
+      pickup_method: form.pickup_method,
       pickup_location_text: form.pickup_location_text,
       pickup_instructions: form.pickup_instructions,
       default_pickup_option_id: selectedDefaultId || null,
@@ -1030,108 +1230,112 @@ export function StoreAdmin() {
             ) : null}
 
             {activeTab === "pickup" ? (
-            <SettingsSection
-              description="Reusable pickup details shown in checkout and seller order workflows."
-              title="Pickup & Fulfillment"
-            >
-              <TextField
-                label="Pickup location text"
-                onChange={(value) => updateField("pickup_location_text", value)}
-                placeholder="Farm pickup in Fort Collins, CO"
-                value={form.pickup_location_text}
-              />
-              <TextAreaField
-                label="Pickup instructions"
-                onChange={(value) => updateField("pickup_instructions", value)}
-                value={form.pickup_instructions}
-              />
-              <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                Default pickup option
-                <select
-                  className="seller-form-field"
-                  value={form.default_pickup_option_id}
-                  onChange={(event) =>
-                    updateField("default_pickup_option_id", event.target.value)
-                  }
-                >
-                  <option value="">No default</option>
-                  {pickupOptions
-                    .filter((option) => option.is_active && option.label.trim())
-                    .map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label || "Untitled pickup option"}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <div className="grid gap-3">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-stone-950">
-                    Pickup options
-                  </h3>
-                  <button
-                    className="seller-small-button"
-                    onClick={addPickupOption}
-                    type="button"
-                  >
-                    Add Option
-                  </button>
-                </div>
-                {pickupOptions.length === 0 ? (
-                  <p className="rounded-lg border border-dashed border-stone-300 bg-stone-50 px-4 py-4 text-sm text-stone-600">
-                    No pickup options yet.
-                  </p>
-                ) : (
-                  <div className="grid gap-3">
-                    {pickupOptions.map((option, index) => (
-                      <div
-                        className="grid gap-3 rounded-lg border border-stone-200 bg-stone-50 p-3"
-                        key={option.id}
+              <div className="grid gap-5">
+                <PickupIntro />
+
+                <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(19rem,0.85fr)] lg:items-start">
+                  <section className="grid gap-3 border-b border-stone-200 pb-5 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-6">
+                    <div>
+                      <h2 className="text-lg font-semibold text-stone-950">
+                        Pickup method
+                      </h2>
+                      <p className="mt-1 text-sm leading-6 text-stone-600">
+                        Choose how buyers will handle pickup for their orders.
+                      </p>
+                    </div>
+                    <div className="grid gap-3">
+                      <PickupMethodRow
+                        copy="Buyers enter their preferred pickup time or date in checkout notes. Best for most sellers."
+                        glyph="/glyphs/chat.png"
+                        onSelect={() => updateField("pickup_method", "notes")}
+                        state={form.pickup_method === "notes" ? "current" : "neutral"}
+                        title="Buyer requests pickup in notes"
+                      />
+                      <PickupMethodRow
+                        copy="Let buyers choose from a short list of pickup choices, such as Farm pickup, Meet in town, or Text to schedule."
+                        glyph="/glyphs/clipboard.png"
+                        onSelect={() =>
+                          updateField("pickup_method", "manual_options")
+                        }
+                        state={
+                          form.pickup_method === "manual_options"
+                            ? "current"
+                            : "neutral"
+                        }
+                        title="Manual pickup dropdown"
                       >
-                        <div className="grid gap-3 md:grid-cols-[1fr_7rem_auto] md:items-end">
-                          <TextField
-                            label="Label"
-                            onChange={(value) =>
-                              updatePickupOption(option.id, { label: value })
+                        {form.pickup_method === "manual_options" ? (
+                          <ManualPickupChoiceBuilder
+                            dragPreview={pickupOptionDragPreview}
+                            draggingPickupOptionId={draggingPickupOptionId}
+                            getVisiblePickupOptions={getVisiblePickupOptions}
+                            handlePickupOptionInputRef={
+                              handlePickupOptionInputRef
                             }
-                            value={option.label}
-                          />
-                          <TextField
-                            label="Sort"
-                            onChange={(value) =>
-                              updatePickupOption(option.id, {
-                                sort_order: Number(value) || 0,
-                              })
+                            onAdd={addPickupOption}
+                            onBeginDrag={beginPickupOptionDrag}
+                            onEndDrag={endPickupOptionDrag}
+                            onLabelChange={(optionId, label) =>
+                              updatePickupOption(optionId, { label })
                             }
-                            type="number"
-                            value={String(option.sort_order ?? index)}
+                            onMoveDrag={movePickupOptionDrag}
+                            onRegisterRow={registerPickupOptionRow}
+                            onRemove={removePickupOption}
+                            pickupOptions={pickupOptions}
                           />
-                          <ToggleField
-                            checked={option.is_active}
-                            label="Active"
-                            onChange={(value) =>
-                              updatePickupOption(option.id, {
-                                is_active: value,
-                              })
-                            }
-                          />
-                        </div>
-                        <TextAreaField
-                          label="Description"
-                          onChange={(value) =>
-                            updatePickupOption(option.id, {
-                              description: value,
-                            })
-                          }
-                          rows={2}
-                          value={option.description}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
+                        ) : null}
+                      </PickupMethodRow>
+                      <PickupMethodRow
+                        badge="Coming soon"
+                        copy="Useful if you usually offer the same pickup times each week."
+                        glyph="/glyphs/calendar.png"
+                        isDisabled
+                        state="planned"
+                        title="Regular pickup windows"
+                      />
+                    </div>
+                  </section>
+
+                  <section className="grid gap-4">
+                    <div>
+                      <h2 className="text-lg font-semibold text-stone-950">
+                        Pickup details
+                      </h2>
+                      <p className="mt-1 text-sm leading-6 text-stone-600">
+                        Tell buyers where pickup happens and what they should
+                        know before they arrive.
+                      </p>
+                    </div>
+                    <TextAreaField
+                      compact
+                      helper="Examples: Farm pickup in Hotchkiss; pickup at the blue barn; location shared after order confirmation."
+                      label="Pickup location"
+                      onChange={(value) =>
+                        updateField("pickup_location_text", value)
+                      }
+                      placeholder="Farm pickup in Hotchkiss"
+                      rows={3}
+                      value={form.pickup_location_text}
+                    />
+                    <TextAreaField
+                      compact
+                      helper="Examples: Message before arriving; bring a box or crate for chicks; pickup by appointment only."
+                      label="Pickup instructions"
+                      onChange={(value) =>
+                        updateField("pickup_instructions", value)
+                      }
+                      rows={3}
+                      value={form.pickup_instructions}
+                    />
+                  </section>
+                </div>
+
+                <input
+                  readOnly
+                  type="hidden"
+                  value={form.default_pickup_option_id}
+                />
               </div>
-            </SettingsSection>
             ) : null}
 
             {activeTab === "policies" ? (
@@ -1264,6 +1468,343 @@ function SettingsSection({
       </div>
       <div className="grid gap-4">{children}</div>
     </section>
+  );
+}
+
+function PickupIntro() {
+  return (
+    <section className="rounded-lg border border-stone-200 bg-stone-50/70 px-3 py-2.5">
+      <div className="flex items-center gap-2.5">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-stone-200">
+          <Image
+            alt=""
+            className="object-contain"
+            height={20}
+            src="/glyphs/map-pin.png"
+            width={20}
+          />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-stone-950">
+            How should buyers handle pickup?
+          </p>
+          <p className="text-sm leading-6 text-stone-700">
+            Most sellers can start simple: buyers request a pickup time in
+            checkout notes, and you confirm the details after the order comes in.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PickupMethodRow({
+  badge,
+  children,
+  copy,
+  glyph,
+  isDisabled = false,
+  onSelect,
+  state,
+  title,
+}: {
+  badge?: string;
+  children?: React.ReactNode;
+  copy: string;
+  glyph: string;
+  isDisabled?: boolean;
+  onSelect?: () => void;
+  state: "current" | "planned" | "neutral";
+  title: string;
+}) {
+  const isCurrent = state === "current";
+  const isPlanned = state === "planned";
+
+  return (
+    <div
+      className={`overflow-hidden rounded-lg border transition ${
+        isCurrent
+          ? "border-emerald-200 bg-emerald-50/35"
+          : isPlanned
+            ? "border-stone-200 bg-stone-50/80 opacity-85"
+            : "border-stone-200 bg-white hover:border-emerald-200 hover:bg-emerald-50/20"
+      }`}
+    >
+      <button
+        aria-checked={isCurrent}
+        className={`grid w-full gap-2 px-3 py-3 text-left sm:items-center ${
+          badge
+            ? "sm:grid-cols-[minmax(0,1fr)_6.75rem]"
+            : "sm:grid-cols-[minmax(0,1fr)_2rem]"
+        }`}
+        disabled={isDisabled}
+        onClick={onSelect}
+        role="radio"
+        type="button"
+      >
+        <div className="flex min-w-0 gap-2.5">
+          <span className="pt-2">
+            <PickupMethodRadio
+              isChecked={isCurrent}
+              isDisabled={isDisabled}
+            />
+          </span>
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-stone-100 ring-1 ring-stone-200">
+            <Image
+              alt=""
+              className="object-contain"
+              height={22}
+              src={glyph}
+              width={22}
+            />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-stone-950">{title}</h3>
+            <p className="mt-0.5 text-xs leading-5 text-stone-600">{copy}</p>
+          </div>
+        </div>
+        {badge ? (
+          <div className="flex items-center justify-between gap-2 sm:justify-end">
+            <span
+              className={`inline-flex min-h-6 items-center rounded-full px-2.5 text-xs font-semibold ${
+                isCurrent
+                  ? "bg-emerald-100 text-emerald-900"
+                  : isPlanned
+                    ? "bg-stone-100 text-stone-500"
+                    : "bg-stone-100 text-stone-600"
+              }`}
+            >
+              {badge}
+            </span>
+          </div>
+        ) : null}
+      </button>
+      {children ? (
+        <div className="border-t border-emerald-100 bg-white/75 px-3 py-3">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PickupMethodRadio({
+  isChecked,
+  isDisabled,
+}: {
+  isChecked: boolean;
+  isDisabled: boolean;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-flex size-5 shrink-0 items-center justify-center rounded-full border transition ${
+        isChecked
+          ? "border-emerald-700 bg-white"
+          : isDisabled
+            ? "border-stone-300 bg-stone-100"
+            : "border-stone-300 bg-white"
+      }`}
+    >
+      {isChecked ? (
+        <span className="size-2.5 rounded-full bg-emerald-700" />
+      ) : null}
+    </span>
+  );
+}
+
+function ManualPickupChoiceBuilder({
+  dragPreview,
+  draggingPickupOptionId,
+  getVisiblePickupOptions,
+  handlePickupOptionInputRef,
+  onAdd,
+  onBeginDrag,
+  onEndDrag,
+  onLabelChange,
+  onMoveDrag,
+  onRegisterRow,
+  onRemove,
+  pickupOptions,
+}: {
+  dragPreview: {
+    label: string;
+    width: number;
+    x: number;
+    y: number;
+  } | null;
+  draggingPickupOptionId: string | null;
+  getVisiblePickupOptions: (
+    options: PickupOptionDraft[],
+  ) => PickupOptionDraft[];
+  handlePickupOptionInputRef: (
+    optionId: string,
+    element: HTMLInputElement | null,
+  ) => void;
+  onAdd: () => void;
+  onBeginDrag: (
+    optionId: string,
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) => void;
+  onEndDrag: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onLabelChange: (optionId: string, label: string) => void;
+  onMoveDrag: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onRegisterRow: (optionId: string, element: HTMLElement | null) => void;
+  onRemove: (optionId: string) => void;
+  pickupOptions: PickupOptionDraft[];
+}) {
+  const visibleOptions = getVisiblePickupOptions(pickupOptions);
+
+  return (
+    <div className="grid gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-stone-950">
+            Dropdown choices
+          </p>
+          <p className="mt-0.5 text-xs leading-5 text-stone-600">
+            Create the short choices buyers will see at checkout.
+          </p>
+        </div>
+        <button
+          className="seller-small-button w-full sm:w-auto"
+          onClick={onAdd}
+          type="button"
+        >
+          + Add new
+        </button>
+      </div>
+      <p className="text-xs font-medium leading-5 text-stone-500">
+        Examples: Tuesday, July 7 at 9am; Meet in town; Text to schedule.
+      </p>
+      {visibleOptions.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-stone-300 bg-stone-50 px-3 py-3 text-sm text-stone-600">
+          No manual pickup choices yet.
+        </p>
+      ) : (
+        <div className="grid gap-2">
+          {visibleOptions.map((option) => (
+            <PickupChoiceRow
+              inputRef={(element) =>
+                handlePickupOptionInputRef(option.id, element)
+              }
+              isDragging={draggingPickupOptionId === option.id}
+              key={option.id}
+              onDragHandlePointerCancel={onEndDrag}
+              onDragHandlePointerDown={(event) =>
+                onBeginDrag(option.id, event)
+              }
+              onDragHandlePointerMove={onMoveDrag}
+              onDragHandlePointerUp={onEndDrag}
+              onLabelChange={(label) => onLabelChange(option.id, label)}
+              onRemove={() => onRemove(option.id)}
+              option={option}
+              rowRef={(element) => onRegisterRow(option.id, element)}
+            />
+          ))}
+        </div>
+      )}
+      {dragPreview ? <PickupChoiceDragPreview preview={dragPreview} /> : null}
+    </div>
+  );
+}
+
+function PickupChoiceDragPreview({
+  preview,
+}: {
+  preview: {
+    label: string;
+    width: number;
+    x: number;
+    y: number;
+  };
+}) {
+  return (
+    <div
+      className="pointer-events-none fixed z-50 rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-stone-950 shadow-lg"
+      style={{
+        left: preview.x,
+        top: preview.y,
+        width: preview.width,
+      }}
+    >
+      {preview.label}
+    </div>
+  );
+}
+
+function PickupChoiceRow({
+  inputRef,
+  isDragging,
+  onLabelChange,
+  onDragHandlePointerCancel,
+  onDragHandlePointerDown,
+  onDragHandlePointerMove,
+  onDragHandlePointerUp,
+  onRemove,
+  option,
+  rowRef,
+}: {
+  inputRef: (element: HTMLInputElement | null) => void;
+  isDragging: boolean;
+  onLabelChange: (label: string) => void;
+  onDragHandlePointerCancel: (
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) => void;
+  onDragHandlePointerDown: (
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) => void;
+  onDragHandlePointerMove: (
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) => void;
+  onDragHandlePointerUp: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onRemove: () => void;
+  option: PickupOptionDraft;
+  rowRef: (element: HTMLDivElement | null) => void;
+}) {
+  return (
+    <div className="grid gap-1">
+      <div
+        className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border bg-white px-2.5 py-2 transition ${
+          isDragging
+            ? "border-emerald-300 bg-emerald-50/40 shadow-sm"
+            : "border-stone-200"
+        }`}
+        ref={rowRef}
+      >
+        <button
+          aria-label="Drag to reorder pickup choice"
+          className="inline-flex size-10 touch-none cursor-grab items-center justify-center rounded-md border border-stone-200 bg-stone-50 text-lg font-semibold leading-none text-stone-400 transition hover:border-stone-300 hover:bg-stone-100 active:cursor-grabbing active:border-emerald-300 active:bg-emerald-50 active:text-emerald-800"
+          onPointerCancel={onDragHandlePointerCancel}
+          onPointerDown={onDragHandlePointerDown}
+          onPointerMove={onDragHandlePointerMove}
+          onPointerUp={onDragHandlePointerUp}
+          type="button"
+        >
+          ⋮⋮
+        </button>
+        <input
+          className="min-h-10 rounded-md border border-stone-200 bg-stone-50/70 px-3 text-sm font-medium text-stone-950 outline-none transition placeholder:text-stone-400 focus:border-emerald-700 focus:bg-white focus:ring-2 focus:ring-emerald-700/15"
+          onChange={(event) => onLabelChange(event.target.value)}
+          placeholder="Tuesday, July 7 at 9am"
+          ref={inputRef}
+          value={option.label}
+        />
+        <button
+          aria-label="Remove pickup choice"
+          className="inline-flex min-h-10 items-center justify-center rounded-md border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+          onClick={onRemove}
+          type="button"
+        >
+          Remove
+        </button>
+      </div>
+      {option.label !== option.label.trim() ? (
+        <p className="px-2 text-xs font-medium text-stone-500">
+          Extra spaces will be cleaned up when you save.
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -1738,13 +2279,19 @@ function TextField({
 }
 
 function TextAreaField({
+  compact = false,
+  helper,
   label,
   onChange,
+  placeholder,
   rows = 4,
   value,
 }: {
+  compact?: boolean;
+  helper?: string;
   label: string;
   onChange: (value: string) => void;
+  placeholder?: string;
   rows?: number;
   value: string;
 }) {
@@ -1752,11 +2299,19 @@ function TextAreaField({
     <label className="grid gap-1 text-sm font-semibold text-stone-700">
       {label}
       <textarea
-        className="seller-form-field min-h-28 resize-y py-3"
+        className={`seller-form-field resize-y py-3 ${
+          compact ? "min-h-20" : "min-h-28"
+        }`}
         onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
         rows={rows}
         value={value}
       />
+      {helper ? (
+        <span className="text-xs font-medium leading-5 text-stone-500">
+          {helper}
+        </span>
+      ) : null}
     </label>
   );
 }
@@ -1803,6 +2358,8 @@ function buildInitialForm(
     public_phone: seller.public_phone ?? "",
     show_public_phone: seller.show_public_phone,
     communication_email: defaults?.communication_email ?? "",
+    pickup_method:
+      defaults?.pickup_method === "manual_options" ? "manual_options" : "notes",
     pickup_location_text: defaults?.pickup_location_text ?? "",
     pickup_instructions:
       defaults?.pickup_instructions ?? seller.pickup_instructions ?? "",
@@ -1939,8 +2496,8 @@ function validateForm(form: StoreAdminForm, pickupOptions: PickupOptionDraft[]) 
   }
 
   for (const option of pickupOptions) {
-    if (!option.isNew || option.label.trim() || option.description.trim()) {
-      if (!option.label.trim()) return "Each pickup option needs a label.";
+    if (option.is_active && !option.isNew && !option.label.trim()) {
+      return "Each visible pickup choice needs a label.";
     }
   }
 

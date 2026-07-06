@@ -11,7 +11,11 @@ import {
   readStorefrontCart,
   summarizeStorefrontCart,
 } from "../_components/storefront-cart-client";
-import { StorefrontHome } from "../storefront-data";
+import {
+  loadStorefrontPickupOptions,
+  type StorefrontHome,
+  type StorefrontPickupOption,
+} from "../storefront-data";
 import {
   StorefrontButton,
   StorefrontCard,
@@ -36,6 +40,7 @@ type BuyerForm = {
   postalCode: string;
   buyerNotes: string;
   pickupNote: string;
+  pickupOptionId: string;
 };
 
 type CheckoutSummary = {
@@ -90,6 +95,7 @@ const initialForm: BuyerForm = {
   postalCode: "",
   buyerNotes: "",
   pickupNote: "",
+  pickupOptionId: "",
 };
 
 const emptyCartItems: StorefrontCart["items"] = [];
@@ -100,7 +106,14 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
   const [form, setForm] = useState<BuyerForm>(initialForm);
   const [summary, setSummary] = useState<CheckoutSummary | null>(null);
   const [summaryMessage, setSummaryMessage] = useState<string | null>(null);
+  const [pickupOptions, setPickupOptions] = useState<StorefrontPickupOption[]>(
+    [],
+  );
+  const [pickupOptionsError, setPickupOptionsError] = useState<string | null>(
+    null,
+  );
   const [isChecking, setIsChecking] = useState(false);
+  const [isLoadingPickupOptions, setIsLoadingPickupOptions] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState<SuccessState | null>(null);
@@ -112,6 +125,42 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
 
     return () => window.clearTimeout(timeout);
   }, [store.store_slug]);
+
+  const usesManualPickupOptions = store.pickup_method === "manual_options";
+
+  useEffect(() => {
+    let isActive = true;
+
+    const timeout = window.setTimeout(() => {
+      if (!usesManualPickupOptions) {
+        setPickupOptions([]);
+        setPickupOptionsError(null);
+        setIsLoadingPickupOptions(false);
+        setForm((current) =>
+          current.pickupOptionId
+            ? { ...current, pickupOptionId: "" }
+            : current,
+        );
+        return;
+      }
+
+      setIsLoadingPickupOptions(true);
+      setPickupOptionsError(null);
+
+      loadStorefrontPickupOptions(store.store_slug).then((result) => {
+        if (!isActive) return;
+
+        setPickupOptions(result.data);
+        setPickupOptionsError(result.error?.message ?? null);
+        setIsLoadingPickupOptions(false);
+      });
+    }, 0);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeout);
+    };
+  }, [store.store_slug, usesManualPickupOptions]);
 
   const cartItems = cart?.items ?? emptyCartItems;
   const cartSummary = useMemo(
@@ -194,6 +243,11 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
       return;
     }
 
+    if (usesManualPickupOptions && !form.pickupOptionId) {
+      setErrorMessage("Please choose a pickup option.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     const payload = {
@@ -211,6 +265,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
       delivery_country: "US",
       buyer_notes: form.buyerNotes.trim() || null,
       pickup_note: form.pickupNote.trim() || null,
+      pickup_option_id: usesManualPickupOptions ? form.pickupOptionId : null,
       items: checkoutItems,
     };
 
@@ -345,6 +400,42 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
               <h2 className="border-t border-[#eee5d6] pt-5 text-xl font-semibold text-stone-950">
                 Pickup details
               </h2>
+              {usesManualPickupOptions ? (
+                <label className="grid gap-2 text-sm font-semibold text-stone-800">
+                  Pickup choice
+                  <select
+                    className="min-h-11 rounded-md border border-[#ded7c8] bg-white px-3 text-sm text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                    disabled={isLoadingPickupOptions}
+                    onChange={(event) =>
+                      updateField("pickupOptionId", event.target.value)
+                    }
+                    required
+                    value={form.pickupOptionId}
+                  >
+                    <option value="">
+                      {isLoadingPickupOptions
+                        ? "Loading pickup choices..."
+                        : "Choose a pickup option"}
+                    </option>
+                    {pickupOptions.map((option) => (
+                      <option
+                        key={option.pickup_option_id}
+                        value={option.pickup_option_id}
+                      >
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-xs font-medium leading-5 text-stone-500">
+                    Choose a pickup option from this seller.
+                  </span>
+                </label>
+              ) : null}
+              {pickupOptionsError ? (
+                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900">
+                  Pickup choices could not load. Please refresh and try again.
+                </p>
+              ) : null}
               <TextField
                 label="Address line 1"
                 name="addressLine1"
@@ -405,8 +496,10 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                 disabled={
                   isSubmitting ||
                   isChecking ||
+                  isLoadingPickupOptions ||
                   checkoutItems.length === 0 ||
-                  summary?.is_checkout_available === false
+                  summary?.is_checkout_available === false ||
+                  (usesManualPickupOptions && !form.pickupOptionId)
                 }
                 type="submit"
               >

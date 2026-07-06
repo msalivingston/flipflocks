@@ -548,6 +548,11 @@ export function OrderDetail({ orderId }: { orderId: string }) {
             </h2>
             <div className="mt-3 grid gap-3 text-sm leading-6 text-stone-700 md:grid-cols-2">
               <NoteBlock
+                label="Pickup choice"
+                value={order.pickup_option_label_snapshot}
+                empty="No pickup choice selected."
+              />
+              <NoteBlock
                 label="Note from buyer"
                 value={order.buyer_notes}
                 empty="No buyer note added."
