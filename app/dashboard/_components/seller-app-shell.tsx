@@ -34,8 +34,15 @@ const sellerNavItems = [
     href: "/dashboard/store-admin",
     glyph: "/glyphs/storefront.png",
   },
-  { label: "Account", href: "/dashboard/account", glyph: "/glyphs/person.png" },
 ];
+
+const sellerAccountNavItem = {
+  label: "Account",
+  href: "/dashboard/account",
+  glyph: "/glyphs/person.png",
+};
+
+const mobileSellerNavItems = [...sellerNavItems, sellerAccountNavItem];
 
 export function SellerAppShell({ children }: { children: React.ReactNode }) {
   return (
@@ -104,29 +111,21 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2.5 pt-1">
+        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2.5 pt-1.5">
           <SellerNavLinks />
         </nav>
 
-        <div className="sticky bottom-0 shrink-0 space-y-1 border-t border-stone-200 bg-white px-3 py-2.5">
-          <div className="flex items-center gap-2.5 rounded-xl px-1 py-0.5">
-            <NavGlyph src="/glyphs/storefront.png" alt="" />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-stone-950">
-                {seller.store_slug}
-              </p>
-              <p className="text-xs font-medium text-stone-500">Store URL</p>
-            </div>
-          </div>
+        <div className="sticky bottom-0 shrink-0 space-y-0.5 border-t border-stone-200 bg-white px-3 py-2">
           <a
-            className="flex min-h-8 items-center gap-2 rounded-xl px-1 text-xs font-medium text-stone-950 transition hover:text-emerald-800"
+            className="flex min-h-8 items-center gap-2 rounded-xl px-1 text-sm font-medium text-stone-950 transition hover:text-emerald-800"
             href={`mailto:${SUPPORT_EMAIL}`}
           >
             <NavGlyph src="/glyphs/chat.png" alt="" />
             Contact support
           </a>
+          <SellerUtilityLink item={sellerAccountNavItem} />
           <button
-            className="flex min-h-8 items-center gap-2 rounded-xl px-1 text-xs font-medium text-stone-950 transition hover:text-emerald-800"
+            className="flex min-h-8 items-center gap-2 rounded-xl px-1 text-sm font-medium text-stone-950 transition hover:text-emerald-800"
             onClick={handleSignOut}
           >
             <LogOut aria-hidden="true" className="size-5 shrink-0" />
@@ -198,7 +197,7 @@ function SellerNavLinks() {
       <Link
         key={item.href}
         href={item.href}
-        className={`flex min-h-8 items-center gap-2 rounded-lg px-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 focus:ring-offset-white ${
+        className={`flex min-h-8 items-center gap-2 rounded-md px-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 focus:ring-offset-white ${
           isActive
             ? "bg-[#f0f5ea] text-emerald-950"
             : "text-stone-950 hover:bg-[#f7faf3] hover:text-emerald-950"
@@ -214,7 +213,7 @@ function SellerNavLinks() {
 function MobileSellerNavLinks() {
   const pathname = usePathname();
 
-  return sellerNavItems.map((item) => {
+  return mobileSellerNavItems.map((item) => {
     const isActive =
       item.href === "/dashboard"
         ? pathname === item.href
@@ -235,6 +234,27 @@ function MobileSellerNavLinks() {
       </Link>
     );
   });
+}
+
+function SellerUtilityLink({
+  item,
+}: {
+  item: { label: string; href: string; glyph: string };
+}) {
+  const pathname = usePathname();
+  const isActive = pathname.startsWith(item.href);
+
+  return (
+    <Link
+      className={`flex min-h-8 items-center gap-2 rounded-xl px-1 text-sm font-medium transition hover:text-emerald-800 ${
+        isActive ? "text-emerald-950" : "text-stone-950"
+      }`}
+      href={item.href}
+    >
+      <NavGlyph src={item.glyph} alt="" />
+      {item.label}
+    </Link>
+  );
 }
 
 function NavGlyph({ src, alt }: { src: string; alt: string }) {

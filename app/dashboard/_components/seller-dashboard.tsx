@@ -124,13 +124,13 @@ export function SellerDashboard() {
   const storefrontEnabled =
     data.home?.storefront_enabled ?? seller?.storefront_enabled ?? false;
   const storefrontHref = `/store/${seller?.store_slug ?? ""}`;
-  const sellerDisplayName = getSellerDisplayName(seller?.store_name);
+  const storeName = seller?.store_name?.trim();
   const hasListings =
     (data.home?.active_listing_count ?? data.inventory.length) > 0;
   const showFirstListingPrompt = !isLoading && !error && !hasListings;
   const welcomeMessage = storefrontIsLive
-    ? `Good morning${sellerDisplayName ? `, ${sellerDisplayName}` : ""} - your storefront is live.`
-    : "Your storefront is ready for setup.";
+    ? `Hello${storeName ? `, ${storeName}` : ""} - your storefront is live.`
+    : `Hello${storeName ? `, ${storeName}` : ""}`;
   const toggleOrder = (orderId: string) => {
     setExpandedOrderIds((current) => {
       const next = new Set(current);
@@ -206,7 +206,7 @@ export function SellerDashboard() {
 
         {!isLoading && !error ? (
           <>
-            <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <MetricCard
                 label="New orders"
                 value={data.home?.pending_open_order_count}
@@ -343,8 +343,8 @@ function MetricCard({
   const valueTone = tone === "amber" ? "text-orange-600" : "text-emerald-900";
 
   return (
-    <SellerCard className="min-h-28 rounded-2xl p-3 shadow-[0_12px_28px_rgba(46,39,25,0.04)] sm:min-h-32 sm:p-4">
-      <div className="flex h-full min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-4">
+    <SellerCard className="min-h-28 rounded-2xl p-3 shadow-[0_12px_28px_rgba(46,39,25,0.04)] sm:p-4">
+      <div className="flex h-full min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-4 lg:flex-col lg:items-start xl:flex-row xl:items-center">
         <span
           className={`flex size-10 shrink-0 items-center justify-center rounded-full sm:size-12 ${iconTone}`}
         >
@@ -357,13 +357,13 @@ function MetricCard({
           />
         </span>
         <div className="min-w-0">
-          <p className="text-base font-medium leading-snug text-stone-600 sm:text-sm">
+          <p className="text-base font-medium leading-snug text-stone-600 sm:text-sm lg:text-xs xl:text-sm">
             {label}
           </p>
-          <p className={`mt-0.5 font-serif text-2xl font-bold sm:mt-1 sm:text-3xl ${valueTone}`}>
+          <p className={`mt-0.5 font-serif text-2xl font-bold sm:mt-1 sm:text-3xl lg:text-2xl xl:text-3xl ${valueTone}`}>
             {value ?? 0}
           </p>
-          <p className="mt-0.5 text-sm leading-6 text-stone-500 sm:mt-1 sm:leading-5">
+          <p className="mt-0.5 text-sm leading-6 text-stone-500 sm:mt-1 sm:leading-5 lg:text-xs xl:text-sm">
             {helper}
           </p>
         </div>
@@ -558,12 +558,6 @@ function getOrderStatusLabel(status: string | null | undefined) {
   if (!status || status === "pending") return "open";
 
   return status;
-}
-
-function getSellerDisplayName(storeName: string | null | undefined) {
-  if (!storeName) return null;
-
-  return storeName.replace(/\s+(test\s+)?store$/i, "").trim() || storeName;
 }
 
 function summarizeLiveInventoryQuantity(rows: SellerInventoryRow[]) {

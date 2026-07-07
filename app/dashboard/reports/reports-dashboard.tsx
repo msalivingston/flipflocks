@@ -392,54 +392,55 @@ export function ReportsDashboard() {
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-0">
       <TabNav activeTab={activeTab} onChange={setActiveTab} />
+      <div className="rounded-b-xl rounded-tr-xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+        {activeTab === "sales" ? (
+          <SalesTab
+            amountFilter={salesAmountFilter}
+            customAmount={salesCustomAmount}
+            dateSettings={dateSettings}
+            itemSummaryByOrder={itemSummaryByOrder}
+            report={salesReport}
+            setAmountFilter={setSalesAmountFilter}
+            setCustomAmount={setSalesCustomAmount}
+            setDateSettings={setDateSettings}
+          />
+        ) : null}
 
-      {activeTab === "sales" ? (
-        <SalesTab
-          amountFilter={salesAmountFilter}
-          customAmount={salesCustomAmount}
-          dateSettings={dateSettings}
-          itemSummaryByOrder={itemSummaryByOrder}
-          report={salesReport}
-          setAmountFilter={setSalesAmountFilter}
-          setCustomAmount={setSalesCustomAmount}
-          setDateSettings={setDateSettings}
-        />
-      ) : null}
+        {activeTab === "items" ? (
+          <ItemsTab
+            breedFilter={breedFilter}
+            dateRangeLabel={dateRangeLabel}
+            dateSettings={dateSettings}
+            itemRows={filteredItemRows}
+            itemSearch={itemSearch}
+            itemTypeFilter={itemTypeFilter}
+            options={itemOptions}
+            setBreedFilter={setBreedFilter}
+            setDateSettings={setDateSettings}
+            setItemSearch={setItemSearch}
+            setItemTypeFilter={setItemTypeFilter}
+            setSpeciesFilter={setSpeciesFilter}
+            speciesFilter={speciesFilter}
+          />
+        ) : null}
 
-      {activeTab === "items" ? (
-        <ItemsTab
-          breedFilter={breedFilter}
-          dateRangeLabel={dateRangeLabel}
-          dateSettings={dateSettings}
-          itemRows={filteredItemRows}
-          itemSearch={itemSearch}
-          itemTypeFilter={itemTypeFilter}
-          options={itemOptions}
-          setBreedFilter={setBreedFilter}
-          setDateSettings={setDateSettings}
-          setItemSearch={setItemSearch}
-          setItemTypeFilter={setItemTypeFilter}
-          setSpeciesFilter={setSpeciesFilter}
-          speciesFilter={speciesFilter}
-        />
-      ) : null}
-
-      {activeTab === "customers" ? (
-        <CustomersTab
-          customerRows={filteredCustomerRows}
-          customSpend={customerCustomSpend}
-          dateRangeLabel={dateRangeLabel}
-          dateSettings={dateSettings}
-          search={customerSearch}
-          setCustomSpend={setCustomerCustomSpend}
-          setDateSettings={setDateSettings}
-          setSearch={setCustomerSearch}
-          setSpendFilter={setCustomerSpendFilter}
-          spendFilter={customerSpendFilter}
-        />
-      ) : null}
+        {activeTab === "customers" ? (
+          <CustomersTab
+            customerRows={filteredCustomerRows}
+            customSpend={customerCustomSpend}
+            dateRangeLabel={dateRangeLabel}
+            dateSettings={dateSettings}
+            search={customerSearch}
+            setCustomSpend={setCustomerCustomSpend}
+            setDateSettings={setDateSettings}
+            setSearch={setCustomerSearch}
+            setSpendFilter={setCustomerSpendFilter}
+            spendFilter={customerSpendFilter}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -452,28 +453,31 @@ function TabNav({
   onChange: (tab: ReportTab) => void;
 }) {
   return (
-    <div className="border-b border-stone-200">
-      <div className="flex gap-6 overflow-x-auto px-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.value;
+    <div
+      aria-label="Report sections"
+      className="flex gap-1 overflow-x-auto border-b border-stone-200 pl-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      role="tablist"
+    >
+      {tabs.map((tab) => {
+        const isActive = activeTab === tab.value;
 
-          return (
-            <button
-              aria-pressed={isActive}
-              className={`min-h-9 shrink-0 border-b-2 px-0.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-emerald-700/20 ${
-                isActive
-                  ? "border-emerald-700 text-emerald-800"
-                  : "border-transparent text-stone-950 hover:text-emerald-800"
-              }`}
-              key={tab.value}
-              type="button"
-              onClick={() => onChange(tab.value)}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        return (
+          <button
+            aria-selected={isActive}
+            className={`relative mb-[-1px] min-h-11 shrink-0 rounded-t-lg border px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-700 ${
+              isActive
+                ? "border-stone-200 border-b-white bg-white text-stone-950 shadow-[0_-1px_0_rgba(0,0,0,0.02)]"
+                : "border-transparent bg-stone-100/70 text-stone-600 hover:bg-white hover:text-stone-950"
+            }`}
+            key={tab.value}
+            onClick={() => onChange(tab.value)}
+            role="tab"
+            type="button"
+          >
+            {tab.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

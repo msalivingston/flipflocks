@@ -159,8 +159,7 @@ type StoreSetupTab =
   | "photos"
   | "what-you-sell"
   | "pickup"
-  | "policies"
-  | "preview";
+  | "policies";
 
 type ModulePreferenceField =
   | "hatching_eggs_enabled"
@@ -217,6 +216,8 @@ const maxStoreImageSizeBytes = 8 * 1024 * 1024;
 const heroHeadlineMaxLength = 45;
 const heroSubheadingMaxLength = 90;
 const farmStoryMaxLength = 2500;
+const defaultPickupPolicy =
+  "All pickups are by appointment and need at least 24 hours advance notice. At pickup, please come prepared with appropriate transport for your birds. Pet carriers sized appropriately work well. If you bring cardboard boxes, please cut air holes in advance. Please do not bring plastic tubs unless they have appropriate ventilation. Younger birds should have something so they are not standing on slick surfaces.";
 const starterFarmDescription = `Weâ€™re a local farm offering poultry and farm goods for backyard flock owners, homesteaders, and small farms.
 
 For many people, raising poultry is about more than eggs or meat. Itâ€™s about knowing where your food comes from, building a flock that fits your home, teaching kids responsibility, adding beauty and life to the yard, and enjoying the daily rhythm of caring for animals.
@@ -274,11 +275,10 @@ const heroLibraryImages: HeroLibraryImage[] = [
 
 const storeSetupTabs: Array<{ id: StoreSetupTab; label: string }> = [
   { id: "storefront", label: "Storefront" },
-  { id: "photos", label: "Photos" },
+  { id: "photos", label: "Images" },
   { id: "what-you-sell", label: "What You Sell" },
-  { id: "pickup", label: "Pickup" },
+  { id: "pickup", label: "Pickup Schedule" },
   { id: "policies", label: "Policies" },
-  { id: "preview", label: "Preview" },
 ];
 
 const blankForm: StoreAdminForm = {
@@ -1400,6 +1400,23 @@ export function StoreAdmin() {
     updateField("about_text", normalizedStarterFarmDescription);
   }
 
+  function restoreDefaultPickupPolicy() {
+    const hasCustomPolicy =
+      form.pickup_policy.trim() &&
+      form.pickup_policy.trim() !== defaultPickupPolicy.trim();
+
+    if (
+      hasCustomPolicy &&
+      !window.confirm(
+        "Replace your current pickup policy with the default pickup policy?",
+      )
+    ) {
+      return;
+    }
+
+    updateField("pickup_policy", defaultPickupPolicy);
+  }
+
   async function reloadReadiness() {
     if (!seller) return;
 
@@ -1723,6 +1740,9 @@ export function StoreAdmin() {
     !isLaunching;
   const isStoreLive = seller.store_status === "live";
   const isVisibleToCustomers = seller.is_publicly_available;
+  const previewStoreUrl = isVisibleToCustomers
+    ? `/store/${form.store_slug}`
+    : `/store/${form.store_slug}?preview=1`;
 
   return (
     <>
@@ -1732,6 +1752,13 @@ export function StoreAdmin() {
         description="Manage your public storefront setup, pickup flow, policies, and preview link."
         action={
           <div className="flex flex-wrap gap-2">
+            <Link
+              className="seller-primary-button"
+              href={previewStoreUrl}
+              target="_blank"
+            >
+              Preview Store
+            </Link>
             <button
               className="seller-secondary-button"
               disabled={!hasUnsavedChanges || isSaving}
@@ -1752,23 +1779,15 @@ export function StoreAdmin() {
         }
       />
 
-      <div className="mx-auto grid w-full max-w-7xl gap-5 px-5 py-5 sm:px-7">
+      <div
+        className={`mx-auto grid w-full max-w-7xl gap-5 px-5 py-5 sm:px-7 ${
+          hasUnsavedChanges ? "pb-32 sm:pb-28" : ""
+        }`}
+      >
         {saveMessage ? (
-          <div
-            className={`rounded-lg border px-4 py-3 text-sm font-semibold ${
-              saveState === "error"
-                ? "border-red-200 bg-red-50 text-red-800"
-                : "border-emerald-200 bg-emerald-50 text-emerald-800"
-            }`}
-          >
+          <StoreSetupAlert tone={saveState === "error" ? "error" : "success"}>
             {saveMessage}
-          </div>
-        ) : null}
-
-        {hasUnsavedChanges ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-            You have unsaved Store Admin changes.
-          </div>
+          </StoreSetupAlert>
         ) : null}
 
         <div className="grid gap-0">
@@ -1940,8 +1959,8 @@ export function StoreAdmin() {
               <div className="grid gap-5">
                 <PickupIntro />
 
-                <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(19rem,0.85fr)] lg:items-start">
-                  <section className="grid gap-3 border-b border-stone-200 pb-5 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-6">
+                <div className="grid gap-5">
+                  <section className="grid gap-3 rounded-lg border border-stone-200 bg-white p-4">
                     <div>
                       <h2 className="text-lg font-semibold text-stone-950">
                         Pickup method
@@ -2002,39 +2021,6 @@ export function StoreAdmin() {
                       />
                     </div>
                   </section>
-
-                  <section className="grid gap-4">
-                    <div>
-                      <h2 className="text-lg font-semibold text-stone-950">
-                        Pickup details
-                      </h2>
-                      <p className="mt-1 text-sm leading-6 text-stone-600">
-                        Tell buyers where pickup happens and what they should
-                        know before they arrive.
-                      </p>
-                    </div>
-                    <TextAreaField
-                      compact
-                      helper="Examples: Farm pickup in Hotchkiss; pickup at the blue barn; location shared after order confirmation."
-                      label="Pickup location"
-                      onChange={(value) =>
-                        updateField("pickup_location_text", value)
-                      }
-                      placeholder="Farm pickup in Hotchkiss"
-                      rows={3}
-                      value={form.pickup_location_text}
-                    />
-                    <TextAreaField
-                      compact
-                      helper="Examples: Message before arriving; bring a box or crate for chicks; pickup by appointment only."
-                      label="Pickup instructions"
-                      onChange={(value) =>
-                        updateField("pickup_instructions", value)
-                      }
-                      rows={3}
-                      value={form.pickup_instructions}
-                    />
-                  </section>
                 </div>
 
                 <input
@@ -2057,6 +2043,7 @@ export function StoreAdmin() {
                 onPickupPolicyChange={(value) =>
                   updateField("pickup_policy", value)
                 }
+                onRestoreDefaultPickupPolicy={restoreDefaultPickupPolicy}
                 onRegisterCustomPolicyRow={registerCustomPolicyRow}
                 onRemoveCustomPolicy={removeCustomPolicy}
                 onUpdateCustomPolicy={updateCustomPolicy}
@@ -2064,30 +2051,6 @@ export function StoreAdmin() {
               />
             ) : null}
 
-            {activeTab === "preview" ? (
-              <SettingsSection
-                description="Open or copy the current public storefront URL."
-                title="Preview"
-              >
-                <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                  Public store URL
-                  <input
-                    className="seller-form-field text-xs"
-                    readOnly
-                    value={storeUrl}
-                  />
-                </label>
-                <div>
-                  <Link
-                    className="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-800 px-5 text-sm font-semibold text-white transition hover:bg-emerald-900"
-                    href={`/store/${form.store_slug}`}
-                    target="_blank"
-                  >
-                    View Store
-                  </Link>
-                </div>
-              </SettingsSection>
-            ) : null}
           </div>
         </div>
       </div>
@@ -2111,6 +2074,13 @@ export function StoreAdmin() {
           onConfirm={continuePendingNavigation}
         />
       ) : null}
+      {hasUnsavedChanges ? (
+        <StickySaveBar
+          isSaving={isSaving}
+          onDiscard={discardChanges}
+          onSave={saveChanges}
+        />
+      ) : null}
     </>
   );
 }
@@ -2125,7 +2095,7 @@ function StoreSetupTabs({
   return (
     <div
       aria-label="Store setup sections"
-      className="flex gap-1 overflow-x-auto border-b border-stone-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="flex gap-1 overflow-x-auto border-b border-stone-200 pl-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       role="tablist"
     >
       {storeSetupTabs.map((tab) => {
@@ -2134,7 +2104,7 @@ function StoreSetupTabs({
         return (
           <button
             aria-selected={isActive}
-            className={`relative mb-[-1px] min-h-11 shrink-0 rounded-t-lg border px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 ${
+            className={`relative mb-[-1px] min-h-11 shrink-0 rounded-t-lg border px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-700 ${
               isActive
                 ? "border-stone-200 border-b-white bg-white text-stone-950 shadow-[0_-1px_0_rgba(0,0,0,0.02)]"
                 : "border-transparent bg-stone-100/70 text-stone-600 hover:bg-white hover:text-stone-950"
@@ -2148,6 +2118,65 @@ function StoreSetupTabs({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function StoreSetupAlert({
+  children,
+  tone,
+}: {
+  children: React.ReactNode;
+  tone: "error" | "success" | "warning";
+}) {
+  const toneClass =
+    tone === "error"
+      ? "border-red-200 bg-red-50 text-red-800"
+      : tone === "success"
+        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+        : "border-amber-200 bg-amber-50 text-amber-900";
+
+  return (
+    <div className={`rounded-lg border px-4 py-3 text-sm font-semibold ${toneClass}`}>
+      {children}
+    </div>
+  );
+}
+
+function StickySaveBar({
+  isSaving,
+  onDiscard,
+  onSave,
+}: {
+  isSaving: boolean;
+  onDiscard: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-amber-200 bg-white/95 px-4 py-3 shadow-[0_-12px_30px_rgba(41,37,36,0.12)] backdrop-blur sm:px-7">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-semibold text-stone-900">
+          You have unsaved changes.
+        </p>
+        <div className="grid gap-2 sm:flex sm:items-center">
+          <button
+            className="seller-secondary-button bg-white"
+            disabled={isSaving}
+            onClick={onDiscard}
+            type="button"
+          >
+            Discard
+          </button>
+          <button
+            className="seller-primary-button"
+            disabled={isSaving}
+            onClick={onSave}
+            type="button"
+          >
+            {isSaving ? "Saving..." : "Save changes"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2188,6 +2217,9 @@ function StorefrontTab({
   warningItems: SellerLaunchItem[];
 }) {
   const contactEmail = getStorefrontContactEmail(form);
+  const selectedStorefrontVisible = Boolean(form.storefront_enabled);
+  const hasPendingVisibilityChange =
+    isStoreLive && selectedStorefrontVisible !== isVisibleToCustomers;
 
   return (
     <div className="grid gap-3">
@@ -2195,51 +2227,50 @@ function StorefrontTab({
         description="Control whether your storefront is visible to customers."
         title="Store status"
       >
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,1fr)] lg:items-start">
-          {isStoreLive ? (
-            <StorefrontStatusPanel
-              isVisibleToCustomers={isVisibleToCustomers}
-            />
-          ) : (
-            <LaunchStoreCardContent
-              hasUnsavedChanges={hasUnsavedChanges}
-              isLaunching={isLaunching}
-              isReadinessLoading={isReadinessLoading}
-              launchAllowed={launchAllowed}
-              onLaunch={onLaunch}
-              platformReviewNeeded={platformReviewNeeded}
-              readinessError={readinessError}
-              requiredItems={requiredItems}
-              sellerStatus={sellerStatus}
-              warningItems={warningItems}
-            />
-          )}
+        {isStoreLive ? (
           <div className="grid gap-3">
-            <div className="flex flex-wrap gap-2 sm:justify-end">
-              <Link
-                className="seller-primary-button min-w-32 rounded-md"
-                href={`/store/${form.store_slug}`}
-                target="_blank"
-              >
-                View Store
-              </Link>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+              <StorefrontStatusPanel
+                hasPendingVisibilityChange={hasPendingVisibilityChange}
+                isVisibleToCustomers={selectedStorefrontVisible}
+              />
               <button
                 className="seller-secondary-button min-w-32 rounded-md bg-white"
                 onClick={() =>
-                  onUpdateField("storefront_enabled", !form.storefront_enabled)
+                  onUpdateField("storefront_enabled", !selectedStorefrontVisible)
                 }
                 type="button"
               >
-                {form.storefront_enabled ? "Hide Store" : "Show Store"}
+                {selectedStorefrontVisible ? "Hide Store" : "Show Store"}
               </button>
             </div>
+            {hasPendingVisibilityChange ? (
+              <StoreSetupAlert tone="warning">
+                Save changes to{" "}
+                {selectedStorefrontVisible ? "show" : "hide"} this store for
+                customers.
+              </StoreSetupAlert>
+            ) : null}
             <ReadOnlyCopyField
               helper="This is how customers find your store. Your URL is created from your store name."
               label="Public store URL"
               value={storeUrl}
             />
           </div>
-        </div>
+        ) : (
+          <LaunchStoreCardContent
+            hasUnsavedChanges={hasUnsavedChanges}
+            isLaunching={isLaunching}
+            isReadinessLoading={isReadinessLoading}
+            launchAllowed={launchAllowed}
+            onLaunch={onLaunch}
+            platformReviewNeeded={platformReviewNeeded}
+            readinessError={readinessError}
+            requiredItems={requiredItems}
+            sellerStatus={sellerStatus}
+            warningItems={warningItems}
+          />
+        )}
       </StorefrontSection>
 
       <StorefrontSection
@@ -2316,7 +2347,7 @@ function StorefrontTab({
         </div>
         <StorefrontNote tone="info">
           Preview and adjust your hero image on the{" "}
-          <span className="font-bold text-emerald-900">Photos tab</span>.
+          <span className="font-bold text-emerald-900">Images tab</span>.
         </StorefrontNote>
       </StorefrontSection>
 
@@ -2421,17 +2452,17 @@ function PhotosTab({
   return (
     <div className="grid gap-3">
       <div>
-        <h2 className="text-xl font-semibold text-stone-950">Photos</h2>
+        <h2 className="text-xl font-semibold text-stone-950">Images</h2>
         <p className="mt-1 text-sm leading-5 text-stone-600">
-          Add or update photos that represent your farm and brand. These appear
+          Add or update images that represent your farm and brand. These appear
           on your storefront.
         </p>
       </div>
 
       {mediaError ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
+        <StoreSetupAlert tone="error">
           {mediaError}
-        </div>
+        </StoreSetupAlert>
       ) : null}
 
       <LogoPhotoSection
@@ -2463,7 +2494,7 @@ function PhotosTab({
       />
 
       <p className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm leading-5 text-stone-700">
-        Logo and About photos are optional. Your storefront always has a hero
+        Logo and About images are optional. Your storefront always has a hero
         image: use one from the library or upload your own.
       </p>
     </div>
@@ -2484,7 +2515,10 @@ function LogoPhotoSection({
   return (
     <section className="rounded-lg border border-stone-200 bg-white p-3">
       <div>
-        <h3 className="text-base font-semibold text-stone-950">Store logo</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-base font-semibold text-stone-950">Store logo</h3>
+          <OptionalBadge />
+        </div>
         <p className="mt-1 text-sm leading-5 text-stone-600">
           Your logo appears in the top left of your storefront.
         </p>
@@ -3165,6 +3199,7 @@ function PoliciesTab({
   onPickupPolicyChange,
   onRegisterCustomPolicyRow,
   onRemoveCustomPolicy,
+  onRestoreDefaultPickupPolicy,
   onUpdateCustomPolicy,
   pickupPolicy,
 }: {
@@ -3191,6 +3226,7 @@ function PoliciesTab({
     element: HTMLElement | null,
   ) => void;
   onRemoveCustomPolicy: (policyId: string) => void;
+  onRestoreDefaultPickupPolicy: () => void;
   onUpdateCustomPolicy: (
     policyId: string,
     updates: Partial<CustomPolicyDraft>,
@@ -3237,6 +3273,15 @@ function PoliciesTab({
                   rows={4}
                   value={pickupPolicy}
                 />
+              </div>
+              <div className="mt-3 flex justify-end">
+                <button
+                  className="seller-secondary-button bg-white"
+                  onClick={onRestoreDefaultPickupPolicy}
+                  type="button"
+                >
+                  Restore default pickup policy
+                </button>
               </div>
             </div>
           </div>
@@ -3436,10 +3481,25 @@ function StorefrontSection({
 }
 
 function StorefrontStatusPanel({
+  hasPendingVisibilityChange,
   isVisibleToCustomers,
 }: {
+  hasPendingVisibilityChange: boolean;
   isVisibleToCustomers: boolean;
 }) {
+  const title = hasPendingVisibilityChange
+    ? isVisibleToCustomers
+      ? "Storefront will be shown"
+      : "Storefront will be hidden"
+    : isVisibleToCustomers
+      ? "Storefront is live"
+      : "Storefront is hidden";
+  const description = hasPendingVisibilityChange
+    ? "This change will apply after you save."
+    : isVisibleToCustomers
+      ? "Customers can view your store and place orders."
+      : "Customers cannot view your store until you show it again.";
+
   return (
     <div
       className={`flex min-h-20 items-center gap-3 rounded-md border px-4 py-3 ${
@@ -3463,12 +3523,10 @@ function StorefrontStatusPanel({
       </span>
       <div>
         <p className="text-base font-semibold text-stone-950">
-          {isVisibleToCustomers ? "Storefront is live" : "Storefront is hidden"}
+          {title}
         </p>
         <p className="mt-0.5 text-sm leading-5 text-stone-700">
-          {isVisibleToCustomers
-            ? "Customers can view your store and place orders."
-            : "Customers cannot currently view your store."}
+          {description}
         </p>
       </div>
     </div>
@@ -4001,7 +4059,7 @@ function ModuleDisableDialog({
             Keep showing it
           </button>
           <button
-            className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+            className="seller-primary-button"
             type="button"
             onClick={onConfirm}
           >
@@ -4030,7 +4088,7 @@ function UnsavedChangesDialog({
         <div className="flex items-start gap-3">
           <span
             aria-hidden="true"
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-emerald-100 bg-emerald-50 text-lg font-bold text-emerald-800"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-lg font-bold text-amber-800"
           >
             !
           </span>
@@ -4053,7 +4111,7 @@ function UnsavedChangesDialog({
             Leave without saving
           </button>
           <button
-            className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+            className="seller-primary-button"
             type="button"
             onClick={onCancel}
           >
@@ -4114,22 +4172,22 @@ function LaunchStoreCardContent({
         </div>
 
         {readinessError ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
+          <StoreSetupAlert tone="error">
             Readiness could not be checked. Please try again.
-          </div>
+          </StoreSetupAlert>
         ) : null}
 
         {platformReviewNeeded ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+          <StoreSetupAlert tone="warning">
             Something needs platform review before this store can launch.
             Contact support or an admin.
-          </div>
+          </StoreSetupAlert>
         ) : null}
 
         {sellerStatus !== "draft" ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+          <StoreSetupAlert tone="warning">
             This store cannot be launched from its current status.
-          </div>
+          </StoreSetupAlert>
         ) : null}
 
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -4628,9 +4686,7 @@ function buildLaunchSummary(
     readinessItems.map((item) => [item.item_key, item]),
   );
   const isReady = (key: string) => readiness.get(key)?.passed === true;
-  const hasPickupDetails =
-    Boolean(form.pickup_location_text.trim()) ||
-    Boolean(form.pickup_instructions.trim());
+  const hasPickupPolicy = Boolean(form.pickup_policy.trim());
   const platformReviewNeeded = [
     "store_exists",
     "seller_owns_store",
@@ -4652,10 +4708,10 @@ function buildLaunchSummary(
       action: "Add your city and state.",
     },
     {
-      key: "pickup-details",
-      label: "Pickup details",
-      passed: hasPickupDetails,
-      action: "Add pickup details.",
+      key: "pickup-policy",
+      label: "Pickup policy",
+      passed: hasPickupPolicy,
+      action: "Add pickup policy in Policies.",
     },
     {
       key: "billing-terms",
