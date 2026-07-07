@@ -39,6 +39,7 @@ type StoreAdminForm = {
   store_name: string;
   store_slug: string;
   store_tagline: string;
+  hero_subheading: string;
   public_city: string;
   public_state: string;
   public_country: string;
@@ -65,6 +66,11 @@ type StoreAdminForm = {
   equipment_supplies_enabled: boolean;
   processed_poultry_enabled: boolean;
 };
+
+type StoreAdminFieldUpdater = <TKey extends keyof StoreAdminForm>(
+  key: TKey,
+  value: StoreAdminForm[TKey],
+) => void;
 
 type CustomPolicyDraft = {
   id: string;
@@ -150,7 +156,6 @@ type SaveState = "idle" | "saved" | "error";
 
 type StoreSetupTab =
   | "storefront"
-  | "about"
   | "photos"
   | "what-you-sell"
   | "pickup"
@@ -209,6 +214,28 @@ const STORE_MEDIA_SELECT =
 
 const acceptedStoreImageTypes = ["image/jpeg", "image/png", "image/webp"];
 const maxStoreImageSizeBytes = 8 * 1024 * 1024;
+const heroHeadlineMaxLength = 45;
+const heroSubheadingMaxLength = 90;
+const farmStoryMaxLength = 2500;
+const starterFarmDescription = `Weâ€™re a local farm offering poultry and farm goods for backyard flock owners, homesteaders, and small farms.
+
+For many people, raising poultry is about more than eggs or meat. Itâ€™s about knowing where your food comes from, building a flock that fits your home, teaching kids responsibility, adding beauty and life to the yard, and enjoying the daily rhythm of caring for animals.
+
+Our birds and products change with the season, the hatch, and the natural pace of farm life. Depending on whatâ€™s available, you may find chicks, started birds, laying hens, hatching eggs, eating eggs, poultry products, supplies, equipment, or other farm goods listed here.
+
+Buying from a small poultry farm keeps things local, supports the people doing the daily work, and gives you a closer connection to where your birds and farm products are coming from.
+
+Check our current listings to see whatâ€™s ready now. Thank you for supporting small farms, local food, and backyard flocks.`;
+
+const normalizedStarterFarmDescription = starterFarmDescription
+  .replaceAll("Ã¢â‚¬â„¢", "'")
+  .replaceAll("â€™", "'")
+  .replaceAll("â€˜", "'");
+const readOnlyFieldStyle: CSSProperties = {
+  backgroundColor: "#e7e5e4",
+  borderColor: "#a8a29e",
+  color: "#57534e",
+};
 
 const heroLayoutOptions: Array<{
   label: string;
@@ -247,7 +274,6 @@ const heroLibraryImages: HeroLibraryImage[] = [
 
 const storeSetupTabs: Array<{ id: StoreSetupTab; label: string }> = [
   { id: "storefront", label: "Storefront" },
-  { id: "about", label: "About" },
   { id: "photos", label: "Photos" },
   { id: "what-you-sell", label: "What You Sell" },
   { id: "pickup", label: "Pickup" },
@@ -259,6 +285,7 @@ const blankForm: StoreAdminForm = {
   store_name: "",
   store_slug: "",
   store_tagline: "",
+  hero_subheading: "",
   public_city: "",
   public_state: "",
   public_country: "US",
@@ -1358,6 +1385,21 @@ export function StoreAdmin() {
     setSaveMessage("Changes discarded.");
   }
 
+  function restoreDefaultStory() {
+    const hasCustomStory =
+      form.about_text.trim() &&
+      form.about_text.trim() !== normalizedStarterFarmDescription.trim();
+
+    if (
+      hasCustomStory &&
+      !window.confirm("Replace your current farm story with the default story?")
+    ) {
+      return;
+    }
+
+    updateField("about_text", normalizedStarterFarmDescription);
+  }
+
   async function reloadReadiness() {
     if (!seller) return;
 
@@ -1463,6 +1505,7 @@ export function StoreAdmin() {
       store_name: form.store_name,
       store_slug: form.store_slug,
       store_tagline: form.store_tagline,
+      hero_subheading: form.hero_subheading,
       public_city: form.public_city,
       public_state: form.public_state,
       public_country: form.public_country,
@@ -1531,6 +1574,7 @@ export function StoreAdmin() {
       store_name: form.store_name.trim(),
       store_slug: form.store_slug.trim().toLowerCase(),
       store_tagline: form.store_tagline.trim(),
+      hero_subheading: form.hero_subheading.trim(),
       public_city: form.public_city.trim(),
       public_state: form.public_state.trim(),
       public_country: form.public_country.trim().toUpperCase() || "US",
@@ -1734,160 +1778,24 @@ export function StoreAdmin() {
           />
           <div className="rounded-b-xl rounded-tr-xl border border-stone-200 bg-white p-5 shadow-sm">
             {activeTab === "storefront" ? (
-              <div className="grid gap-6">
-                {isStoreLive ? (
-                  <StoreStatusCardContent
-                    form={form}
-                    isVisibleToCustomers={isVisibleToCustomers}
-                    onVisibilityChange={(value) =>
-                      updateField("storefront_enabled", value)
-                    }
-                    storeUrl={storeUrl}
-                  />
-                ) : (
-                  <LaunchStoreCardContent
-                    hasUnsavedChanges={hasUnsavedChanges}
-                    isLaunching={isLaunching}
-                    isReadinessLoading={isReadinessLoading}
-                    launchAllowed={launchAllowed}
-                    onLaunch={() => void launchStore()}
-                    platformReviewNeeded={platformReviewNeeded}
-                    readinessError={readinessError}
-                    requiredItems={sellerRequiredItems}
-                    sellerStatus={seller.store_status}
-                    warningItems={sellerWarningItems}
-                  />
-                )}
-
-            <SettingsSection
-              description="Core public identity for this seller store."
-              title="Store Profile"
-            >
-              <div className="grid gap-4 md:grid-cols-2">
-                <TextField
-                  label="Store name"
-                  onChange={(value) => updateField("store_name", value)}
-                  required
-                  value={form.store_name}
-                />
-                <TextField
-                  helper={`Public URL: /store/${form.store_slug || "store-slug"}`}
-                  label="Store slug"
-                  onChange={(value) => updateField("store_slug", value)}
-                  required
-                  value={form.store_slug}
-                />
-                <TextField
-                  label="Store tagline"
-                  onChange={(value) => updateField("store_tagline", value)}
-                  value={form.store_tagline}
-                />
-                <TextField
-                  label="City"
-                  onChange={(value) => updateField("public_city", value)}
-                  value={form.public_city}
-                />
-                <TextField
-                  label="State"
-                  onChange={(value) => updateField("public_state", value)}
-                  value={form.public_state}
-                />
-                <TextField
-                  label="Country"
-                  onChange={(value) => updateField("public_country", value)}
-                  value={form.public_country}
-                />
-                <TextField
-                  label="Website URL"
-                  onChange={(value) => updateField("website_url", value)}
-                  placeholder="https://example.com"
-                  value={form.website_url}
-                />
-              </div>
-            </SettingsSection>
-
-                <SettingsSection
-                  description="Operational notification destination for new order email."
-                  title="Notifications"
-                >
-                  <TextField
-                    label="Order notification email"
-                    onChange={(value) =>
-                      updateField("order_notification_email", value)
-                    }
-                    value={form.order_notification_email}
-                  />
-                </SettingsSection>
-              </div>
-            ) : null}
-
-            {activeTab === "about" ? (
-              <div className="grid gap-6">
-                <SettingsSection
-                  description="Public story, certifications, and buyer-facing contact details."
-                  title="About"
-                >
-                  <TextAreaField
-                    label="About text"
-                    onChange={(value) => updateField("about_text", value)}
-                    value={form.about_text}
-                  />
-                  <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-                    <TextField
-                      label="NPIP number"
-                      onChange={(value) => updateField("npip_number", value)}
-                      value={form.npip_number}
-                    />
-                    <ToggleField
-                      checked={form.show_npip}
-                      label="Show NPIP"
-                      onChange={(value) => updateField("show_npip", value)}
-                    />
-                  </div>
-                </SettingsSection>
-
-                <SettingsSection
-                  description="Choose which contact details are public and which email is used inside seller workflows."
-                  title="Contact Information"
-                >
-                  <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-                    <TextField
-                      label="Public email"
-                      onChange={(value) => updateField("public_email", value)}
-                      value={form.public_email}
-                    />
-                    <ToggleField
-                      checked={form.show_public_email}
-                      label="Show email"
-                      onChange={(value) =>
-                        updateField("show_public_email", value)
-                      }
-                    />
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-                    <TextField
-                      label="Public phone"
-                      onChange={(value) => updateField("public_phone", value)}
-                      value={form.public_phone}
-                    />
-                    <ToggleField
-                      checked={form.show_public_phone}
-                      label="Show phone"
-                      onChange={(value) =>
-                        updateField("show_public_phone", value)
-                      }
-                    />
-                  </div>
-                  <TextField
-                    helper="Used for seller workflows when different from public contact details."
-                    label="Communication email"
-                    onChange={(value) =>
-                      updateField("communication_email", value)
-                    }
-                    value={form.communication_email}
-                  />
-                </SettingsSection>
-              </div>
+              <StorefrontTab
+                form={form}
+                hasUnsavedChanges={hasUnsavedChanges}
+                isLaunching={isLaunching}
+                isReadinessLoading={isReadinessLoading}
+                isStoreLive={isStoreLive}
+                isVisibleToCustomers={isVisibleToCustomers}
+                launchAllowed={launchAllowed}
+                onLaunch={() => void launchStore()}
+                onRestoreDefaultStory={() => restoreDefaultStory()}
+                onUpdateField={updateField}
+                platformReviewNeeded={platformReviewNeeded}
+                readinessError={readinessError}
+                requiredItems={sellerRequiredItems}
+                sellerStatus={seller.store_status}
+                storeUrl={storeUrl}
+                warningItems={sellerWarningItems}
+              />
             ) : null}
 
             {activeTab === "photos" ? (
@@ -1904,7 +1812,7 @@ export function StoreAdmin() {
                 onUpload={(role, files) => void uploadStoreMedia(role, files)}
                 storeName={form.store_name || "Your farm"}
                 tagline={form.store_tagline}
-                aboutText={form.about_text}
+                heroSubheading={form.hero_subheading}
               />
             ) : null}
 
@@ -2244,9 +2152,246 @@ function StoreSetupTabs({
   );
 }
 
+function StorefrontTab({
+  form,
+  hasUnsavedChanges,
+  isLaunching,
+  isReadinessLoading,
+  isStoreLive,
+  isVisibleToCustomers,
+  launchAllowed,
+  onLaunch,
+  onRestoreDefaultStory,
+  onUpdateField,
+  platformReviewNeeded,
+  readinessError,
+  requiredItems,
+  sellerStatus,
+  storeUrl,
+  warningItems,
+}: {
+  form: StoreAdminForm;
+  hasUnsavedChanges: boolean;
+  isLaunching: boolean;
+  isReadinessLoading: boolean;
+  isStoreLive: boolean;
+  isVisibleToCustomers: boolean;
+  launchAllowed: boolean;
+  onLaunch: () => void;
+  onRestoreDefaultStory: () => void;
+  onUpdateField: StoreAdminFieldUpdater;
+  platformReviewNeeded: boolean;
+  readinessError: string | null;
+  requiredItems: SellerLaunchItem[];
+  sellerStatus: string;
+  storeUrl: string;
+  warningItems: SellerLaunchItem[];
+}) {
+  const contactEmail = getStorefrontContactEmail(form);
+
+  return (
+    <div className="grid gap-3">
+      <StorefrontSection
+        description="Control whether your storefront is visible to customers."
+        title="Store status"
+      >
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,1fr)] lg:items-start">
+          {isStoreLive ? (
+            <StorefrontStatusPanel
+              isVisibleToCustomers={isVisibleToCustomers}
+            />
+          ) : (
+            <LaunchStoreCardContent
+              hasUnsavedChanges={hasUnsavedChanges}
+              isLaunching={isLaunching}
+              isReadinessLoading={isReadinessLoading}
+              launchAllowed={launchAllowed}
+              onLaunch={onLaunch}
+              platformReviewNeeded={platformReviewNeeded}
+              readinessError={readinessError}
+              requiredItems={requiredItems}
+              sellerStatus={sellerStatus}
+              warningItems={warningItems}
+            />
+          )}
+          <div className="grid gap-3">
+            <div className="flex flex-wrap gap-2 sm:justify-end">
+              <Link
+                className="seller-primary-button min-w-32 rounded-md"
+                href={`/store/${form.store_slug}`}
+                target="_blank"
+              >
+                View Store
+              </Link>
+              <button
+                className="seller-secondary-button min-w-32 rounded-md bg-white"
+                onClick={() =>
+                  onUpdateField("storefront_enabled", !form.storefront_enabled)
+                }
+                type="button"
+              >
+                {form.storefront_enabled ? "Hide Store" : "Show Store"}
+              </button>
+            </div>
+            <ReadOnlyCopyField
+              helper="This is how customers find your store. Your URL is created from your store name."
+              label="Public store URL"
+              value={storeUrl}
+            />
+          </div>
+        </div>
+      </StorefrontSection>
+
+      <StorefrontSection
+        description="Basic public information about your farm."
+        title="Store basics"
+      >
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <TextField
+            label="Store name"
+            onChange={(value) => onUpdateField("store_name", value)}
+            required
+            value={form.store_name}
+          />
+          <TextField
+            label="City"
+            onChange={(value) => onUpdateField("public_city", value)}
+            required
+            value={form.public_city}
+          />
+          <TextField
+            label="State"
+            onChange={(value) => onUpdateField("public_state", value)}
+            required
+            value={form.public_state}
+          />
+        </div>
+        <StorefrontNote tone="warm">
+          Your store URL is created automatically from your store name.
+        </StorefrontNote>
+      </StorefrontSection>
+
+      <StorefrontSection
+        description="These short lines appear over your main storefront photo."
+        title="Hero text"
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <TextField
+              helper="Short headline shown over your main storefront photo. Keep it brief so it fits on mobile and desktop."
+              label="Hero headline"
+              maxLength={heroHeadlineMaxLength}
+              onChange={(value) => onUpdateField("store_tagline", value)}
+              placeholder="Started pullets in western Colorado"
+              required
+              showCounter
+              value={form.store_tagline}
+            />
+            <FieldExamples
+              examples={[
+                "Started pullets in western Colorado",
+                "Local chicks and hatching eggs",
+                "Pasture-raised poultry",
+              ]}
+            />
+          </div>
+          <div className="grid gap-2">
+            <TextField
+              helper="One short supporting line under your headline. Tell buyers what they can expect or do next."
+              label="Hero subheading"
+              maxLength={heroSubheadingMaxLength}
+              onChange={(value) => onUpdateField("hero_subheading", value)}
+              placeholder="Browse current availability and request pickup at checkout."
+              required
+              showCounter
+              value={form.hero_subheading}
+            />
+            <FieldExamples
+              examples={[
+                "Local pickup in Hotchkiss with new birds added seasonally.",
+                "Healthy chicks, pullets, and hatching eggs from our family farm.",
+              ]}
+            />
+          </div>
+        </div>
+        <StorefrontNote tone="info">
+          Preview and adjust your hero image on the{" "}
+          <span className="font-bold text-emerald-900">Photos tab</span>.
+        </StorefrontNote>
+      </StorefrontSection>
+
+      <StorefrontSection
+        description="This appears on your About page next to your About photo."
+        title="Farm story (About page)"
+      >
+        <TextAreaField
+          label="Farm story"
+          maxLength={farmStoryMaxLength}
+          onChange={(value) => onUpdateField("about_text", value)}
+          required
+          rows={6}
+          showCounter
+          value={form.about_text}
+        />
+        <div className="flex justify-end">
+          <button
+            className="seller-secondary-button min-w-44 rounded-md bg-white"
+            type="button"
+            onClick={onRestoreDefaultStory}
+          >
+            Restore default story
+          </button>
+        </div>
+      </StorefrontSection>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <StorefrontSection
+          description="Share certifications or testing information."
+          title="Certifications"
+        >
+          <TextField
+            label="NPIP number"
+            onChange={(value) => onUpdateField("npip_number", value)}
+            optional
+            value={form.npip_number}
+          />
+          <ToggleField
+            checked={form.show_npip}
+            label="Show NPIP number on my storefront"
+            onChange={(value) => onUpdateField("show_npip", value)}
+          />
+          <StorefrontNote tone="info">
+            NPIP is optional. Add your number if you participate in the NPIP
+            program.
+          </StorefrontNote>
+        </StorefrontSection>
+
+        <StorefrontSection
+          description="This is the email buyers can use to contact you and where order notifications are sent."
+          title="Contact"
+        >
+          <ReadOnlyField label="Contact email" value={contactEmail} />
+          <StorefrontNote tone="info">
+            This email is managed from your Account page.
+            <br />
+            <Link className="font-bold text-emerald-900" href="/dashboard/account">
+              Go to Account settings
+            </Link>
+          </StorefrontNote>
+        </StorefrontSection>
+      </div>
+
+      <StorefrontNote tone="warm">
+        Tip: Clear, friendly information helps buyers feel confident purchasing
+        from your farm.
+      </StorefrontNote>
+    </div>
+  );
+}
+
 function PhotosTab({
   aboutPhoto,
-  aboutText,
+  heroSubheading,
   heroImage,
   isUploading,
   logo,
@@ -2260,7 +2405,7 @@ function PhotosTab({
   tagline,
 }: {
   aboutPhoto: StoreMediaItem | null;
-  aboutText: string;
+  heroSubheading: string;
   heroImage: StoreMediaItem | null;
   isUploading: StoreMediaRole | null;
   logo: StoreMediaItem | null;
@@ -2307,7 +2452,7 @@ function PhotosTab({
         onUpload={(files) => onUpload("hero", files)}
         storeName={storeName}
         tagline={tagline}
-        aboutText={aboutText}
+        heroSubheading={heroSubheading}
       />
 
       <AboutPhotoSection
@@ -2386,7 +2531,7 @@ function LogoPhotoSection({
 type HeroLayout = "full" | "right";
 
 function HeroPhotoSection({
-  aboutText,
+  heroSubheading,
   heroImage,
   isUploading,
   onRemove,
@@ -2397,7 +2542,7 @@ function HeroPhotoSection({
   storeName,
   tagline,
 }: {
-  aboutText: string;
+  heroSubheading: string;
   heroImage: StoreMediaItem | null;
   isUploading: boolean;
   onRemove: () => void;
@@ -2614,7 +2759,7 @@ function HeroPhotoSection({
                       layout === "right" && "text-white",
                     )}
                   >
-                    {previewStoreText(aboutText)}
+                    {previewStoreText(heroSubheading)}
                   </p>
                 </div>
                 <span className={storefrontButtonClass({ className: "w-fit" })}>
@@ -2985,12 +3130,23 @@ function getHeroCoverZoom(media: StoreMediaItem | null | undefined) {
   return Math.round(zoom * 100) / 100;
 }
 
-function previewStoreText(value: string) {
+function previewStoreText(value: string, maxLength = heroSubheadingMaxLength) {
   const trimmed = value.trim();
 
   if (!trimmed) return "Healthy birds from our family farm to yours.";
 
-  return trimmed.length > 92 ? `${trimmed.slice(0, 89).trim()}...` : trimmed;
+  return trimmed.length > maxLength
+    ? `${trimmed.slice(0, maxLength - 3).trim()}...`
+    : trimmed;
+}
+
+function getStorefrontContactEmail(form: StoreAdminForm) {
+  return (
+    form.public_email.trim() ||
+    form.order_notification_email.trim() ||
+    form.communication_email.trim() ||
+    "No contact email set"
+  );
 }
 
 function useIdForUpload(label: string) {
@@ -3254,6 +3410,104 @@ function SettingsSection({
       </div>
       <div className="grid gap-4">{children}</div>
     </section>
+  );
+}
+
+function StorefrontSection({
+  children,
+  description,
+  title,
+}: {
+  children: React.ReactNode;
+  description: string;
+  title: string;
+}) {
+  return (
+    <section className="grid gap-3 rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+      <div>
+        <h2 className="text-lg font-semibold text-stone-950">{title}</h2>
+        <p className="mt-0.5 text-sm leading-5 text-stone-600">
+          {description}
+        </p>
+      </div>
+      <div className="grid gap-3">{children}</div>
+    </section>
+  );
+}
+
+function StorefrontStatusPanel({
+  isVisibleToCustomers,
+}: {
+  isVisibleToCustomers: boolean;
+}) {
+  return (
+    <div
+      className={`flex min-h-20 items-center gap-3 rounded-md border px-4 py-3 ${
+        isVisibleToCustomers
+          ? "border-emerald-100 bg-emerald-50"
+          : "border-amber-100 bg-amber-50"
+      }`}
+    >
+      <span
+        className={`flex size-8 shrink-0 items-center justify-center rounded-full ${
+          isVisibleToCustomers ? "bg-emerald-700" : "bg-amber-600"
+        }`}
+      >
+        <Image
+          alt=""
+          className="object-contain"
+          height={16}
+          src="/glyphs/checkmark.png"
+          width={16}
+        />
+      </span>
+      <div>
+        <p className="text-base font-semibold text-stone-950">
+          {isVisibleToCustomers ? "Storefront is live" : "Storefront is hidden"}
+        </p>
+        <p className="mt-0.5 text-sm leading-5 text-stone-700">
+          {isVisibleToCustomers
+            ? "Customers can view your store and place orders."
+            : "Customers cannot currently view your store."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function FieldExamples({ examples }: { examples: string[] }) {
+  return (
+    <div className="text-xs font-medium leading-4 text-stone-600">
+      <p className="font-semibold text-stone-700">Examples:</p>
+      <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
+        {examples.map((example) => (
+          <li key={example}>{example}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function StorefrontNote({
+  children,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  tone?: "neutral" | "info" | "warm";
+}) {
+  const toneClass =
+    tone === "info"
+      ? "border-blue-100 bg-blue-50 text-stone-700"
+      : tone === "warm"
+        ? "border-amber-100 bg-amber-50/60 text-stone-700"
+        : "border-stone-200 bg-stone-50 text-stone-600";
+
+  return (
+    <p
+      className={`rounded-md border px-3 py-1.5 text-xs font-medium leading-4 ${toneClass}`}
+    >
+      {children}
+    </p>
   );
 }
 
@@ -3929,74 +4183,6 @@ function LaunchStoreCardContent({
   );
 }
 
-function StoreStatusCardContent({
-  form,
-  isVisibleToCustomers,
-  onVisibilityChange,
-  storeUrl,
-}: {
-  form: StoreAdminForm;
-  isVisibleToCustomers: boolean;
-  onVisibilityChange: (value: boolean) => void;
-  storeUrl: string;
-}) {
-  return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-start">
-      <div className="grid gap-3">
-        <div>
-          <h2 className="text-xl font-semibold text-stone-950">
-            Your store is live
-          </h2>
-          <p className="mt-1 text-sm leading-6 text-stone-600">
-            {isVisibleToCustomers
-              ? "Customers can currently view your storefront."
-              : "Your store is live, but hidden from customers."}
-          </p>
-        </div>
-        <ToggleField
-          checked={form.storefront_enabled}
-          label="Make storefront visible to customers"
-          onChange={onVisibilityChange}
-        />
-        <label className="grid gap-1 text-sm font-semibold text-stone-700">
-          Public store URL
-          <input
-            className="seller-form-field text-xs"
-            readOnly
-            value={storeUrl}
-          />
-        </label>
-      </div>
-      <div className="grid gap-2 lg:min-w-44">
-        <Link
-          className="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-800 px-5 text-sm font-semibold text-white transition hover:bg-emerald-900"
-          href={`/store/${form.store_slug}`}
-          target="_blank"
-        >
-          View Store
-        </Link>
-        {form.storefront_enabled ? (
-          <button
-            className="seller-secondary-button"
-            onClick={() => onVisibilityChange(false)}
-            type="button"
-          >
-            Hide Storefront
-          </button>
-        ) : (
-          <button
-            className="seller-secondary-button"
-            onClick={() => onVisibilityChange(true)}
-            type="button"
-          >
-            Turn on Storefront
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function SellerReadinessRow({ item }: { item: SellerLaunchItem }) {
   return (
     <div
@@ -4030,25 +4216,45 @@ function SellerReadinessRow({ item }: { item: SellerLaunchItem }) {
 function TextField({
   helper,
   label,
+  maxLength,
   onChange,
+  optional = false,
   placeholder,
   required = false,
+  showCounter = false,
   type = "text",
   value,
 }: {
   helper?: string;
   label: string;
+  maxLength?: number;
   onChange: (value: string) => void;
+  optional?: boolean;
   placeholder?: string;
   required?: boolean;
+  showCounter?: boolean;
   type?: "text" | "number";
   value: string;
 }) {
   return (
     <label className="grid gap-1 text-sm font-semibold text-stone-700">
-      {label}
+      <span className="flex items-center justify-between gap-3">
+        <span>
+          {label}
+          {required ? <span className="ml-1 text-red-600">*</span> : null}
+          {optional ? (
+            <span className="ml-1 font-medium text-stone-500">(optional)</span>
+          ) : null}
+        </span>
+        {showCounter && maxLength ? (
+          <span className="text-xs font-medium text-stone-500">
+            {value.length} / {maxLength}
+          </span>
+        ) : null}
+      </span>
       <input
         className="seller-form-field"
+        maxLength={maxLength}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         required={required}
@@ -4068,28 +4274,46 @@ function TextAreaField({
   compact = false,
   helper,
   label,
+  maxLength,
   onChange,
   placeholder,
+  required = false,
   rows = 4,
+  showCounter = false,
   value,
 }: {
   compact?: boolean;
   helper?: string;
   label: string;
+  maxLength?: number;
   onChange: (value: string) => void;
   placeholder?: string;
+  required?: boolean;
   rows?: number;
+  showCounter?: boolean;
   value: string;
 }) {
   return (
     <label className="grid gap-1 text-sm font-semibold text-stone-700">
-      {label}
+      <span className="flex items-center justify-between gap-3">
+        <span>
+          {label}
+          {required ? <span className="ml-1 text-red-600">*</span> : null}
+        </span>
+        {showCounter && maxLength ? (
+          <span className="text-xs font-medium text-stone-500">
+            {value.length} / {maxLength}
+          </span>
+        ) : null}
+      </span>
       <textarea
         className={`seller-form-field resize-y py-3 ${
           compact ? "min-h-20" : "min-h-28"
         }`}
+        maxLength={maxLength}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
+        required={required}
         rows={rows}
         value={value}
       />
@@ -4099,6 +4323,77 @@ function TextAreaField({
         </span>
       ) : null}
     </label>
+  );
+}
+
+function ReadOnlyField({
+  helper,
+  label,
+  value,
+}: {
+  helper?: string;
+  label: string;
+  value: string;
+}) {
+  return (
+    <label className="grid gap-1 text-sm font-semibold text-stone-700">
+      {label}
+      <input
+        aria-readonly="true"
+        className="seller-form-field cursor-not-allowed shadow-none"
+        readOnly
+        style={readOnlyFieldStyle}
+        value={value}
+      />
+      {helper ? (
+        <span className="text-xs font-medium leading-5 text-stone-500">
+          {helper}
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
+function ReadOnlyCopyField({
+  helper,
+  label,
+  value,
+}: {
+  helper?: string;
+  label: string;
+  value: string;
+}) {
+  const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
+
+  async function copyValue() {
+    if (!value || typeof navigator === "undefined") return;
+
+    await navigator.clipboard.writeText(value);
+    setCopyState("copied");
+    window.setTimeout(() => setCopyState("idle"), 1500);
+  }
+
+  return (
+    <div className="grid gap-1 text-sm font-semibold text-stone-700">
+      <span>{label}</span>
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <input
+          aria-readonly="true"
+          className="seller-form-field cursor-not-allowed shadow-none"
+          readOnly
+          style={readOnlyFieldStyle}
+          value={value}
+        />
+        <button className="seller-secondary-button" type="button" onClick={copyValue}>
+          {copyState === "copied" ? "Copied" : "Copy"}
+        </button>
+      </div>
+      {helper ? (
+        <span className="text-xs font-medium leading-5 text-stone-500">
+          {helper}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -4132,6 +4427,9 @@ function buildInitialForm(
     store_name: seller.store_name ?? "",
     store_slug: seller.store_slug ?? "",
     store_tagline: seller.store_tagline ?? "",
+    hero_subheading:
+      seller.hero_subheading ??
+      "Browse current availability and request pickup at checkout.",
     public_city: seller.public_city ?? "",
     public_state: seller.public_state ?? "",
     public_country: seller.public_country ?? "US",
@@ -4408,16 +4706,19 @@ function buildLaunchSummary(
 
 function validateForm(form: StoreAdminForm, pickupOptions: PickupOptionDraft[]) {
   if (!form.store_name.trim()) return "Store name is required.";
-
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.store_slug.trim())) {
-    return "Store slug must use lowercase letters, numbers, and hyphens.";
+  if (!form.public_city.trim()) return "City is required.";
+  if (!form.public_state.trim()) return "State is required.";
+  if (!form.store_tagline.trim()) return "Hero headline is required.";
+  if (form.store_tagline.trim().length > heroHeadlineMaxLength) {
+    return `Hero headline must be ${heroHeadlineMaxLength} characters or fewer.`;
   }
-
-  if (
-    form.public_country.trim() &&
-    !/^[A-Za-z]{2,3}$/.test(form.public_country.trim())
-  ) {
-    return "Country should use a two or three letter code.";
+  if (!form.hero_subheading.trim()) return "Hero subheading is required.";
+  if (form.hero_subheading.trim().length > heroSubheadingMaxLength) {
+    return `Hero subheading must be ${heroSubheadingMaxLength} characters or fewer.`;
+  }
+  if (!form.about_text.trim()) return "Farm story is required.";
+  if (form.about_text.trim().length > farmStoryMaxLength) {
+    return `Farm story must be ${farmStoryMaxLength} characters or fewer.`;
   }
 
   for (const option of pickupOptions) {

@@ -2,6 +2,7 @@ export type SellerContext = {
   store_id: string;
   store_name: string;
   store_tagline: string | null;
+  hero_subheading: string | null;
   store_slug: string;
   store_status: string;
   storefront_mode: string;

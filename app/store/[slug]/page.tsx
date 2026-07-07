@@ -95,6 +95,9 @@ export default async function StorefrontHomePage({
   );
   const equipment = equipmentResult.data;
   const processedPoultry = processedPoultryResult.data;
+  const heroSubheading =
+    store.hero_subheading?.trim() ||
+    "Browse current availability and request pickup at checkout.";
   const aboutPreview = previewText(
     store.about_text,
     `${store.store_name} shares pickup details and current products from the farm.`,
@@ -154,7 +157,7 @@ export default async function StorefrontHomePage({
                   heroIsLeftFade ? "text-white" : ""
                 }`}
               >
-                {aboutPreview}
+                {heroSubheading}
               </p>
             </div>
             <div>

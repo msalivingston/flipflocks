@@ -13,6 +13,7 @@ export type StorefrontHome = {
   store_slug: string;
   store_name: string;
   store_tagline: string | null;
+  hero_subheading: string | null;
   public_city: string | null;
   public_state: string | null;
   public_country: string | null;
