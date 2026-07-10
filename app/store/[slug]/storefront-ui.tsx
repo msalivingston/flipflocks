@@ -43,7 +43,7 @@ export function cx(...classes: Array<string | false | null | undefined>) {
 export const storefrontHeroTypography = {
   eyebrow: "text-xs font-semibold uppercase tracking-[0.12em] text-emerald-800",
   title:
-    `${storefrontSerifClass} mt-2 text-3xl font-bold leading-[1.05] text-stone-950 sm:text-[2.75rem] lg:text-5xl`,
+    `${storefrontSerifClass} mt-2 text-3xl font-normal leading-[1.05] text-stone-950 sm:text-[2.75rem] lg:text-5xl`,
   body: "mt-3 max-w-[30rem] text-sm leading-6 text-stone-700 sm:text-base",
 };
 
