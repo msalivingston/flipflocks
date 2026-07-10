@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { storefrontSans, storefrontSerifClass } from "./storefront-fonts";
 
 type StorefrontLocation = {
   public_city: string | null;
@@ -42,18 +43,18 @@ export function cx(...classes: Array<string | false | null | undefined>) {
 export const storefrontHeroTypography = {
   eyebrow: "text-xs font-semibold uppercase tracking-[0.12em] text-emerald-800",
   title:
-    "mt-3 font-serif text-4xl font-semibold leading-[1.08] text-stone-950 sm:text-5xl",
-  body: "mt-5 text-base leading-7 text-stone-700",
+    `${storefrontSerifClass} mt-2 text-3xl font-bold leading-[1.05] text-stone-950 sm:text-[2.75rem]`,
+  body: "mt-3 max-w-[30rem] text-sm leading-6 text-stone-700 sm:text-base",
 };
 
 export const storefrontHeroFrame = {
-  aspectClass: "aspect-[7/3]",
-  aspectRatio: 7 / 3,
+  aspectClass: "aspect-[10/3]",
+  aspectRatio: 10 / 3,
   publicClass:
-    "relative overflow-hidden rounded-2xl border border-[#ded7c8] bg-white aspect-[7/3] min-h-[30rem]",
+    "relative h-[clamp(20rem,64vw,24rem)] overflow-hidden bg-white sm:h-[clamp(18.5rem,40vw,23rem)] lg:h-[clamp(17rem,30vw,21rem)]",
   setupPreviewScale: 0.72,
   setupPreviewClass:
-    "relative mx-auto aspect-[7/3] w-full max-w-[50rem] overflow-hidden rounded-lg border border-stone-200 bg-stone-100",
+    "relative mx-auto aspect-[10/3] w-full max-w-[50rem] overflow-hidden border border-stone-200 bg-stone-100",
 };
 
 export function storefrontButtonClass({
@@ -64,7 +65,7 @@ export function storefrontButtonClass({
   variant?: "primary" | "secondary";
 } = {}) {
   return cx(
-    "inline-flex min-h-11 items-center justify-center rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-white",
+    "inline-flex min-h-10 items-center justify-center rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-white",
     storefrontTheme.focus,
     variant === "primary"
       ? storefrontTheme.primary
@@ -77,6 +78,8 @@ export function StorefrontShell({ children }: { children: React.ReactNode }) {
   return (
     <div
       className={cx(
+        storefrontSans.className,
+        "buyer-storefront",
         "min-h-screen text-stone-950 antialiased",
         storefrontTheme.background,
       )}
@@ -428,7 +431,7 @@ export function StorefrontFooter({ store }: { store: StorefrontIdentity }) {
           <p className="font-semibold text-stone-950">Quick Links</p>
           <div className="mt-3 grid gap-2">
             <Link href={`/store/${store.store_slug}/about`}>
-              About This Farm
+              About Our Farm
             </Link>
             <Link href={`/store/${store.store_slug}/policies`}>
               Pickup Location
@@ -444,14 +447,20 @@ export function StoreLogo({
   size = "md",
   store,
 }: {
-  size?: "xs" | "sm" | "md";
+  size?: "xs" | "sm" | "md" | "lg";
   store: Pick<
     StorefrontIdentity,
     "logo_image_alt_text" | "logo_image_url" | "store_name"
   >;
 }) {
   const sizeClass =
-    size === "xs" ? "h-9 w-9" : size === "sm" ? "h-12 w-12" : "h-16 w-16";
+    size === "xs"
+      ? "h-9 w-9"
+      : size === "sm"
+        ? "h-12 w-12"
+        : size === "lg"
+          ? "h-20 w-20"
+          : "h-16 w-16";
 
   if (!store.logo_image_url) {
     return (
@@ -508,21 +517,23 @@ export function HeroImage({
 
 export function ListingPhoto({
   alt,
+  aspect = "default",
   src,
 }: {
   alt: string;
+  aspect?: "default" | "square";
   src: string | null;
 }) {
   if (!src) {
     return (
-      <StorefrontPlaceholderImage label="Photo coming soon" />
+      <StorefrontPlaceholderImage aspect={aspect} label="Photo coming soon" />
     );
   }
 
   return (
     <Image
       alt={alt}
-      className="aspect-[4/3] w-full object-cover"
+      className={`${aspect === "square" ? "aspect-square" : "aspect-[4/3]"} w-full object-cover`}
       height={600}
       src={toPublicImageUrl(src)}
       unoptimized
@@ -546,12 +557,14 @@ export function StorefrontMediaFrame({
 }
 
 export function StorefrontPlaceholderImage({
+  aspect = "default",
   label = "Photo coming soon",
 }: {
+  aspect?: "default" | "square";
   label?: string;
 }) {
   return (
-    <div className="flex aspect-[4/3] items-center justify-center bg-[#f4f1ea] px-4 text-center text-sm font-semibold text-stone-500">
+    <div className={`flex ${aspect === "square" ? "aspect-square" : "aspect-[4/3]"} items-center justify-center bg-[#f4f1ea] px-4 text-center text-sm font-semibold text-stone-500`}>
       <span className="rounded-md border border-[#e1d8c8] bg-white/65 px-3 py-1">
         {label}
       </span>
@@ -605,14 +618,14 @@ export function AvailabilityBadge({
 }) {
   const tone =
     code === "ready_now"
-      ? "bg-emerald-100 text-emerald-800"
+      ? "border-emerald-200 bg-white/90 text-emerald-800"
       : code === "reserve_now"
-        ? "bg-amber-100 text-amber-800"
-        : "bg-stone-100 text-stone-700";
+        ? "border-amber-200 bg-white/90 text-amber-800"
+        : "border-stone-200 bg-white/90 text-stone-700";
 
   return (
     <span
-      className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${tone}`}
+      className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold shadow-sm backdrop-blur ${tone}`}
     >
       {label}
     </span>

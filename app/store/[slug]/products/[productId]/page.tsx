@@ -6,6 +6,7 @@ import {
   StorefrontMediaFrame,
   StorefrontPage,
   StorefrontShell,
+  cx,
   formatDate,
   toPublicImageUrl,
 } from "../../storefront-ui";
@@ -24,6 +25,7 @@ import {
   StorefrontChrome,
   getStorefrontCategoryAvailability,
 } from "../../storefront-shell-components";
+import { storefrontSerifClass } from "../../storefront-fonts";
 import { ProductOrderOptions } from "./product-order-options";
 
 export default async function StorefrontProductPage({
@@ -147,7 +149,12 @@ export default async function StorefrontProductPage({
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#073f1e]">
                 {product.speciesName}
               </p>
-              <h1 className="mt-4 font-serif text-4xl font-semibold leading-tight text-stone-950">
+              <h1
+                className={cx(
+                  storefrontSerifClass,
+                  "mt-4 text-4xl font-bold leading-tight text-stone-950",
+                )}
+              >
                 {product.name}
               </h1>
               <p className="mt-3 text-lg text-stone-900">

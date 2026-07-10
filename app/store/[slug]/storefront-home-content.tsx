@@ -1,8 +1,8 @@
 "use client";
 
-import { House, MapPin } from "lucide-react";
 import Image from "next/image";
 import {
+  cx,
   formatCurrency,
   formatLocation,
   storefrontButtonClass,
@@ -29,6 +29,7 @@ import {
   StorefrontChrome,
   getStorefrontCategoryAvailability,
 } from "./storefront-shell-components";
+import { storefrontSerifClass } from "./storefront-fonts";
 
 type StorefrontHeroLayout = "full" | "right";
 
@@ -86,7 +87,7 @@ export function StorefrontHomeContent({
         </div>
       ) : null}
       <StorefrontChrome categories={categories} store={store}>
-      <main className="mx-auto grid max-w-[70rem] gap-8 px-5 py-7 sm:px-7 lg:gap-9">
+      <main className="grid gap-3 pb-4 lg:gap-4">
         <section className={storefrontHeroFrame.publicClass}>
           <HeroBackdrop
             alt={store.hero_image_alt_text || `${store.store_name} farm photo`}
@@ -94,70 +95,112 @@ export function StorefrontHomeContent({
             layout={heroLayout}
             src={store.hero_image_url}
           />
-          <div
-            className={`relative z-10 flex min-h-[19rem] max-w-[31rem] flex-col justify-center gap-6 p-6 sm:p-9 lg:min-h-[27rem] lg:p-10 ${
-              heroIsLeftFade ? "text-white" : "text-stone-950"
-            }`}
-          >
-            <div>
-              <p
-                className={`${storefrontHeroTypography.eyebrow} ${
-                  heroIsLeftFade ? "text-white" : ""
-                }`}
-              >
-                Local farm storefront
-              </p>
-              <h1
-                className={`${storefrontHeroTypography.title} ${
-                  heroIsLeftFade ? "text-white" : ""
-                }`}
-              >
-                {heroTitle}
-              </h1>
-              <p
-                className={`${storefrontHeroTypography.body} ${
-                  heroIsLeftFade ? "text-white" : ""
-                }`}
-              >
-                {heroSubheading}
-              </p>
-            </div>
-            <div>
-              <a className={storefrontButtonClass()} href="#shop-listings">
-                Shop Live Poultry
-              </a>
+          <div className="relative z-10 mx-auto h-full max-w-[70rem] px-5 sm:px-7">
+            <div
+              className={`flex h-full max-w-[32rem] flex-col justify-center gap-4 ${
+                heroIsLeftFade ? "text-white" : "text-stone-950"
+              }`}
+            >
+              <div>
+                <p
+                  className={`${storefrontHeroTypography.eyebrow} ${
+                    heroIsLeftFade ? "text-white" : ""
+                  }`}
+                >
+                  Local farm storefront
+                </p>
+                <h1
+                  className={`${storefrontHeroTypography.title} ${
+                    heroIsLeftFade ? "text-white" : ""
+                  }`}
+                >
+                  {heroTitle}
+                </h1>
+                <p
+                  className={`${storefrontHeroTypography.body} ${
+                    heroIsLeftFade ? "text-white" : ""
+                  }`}
+                >
+                  {heroSubheading}
+                </p>
+              </div>
+              <div className="grid justify-items-start gap-2">
+                <HeroPickupBadge
+                  location={formatLocation(store)}
+                  light={heroIsLeftFade}
+                />
+                <a
+                  className={storefrontButtonClass({
+                    className: "mt-3 min-h-12 px-6 text-xl",
+                  })}
+                  href="#shop-listings"
+                >
+                  Shop
+                </a>
+              </div>
             </div>
           </div>
         </section>
 
-        <section id="shop-listings">
-          <h2 className="mb-5 font-serif text-3xl font-semibold leading-tight text-stone-950">
-            Shop Our Listings
-          </h2>
-          <StorefrontListingTabs sections={listingSections} />
-        </section>
+        <div className="mx-auto grid w-full max-w-[70rem] gap-5 px-5 sm:px-7 lg:gap-6">
+          <section
+            className="rounded-lg bg-[#fbf7ef] p-4 sm:p-5"
+            id="shop-listings"
+          >
+            <StorefrontListingTabs sections={listingSections} />
+          </section>
 
-        <section className="grid overflow-hidden rounded-2xl border border-[#ded7c8] bg-[#fffdf8] lg:grid-cols-2">
-          <InfoCard
-            actionHref={`/store/${store.store_slug}/about`}
-            actionLabel="Learn more about our farm"
-            eyebrow="About This Farm"
-            title={store.store_name}
-          >
-            {aboutPreview}
-          </InfoCard>
-          <InfoCard
-            actionHref={`/store/${store.store_slug}/policies`}
-            actionLabel="View pickup details"
-            eyebrow="Pickup Location"
-            title={hasLocation(store) ? formatLocation(store) : "Pickup details"}
-          >
-            {pickupPreview}
-          </InfoCard>
-        </section>
+          <section className="grid overflow-hidden rounded-2xl border border-[#ded7c8] bg-[#fffdf8] lg:grid-cols-2">
+            <InfoCard
+              actionHref={`/store/${store.store_slug}/about`}
+              actionLabel="Learn more about our farm"
+              eyebrow="About Our Farm"
+              title={store.store_name}
+            >
+              {aboutPreview}
+            </InfoCard>
+            <InfoCard
+              actionHref={`/store/${store.store_slug}/policies`}
+              actionLabel="View pickup details"
+              eyebrow="Pickup Location"
+              title={hasLocation(store) ? formatLocation(store) : "Pickup details"}
+            >
+              {pickupPreview}
+            </InfoCard>
+          </section>
+        </div>
       </main>
       </StorefrontChrome>
     </>
+  );
+}
+
+function HeroPickupBadge({
+  light,
+  location,
+}: {
+  light: boolean;
+  location: string;
+}) {
+  return (
+    <div
+      className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 text-xs font-semibold shadow-sm ${
+        light
+          ? "border-white/35 bg-white/90 text-[#073f1e]"
+          : "border-[#ddd5c7] bg-white/90 text-[#073f1e]"
+      }`}
+    >
+      <Image
+        alt=""
+        aria-hidden="true"
+        className="h-4 w-4 object-contain"
+        height={128}
+        src="/glyphs/map-pin.png"
+        unoptimized
+        width={128}
+      />
+      Local pickup in {location}
+    </div>
   );
 }
 
@@ -378,20 +421,25 @@ function InfoCard({
   return (
     <article className="grid gap-3 border-b border-[#ded7c8] p-6 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0 lg:p-8">
       <div className="flex items-center gap-3">
-        {eyebrow === "Pickup Location" ? (
-          <MapPin
-            aria-hidden="true"
-            className="h-10 w-10 shrink-0 text-[#073f1e]"
-            strokeWidth={2}
-          />
-        ) : (
-          <House
-            aria-hidden="true"
-            className="h-10 w-10 shrink-0 text-[#073f1e]"
-            strokeWidth={2}
-          />
-        )}
-        <p className="font-serif text-xl font-semibold text-stone-950">
+        <Image
+          alt=""
+          aria-hidden="true"
+          className="h-11 w-11 shrink-0 object-contain"
+          height={128}
+          src={
+            eyebrow === "Pickup Location"
+              ? "/glyphs/map-pin.png"
+              : "/glyphs/farmhouse.png"
+          }
+          unoptimized
+          width={128}
+        />
+        <p
+          className={cx(
+            storefrontSerifClass,
+            "text-xl font-bold text-stone-950",
+          )}
+        >
           {eyebrow}
         </p>
       </div>

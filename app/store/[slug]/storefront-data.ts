@@ -525,7 +525,7 @@ function formatPricingSummary(
   if (minPrice === null || maxPrice === null) return null;
 
   if (minPrice !== maxPrice) {
-    return `Options from ${formatCurrency(minPrice)}`;
+    return `From ${formatCurrency(minPrice)}`;
   }
 
   return formatCurrency(minPrice);

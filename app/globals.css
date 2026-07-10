@@ -18,6 +18,83 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.buyer-storefront .text-\[0\.68rem\]:not(.storefront-serif),
+.buyer-storefront .text-\[0\.7rem\]:not(.storefront-serif) {
+  font-size: calc(0.7rem + 0.125rem);
+}
+
+.buyer-storefront .text-xs:not(.storefront-serif) {
+  font-size: calc(0.75rem + 0.125rem);
+}
+
+.buyer-storefront .text-sm:not(.storefront-serif) {
+  font-size: calc(0.875rem + 0.125rem);
+}
+
+.buyer-storefront .text-base:not(.storefront-serif) {
+  font-size: calc(1rem + 0.125rem);
+}
+
+.buyer-storefront .text-lg:not(.storefront-serif) {
+  font-size: calc(1.125rem + 0.125rem);
+}
+
+.buyer-storefront .text-xl:not(.storefront-serif) {
+  font-size: calc(1.25rem + 0.125rem);
+}
+
+.buyer-storefront .text-2xl:not(.storefront-serif) {
+  font-size: calc(1.5rem + 0.125rem);
+}
+
+.buyer-storefront .text-3xl:not(.storefront-serif) {
+  font-size: calc(1.875rem + 0.125rem);
+}
+
+.buyer-storefront .text-4xl:not(.storefront-serif) {
+  font-size: calc(2.25rem + 0.125rem);
+}
+
+.buyer-storefront .text-\[1\.375rem\]:not(.storefront-serif) {
+  font-size: calc(1.375rem + 0.125rem);
+}
+
+@media (min-width: 640px) {
+  .buyer-storefront .sm\:text-base:not(.storefront-serif) {
+    font-size: calc(1rem + 0.125rem);
+  }
+
+  .buyer-storefront .sm\:text-2xl:not(.storefront-serif) {
+    font-size: calc(1.5rem + 0.125rem);
+  }
+
+  .buyer-storefront .sm\:text-3xl:not(.storefront-serif) {
+    font-size: calc(1.875rem + 0.125rem);
+  }
+
+  .buyer-storefront .sm\:text-5xl:not(.storefront-serif) {
+    font-size: calc(3rem + 0.125rem);
+  }
+
+  .buyer-storefront .sm\:text-\[0\.95rem\]:not(.storefront-serif) {
+    font-size: calc(0.95rem + 0.125rem);
+  }
+
+  .buyer-storefront .sm\:text-\[1\.75rem\]:not(.storefront-serif) {
+    font-size: calc(1.75rem + 0.125rem);
+  }
+
+  .buyer-storefront .sm\:text-\[2\.75rem\]:not(.storefront-serif) {
+    font-size: calc(2.75rem + 0.125rem);
+  }
+}
+
+@media (min-width: 1024px) {
+  .buyer-storefront .lg\:text-sm:not(.storefront-serif) {
+    font-size: calc(0.875rem + 0.125rem);
+  }
+}
+
 .seller-small-button {
   display: inline-flex;
   min-height: 2rem;

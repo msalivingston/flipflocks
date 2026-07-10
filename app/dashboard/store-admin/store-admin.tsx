@@ -1634,7 +1634,6 @@ export function StoreAdmin() {
     setSaveState("saved");
     setSaveMessage("Store Admin saved.");
     await reloadReadiness();
-    reload();
   }
 
   async function launchStore() {
@@ -2766,7 +2765,7 @@ function HeroPhotoSection({
               />
               <HeroFade layout={layout} />
               <div
-                className={`relative z-10 flex h-full max-w-md flex-col justify-center gap-6 p-5 sm:p-7 ${
+                className={`relative z-10 flex h-full max-w-lg flex-col justify-center gap-5 p-5 sm:p-7 ${
                   layout === "right" ? "text-white" : "text-stone-950"
                 }`}
               >
@@ -2796,8 +2795,12 @@ function HeroPhotoSection({
                     {previewStoreText(heroSubheading)}
                   </p>
                 </div>
-                <span className={storefrontButtonClass({ className: "w-fit" })}>
-                  View available birds
+                <span
+                  className={storefrontButtonClass({
+                    className: "mt-3 w-fit min-h-12 px-6 text-xl",
+                  })}
+                >
+                  Shop
                 </span>
               </div>
             </div>
@@ -2916,7 +2919,7 @@ function LibraryMenu({
             if (event.target === event.currentTarget) setIsOpen(false);
           }}
         >
-          <div className="grid max-h-[min(44rem,calc(100vh-2rem))] w-full max-w-5xl overflow-hidden rounded-xl bg-white shadow-2xl">
+          <div className="grid max-h-[min(44rem,calc(100vh-2rem))] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl bg-white shadow-2xl">
             <div className="flex items-center justify-between gap-3 border-b border-stone-200 px-5 py-4">
               <div>
                 <h4
@@ -2938,7 +2941,7 @@ function LibraryMenu({
               </button>
             </div>
 
-            <div className="grid gap-3 overflow-auto p-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid min-h-0 gap-3 overflow-y-auto p-4 sm:grid-cols-2 lg:grid-cols-3">
               {heroLibraryImages.map((image) => {
                 const isSelected = selectedPath === image.path;
 
@@ -3137,7 +3140,15 @@ function normalizeHeroLayout(value: string | null | undefined): HeroLayout {
 }
 
 function buildHeroInitialCrop(media: StoreMediaItem | null | undefined) {
-  if (media?.crop_metadata) return normalizeCrop(media.crop_metadata);
+  if (media?.crop_metadata) {
+    const normalized = normalizeCrop(media.crop_metadata);
+
+    return {
+      ...normalized,
+      aspect: storefrontHeroFrame.aspectRatio,
+      zoom: Math.max(normalized.zoom, getHeroCoverZoom(media)),
+    };
+  }
 
   return buildHeroDefaultCrop(media);
 }
