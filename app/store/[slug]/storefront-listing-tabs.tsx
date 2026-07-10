@@ -127,7 +127,7 @@ export function StorefrontListingTabs({
         <h2
           className={cx(
             storefrontSerifClass,
-            "text-2xl font-bold leading-tight text-stone-950 sm:text-3xl",
+            "text-2xl font-bold leading-tight text-stone-950 sm:text-3xl lg:text-[2.0625rem]",
           )}
         >
           Shop
@@ -145,7 +145,7 @@ export function StorefrontListingTabs({
                 aria-controls={`${section.id}-panel`}
                 aria-selected={active}
                 className={cx(
-                  "relative -mb-px inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-t-md border border-b-0 px-2 text-xs font-semibold transition lg:gap-2 lg:px-3 lg:text-sm",
+                  "relative -mb-px inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-t-md border border-b-0 px-2 text-xs font-semibold transition lg:min-h-11 lg:gap-2 lg:px-3 lg:text-sm",
                   active
                     ? "border-[#c8d6bf] bg-white text-[#073f1e] shadow-[0_-1px_0_#c8d6bf_inset]"
                     : "border-[#eee8dc] bg-[#f8f3ea] text-stone-700 hover:border-[#ddd5c7] hover:bg-white hover:text-[#073f1e]",
@@ -157,7 +157,7 @@ export function StorefrontListingTabs({
                 type="button"
               >
                 <ListingTabIcon name={tabIconName(section.label)} />
-                {section.label}
+                <span className="whitespace-nowrap">{section.label}</span>
               </button>
             );
           })}
@@ -171,7 +171,7 @@ export function StorefrontListingTabs({
         role="tabpanel"
       >
         {activeSection.cards.length > 0 ? (
-          <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
+          <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-5">
             <ListingFilters
               availability={availabilityFilter}
               breed={breedFilter}
@@ -189,7 +189,7 @@ export function StorefrontListingTabs({
               onSpeciesChange={setSpeciesFilter}
             />
             {filteredCards.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
                 {filteredCards.map((card) => (
                   <ListingCard card={card} key={card.href} />
                 ))}
@@ -357,11 +357,11 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
         className="flex h-full flex-col focus:outline-none focus:ring-2 focus:ring-emerald-700"
         href={card.href}
       >
-        <div className="px-3.5 pb-2 pt-3">
+        <div className="px-3.5 pb-2 pt-3 lg:px-4 lg:pb-2.5 lg:pt-4">
           <p className="truncate text-[0.7rem] font-bold uppercase tracking-[0.08em] text-emerald-700">
             {card.meta}
           </p>
-          <h3 className="mt-1 line-clamp-1 text-base font-semibold leading-snug text-stone-950">
+          <h3 className="mt-1 line-clamp-1 text-base font-semibold leading-snug text-stone-950 lg:mt-1.5">
             {card.title}
           </h3>
         </div>
@@ -374,14 +374,14 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
             />
           </div>
         </div>
-        <div className="flex flex-1 flex-col p-3.5 pt-3">
-          <div className="mt-auto flex items-end justify-between gap-3">
+        <div className="flex flex-1 flex-col p-3.5 pt-3 lg:p-4 lg:pt-3.5">
+          <div className="mt-auto flex items-end justify-between gap-3 lg:gap-4">
             <div className="min-w-0">
               <p className="truncate text-lg font-bold text-[#073f1e]">
                 {card.price}
               </p>
             </div>
-            <span className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-md bg-[#073f1e] px-3 text-sm font-semibold text-white transition group-hover:bg-[#0b562a]">
+            <span className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-md bg-[#073f1e] px-3 text-sm font-semibold text-white transition group-hover:bg-[#0b562a] lg:min-h-11 lg:px-4 lg:text-base">
               View
             </span>
           </div>
@@ -502,7 +502,7 @@ function tabIconName(label: string): StorefrontCategorySymbolName {
 function ListingTabIcon({ name }: { name: StorefrontCategorySymbolName }) {
   return (
     <StorefrontCategorySymbol
-      className="h-5 w-5"
+      className="h-5 w-5 lg:h-6 lg:w-6"
       name={name}
     />
   );

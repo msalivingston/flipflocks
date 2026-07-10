@@ -43,7 +43,7 @@ export function StorefrontChrome({
 export function StorefrontHeader({ store }: { store: StorefrontHome }) {
   return (
     <header className="border-b border-[#e7e0d2] bg-white">
-      <div className="mx-auto grid max-w-[70rem] gap-3 px-5 py-2.5 sm:px-7 lg:min-h-[5.75rem] lg:grid-cols-[minmax(24rem,1fr)_auto_auto] lg:items-center">
+      <div className="mx-auto grid max-w-[70rem] gap-3 px-5 py-2.5 sm:px-7 lg:min-h-[6rem] lg:grid-cols-[minmax(24rem,1fr)_auto_auto] lg:items-center">
         <Link
           className="flex min-w-0 items-center gap-4 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
           href={`/store/${store.store_slug}`}
@@ -53,7 +53,7 @@ export function StorefrontHeader({ store }: { store: StorefrontHome }) {
             <p
               className={cx(
                 storefrontSerifClass,
-                "text-xl font-normal leading-tight text-[#073f1e] sm:text-2xl",
+                "text-xl font-normal leading-tight text-[#073f1e] sm:text-2xl lg:text-[1.625rem]",
               )}
             >
               {store.store_name}
@@ -73,13 +73,13 @@ export function StorefrontHeader({ store }: { store: StorefrontHome }) {
         <div className="flex items-center gap-1.5 lg:ml-4 lg:justify-end xl:ml-6">
           <Link
             aria-label="Search listings"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 lg:h-11 lg:w-11"
             href={`/store/${store.store_slug}#storefront-search`}
           >
             <Image
               alt=""
               aria-hidden="true"
-              className="h-6 w-6 object-contain"
+              className="h-6 w-6 object-contain lg:h-7 lg:w-7"
               height={128}
               src="/glyphs/looking-glass.png"
               unoptimized
@@ -88,13 +88,13 @@ export function StorefrontHeader({ store }: { store: StorefrontHome }) {
           </Link>
           <Link
             aria-label="Account"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 lg:h-11 lg:w-11"
             href="/sign-in"
           >
             <Image
               alt=""
               aria-hidden="true"
-              className="h-6 w-6 object-contain"
+              className="h-6 w-6 object-contain lg:h-7 lg:w-7"
               height={128}
               src="/glyphs/person.png"
               unoptimized

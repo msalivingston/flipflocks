@@ -97,7 +97,7 @@ export function StorefrontHomeContent({
           />
           <div className="relative z-10 mx-auto h-full max-w-[70rem] px-5 sm:px-7">
             <div
-              className={`flex h-full max-w-[32rem] flex-col justify-center gap-4 ${
+              className={`flex h-full max-w-[32rem] flex-col justify-center gap-4 lg:max-w-[36rem] ${
                 heroIsLeftFade ? "text-white" : "text-stone-950"
               }`}
             >
@@ -131,7 +131,7 @@ export function StorefrontHomeContent({
                 />
                 <a
                   className={storefrontButtonClass({
-                    className: "mt-3 min-h-12 px-6 text-xl",
+                    className: "mt-3 min-h-12 px-6 text-xl lg:min-h-[3.25rem] lg:px-7 lg:!text-[1.45rem]",
                   })}
                   href="#shop-listings"
                 >
@@ -184,7 +184,7 @@ function HeroPickupBadge({
 }) {
   return (
     <div
-      className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 text-xs font-semibold shadow-sm ${
+      className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 text-xs font-semibold shadow-sm lg:min-h-10 lg:px-4 lg:text-sm ${
         light
           ? "border-white/35 bg-white/90 text-[#073f1e]"
           : "border-[#ddd5c7] bg-white/90 text-[#073f1e]"
@@ -193,7 +193,7 @@ function HeroPickupBadge({
       <Image
         alt=""
         aria-hidden="true"
-        className="h-4 w-4 object-contain"
+        className="h-4 w-4 object-contain lg:h-[18px] lg:w-[18px]"
         height={128}
         src="/glyphs/map-pin.png"
         unoptimized

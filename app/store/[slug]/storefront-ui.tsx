@@ -43,7 +43,7 @@ export function cx(...classes: Array<string | false | null | undefined>) {
 export const storefrontHeroTypography = {
   eyebrow: "text-xs font-semibold uppercase tracking-[0.12em] text-emerald-800",
   title:
-    `${storefrontSerifClass} mt-2 text-3xl font-bold leading-[1.05] text-stone-950 sm:text-[2.75rem]`,
+    `${storefrontSerifClass} mt-2 text-3xl font-bold leading-[1.05] text-stone-950 sm:text-[2.75rem] lg:text-5xl`,
   body: "mt-3 max-w-[30rem] text-sm leading-6 text-stone-700 sm:text-base",
 };
 
@@ -51,7 +51,7 @@ export const storefrontHeroFrame = {
   aspectClass: "aspect-[10/3]",
   aspectRatio: 10 / 3,
   publicClass:
-    "relative h-[clamp(20rem,64vw,24rem)] overflow-hidden bg-white sm:h-[clamp(18.5rem,40vw,23rem)] lg:h-[clamp(17rem,30vw,21rem)]",
+    "relative h-[clamp(20rem,64vw,24rem)] overflow-hidden bg-white sm:h-[clamp(18.5rem,40vw,23rem)] lg:h-[clamp(18.75rem,33vw,23.25rem)]",
   setupPreviewScale: 0.72,
   setupPreviewClass:
     "relative mx-auto aspect-[10/3] w-full max-w-[50rem] overflow-hidden border border-stone-200 bg-stone-100",
@@ -65,7 +65,7 @@ export function storefrontButtonClass({
   variant?: "primary" | "secondary";
 } = {}) {
   return cx(
-    "inline-flex min-h-10 items-center justify-center rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-white",
+    "inline-flex min-h-10 items-center justify-center rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-white lg:min-h-11 lg:px-5 lg:text-base",
     storefrontTheme.focus,
     variant === "primary"
       ? storefrontTheme.primary
@@ -459,7 +459,7 @@ export function StoreLogo({
       : size === "sm"
         ? "h-12 w-12"
         : size === "lg"
-          ? "h-20 w-20"
+          ? "h-20 w-20 lg:h-[5.5rem] lg:w-[5.5rem]"
           : "h-16 w-16";
 
   if (!store.logo_image_url) {
@@ -625,7 +625,7 @@ export function AvailabilityBadge({
 
   return (
     <span
-      className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold shadow-sm backdrop-blur ${tone}`}
+      className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold shadow-sm backdrop-blur lg:px-3 lg:py-1.5 ${tone}`}
     >
       {label}
     </span>
