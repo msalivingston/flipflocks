@@ -69,11 +69,15 @@ export type StorefrontInventoryItem = {
   buyer_availability_code: "ready_now" | "reserve_now" | "sold_out" | string;
   buyer_availability_label: string;
   available_date: string;
+  origin_date: string | null;
   is_available_now: boolean;
   can_checkout: boolean;
   unit_price: number;
   featured_image_url: string | null;
   featured_image_alt_text: string | null;
+  breed_bird_type: string | null;
+  breed_egg_color: string | null;
+  breed_annual_egg_production: string | null;
   breed_sort_order: number | null;
   inventory_sort_order: number | null;
   batch_type: string | null;
@@ -144,6 +148,7 @@ export type StorefrontPurchaseOption = {
   buyerAvailabilityCode: string;
   buyerAvailabilityLabel: string;
   availableDate: string;
+  originDate: string | null;
   canCheckout: boolean;
   unitPrice: number;
   fulfillmentNote: string | null;
@@ -157,6 +162,9 @@ export type StorefrontProduct = {
   description: string | null;
   imageUrl: string | null;
   imageAlt: string | null;
+  purpose: string | null;
+  eggColor: string | null;
+  annualEggProduction: string | null;
   totalQuantityAvailable: number;
   optionsCount: number;
   minPrice: number | null;
@@ -168,6 +176,13 @@ export type StorefrontProduct = {
   quantityLabel: string;
   options: StorefrontPurchaseOption[];
 };
+
+export type StorefrontProfileImage = {
+  imageAlt: string | null;
+  imageUrl: string;
+};
+
+export type StorefrontProfileImageMap = Record<string, StorefrontProfileImage>;
 
 export async function loadStorefrontHome(slug: string) {
   const { data, error } = await publicSupabase
@@ -330,7 +345,49 @@ export async function loadStoreGallery(
   };
 }
 
-export function groupInventoryByProduct(items: StorefrontInventoryItem[]) {
+export async function loadStorefrontProfileImages(
+  slug: string,
+  profileIds: string[],
+) {
+  const uniqueProfileIds = Array.from(new Set(profileIds.filter(Boolean)));
+
+  if (uniqueProfileIds.length === 0) {
+    return {
+      data: {} as StorefrontProfileImageMap,
+      error: null,
+    };
+  }
+
+  const { data, error } = await publicSupabase
+    .from("public_storefront_media_gallery")
+    .select("*")
+    .eq("store_slug", slug)
+    .eq("entity_type", "seller_breed_profile")
+    .in("entity_id", uniqueProfileIds)
+    .order("is_featured", { ascending: false })
+    .order("sort_order", { ascending: true });
+
+  const images: StorefrontProfileImageMap = {};
+
+  for (const image of (data ?? []) as StorefrontMedia[]) {
+    if (images[image.entity_id]) continue;
+
+    images[image.entity_id] = {
+      imageAlt: image.alt_text,
+      imageUrl: image.public_url,
+    };
+  }
+
+  return {
+    data: images,
+    error,
+  };
+}
+
+export function groupInventoryByProduct(
+  items: StorefrontInventoryItem[],
+  profileImages: StorefrontProfileImageMap = {},
+) {
   const groups = new Map<string, StorefrontInventoryItem[]>();
 
   for (const item of items) {
@@ -339,12 +396,18 @@ export function groupInventoryByProduct(items: StorefrontInventoryItem[]) {
     groups.set(item.seller_breed_profile_id, current);
   }
 
-  return Array.from(groups.values()).map(toStorefrontProduct);
+  return Array.from(groups.values()).map((group) =>
+    toStorefrontProduct(group, profileImages),
+  );
 }
 
-export function toStorefrontProduct(items: StorefrontInventoryItem[]) {
+export function toStorefrontProduct(
+  items: StorefrontInventoryItem[],
+  profileImages: StorefrontProfileImageMap = {},
+) {
   const sorted = [...items].sort(compareOptions);
   const first = sorted[0];
+  const profileImage = profileImages[first.seller_breed_profile_id];
   const availableOptions = sorted.filter((item) => item.quantity_available > 0);
   const priceableOptions = availableOptions.length > 0 ? availableOptions : sorted;
   const prices = priceableOptions
@@ -364,8 +427,13 @@ export function toStorefrontProduct(items: StorefrontInventoryItem[]) {
     speciesName: first.species_name,
     name: first.breed_display_name,
     description: first.breed_description,
-    imageUrl: first.featured_image_url,
-    imageAlt: first.featured_image_alt_text,
+    imageUrl: profileImage?.imageUrl ?? first.featured_image_url,
+    imageAlt: profileImage?.imageAlt ?? first.featured_image_alt_text,
+    purpose: formatBirdPurpose(first.breed_bird_type),
+    eggColor: formatEggColor(first.breed_egg_color),
+    annualEggProduction: formatAnnualEggProduction(
+      first.breed_annual_egg_production,
+    ),
     totalQuantityAvailable,
     optionsCount: sorted.length,
     minPrice,
@@ -395,6 +463,7 @@ export function toPurchaseOption(
     buyerAvailabilityCode: item.buyer_availability_code,
     buyerAvailabilityLabel: item.buyer_availability_label,
     availableDate: item.available_date,
+    originDate: item.origin_date,
     canCheckout: item.can_checkout,
     unitPrice: item.unit_price,
     fulfillmentNote: null,
@@ -440,14 +509,16 @@ export function formatInventoryTypeLabel(item: {
 
 export function formatAgeLabel(item: {
   age_at_availability_days: number | null;
+  available_date?: string | null;
   batch_type: string | null;
   inventory_type: string;
+  origin_date?: string | null;
 }) {
   if (item.batch_type === "hatching_eggs" || item.inventory_type === "hatching_eggs") {
     return "Hatching eggs";
   }
 
-  return formatBirdAgeLabel(item.age_at_availability_days);
+  return formatCurrentBirdAgeLabel(item);
 }
 
 export function formatBirdAgeLabel(days: number | null | undefined) {
@@ -467,6 +538,69 @@ export function formatBirdAgeLabel(days: number | null | undefined) {
   const weeks = Math.floor(wholeDays / 7);
 
   return weeks === 1 ? "1 week old" : `${weeks} weeks old`;
+}
+
+function formatCurrentBirdAgeLabel(item: {
+  age_at_availability_days: number | null;
+  available_date?: string | null;
+  origin_date?: string | null;
+}) {
+  const currentAgeDays = getCurrentBirdAgeDays(item);
+
+  if (currentAgeDays === null) return "Age not listed";
+
+  if (currentAgeDays < 7) {
+    return currentAgeDays === 1 ? "1 day old" : `${currentAgeDays} days old`;
+  }
+
+  const weeks = Math.max(0, Math.floor(currentAgeDays / 7));
+
+  return weeks === 1 ? "1 week old" : `${weeks} weeks old`;
+}
+
+function getCurrentBirdAgeDays(item: {
+  age_at_availability_days: number | null;
+  available_date?: string | null;
+  origin_date?: string | null;
+}) {
+  const today = parseDateOnly(new Date().toISOString().slice(0, 10));
+
+  if (!today) return null;
+
+  if (item.origin_date) {
+    const origin = parseDateOnly(item.origin_date);
+
+    if (origin) {
+      return Math.max(
+        0,
+        Math.floor((today.getTime() - origin.getTime()) / 86_400_000),
+      );
+    }
+  }
+
+  if (
+    item.available_date &&
+    item.age_at_availability_days !== null &&
+    Number.isFinite(item.age_at_availability_days)
+  ) {
+    const available = parseDateOnly(item.available_date);
+
+    if (available) {
+      const daysUntilReady = Math.ceil(
+        (available.getTime() - today.getTime()) / 86_400_000,
+      );
+
+      return Math.max(0, item.age_at_availability_days - daysUntilReady);
+    }
+  }
+
+  return null;
+}
+
+function parseDateOnly(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function compareOptions(
@@ -542,4 +676,47 @@ export function formatCurrency(value: number) {
     currency: "USD",
     style: "currency",
   }).format(value);
+}
+
+function formatBirdPurpose(value: string | null) {
+  const labels: Record<string, string> = {
+    dual_purpose: "Dual-purpose",
+    layer: "Layer",
+    meat: "Meat",
+  };
+
+  return value ? labels[value] ?? toTitleText(value) : null;
+}
+
+function formatEggColor(value: string | null) {
+  const labels: Record<string, string> = {
+    blue: "Blue",
+    blue_green: "Blue-green",
+    brown: "Brown",
+    dark_brown: "Dark brown",
+    green: "Green",
+    light_brown: "Light brown",
+    olive: "Olive",
+    white: "White",
+  };
+
+  return value ? labels[value] ?? toTitleText(value) : null;
+}
+
+function formatAnnualEggProduction(value: string | null) {
+  const labels: Record<string, string> = {
+    "150_200": "150-200 per year",
+    "200_250": "200-250 per year",
+    "250_300": "250-300 per year",
+    over_300: "More than 300 per year",
+    under_150: "Less than 150 per year",
+  };
+
+  return value ? labels[value] ?? toTitleText(value) : null;
+}
+
+function toTitleText(value: string) {
+  return value
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

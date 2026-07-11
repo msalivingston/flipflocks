@@ -17,6 +17,7 @@ import {
 } from "./storefront-listing-tabs";
 import {
   StorefrontProduct,
+  StorefrontProfileImageMap,
   StorefrontEquipmentItem,
   StorefrontInventoryItem,
   StorefrontProcessedPoultryItem,
@@ -36,18 +37,21 @@ type StorefrontHeroLayout = "full" | "right";
 export function StorefrontHomeContent({
   equipment,
   inventory,
+  livePoultryProfileImages = {},
   processedPoultry,
   showPreviewBanner = false,
   store,
 }: {
   equipment: StorefrontEquipmentItem[];
   inventory: StorefrontInventoryItem[];
+  livePoultryProfileImages?: StorefrontProfileImageMap;
   processedPoultry: StorefrontProcessedPoultryItem[];
   showPreviewBanner?: boolean;
   store: StorefrontHome;
 }) {
   const livePoultryProducts = groupInventoryByProduct(
     inventory.filter(isLivePoultryItem),
+    livePoultryProfileImages,
   );
   const hatchingEggProducts = groupInventoryByProduct(
     inventory.filter(isHatchingEggItem),

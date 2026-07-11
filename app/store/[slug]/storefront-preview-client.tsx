@@ -8,8 +8,10 @@ import {
 } from "./storefront-ui";
 import {
   StorefrontHome,
+  StorefrontProfileImageMap,
   loadStorefrontEquipment,
   loadStorefrontInventory,
+  loadStorefrontProfileImages,
   loadStorefrontProcessedPoultry,
 } from "./storefront-data";
 import { StorefrontHomeContent } from "./storefront-home-content";
@@ -24,6 +26,7 @@ type PreviewState =
   | {
       equipment: Awaited<ReturnType<typeof loadStorefrontEquipment>>["data"];
       inventory: Awaited<ReturnType<typeof loadStorefrontInventory>>["data"];
+      livePoultryProfileImages: StorefrontProfileImageMap;
       processedPoultry: Awaited<
         ReturnType<typeof loadStorefrontProcessedPoultry>
       >["data"];
@@ -81,9 +84,21 @@ export function StorefrontPreviewClient({ slug }: { slug: string }) {
         return;
       }
 
+      const livePoultryProfileImagesResult = await loadStorefrontProfileImages(
+        slug,
+        inventoryResult.data
+          .filter(isLivePoultryItem)
+          .map((item) => item.seller_breed_profile_id),
+      );
+
+      if (!isMounted) return;
+
       setState({
         equipment: equipmentResult.data,
         inventory: inventoryResult.data,
+        livePoultryProfileImages: livePoultryProfileImagesResult.error
+          ? {}
+          : livePoultryProfileImagesResult.data,
         processedPoultry: processedPoultryResult.data,
         status: "ready",
         store: homeResult.data as PreviewHome,
@@ -102,6 +117,7 @@ export function StorefrontPreviewClient({ slug }: { slug: string }) {
       <StorefrontHomeContent
         equipment={state.equipment}
         inventory={state.inventory}
+        livePoultryProfileImages={state.livePoultryProfileImages}
         processedPoultry={state.processedPoultry}
         showPreviewBanner={state.store.preview_is_hidden}
         store={state.store}
@@ -127,4 +143,18 @@ export function StorefrontPreviewClient({ slug }: { slug: string }) {
       </main>
     </StorefrontShell>
   );
+}
+
+function isHatchingEggItem(item: {
+  batch_type: string | null;
+  inventory_type: string;
+}) {
+  return item.batch_type === "hatching_eggs" || item.inventory_type === "hatching_eggs";
+}
+
+function isLivePoultryItem(item: {
+  batch_type: string | null;
+  inventory_type: string;
+}) {
+  return !isHatchingEggItem(item);
 }

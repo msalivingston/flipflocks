@@ -7,7 +7,6 @@ import {
   StorefrontPage,
   StorefrontShell,
   cx,
-  formatDate,
   toPublicImageUrl,
 } from "../../storefront-ui";
 import {
@@ -87,13 +86,10 @@ export default async function StorefrontProductPage({
     );
   }
 
-  const product = findProduct(
-    groupInventoryByProduct(inventoryResult.data),
-    productId,
-  );
   const livePoultryProducts = groupInventoryByProduct(
     inventoryResult.data.filter(isLivePoultryItem),
   );
+  const product = findProduct(livePoultryProducts, productId);
   const hatchingEggProducts = groupInventoryByProduct(
     inventoryResult.data.filter(isHatchingEggItem),
   );
@@ -121,7 +117,7 @@ export default async function StorefrontProductPage({
 
   return (
     <StorefrontChrome categories={categories} store={store}>
-      <StorefrontPage className="gap-6">
+      <StorefrontPage className="gap-7">
         <nav className="flex flex-wrap items-center gap-2 text-sm text-stone-700">
           <Link href={`/store/${store.store_slug}`}>Shop</Link>
           <span>/</span>
@@ -134,17 +130,16 @@ export default async function StorefrontProductPage({
           <span className="text-stone-950">{product.name}</span>
         </nav>
 
-        <section className="grid gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(18rem,0.7fr)_minmax(21rem,0.8fr)] lg:items-start">
-          <div className="grid gap-5">
+        <section className="grid gap-8 lg:grid-cols-[minmax(18rem,0.85fr)_minmax(0,1.15fr)] lg:items-start">
+          <div className="grid max-w-[28rem] gap-3 lg:max-w-none">
             <ProductGallery
               fallbackAlt={product.imageAlt || product.name}
               fallbackSrc={product.imageUrl}
               gallery={gallery}
             />
-            <ProductHighlights />
           </div>
 
-          <section className="grid gap-5">
+          <section className="grid gap-5 lg:pt-1">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#073f1e]">
                 {product.speciesName}
@@ -157,55 +152,63 @@ export default async function StorefrontProductPage({
               >
                 {product.name}
               </h1>
-              <p className="mt-3 text-lg text-stone-900">
-                {productSubtitle(product)}
+            </div>
+
+            <p className="max-w-2xl whitespace-pre-line text-base leading-7 text-stone-700">
+              {formatProductDescription(product.description) ||
+                "This seller has not added a breed description yet. Current purchase options are listed below."}
+            </p>
+
+            <div className="flex items-center gap-3 text-base text-stone-800">
+              <Image
+                alt=""
+                aria-hidden="true"
+                className="h-6 w-6"
+                height={24}
+                src="/glyphs/hen.png"
+                width={24}
+              />
+              <p>
+                <span className="font-semibold text-stone-950">
+                  {product.totalQuantityAvailable}
+                </span>{" "}
+                {product.totalQuantityAvailable === 1 ? "bird" : "birds"} available
+                across {formatOptionsCount(product.optionsCount)}.
               </p>
             </div>
 
-            <p className="whitespace-pre-line text-base leading-8 text-stone-700">
-              {product.description ||
-                "This seller has not added a long description yet. Current purchase options are listed in the ordering panel."}
-            </p>
-
-            <div className="grid overflow-hidden rounded-xl border border-[#ded7c8] bg-[#fffdf8] text-sm sm:grid-cols-2">
-              <ProductSummary label="Availability" value={product.availabilityLabel} />
-              <ProductSummary
-                label="Next availability"
-                value={
-                  product.nextAvailableDate
-                    ? formatDate(product.nextAvailableDate)
-                    : "Check back soon"
-                }
-              />
-              <ProductSummary label="Total available" value={product.quantityLabel} />
-              <ProductSummary
-                label="Purchase options"
-                value={
-                  product.optionsCount === 1
-                    ? "1 option"
-                    : `${product.optionsCount} options`
-                }
-              />
-            </div>
+            <ProductCharacteristics product={product} />
           </section>
-
-          <aside className="lg:sticky lg:top-28">
-            <ProductOrderOptions product={product} />
-          </aside>
         </section>
+
+        <ProductOrderOptions product={product} />
       </StorefrontPage>
     </StorefrontChrome>
   );
 }
 
-function ProductSummary({ label, value }: { label: string; value: string }) {
+function ProductCharacteristics({ product }: { product: StorefrontProduct }) {
+  const facts = [
+    ["Purpose", product.purpose || "Not listed"],
+    ["Egg Color", product.eggColor || "Not listed"],
+    ["Egg Production", product.annualEggProduction || "Not listed"],
+  ];
+
   return (
-    <div className="border-b border-[#ded7c8] p-4 last:border-b-0 sm:border-r sm:last:border-r-0 sm:[&:nth-child(2n)]:border-r-0">
-      <p className="text-sm font-semibold text-stone-950">
-        {label}
-      </p>
-      <p className="mt-1 font-semibold text-[#073f1e]">{value}</p>
-    </div>
+    <dl className="grid max-w-2xl border-y border-[#ded7c8] py-4 text-sm sm:grid-cols-3">
+      {facts.map(([label, value], index) => (
+        <div
+          className={cx(
+            "py-2 sm:px-6 sm:py-0",
+            index === 0 ? "sm:pl-0" : "border-t border-[#e7decd] sm:border-l sm:border-t-0",
+          )}
+          key={label}
+        >
+          <dt className="font-semibold text-stone-950">{label}</dt>
+          <dd className="mt-1 text-stone-700">{value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -223,14 +226,14 @@ function ProductGallery({
   if (!featured) {
     return (
       <div className="grid gap-4">
-        <div className="overflow-hidden rounded-xl border border-[#ded7c8]">
+        <div className="overflow-hidden rounded-lg border border-[#ded7c8]">
           <ListingPhoto alt={fallbackAlt} src={fallbackSrc} />
         </div>
         {fallbackSrc ? (
           <div className="grid grid-cols-4 gap-3">
             <Image
               alt={fallbackAlt}
-              className="aspect-square w-full rounded-lg border border-[#ded7c8] object-cover"
+              className="aspect-square w-full rounded-md border border-[#ded7c8] object-cover"
               height={240}
               src={toPublicImageUrl(fallbackSrc)}
               unoptimized
@@ -247,7 +250,7 @@ function ProductGallery({
     <StorefrontMediaFrame className="grid gap-4 border-0 bg-transparent p-0">
       <Image
         alt={featured.alt_text || fallbackAlt}
-        className="aspect-[4/3] w-full rounded-xl border border-[#ded7c8] object-cover"
+        className="aspect-[4/3] w-full rounded-lg border border-[#ded7c8] object-cover"
         height={720}
         src={toPublicImageUrl(featured.public_url)}
         unoptimized
@@ -257,7 +260,7 @@ function ProductGallery({
         {thumbnails.map((image) => (
           <Image
             alt={image.alt_text || fallbackAlt}
-            className="aspect-square w-full rounded-lg border border-[#ded7c8] object-cover"
+            className="aspect-square w-full rounded-md border border-[#ded7c8] object-cover"
             height={240}
             key={`${image.entity_type}-${image.public_url}`}
             src={toPublicImageUrl(image.public_url)}
@@ -300,34 +303,16 @@ function buildProductGallery(
   ];
 }
 
-function ProductHighlights() {
-  const highlights = [
-    ["Blue eggs", "Beautiful blue-green egg layers"],
-    ["Friendly temperament", "Curious, gentle, and great for families"],
-    ["Good layers", "Steady production of blue eggs"],
-    ["Healthy birds", "Raised with care in small flocks"],
-  ];
-
-  return (
-    <section className="grid gap-3 rounded-xl border border-[#ded7c8] bg-[#fffdf8] p-4 sm:grid-cols-2">
-      {highlights.map(([title, text]) => (
-        <div className="py-2" key={title}>
-          <p className="font-semibold text-stone-950">{title}</p>
-          <p className="mt-1 text-sm leading-6 text-stone-700">{text}</p>
-        </div>
-      ))}
-    </section>
-  );
+function formatOptionsCount(count: number) {
+  return count === 1 ? "1 pickup option" : `${count} pickup options`;
 }
 
-function productSubtitle(product: StorefrontProduct) {
-  return [
-    product.pricingLabel || "Choose an option",
-    product.optionsCount === 1
-      ? "1 purchase option"
-      : `${product.optionsCount} purchase options`,
-    product.availabilityLabel,
-  ].join(" - ");
+function formatProductDescription(description: string | null) {
+  const trimmed = description?.trim();
+
+  if (!trimmed || /^minimum order\s*:/i.test(trimmed)) return null;
+
+  return trimmed.replace(/(?:^|\n)\s*minimum order\s*:[^\n]+/gi, "").trim();
 }
 
 function isHatchingEggItem(item: { batch_type: string | null; inventory_type: string }) {
