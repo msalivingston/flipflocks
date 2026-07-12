@@ -140,7 +140,7 @@ export default function Home() {
               <PlaceholderLink className="transition hover:text-white">
                 Pricing
               </PlaceholderLink>
-              <PlaceholderLink className="transition hover:text-white" href="/sign-in">
+              <PlaceholderLink className="transition hover:text-white" href="/login">
                 Sign in
               </PlaceholderLink>
             </nav>
@@ -326,7 +326,7 @@ export default function Home() {
             <PlaceholderLink className="hover:text-[#0e4a2d]">
               Pricing
             </PlaceholderLink>
-            <PlaceholderLink className="hover:text-[#0e4a2d]" href="/sign-in">
+            <PlaceholderLink className="hover:text-[#0e4a2d]" href="/login">
               Sign in
             </PlaceholderLink>
             <PlaceholderLink className="hover:text-[#0e4a2d]">

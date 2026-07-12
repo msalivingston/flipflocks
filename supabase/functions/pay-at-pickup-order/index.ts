@@ -327,6 +327,53 @@ function parseOrderRequest(body: unknown): OrderRequest {
   };
 }
 
+async function triggerPostmarkEmailWorker(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+): Promise<void> {
+  const workerSecret = Deno.env.get("POSTMARK_WORKER_SECRET")?.trim();
+
+  if (!workerSecret) {
+    console.warn("postmark-email-worker invocation skipped: worker secret is not configured");
+    return;
+  }
+
+  const workerUrl = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/postmark-email-worker`;
+
+  try {
+    const response = await fetch(workerUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${serviceRoleKey}`,
+        "apikey": serviceRoleKey,
+        "x-flockfront-worker-secret": workerSecret,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        batch_size: 10,
+        source: "pay-at-pickup-order",
+      }),
+    });
+
+    if (!response.ok) {
+      const responseBody = await response.text().catch(() => "");
+      console.warn(
+        "postmark-email-worker invocation returned non-2xx",
+        JSON.stringify({
+          status: response.status,
+          status_text: response.statusText,
+          response_body: responseBody.slice(0, 2000),
+        }),
+      );
+    }
+  } catch (error) {
+    console.warn(
+      "postmark-email-worker invocation failed",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") {
     return new Response(null, {
@@ -529,6 +576,8 @@ Deno.serve(async (request: Request) => {
   const order = sanitizeOrderConfirmation(
     Array.isArray(orderRows) ? orderRows[0] : null,
   );
+
+  await triggerPostmarkEmailWorker(supabaseUrl, serviceRoleKey);
 
   return jsonResponse(201, {
     order,

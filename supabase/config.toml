@@ -2,3 +2,9 @@ project_id = "ymbnnipiohoccwpltkkj"
 
 [functions.pay-at-pickup-order]
 verify_jwt = false
+
+[functions.postmark-email-worker]
+verify_jwt = false
+
+[functions.manual-order-email-kick]
+verify_jwt = true

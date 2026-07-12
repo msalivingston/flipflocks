@@ -197,7 +197,7 @@ export function SellerDashboard() {
           <ErrorState
             message={error}
             action={
-              <Link className="seller-secondary-button" href="/sign-in">
+              <Link className="seller-secondary-button" href="/login">
                 Return to sign in
               </Link>
             }

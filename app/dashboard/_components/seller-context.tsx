@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { isCurrentUserPlatformAdmin } from "@/app/admin/_lib/admin-auth";
 import type { SellerContext } from "../_lib/seller-types";
 
 type SellerBootstrapState = {
@@ -49,7 +50,7 @@ export function SellerContextProvider({
       }
 
       if (!userData.user) {
-        router.replace("/sign-in");
+        router.replace("/login");
         return;
       }
 
@@ -68,8 +69,10 @@ export function SellerContextProvider({
       const primarySeller = sellerRows[0] ?? null;
 
       if (!primarySeller) {
-        setError("No seller store was found for this account.");
-        setIsLoading(false);
+        const isPlatformAdmin = await isCurrentUserPlatformAdmin();
+        if (!isMounted) return;
+
+        router.replace(isPlatformAdmin ? "/admin" : "/onboarding");
         return;
       }
 

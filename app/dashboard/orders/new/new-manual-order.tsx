@@ -120,6 +120,7 @@ export function NewManualOrder() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [sendBuyerConfirmation, setSendBuyerConfirmation] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -193,6 +194,12 @@ export function NewManualOrder() {
   const selectedCustomer = customers.find(
     (customer) => customer.customer_id === selectedCustomerId,
   );
+  const buyerConfirmationEmail = getCreatedCustomerEmail(
+    customerMode,
+    selectedCustomer,
+    newCustomer,
+  );
+  const canEmailBuyerConfirmation = isEmail(buyerConfirmationEmail);
   const activeLines = lines.filter(isActiveLine);
   const subtotal = activeLines.reduce((total, line) => {
     const quantity = Number(line.quantity || 0);
@@ -319,6 +326,8 @@ export function NewManualOrder() {
 
     const parsedNewCustomerName = parseFullName(newCustomer.firstName);
 
+    const shouldSendBuyerConfirmation =
+      sendBuyerConfirmation && canEmailBuyerConfirmation;
     const result = await supabase.rpc("seller_create_manual_order", {
       p_store_id: seller.store_id,
       p_idempotency_key: crypto.randomUUID(),
@@ -362,7 +371,7 @@ export function NewManualOrder() {
       p_buyer_notes: buyerNotes.trim() || null,
       p_pickup_note: pickupNote.trim() || "Pickup",
       p_tax_fee_amount: taxAmount,
-      p_send_buyer_notification: false,
+      p_send_buyer_notification: shouldSendBuyerConfirmation,
       p_send_seller_notification: false,
     });
 
@@ -379,6 +388,22 @@ export function NewManualOrder() {
 
     setCreatedOrder(order);
     setIsSaving(false);
+
+    if (shouldSendBuyerConfirmation) {
+      void supabase.functions
+        .invoke("manual-order-email-kick")
+        .then(({ error }) => {
+          if (error) {
+            console.warn("Manual order email kick failed", error.message);
+          }
+        })
+        .catch((error) => {
+          console.warn(
+            "Manual order email kick failed",
+            error instanceof Error ? error.message : String(error),
+          );
+        });
+    }
   }
 
   if (isLoading) return <LoadingState label="Loading order tools" />;
@@ -617,6 +642,26 @@ export function NewManualOrder() {
           {saveError ? (
             <ErrorState title="Order was not created" message={saveError} />
           ) : null}
+
+          <label className="flex items-start gap-3 rounded-lg border border-stone-200 bg-white px-3 py-3 text-sm text-stone-700">
+            <input
+              checked={sendBuyerConfirmation && canEmailBuyerConfirmation}
+              className="mt-1 size-4 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
+              disabled={!canEmailBuyerConfirmation || isSaving}
+              type="checkbox"
+              onChange={(event) => setSendBuyerConfirmation(event.target.checked)}
+            />
+            <span>
+              <span className="block font-semibold text-stone-950">
+                Email order confirmation to customer
+              </span>
+              <span className="block text-xs leading-5 text-stone-600">
+                {canEmailBuyerConfirmation
+                  ? buyerConfirmationEmail
+                  : "Add a customer email address to send a confirmation."}
+              </span>
+            </span>
+          </label>
 
           <button
             className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-5 text-sm font-semibold text-white transition hover:bg-emerald-900 disabled:cursor-wait disabled:opacity-70"

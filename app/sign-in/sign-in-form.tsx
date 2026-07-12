@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { isCurrentUserPlatformAdmin } from "@/app/admin/_lib/admin-auth";
 import type { SellerContext } from "@/app/dashboard/_lib/seller-types";
 
 type OnboardingState = {
@@ -170,13 +171,19 @@ function validateSignIn({
 
 async function getPostSignInPath() {
   const { data, error } = await supabase.rpc("get_seller_context");
+  const isPlatformAdmin = await isCurrentUserPlatformAdmin();
 
   if (error) {
+    if (isPlatformAdmin) return "/admin";
     return "/onboarding";
   }
 
   const rows = Array.isArray(data) ? (data as SellerContext[]) : [];
   const primarySeller = rows[0] ?? null;
+
+  if (!primarySeller && isPlatformAdmin) {
+    return "/admin";
+  }
 
   if (!primarySeller?.store_id || !primarySeller.profile_complete) {
     return "/onboarding";

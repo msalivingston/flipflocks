@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { isCurrentUserPlatformAdmin } from "../_lib/admin-auth";
 
 const adminNavItems = [
   { label: "Stores", href: "/admin/stores" },
@@ -12,38 +13,82 @@ const adminNavItems = [
 
 export function AdminAppShell({ children }: { children: React.ReactNode }) {
   const [email, setEmail] = useState<string | null>(null);
+  const [authState, setAuthState] = useState<"checking" | "allowed">(
+    "checking",
+  );
+  const pathname = usePathname();
   const router = useRouter();
+  const isLoginRoute = pathname === "/admin/login";
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadUser() {
-      const { data } = await supabase.auth.getUser();
+    async function loadAdminUser() {
+      if (isLoginRoute) {
+        setAuthState("allowed");
+        return;
+      }
+
+      setAuthState("checking");
+
+      const { data, error } = await supabase.auth.getUser();
       if (!isMounted) return;
+
+      if (error || !data.user) {
+        router.replace("/admin/login");
+        return;
+      }
+
+      const isAdmin = await isCurrentUserPlatformAdmin();
+      if (!isMounted) return;
+
+      if (!isAdmin) {
+        await supabase.auth.signOut();
+        router.replace(
+          "/admin/login?error=platform-admin-required",
+        );
+        return;
+      }
+
       setEmail(data.user?.email ?? null);
+      setAuthState("allowed");
     }
 
-    void loadUser();
+    void loadAdminUser();
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isLoginRoute, router]);
 
   async function signOut() {
     await supabase.auth.signOut();
-    router.replace("/sign-in");
+    router.replace("/admin/login");
+  }
+
+  if (isLoginRoute) {
+    return <>{children}</>;
+  }
+
+  if (authState === "checking") {
+    return (
+      <main className="min-h-screen bg-stone-100 p-5 text-stone-950">
+        <div className="rounded-lg border border-stone-200 bg-white p-6 text-sm font-semibold text-stone-600">
+          Checking platform admin access...
+        </div>
+      </main>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 text-stone-950 lg:grid lg:grid-cols-[260px_1fr]">
+    <div className="min-h-screen bg-[#eef1ed] text-stone-950 lg:grid lg:grid-cols-[260px_1fr]">
       <aside className="hidden border-r border-stone-200 bg-white lg:flex lg:min-h-screen lg:flex-col">
         <div className="border-b border-stone-200 px-5 py-5">
-          <Link href="/" className="text-lg font-bold text-stone-950">
-            FlockFront
+          <Link href="/admin" className="text-lg font-bold text-stone-950">
+            FlockFront Platform Admin
           </Link>
           <p className="mt-1 text-sm font-semibold text-emerald-900">
-            Platform Admin
+            Internal operations
           </p>
         </div>
 
@@ -66,10 +111,10 @@ export function AdminAppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div>
               <Link href="/admin" className="font-bold text-stone-950">
-                FlockFront
+                FlockFront Platform Admin
               </Link>
               <p className="text-xs font-semibold text-emerald-900">
-                Platform Admin
+                Internal operations
               </p>
             </div>
             <button className="seller-small-button" onClick={signOut}>

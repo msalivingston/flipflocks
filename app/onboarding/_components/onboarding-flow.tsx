@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { isCurrentUserPlatformAdmin } from "@/app/admin/_lib/admin-auth";
 import type { SellerContext } from "@/app/dashboard/_lib/seller-types";
 import { OnboardingShell } from "./onboarding-shell";
 import { Step2FarmBasicsForm } from "./step-2-farm-basics-form";
@@ -55,7 +56,7 @@ export function OnboardingFlow() {
       try {
         if (!hasPersistedSupabaseSession()) {
           setView("redirecting");
-          router.replace("/sign-in");
+          router.replace("/login");
           return;
         }
 
@@ -74,7 +75,7 @@ export function OnboardingFlow() {
 
         if (!sessionData.session) {
           setView("redirecting");
-          router.replace("/sign-in");
+          router.replace("/login");
           return;
         }
 
@@ -87,7 +88,7 @@ export function OnboardingFlow() {
 
         if (userError || !userData.user) {
           setView("redirecting");
-          router.replace("/sign-in");
+          router.replace("/login");
           return;
         }
 
@@ -106,6 +107,12 @@ export function OnboardingFlow() {
 
         const rows = Array.isArray(data) ? (data as SellerContext[]) : [];
         const primarySeller = rows[0] ?? null;
+
+        if (!primarySeller && (await isCurrentUserPlatformAdmin())) {
+          setView("redirecting");
+          router.replace("/admin");
+          return;
+        }
 
         setSeller(primarySeller);
         setOnboardingStoreId(primarySeller?.store_id ?? null);
