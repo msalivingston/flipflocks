@@ -6,6 +6,7 @@ import {
   formatCurrency,
   formatLocation,
   getStorefrontCropStyle,
+  StorefrontGlyph,
   storefrontButtonClass,
   storefrontHeroFrame,
   storefrontHeroTypography,
@@ -103,27 +104,27 @@ export function StorefrontHomeContent({
           <div className="relative z-10 mx-auto h-full max-w-[70rem] px-5 sm:px-7">
             <div
               className={`flex h-full max-w-[32rem] flex-col justify-center gap-4 lg:max-w-[36rem] ${
-                heroIsLeftFade ? "text-white" : "text-stone-950"
+                heroIsLeftFade ? "text-white" : "text-black"
               }`}
             >
               <div>
                 <p
                   className={`${storefrontHeroTypography.eyebrow} ${
-                    heroIsLeftFade ? "text-white" : ""
+                    heroIsLeftFade ? "text-white" : "text-black"
                   }`}
                 >
                   Local farm storefront
                 </p>
                 <h1
                   className={`${storefrontHeroTypography.title} ${
-                    heroIsLeftFade ? "text-white" : ""
+                    heroIsLeftFade ? "text-white" : "text-black"
                   }`}
                 >
                   {heroTitle}
                 </h1>
                 <p
                   className={`${storefrontHeroTypography.body} ${
-                    heroIsLeftFade ? "text-white" : ""
+                    heroIsLeftFade ? "text-white" : "text-black"
                   }`}
                 >
                   {heroSubheading}
@@ -191,18 +192,13 @@ function HeroPickupBadge({
     <div
       className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 text-xs font-semibold shadow-sm lg:min-h-10 lg:px-4 lg:text-sm ${
         light
-          ? "border-white/35 bg-white/90 text-[#073f1e]"
-          : "border-[#ddd5c7] bg-white/90 text-[#073f1e]"
+          ? "storefront-primary-color border-white/35 bg-white/90"
+          : "storefront-primary-color border-[#ddd5c7] bg-white/90"
       }`}
     >
-      <Image
-        alt=""
-        aria-hidden="true"
-        className="h-4 w-4 object-contain lg:h-[18px] lg:w-[18px]"
-        height={128}
+      <StorefrontGlyph
+        className="h-4 w-4 lg:h-[18px] lg:w-[18px]"
         src="/glyphs/map-pin.png"
-        unoptimized
-        width={128}
       />
       Local pickup in {location}
     </div>
@@ -431,31 +427,35 @@ function InfoCard({
   return (
     <article className="grid gap-3 border-b border-[#ded7c8] p-6 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0 lg:p-8">
       <div className="flex items-center gap-3">
-        <Image
-          alt=""
-          aria-hidden="true"
-          className="h-11 w-11 shrink-0 object-contain"
-          height={128}
-          src={
+        <span className="storefront-primary-color">
+          <StorefrontGlyph
+            className="h-11 w-11"
+            src={
             eyebrow === "Pickup Location"
               ? "/glyphs/map-pin.png"
               : "/glyphs/farmhouse.png"
-          }
-          unoptimized
-          width={128}
-        />
+            }
+          />
+        </span>
         <p
           className={cx(
             storefrontSerifClass,
-            "text-xl font-bold text-stone-950",
+            "storefront-heading-color text-xl font-bold text-stone-950",
           )}
         >
           {eyebrow}
         </p>
       </div>
-      <h2 className="text-xl font-semibold text-stone-950">{title}</h2>
-      <p className="max-w-md text-sm leading-6 text-stone-700">{children}</p>
-      <a className="text-sm font-semibold text-[#073f1e]" href={actionHref}>
+      <h2 className="storefront-heading-color text-xl font-semibold text-stone-950">
+        {title}
+      </h2>
+      <p className="storefront-text-color max-w-md text-sm leading-6 text-stone-700">
+        {children}
+      </p>
+      <a
+        className="storefront-heading-color text-sm font-semibold text-[#073f1e]"
+        href={actionHref}
+      >
         {actionLabel} &rarr;
       </a>
     </article>

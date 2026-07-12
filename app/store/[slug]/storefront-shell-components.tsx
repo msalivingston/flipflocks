@@ -3,6 +3,7 @@ import Image from "next/image";
 import { StorefrontHeaderCartLink } from "./storefront-header-cart-link";
 import {
   StoreLogo,
+  StorefrontGlyph,
   StorefrontShell,
   cx,
   formatLocation,
@@ -31,8 +32,15 @@ export function StorefrontChrome({
   children: React.ReactNode;
   store: StorefrontHome;
 }) {
+  const theme = {
+    fontPair: store.storefront_font_pair,
+    headingColor: store.storefront_heading_color,
+    textColor: store.storefront_text_color,
+    topMenuColor: store.storefront_top_menu_color,
+  };
+
   return (
-    <StorefrontShell>
+    <StorefrontShell theme={theme}>
       <StorefrontHeader store={store} />
       {children}
       <StorefrontFooter categories={categories} store={store} />
@@ -42,7 +50,7 @@ export function StorefrontChrome({
 
 export function StorefrontHeader({ store }: { store: StorefrontHome }) {
   return (
-    <header className="border-b border-[#e7e0d2] bg-white">
+    <header className="storefront-top-menu border-b border-[#e7e0d2] bg-white">
       <div className="mx-auto grid max-w-[70rem] gap-3 px-5 py-2.5 sm:px-7 lg:min-h-[6rem] lg:grid-cols-[minmax(24rem,1fr)_auto_auto] lg:items-center">
         <Link
           className="flex min-w-0 items-center gap-4 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
@@ -53,7 +61,7 @@ export function StorefrontHeader({ store }: { store: StorefrontHome }) {
             <p
               className={cx(
                 storefrontSerifClass,
-                "text-xl font-normal leading-tight text-[#073f1e] sm:text-2xl lg:text-[1.625rem]",
+                "storefront-heading-color text-xl font-normal leading-tight text-[#073f1e] sm:text-2xl lg:text-[1.625rem]",
               )}
             >
               {store.store_name}
@@ -75,17 +83,12 @@ export function StorefrontHeader({ store }: { store: StorefrontHome }) {
         <div className="flex items-center gap-1.5 lg:ml-4 lg:justify-end xl:ml-6">
           <Link
             aria-label="Search listings"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 lg:h-11 lg:w-11"
+            className="storefront-primary-color inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 lg:h-11 lg:w-11"
             href={`/store/${store.store_slug}#storefront-search`}
           >
-            <Image
-              alt=""
-              aria-hidden="true"
-              className="h-6 w-6 object-contain lg:h-7 lg:w-7"
-              height={128}
+            <StorefrontGlyph
+              className="h-6 w-6 lg:h-7 lg:w-7"
               src="/glyphs/looking-glass.png"
-              unoptimized
-              width={128}
             />
           </Link>
           <StorefrontHeaderCartLink storeSlug={store.store_slug} />
@@ -110,19 +113,13 @@ export function StorefrontTrustStrip({
 
   return (
     <section className="border-b border-[#e5ded0] bg-[#f4f0e8]">
-      <div className="mx-auto flex max-w-[70rem] gap-4 overflow-x-auto px-5 py-2.5 text-sm text-[#083f1e] sm:px-7 lg:justify-start">
+      <div className="storefront-primary-color mx-auto flex max-w-[70rem] gap-4 overflow-x-auto px-5 py-2.5 text-sm text-[#083f1e] sm:px-7 lg:justify-start">
         {items.map((item, index) => (
           <div className="flex shrink-0 items-center gap-2.5" key={item.label}>
-            <Image
-              alt=""
-              aria-hidden="true"
-              className="h-[18px] w-[18px] shrink-0 object-contain"
-              height={128}
-              src={item.glyph}
-              unoptimized
-              width={128}
-            />
-            <span className="font-medium text-[#073f1e]">{item.label}</span>
+            <StorefrontGlyph className="h-[18px] w-[18px]" src={item.glyph} />
+            <span className="storefront-primary-color font-medium text-[#073f1e]">
+              {item.label}
+            </span>
             {index < items.length - 1 ? (
               <span className="ml-2 h-4 w-px bg-[#cfc5b6]" />
             ) : null}
@@ -153,12 +150,12 @@ export function StorefrontFooter({
         }}
       />
       <div className="relative mx-auto max-w-[70rem] px-5 py-5 sm:px-7 lg:py-7">
-        <div className="grid gap-7 text-sm text-[#1f2f37] sm:grid-cols-2 lg:grid-cols-[1.45fr_0.9fr_1fr_1fr] lg:gap-10">
+        <div className="storefront-text-color grid gap-7 text-sm text-[#1f2f37] sm:grid-cols-2 lg:grid-cols-[1.45fr_0.9fr_1fr_1fr] lg:gap-10">
           <div>
             <p
               className={cx(
                 storefrontSerifClass,
-                "max-w-xs text-3xl font-normal leading-[1.05] text-[#073f1e]",
+                "storefront-heading-color max-w-xs text-3xl font-normal leading-[1.05] text-[#073f1e]",
               )}
             >
               {store.store_name}
@@ -203,7 +200,7 @@ export function StorefrontFooter({
         </div>
 
         <div className="relative mt-5 border-t border-[#d5cbb9] pt-3">
-          <div className="flex items-center justify-center gap-3 text-sm font-medium text-[#1f2f37]">
+          <div className="storefront-text-color flex items-center justify-center gap-3 text-sm font-medium text-[#1f2f37]">
             <span>Powered by</span>
             <a
               className="rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
@@ -237,7 +234,7 @@ function FooterColumn({
       <p
         className={cx(
           storefrontSerifClass,
-          "text-xl font-normal leading-tight text-[#073f1e]",
+          "storefront-heading-color text-xl font-normal leading-tight text-[#073f1e]",
         )}
       >
         {title}
@@ -256,15 +253,7 @@ function FooterContactLine({
 }) {
   return (
     <p className="flex min-w-0 items-center gap-3 leading-6">
-      <Image
-        alt=""
-        aria-hidden="true"
-        className="h-6 w-6 shrink-0 object-contain opacity-80"
-        height={128}
-        src={glyph}
-        unoptimized
-        width={128}
-      />
+      <StorefrontGlyph className="storefront-primary-color h-6 w-6 opacity-80" src={glyph} />
       <span className="min-w-0 break-words">{children}</span>
     </p>
   );

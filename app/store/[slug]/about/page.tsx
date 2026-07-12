@@ -137,7 +137,7 @@ export default async function StorefrontAboutPage({
               <h1
                 className={cx(
                   storefrontSerifClass,
-                  "mt-3 max-w-lg text-4xl font-normal leading-[1] text-[#34442f] sm:text-5xl",
+                  "storefront-heading-color mt-3 max-w-lg text-4xl font-normal leading-[1] text-[#34442f] sm:text-5xl",
                 )}
               >
                 {aboutHeading}
@@ -154,7 +154,7 @@ export default async function StorefrontAboutPage({
                   width={128}
                 />
               </div>
-              <div className="mt-3 space-y-3 text-base leading-[1.55] text-[#36342e]">
+              <div className="storefront-text-color mt-3 space-y-3 text-base leading-[1.55] text-[#36342e]">
                 {paragraphs.map((paragraph) => (
                   <p key={paragraph}>{paragraph}</p>
                 ))}
@@ -187,7 +187,7 @@ export default async function StorefrontAboutPage({
               <blockquote
                 className={cx(
                   storefrontSerifClass,
-                  "flex-1 text-center text-[1.375rem] font-normal leading-tight text-[#48583a] sm:text-[1.75rem]",
+                  "storefront-heading-color flex-1 text-center text-[1.375rem] font-normal leading-tight text-[#48583a] sm:text-[1.75rem]",
                 )}
               >
                 &ldquo;{quote}&rdquo;

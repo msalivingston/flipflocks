@@ -34,12 +34,25 @@ import {
   storefrontHeroFrame,
   storefrontHeroTypography,
 } from "@/app/store/[slug]/storefront-ui";
+import {
+  defaultStorefrontTheme,
+  isValidStorefrontHexColor,
+  normalizeStorefrontFontPair,
+  normalizeStorefrontHexColor,
+  storefrontFontPairs,
+  storefrontFontVariablesClass,
+  type StorefrontFontPairId,
+} from "@/app/store/[slug]/storefront-fonts";
 
 type StoreAdminForm = {
   store_name: string;
   store_slug: string;
   store_tagline: string;
   hero_subheading: string;
+  storefront_font_pair: StorefrontFontPairId;
+  storefront_heading_color: string;
+  storefront_text_color: string;
+  storefront_top_menu_color: string;
   public_city: string;
   public_state: string;
   public_country: string;
@@ -286,6 +299,10 @@ const blankForm: StoreAdminForm = {
   store_slug: "",
   store_tagline: "",
   hero_subheading: "",
+  storefront_font_pair: defaultStorefrontTheme.fontPair,
+  storefront_heading_color: defaultStorefrontTheme.headingColor,
+  storefront_text_color: defaultStorefrontTheme.textColor,
+  storefront_top_menu_color: defaultStorefrontTheme.topMenuColor,
   public_city: "",
   public_state: "",
   public_country: "US",
@@ -1578,6 +1595,10 @@ export function StoreAdmin() {
       store_slug: form.store_slug,
       store_tagline: form.store_tagline,
       hero_subheading: form.hero_subheading,
+      storefront_font_pair: form.storefront_font_pair,
+      storefront_heading_color: form.storefront_heading_color,
+      storefront_text_color: form.storefront_text_color,
+      storefront_top_menu_color: form.storefront_top_menu_color,
       public_city: form.public_city,
       public_state: form.public_state,
       public_country: form.public_country,
@@ -1647,6 +1668,21 @@ export function StoreAdmin() {
       store_slug: form.store_slug.trim().toLowerCase(),
       store_tagline: form.store_tagline.trim(),
       hero_subheading: form.hero_subheading.trim(),
+      storefront_font_pair: normalizeStorefrontFontPair(
+        form.storefront_font_pair,
+      ),
+      storefront_heading_color: normalizeStorefrontHexColor(
+        form.storefront_heading_color,
+        defaultStorefrontTheme.headingColor,
+      ),
+      storefront_text_color: normalizeStorefrontHexColor(
+        form.storefront_text_color,
+        defaultStorefrontTheme.textColor,
+      ),
+      storefront_top_menu_color: normalizeStorefrontHexColor(
+        form.storefront_top_menu_color,
+        defaultStorefrontTheme.topMenuColor,
+      ),
       public_city: form.public_city.trim(),
       public_state: form.public_state.trim(),
       public_country: form.public_country.trim().toUpperCase() || "US",
@@ -2406,6 +2442,8 @@ function StorefrontTab({
         </StorefrontNote>
       </StorefrontSection>
 
+      <StoreAppearanceSection form={form} onUpdateField={onUpdateField} />
+
       <StorefrontSection
         description="This appears on your About page next to your About photo."
         title="Farm story (About page)"
@@ -2472,6 +2510,196 @@ function StorefrontTab({
         from your farm.
       </StorefrontNote>
     </div>
+  );
+}
+
+function StoreAppearanceSection({
+  form,
+  onUpdateField,
+}: {
+  form: StoreAdminForm;
+  onUpdateField: StoreAdminFieldUpdater;
+}) {
+  const headlinePreview =
+    form.store_tagline.trim() || "Started pullets in western Colorado";
+  const subheadingPreview =
+    form.hero_subheading.trim() ||
+    "Browse current availability and request pickup at checkout.";
+
+  function resetToDefault() {
+    onUpdateField("storefront_font_pair", defaultStorefrontTheme.fontPair);
+    onUpdateField("storefront_heading_color", defaultStorefrontTheme.headingColor);
+    onUpdateField("storefront_text_color", defaultStorefrontTheme.textColor);
+    onUpdateField("storefront_top_menu_color", defaultStorefrontTheme.topMenuColor);
+  }
+
+  return (
+    <StorefrontSection
+      description="Choose the fonts and colors used across your public storefront."
+      title="Store appearance"
+    >
+      <div className={cx(storefrontFontVariablesClass, "grid gap-5")}>
+        <section className="grid gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-stone-950">Font style</h3>
+          </div>
+          <div className="grid gap-2.5 md:grid-cols-2">
+            {storefrontFontPairs.map((pair) => {
+              const isSelected = pair.id === form.storefront_font_pair;
+
+              return (
+                <button
+                  aria-pressed={isSelected}
+                  className={`grid min-h-36 gap-2.5 rounded-lg border p-3 text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 ${
+                    isSelected
+                      ? "border-emerald-700 bg-emerald-50 ring-1 ring-emerald-700"
+                      : "border-stone-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/40"
+                  }`}
+                  key={pair.id}
+                  onClick={() => onUpdateField("storefront_font_pair", pair.id)}
+                  type="button"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-stone-950">
+                        {pair.label}
+                      </p>
+                      <p className="mt-0.5 text-[0.7rem] font-medium leading-4 text-stone-500">
+                        {pair.headingFontLabel} / {pair.bodyFontLabel}
+                      </p>
+                    </div>
+                    {isSelected ? (
+                      <span className="rounded-full bg-emerald-700 px-2 py-0.5 text-[0.68rem] font-bold text-white">
+                        Selected
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="grid gap-1.5">
+                    <p
+                      className="text-[1.35rem] font-normal leading-[1.08] text-stone-950"
+                      style={{
+                        fontFamily: pair.headingFontVariable,
+                      }}
+                    >
+                      {headlinePreview}
+                    </p>
+                    <p
+                      className="text-sm leading-5 text-stone-700"
+                      style={{ fontFamily: pair.bodyFontVariable }}
+                    >
+                      {subheadingPreview}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="grid gap-3">
+          <div className="grid gap-3 md:grid-cols-3">
+            <ColorSettingField
+              key={`heading-${form.storefront_heading_color}`}
+              helper="Headings, buttons, links, and glyphs."
+              label="Primary color"
+              onChange={(value) =>
+                onUpdateField("storefront_heading_color", value)
+              }
+              value={form.storefront_heading_color}
+            />
+            <ColorSettingField
+              key={`text-${form.storefront_text_color}`}
+              label="Text color"
+              onChange={(value) => onUpdateField("storefront_text_color", value)}
+              value={form.storefront_text_color}
+            />
+            <ColorSettingField
+              key={`top-menu-${form.storefront_top_menu_color}`}
+              label="Top menu color"
+              onChange={(value) =>
+                onUpdateField("storefront_top_menu_color", value)
+              }
+              value={form.storefront_top_menu_color}
+            />
+          </div>
+        </section>
+
+        <div className="flex justify-end">
+          <button
+            className="seller-secondary-button min-w-36 rounded-md bg-white"
+            onClick={resetToDefault}
+            type="button"
+          >
+            Reset to default
+          </button>
+        </div>
+      </div>
+    </StorefrontSection>
+  );
+}
+
+function ColorSettingField({
+  helper,
+  label,
+  onChange,
+  value,
+}: {
+  helper?: string;
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  const normalizedValue = isValidStorefrontHexColor(value)
+    ? value.toLowerCase()
+    : "#000000";
+  const [draft, setDraft] = useState(value);
+  const isDraftValid = isValidStorefrontHexColor(draft);
+
+  function updateFromText(nextValue: string) {
+    const prefixedValue = nextValue.startsWith("#") ? nextValue : `#${nextValue}`;
+    setDraft(prefixedValue);
+
+    if (isValidStorefrontHexColor(prefixedValue)) {
+      onChange(prefixedValue.toLowerCase());
+    }
+  }
+
+  return (
+    <label className="grid gap-1.5 text-sm font-semibold text-stone-800">
+      <span>
+        {label}
+        {helper ? (
+          <span className="mt-0.5 block text-xs font-medium leading-4 text-stone-500">
+            {helper}
+          </span>
+        ) : null}
+      </span>
+      <span className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-2">
+        <input
+          aria-label={`${label} picker`}
+          className="h-11 w-full rounded-md border border-stone-300 bg-white p-1 shadow-sm"
+          onChange={(event) => onChange(event.target.value.toLowerCase())}
+          type="color"
+          value={normalizedValue}
+        />
+        <input
+          aria-invalid={!isDraftValid}
+          className={`seller-form-field seller-compact-field font-mono uppercase ${
+            isDraftValid ? "" : "border-red-300 focus:border-red-500"
+          }`}
+          maxLength={7}
+          onBlur={() => setDraft(value)}
+          onChange={(event) => updateFromText(event.target.value)}
+          spellCheck={false}
+          value={draft}
+        />
+      </span>
+      {!isDraftValid ? (
+        <span className="text-xs font-semibold text-red-700">
+          Use a 6-digit hex value.
+        </span>
+      ) : null}
+    </label>
   );
 }
 
@@ -2833,14 +3061,14 @@ function HeroPhotoSection({
               <HeroFade layout={layout} />
               <div
                 className={`relative z-10 flex h-full max-w-lg flex-col justify-center gap-5 p-5 sm:p-7 ${
-                  layout === "right" ? "text-white" : "text-stone-950"
+                  layout === "right" ? "text-white" : "text-black"
                 }`}
               >
                 <div>
                   <p
                     className={cx(
                       storefrontHeroTypography.eyebrow,
-                      layout === "right" && "text-white",
+                      layout === "right" ? "text-white" : "text-black",
                     )}
                   >
                     Local farm storefront
@@ -2848,7 +3076,7 @@ function HeroPhotoSection({
                   <h4
                     className={cx(
                       storefrontHeroTypography.title,
-                      layout === "right" && "text-white",
+                      layout === "right" ? "text-white" : "text-black",
                     )}
                   >
                     {tagline || storeName}
@@ -2856,7 +3084,7 @@ function HeroPhotoSection({
                   <p
                     className={cx(
                       storefrontHeroTypography.body,
-                      layout === "right" && "text-white",
+                      layout === "right" ? "text-white" : "text-black",
                     )}
                   >
                     {previewStoreText(heroSubheading)}
@@ -4717,6 +4945,21 @@ function buildInitialForm(
     hero_subheading:
       seller.hero_subheading ??
       "Browse current availability and request pickup at checkout.",
+    storefront_font_pair: normalizeStorefrontFontPair(
+      seller.storefront_font_pair,
+    ),
+    storefront_heading_color: normalizeStorefrontHexColor(
+      seller.storefront_heading_color,
+      defaultStorefrontTheme.headingColor,
+    ),
+    storefront_text_color: normalizeStorefrontHexColor(
+      seller.storefront_text_color,
+      defaultStorefrontTheme.textColor,
+    ),
+    storefront_top_menu_color: normalizeStorefrontHexColor(
+      seller.storefront_top_menu_color,
+      defaultStorefrontTheme.topMenuColor,
+    ),
     public_city: seller.public_city ?? "",
     public_state: seller.public_state ?? "",
     public_country: seller.public_country ?? "US",
@@ -5000,6 +5243,20 @@ function validateForm(form: StoreAdminForm, pickupOptions: PickupOptionDraft[]) 
   if (!form.hero_subheading.trim()) return "Hero subheading is required.";
   if (form.hero_subheading.trim().length > heroSubheadingMaxLength) {
     return `Hero subheading must be ${heroSubheadingMaxLength} characters or fewer.`;
+  }
+  if (
+    !storefrontFontPairs.some((pair) => pair.id === form.storefront_font_pair)
+  ) {
+    return "Choose a valid storefront font style.";
+  }
+  if (!isValidStorefrontHexColor(form.storefront_heading_color)) {
+    return "Primary color needs a valid 6-digit hex value.";
+  }
+  if (!isValidStorefrontHexColor(form.storefront_text_color)) {
+    return "Text color needs a valid 6-digit hex value.";
+  }
+  if (!isValidStorefrontHexColor(form.storefront_top_menu_color)) {
+    return "Top menu color needs a valid 6-digit hex value.";
   }
   if (!form.about_text.trim()) return "Farm story is required.";
   if (form.about_text.trim().length > farmStoryMaxLength) {

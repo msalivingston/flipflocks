@@ -4,6 +4,16 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "FlipFlocks",
   description: "Independent poultry storefronts for local pickup.",
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+    },
+  },
 };
 
 export default function RootLayout({

@@ -209,7 +209,7 @@ export function StorefrontListingTabs({
         <h2
           className={cx(
             storefrontSerifClass,
-            "text-2xl font-bold leading-tight text-stone-950 sm:text-3xl lg:text-[2.0625rem]",
+            "storefront-heading-color text-2xl font-bold leading-tight text-stone-950 sm:text-3xl lg:text-[2.0625rem]",
           )}
         >
           Shop
@@ -229,8 +229,8 @@ export function StorefrontListingTabs({
                 className={cx(
                   "relative -mb-px inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-t-md border border-b-0 px-2 text-xs font-semibold transition lg:min-h-11 lg:gap-2 lg:px-3 lg:text-sm",
                   active
-                    ? "border-[#c8d6bf] bg-white text-[#073f1e] shadow-[0_-1px_0_#c8d6bf_inset]"
-                    : "border-[#eee8dc] bg-[#f8f3ea] text-stone-700 hover:border-[#ddd5c7] hover:bg-white hover:text-[#073f1e]",
+                    ? "storefront-primary-color storefront-primary-border bg-white shadow-[0_-1px_0_var(--storefront-heading-color)_inset]"
+                    : "border-[#eee8dc] bg-[#f8f3ea] text-stone-700 hover:border-[#ddd5c7] hover:bg-white hover:text-[var(--storefront-heading-color)]",
                 )}
                 id={`${section.id}-tab`}
                 key={section.id}
@@ -367,7 +367,7 @@ function ListingFilters({
         <label className="grid gap-1 text-[0.68rem] font-bold uppercase tracking-[0.06em] text-stone-700">
           Search listings
           <input
-            className="min-h-8 rounded-md border border-[#ddd5c7] bg-white px-2.5 text-xs font-medium normal-case tracking-normal text-stone-950 outline-none transition placeholder:text-stone-400 focus:border-[#24512f] focus:ring-2 focus:ring-emerald-100"
+            className="storefront-primary-focus min-h-8 rounded-md border border-[#ddd5c7] bg-white px-2.5 text-xs font-medium normal-case tracking-normal text-stone-950 outline-none transition placeholder:text-stone-400"
             id="storefront-search"
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder="Search listings"
@@ -474,7 +474,7 @@ function ListingFilters({
         />
 
         <button
-          className="inline-flex w-fit items-center rounded-md text-sm font-semibold text-[#073f1e] transition hover:text-[#0b562a] disabled:cursor-not-allowed disabled:text-stone-400"
+          className="storefront-primary-color inline-flex w-fit items-center rounded-md text-sm font-semibold transition hover:opacity-80 disabled:cursor-not-allowed disabled:text-stone-400"
           disabled={!hasActiveFilters}
           onClick={onReset}
           type="button"
@@ -501,7 +501,7 @@ function FilterSelect({
     <label className="grid gap-1 text-[0.68rem] font-bold uppercase tracking-[0.06em] text-stone-700">
       {label}
       <select
-        className="min-h-8 rounded-md border border-[#ddd5c7] bg-white px-2.5 text-xs font-medium normal-case tracking-normal text-stone-700 outline-none transition focus:border-[#24512f] focus:ring-2 focus:ring-emerald-100"
+        className="storefront-primary-focus min-h-8 rounded-md border border-[#ddd5c7] bg-white px-2.5 text-xs font-medium normal-case tracking-normal text-stone-700 outline-none transition"
         onChange={(event) => onChange(event.target.value)}
         value={value}
       >
@@ -523,7 +523,7 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
         href={card.href}
       >
         <div className="px-3.5 pb-2 pt-3 lg:px-4 lg:pb-2.5 lg:pt-4">
-          <p className="truncate text-[0.7rem] font-bold uppercase tracking-[0.08em] text-emerald-700">
+          <p className="storefront-primary-color truncate text-[0.7rem] font-bold uppercase tracking-[0.08em] text-emerald-700">
             {card.meta}
           </p>
           <h3 className="mt-1 line-clamp-1 text-base font-semibold leading-snug text-stone-950 lg:mt-1.5">
@@ -542,11 +542,11 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
         <div className="p-3.5 pt-3 lg:p-4 lg:pt-3">
           <div className="flex items-end justify-between gap-3 lg:gap-4">
             <div className="min-w-0">
-              <p className="truncate text-lg font-bold text-[#073f1e]">
+              <p className="storefront-primary-color truncate text-lg font-bold text-[#073f1e]">
                 {card.price}
               </p>
             </div>
-            <span className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-md bg-[#073f1e] px-3 text-sm font-semibold text-white transition group-hover:bg-[#0b562a] lg:min-h-11 lg:px-4 lg:text-base">
+            <span className="storefront-primary-button inline-flex min-h-10 shrink-0 items-center justify-center rounded-md px-3 text-sm font-semibold transition lg:min-h-11 lg:px-4 lg:text-base">
               View
             </span>
           </div>

@@ -1,5 +1,6 @@
 import { publicSupabase } from "@/lib/public-supabase";
 import type { StorefrontCropMetadata } from "./storefront-ui";
+import type { StorefrontFontPairId } from "./storefront-fonts";
 
 export type StorefrontHeroCropMetadata = StorefrontCropMetadata;
 
@@ -14,6 +15,10 @@ export type StorefrontHome = {
   store_name: string;
   store_tagline: string | null;
   hero_subheading: string | null;
+  storefront_font_pair: StorefrontFontPairId | string | null;
+  storefront_heading_color: string | null;
+  storefront_text_color: string | null;
+  storefront_top_menu_color: string | null;
   public_city: string | null;
   public_state: string | null;
   public_country: string | null;

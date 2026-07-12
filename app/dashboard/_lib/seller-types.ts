@@ -3,6 +3,10 @@ export type SellerContext = {
   store_name: string;
   store_tagline: string | null;
   hero_subheading: string | null;
+  storefront_font_pair: string | null;
+  storefront_heading_color: string | null;
+  storefront_text_color: string | null;
+  storefront_top_menu_color: string | null;
   store_slug: string;
   store_status: string;
   storefront_mode: string;

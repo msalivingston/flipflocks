@@ -60,18 +60,23 @@ export default async function StorefrontPoliciesPage({
           aria-label="Breadcrumb"
           className="flex flex-wrap items-center gap-2 text-xs font-medium text-stone-600"
         >
-          <Link className="hover:text-[#073f1e]" href={`/store/${store.store_slug}`}>
+          <Link
+            className="hover:text-[var(--storefront-heading-color)]"
+            href={`/store/${store.store_slug}`}
+          >
             Home
           </Link>
           <span aria-hidden="true">/</span>
           <Link
-            className="hover:text-[#073f1e]"
+            className="hover:text-[var(--storefront-heading-color)]"
             href={`/store/${store.store_slug}#shop-listings`}
           >
             Shop
           </Link>
           <span aria-hidden="true">/</span>
-          <span className="text-[#073f1e]">Pickup & Policies</span>
+          <span className="storefront-primary-color text-[#073f1e]">
+            Pickup & Policies
+          </span>
         </nav>
 
         <header className="max-w-2xl">
@@ -80,7 +85,7 @@ export default async function StorefrontPoliciesPage({
           </h1>
           <div className="mt-3 h-px w-14 bg-[#cbbd96]" />
           {policySections.length > 0 ? (
-            <div className="mt-3 grid gap-1.5 text-sm leading-6 text-stone-700">
+          <div className="mt-3 grid gap-1.5 text-sm leading-6 text-stone-700">
               <p>Please review pickup details and policies before placing your order.</p>
               <p>The seller will confirm final timing after your order is placed.</p>
             </div>
@@ -111,7 +116,10 @@ export default async function StorefrontPoliciesPage({
               {store.public_email ? (
                 <p>
                   Email:{" "}
-                  <a className="font-medium text-[#073f1e]" href={`mailto:${store.public_email}`}>
+                  <a
+                    className="storefront-primary-color font-medium text-[#073f1e]"
+                    href={`mailto:${store.public_email}`}
+                  >
                     {store.public_email}
                   </a>
                 </p>
@@ -119,7 +127,10 @@ export default async function StorefrontPoliciesPage({
               {store.public_phone ? (
                 <p>
                   Phone:{" "}
-                  <a className="font-medium text-[#073f1e]" href={`tel:${store.public_phone}`}>
+                  <a
+                    className="storefront-primary-color font-medium text-[#073f1e]"
+                    href={`tel:${store.public_phone}`}
+                  >
                     {store.public_phone}
                   </a>
                 </p>
@@ -138,12 +149,12 @@ function PolicyCard({ body, title }: { body: string; title: string }) {
       <h2
         className={cx(
           storefrontSerifClass,
-          "text-xl font-normal leading-tight text-stone-950 sm:text-2xl",
+          "storefront-heading-color text-xl font-normal leading-tight text-stone-950 sm:text-2xl",
         )}
       >
         {title}
       </h2>
-      <div className="mt-3 grid gap-2 whitespace-pre-line text-sm leading-6 text-stone-700">
+      <div className="storefront-text-color mt-3 grid gap-2 whitespace-pre-line text-sm leading-6 text-stone-700">
         {body}
       </div>
     </section>
@@ -164,13 +175,13 @@ function InfoCard({
       <h2
         className={cx(
           storefrontSerifClass,
-          "text-lg font-normal leading-tight text-stone-950",
+          "storefront-heading-color text-lg font-normal leading-tight text-stone-950",
         )}
       >
         {title}
       </h2>
       <div className="mt-2.5 h-px w-9 bg-[#cbbd96]" />
-      <div className="mt-3 grid gap-1.5 text-sm leading-6 text-stone-700">
+      <div className="storefront-text-color mt-3 grid gap-1.5 text-sm leading-6 text-stone-700">
         {children}
       </div>
     </section>

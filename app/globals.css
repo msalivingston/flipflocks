@@ -18,6 +18,64 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.buyer-storefront {
+  color: var(--storefront-text-color);
+  font-family: var(--storefront-body-font), Arial, Helvetica, sans-serif;
+}
+
+.buyer-storefront h1,
+.buyer-storefront h2,
+.buyer-storefront h3,
+.buyer-storefront h4,
+.buyer-storefront h5,
+.buyer-storefront h6,
+.buyer-storefront .storefront-heading-font {
+  font-family: var(--storefront-heading-font), Georgia, serif;
+}
+
+.buyer-storefront .storefront-heading-color {
+  color: var(--storefront-heading-color);
+}
+
+.buyer-storefront .storefront-primary-color {
+  color: var(--storefront-primary-color);
+}
+
+.buyer-storefront .storefront-text-color {
+  color: var(--storefront-text-color);
+}
+
+.buyer-storefront .storefront-top-menu {
+  background-color: var(--storefront-top-menu-color);
+}
+
+.buyer-storefront .storefront-primary-bg {
+  background-color: var(--storefront-primary-color);
+}
+
+.buyer-storefront .storefront-primary-border {
+  border-color: var(--storefront-primary-color);
+}
+
+.buyer-storefront .storefront-primary-button {
+  background-color: var(--storefront-primary-color);
+  color: #ffffff;
+}
+
+.buyer-storefront .storefront-primary-button:hover {
+  background-color: color-mix(in srgb, var(--storefront-primary-color) 88%, #000000);
+}
+
+.buyer-storefront .storefront-primary-button:disabled {
+  background-color: #d6d3d1;
+  color: #ffffff;
+}
+
+.buyer-storefront .storefront-primary-focus:focus {
+  border-color: var(--storefront-primary-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--storefront-primary-color) 20%, transparent);
+}
+
 .buyer-storefront .text-\[0\.68rem\]:not(.storefront-serif),
 .buyer-storefront .text-\[0\.7rem\]:not(.storefront-serif) {
   font-size: calc(0.7rem + 0.125rem);

@@ -137,7 +137,7 @@ export default async function StorefrontProcessedPoultryPage({
 
           <section className="grid gap-5 lg:pt-1">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#073f1e]">
+              <p className="storefront-primary-color text-xs font-bold uppercase tracking-[0.18em] text-[#073f1e]">
                 {[item.poultry_type, item.product_type].filter(Boolean).join(" - ")}
               </p>
               <h1

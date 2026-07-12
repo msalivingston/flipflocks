@@ -301,7 +301,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
     return (
       <StorefrontPage size="narrow" className="py-10">
         <StorefrontCard className="border-emerald-200 p-6">
-          <p className="text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
+          <p className="storefront-primary-color text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
             Order placed
           </p>
           <h1 className="mt-2 text-3xl font-semibold text-stone-950">
@@ -327,7 +327,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
   return (
     <StorefrontPage className="gap-7">
       <div className="rounded-xl border border-[#ded7c8] bg-white p-6">
-        <p className="text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
+        <p className="storefront-primary-color text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
           Checkout
         </p>
         <h1 className="mt-1 text-4xl font-semibold text-stone-950">
@@ -360,7 +360,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
             className="rounded-xl border border-[#ded7c8] bg-white p-6"
             onSubmit={handleSubmit}
           >
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
+            <p className="storefront-primary-color text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
               Buyer details
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-stone-950">
@@ -510,7 +510,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
 
           <aside className="grid h-fit gap-4 lg:sticky lg:top-28">
             <StorefrontSummaryCard>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
+              <p className="storefront-primary-color text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
                 Order summary
               </p>
               <h2 className="mt-2 text-2xl font-semibold text-stone-950">

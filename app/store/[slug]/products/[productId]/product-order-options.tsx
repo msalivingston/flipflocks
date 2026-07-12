@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useMemo, useState } from "react";
 import {
   StorefrontCartItem,
@@ -12,6 +11,7 @@ import {
 import { StorefrontProduct } from "../../storefront-data";
 import {
   StorefrontButton,
+  StorefrontGlyph,
   cx,
   formatCurrency,
 } from "../../storefront-ui";
@@ -148,7 +148,7 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
                     <TableCell>
                       <ReadyPill option={option} />
                     </TableCell>
-                    <TableCell className="font-semibold text-[#073f1e]">
+                    <TableCell className="storefront-primary-color font-semibold text-[#073f1e]">
                       {formatQuantityAvailable(option.quantityAvailable)}
                     </TableCell>
                     <TableCell>
@@ -204,7 +204,7 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
                     <SexLabel label={option.typeLabel} />
                   </MobileFact>
                   <MobileFact label="Available">
-                    <span className="font-semibold text-[#073f1e]">
+                    <span className="storefront-primary-color font-semibold text-[#073f1e]">
                       {formatQuantityAvailable(option.quantityAvailable)}
                     </span>
                   </MobileFact>
@@ -248,7 +248,7 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
         </div>
         <div>
           <p className="text-sm text-stone-600">Estimated total</p>
-          <p className="text-2xl font-bold text-[#073f1e]">
+          <p className="storefront-primary-color text-2xl font-bold text-[#073f1e]">
             {formatCurrency(summary.subtotal)}
           </p>
         </div>
@@ -257,14 +257,7 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
           disabled={summary.totalQuantity <= 0}
           onClick={handleAddToCart}
         >
-          <Image
-            alt=""
-            aria-hidden="true"
-            className="h-5 w-5 brightness-0 invert"
-            height={20}
-            src="/glyphs/cart.png"
-            width={20}
-          />
+          <StorefrontGlyph className="h-5 w-5" src="/glyphs/cart.png" />
           Add to cart
         </StorefrontButton>
       </div>
@@ -294,14 +287,14 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
             </p>
             <div className="flex flex-wrap gap-2">
               <button
-                className="min-h-10 rounded-md border border-emerald-700 bg-white/60 px-4 text-sm font-semibold text-emerald-900 hover:bg-white"
+                className="storefront-primary-border storefront-primary-color min-h-10 rounded-md border bg-white/60 px-4 text-sm font-semibold hover:bg-white"
                 onClick={() => setAddedItems(null)}
                 type="button"
               >
                 Continue shopping
               </button>
               <StorefrontButton
-                className="min-h-10 border-emerald-700 text-emerald-900 hover:bg-white"
+                className="min-h-10 hover:bg-white"
                 href={`/store/${product.storeSlug}/cart`}
                 variant="secondary"
               >

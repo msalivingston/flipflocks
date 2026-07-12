@@ -69,7 +69,7 @@ export function ProcessedPoultryOrderOptions({
                     .filter(Boolean)
                     .join(" - ") || "Not listed"}
                 </TableCell>
-                <TableCell className="font-semibold text-[#073f1e]">
+                <TableCell className="storefront-primary-color font-semibold text-[#073f1e]">
                   {formatQuantityAvailable(item.quantity_available)}
                 </TableCell>
                 <TableCell>
@@ -101,7 +101,7 @@ export function ProcessedPoultryOrderOptions({
                 {item.product_name}
               </h3>
             </div>
-            <p className="font-semibold text-[#073f1e]">
+            <p className="storefront-primary-color font-semibold text-[#073f1e]">
               {formatQuantityAvailable(item.quantity_available)}
             </p>
           </div>
@@ -140,7 +140,7 @@ export function ProcessedPoultryOrderOptions({
         </div>
         <div>
           <p className="text-sm text-stone-600">Estimated total</p>
-          <p className="text-2xl font-bold text-[#073f1e]">
+          <p className="storefront-primary-color text-2xl font-bold text-[#073f1e]">
             {formatCurrency(summary.subtotal)}
           </p>
         </div>
@@ -172,14 +172,14 @@ export function ProcessedPoultryOrderOptions({
             </p>
             <div className="flex flex-wrap gap-2">
               <button
-                className="min-h-10 rounded-md border border-emerald-700 bg-white/60 px-4 text-sm font-semibold text-emerald-900 hover:bg-white"
+                className="storefront-primary-border storefront-primary-color min-h-10 rounded-md border bg-white/60 px-4 text-sm font-semibold hover:bg-white"
                 onClick={() => setAddedItem(null)}
                 type="button"
               >
                 Continue shopping
               </button>
               <StorefrontButton
-                className="min-h-10 border-emerald-700 text-emerald-900 hover:bg-white"
+                className="min-h-10 hover:bg-white"
                 href={`/store/${item.store_slug}/cart`}
                 variant="secondary"
               >

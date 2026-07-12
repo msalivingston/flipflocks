@@ -56,7 +56,7 @@ export function CartPage({ store }: { store: StorefrontHome }) {
   return (
     <StorefrontPage className="max-w-6xl gap-7">
       <div className="rounded-xl border border-[#ded7c8] bg-white p-6">
-        <p className="text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
+        <p className="storefront-primary-color text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
           Cart
         </p>
         <h1 className="mt-1 text-3xl font-semibold text-stone-950">
@@ -96,7 +96,7 @@ export function CartPage({ store }: { store: StorefrontHome }) {
                 >
                   <div>
                     {item.speciesName ? (
-                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-emerald-700">
+                      <p className="storefront-primary-color text-xs font-semibold uppercase tracking-[0.08em] text-emerald-700">
                         {item.speciesName}
                       </p>
                     ) : null}
@@ -148,7 +148,7 @@ export function CartPage({ store }: { store: StorefrontHome }) {
           </div>
 
           <StorefrontSummaryCard className="lg:sticky lg:top-28">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
+            <p className="storefront-primary-color text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
               Order summary
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-stone-950">

@@ -1,6 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
-import { storefrontSans, storefrontSerifClass } from "./storefront-fonts";
+import {
+  defaultStorefrontTheme,
+  getStorefrontFontPair,
+  normalizeStorefrontHexColor,
+  storefrontFontVariablesClass,
+  storefrontSerifClass,
+  type StorefrontThemeInput,
+} from "./storefront-fonts";
 
 type StorefrontLocation = {
   public_city: string | null;
@@ -94,21 +101,53 @@ export function storefrontButtonClass({
     "inline-flex min-h-10 items-center justify-center rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-white lg:min-h-11 lg:px-5 lg:text-base",
     storefrontTheme.focus,
     variant === "primary"
-      ? storefrontTheme.primary
-      : "border border-[#cfc7b8] bg-white text-stone-800 hover:bg-[#fbf7ef]",
+      ? "storefront-primary-button"
+      : "storefront-primary-color storefront-primary-border border bg-white hover:bg-[#fbf7ef]",
     className,
   );
 }
 
-export function StorefrontShell({ children }: { children: React.ReactNode }) {
+export function getStorefrontThemeStyle(
+  theme?: StorefrontThemeInput,
+) {
+  const fontPair = getStorefrontFontPair(theme?.fontPair);
+  const primaryColor = normalizeStorefrontHexColor(
+    theme?.headingColor,
+    defaultStorefrontTheme.headingColor,
+  );
+
+  return {
+    "--storefront-primary-color": primaryColor,
+    "--storefront-heading-font": fontPair.headingFontVariable,
+    "--storefront-body-font": fontPair.bodyFontVariable,
+    "--storefront-heading-color": primaryColor,
+    "--storefront-text-color": normalizeStorefrontHexColor(
+      theme?.textColor,
+      defaultStorefrontTheme.textColor,
+    ),
+    "--storefront-top-menu-color": normalizeStorefrontHexColor(
+      theme?.topMenuColor,
+      defaultStorefrontTheme.topMenuColor,
+    ),
+  } as React.CSSProperties;
+}
+
+export function StorefrontShell({
+  children,
+  theme,
+}: {
+  children: React.ReactNode;
+  theme?: StorefrontThemeInput;
+}) {
   return (
     <div
       className={cx(
-        storefrontSans.className,
+        storefrontFontVariablesClass,
         "buyer-storefront",
         "min-h-screen text-stone-950 antialiased",
         storefrontTheme.background,
       )}
+      style={getStorefrontThemeStyle(theme)}
     >
       {children}
     </div>
@@ -307,6 +346,25 @@ export function StorefrontTextButton({
   );
 }
 
+export function StorefrontGlyph({
+  className = "h-5 w-5",
+  src,
+}: {
+  className?: string;
+  src: string;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cx("inline-block shrink-0 bg-current", className)}
+      style={{
+        WebkitMask: `url('${src}') center / contain no-repeat`,
+        mask: `url('${src}') center / contain no-repeat`,
+      }}
+    />
+  );
+}
+
 export function StorefrontLabel({
   children,
   className,
@@ -349,7 +407,7 @@ export function StorefrontTextarea(
 
 export function StorefrontNav({ store }: { store: StorefrontIdentity }) {
   return (
-    <nav className="sticky top-0 z-20 border-b border-[#e5decf] bg-white/95 backdrop-blur">
+    <nav className="storefront-top-menu sticky top-0 z-20 border-b border-[#e5decf] bg-white/95 backdrop-blur">
       <StorefrontContainer className="flex flex-col gap-4 py-4 lg:flex-row lg:items-center lg:justify-between">
         <Link
           className={cx(
@@ -360,7 +418,7 @@ export function StorefrontNav({ store }: { store: StorefrontIdentity }) {
         >
           <StoreLogo store={store} size="sm" />
           <div className="min-w-0">
-            <p className="truncate text-lg font-semibold leading-tight text-[#23412a]">
+            <p className="storefront-heading-color truncate text-lg font-semibold leading-tight text-[#23412a]">
               {store.store_name}
             </p>
             <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-stone-500">
@@ -370,25 +428,25 @@ export function StorefrontNav({ store }: { store: StorefrontIdentity }) {
         </Link>
         <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-stone-700">
           <Link
-            className="rounded-md px-3 py-2 hover:bg-[#f6f1e8] hover:text-[#24512f]"
+            className="rounded-md px-3 py-2 hover:bg-[#f6f1e8] hover:text-[var(--storefront-heading-color)]"
             href={`/store/${store.store_slug}`}
           >
             Shop
           </Link>
           <Link
-            className="rounded-md px-3 py-2 hover:bg-[#f6f1e8] hover:text-[#24512f]"
+            className="rounded-md px-3 py-2 hover:bg-[#f6f1e8] hover:text-[var(--storefront-heading-color)]"
             href={`/store/${store.store_slug}/about`}
           >
             About
           </Link>
           <Link
-            className="rounded-md px-3 py-2 hover:bg-[#f6f1e8] hover:text-[#24512f]"
+            className="rounded-md px-3 py-2 hover:bg-[#f6f1e8] hover:text-[var(--storefront-heading-color)]"
             href={`/store/${store.store_slug}/policies`}
           >
             Pickup & policies
           </Link>
           <Link
-            className="inline-flex min-h-10 items-center rounded-md border border-[#24512f] bg-[#24512f] px-4 text-white hover:bg-[#183b22]"
+            className="storefront-primary-button storefront-primary-border inline-flex min-h-10 items-center rounded-md border px-4"
             href={`/store/${store.store_slug}/cart`}
           >
             Cart
@@ -413,7 +471,7 @@ export function StorefrontFooter({ store }: { store: StorefrontIdentity }) {
           <div className="flex items-center gap-3">
             <StoreLogo store={store} size="sm" />
             <div>
-              <p className="text-lg font-semibold leading-tight text-[#23412a]">
+              <p className="storefront-heading-color text-lg font-semibold leading-tight text-[#23412a]">
                 {store.store_name}
               </p>
               <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-stone-500">
@@ -491,7 +549,7 @@ export function StoreLogo({
   if (!store.logo_image_url) {
     return (
       <div
-        className={`${sizeClass} flex shrink-0 items-center justify-center rounded-md border border-emerald-100 bg-[#eef4e8] text-base font-bold text-[#24512f]`}
+        className={`${sizeClass} storefront-primary-color flex shrink-0 items-center justify-center rounded-md border border-emerald-100 bg-[#eef4e8] text-base font-bold text-[#24512f]`}
       >
         {store.store_name.trim().slice(0, 1).toUpperCase() || "S"}
       </div>
@@ -644,7 +702,7 @@ export function AvailabilityBadge({
 }) {
   const tone =
     code === "ready_now"
-      ? "border-emerald-200 bg-white/90 text-emerald-800"
+      ? "storefront-primary-border storefront-primary-color bg-white/90"
       : code === "reserve_now"
         ? "border-amber-200 bg-white/90 text-amber-800"
         : "border-stone-200 bg-white/90 text-stone-700";

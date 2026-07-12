@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { StorefrontGlyph } from "./storefront-ui";
 
 export type StorefrontCategorySymbolName =
   | "egg"
@@ -23,14 +23,6 @@ export function StorefrontCategorySymbol({
           : "/glyphs/hen.png";
 
   return (
-    <Image
-      alt=""
-      aria-hidden="true"
-      className={`${className} shrink-0 object-contain`}
-      height={128}
-      src={src}
-      unoptimized
-      width={128}
-    />
+    <StorefrontGlyph className={className} src={src} />
   );
 }
