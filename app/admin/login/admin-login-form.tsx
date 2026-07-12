@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { PasswordResetRequest } from "@/app/_components/password-reset-request";
 import { supabase } from "@/lib/supabase";
 import { isCurrentUserPlatformAdmin } from "../_lib/admin-auth";
 
@@ -97,12 +98,14 @@ export function AdminLoginForm({ initialError }: { initialError?: string }) {
           </div>
 
           <div>
-            <label
-              className="text-sm font-bold text-stone-950"
-              htmlFor="admin-sign-in-password"
-            >
-              Password
-            </label>
+            <div className="flex items-center justify-between gap-3">
+              <label
+                className="text-sm font-bold text-stone-950"
+                htmlFor="admin-sign-in-password"
+              >
+                Password
+              </label>
+            </div>
             <input
               autoComplete="current-password"
               className="mt-1 min-h-12 w-full rounded-md border border-stone-300 bg-white px-3 text-base font-medium text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-emerald-900 focus:ring-2 focus:ring-emerald-900/20"
@@ -112,6 +115,13 @@ export function AdminLoginForm({ initialError }: { initialError?: string }) {
               type="password"
               value={password}
             />
+            <div className="mt-2">
+              <PasswordResetRequest
+                currentEmail={email}
+                source="admin"
+                tone="admin"
+              />
+            </div>
           </div>
 
           {error ? (

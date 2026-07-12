@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { PasswordResetRequest } from "@/app/_components/password-reset-request";
 import { supabase } from "@/lib/supabase";
 import { isCurrentUserPlatformAdmin } from "@/app/admin/_lib/admin-auth";
 import type { SellerContext } from "@/app/dashboard/_lib/seller-types";
@@ -100,12 +101,6 @@ export function SignInForm() {
               >
                 Password
               </label>
-              <Link
-                className="text-sm font-bold text-[#246f38] underline-offset-4 hover:underline"
-                href="#"
-              >
-                Forgot password?
-              </Link>
             </div>
             <input
               autoComplete="current-password"
@@ -116,6 +111,9 @@ export function SignInForm() {
               type="password"
               value={password}
             />
+            <div className="mt-2">
+              <PasswordResetRequest currentEmail={email} source="seller" />
+            </div>
           </div>
 
           {error ? (
