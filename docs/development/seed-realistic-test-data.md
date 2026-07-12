@@ -1,6 +1,6 @@
 # Seed Realistic Test Data
 
-This is a development-only process for loading realistic FlipFlocks test data across multiple seller storefronts. Do not add this script to Supabase migrations.
+This is a development-only process for loading realistic FlockFront test data across multiple seller storefronts. Do not add this script to Supabase migrations.
 
 ## Required Auth Users
 

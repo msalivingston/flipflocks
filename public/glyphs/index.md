@@ -1,4 +1,4 @@
-# FlipFlocks Glyph Library
+# FlockFront Glyph Library
 
 Production glyphs are exported as 128x128 PNG files with transparent backgrounds.
 

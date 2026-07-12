@@ -1,4 +1,4 @@
-# FlipFlocks V1 Schema Plan
+# FlockFront V1 Schema Plan
 
 This document describes the intended schema direction. It should be compared against the current Supabase schema before creating migrations.
 

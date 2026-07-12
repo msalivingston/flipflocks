@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { SellerContextProvider, useSellerContext } from "./seller-context";
 import { ErrorState, LoadingState } from "./seller-ui";
 
-const SUPPORT_EMAIL = "support@flipflocks.com";
+const SUPPORT_EMAIL = "hello@flockfront.com";
 
 const sellerNavItems = [
   { label: "Dashboard", href: "/dashboard", glyph: "/glyphs/farmhouse.png" },

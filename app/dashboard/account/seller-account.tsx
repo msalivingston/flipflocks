@@ -8,7 +8,7 @@ import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { useSellerContext } from "../_components/seller-context";
 import { ErrorState, LoadingState } from "../_components/seller-ui";
 
-const SUPPORT_EMAIL = "support@flipflocks.com";
+const SUPPORT_EMAIL = "hello@flockfront.com";
 
 type AccountUser = {
   email: string | null;

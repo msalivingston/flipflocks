@@ -1,6 +1,6 @@
 # Create a Second Test Seller Store
 
-This is a development-only process for creating a second seller/store so FlipFlocks can test multi-seller behavior before public seller onboarding exists.
+This is a development-only process for creating a second seller/store so FlockFront can test multi-seller behavior before public seller onboarding exists.
 
 Do not add these scripts to Supabase migrations. They are repeatable utilities for development and test environments only.
 

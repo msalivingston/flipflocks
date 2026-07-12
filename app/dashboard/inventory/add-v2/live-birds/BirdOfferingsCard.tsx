@@ -632,7 +632,7 @@ function BreedPhotoPanel({
   const photoSource = sellerPhotoUrl
     ? "Personal breed library photo"
     : catalogPhotoUrl
-      ? "FlipFlocks breed catalog photo"
+      ? "FlockFront breed catalog photo"
       : "Placeholder";
 
   return (

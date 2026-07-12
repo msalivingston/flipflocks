@@ -1,6 +1,6 @@
-# FlipFlocks V1 Documentation Package
+# FlockFront V1 Documentation Package
 
-These documents define the working architecture for FlipFlocks V1. They are intended to be committed into the project repo under `/docs` and used as the source of truth for Codex-assisted development.
+These documents define the working architecture for FlockFront V1. They are intended to be committed into the project repo under `/docs` and used as the source of truth for Codex-assisted development.
 
 ## Current Backend Status
 
@@ -24,10 +24,10 @@ Next phase:
 
 Recommended reading order for Codex:
 
-1. `flipflocks-core-architecture.md`
-2. `flipflocks-v1-scope.md`
-3. `flipflocks-schema-plan.md`
-4. `flipflocks-security-rls.md`
+1. `flockfront-core-architecture.md`
+2. `flockfront-v1-scope.md`
+3. `flockfront-schema-plan.md`
+4. `flockfront-security-rls.md`
 5. `codex-development-rules.md`
 
 Group implementation notes:

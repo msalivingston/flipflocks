@@ -1,4 +1,4 @@
-# FlipFlocks Security and RLS Rules
+# FlockFront Security and RLS Rules
 
 ## Current Security Posture
 
@@ -17,7 +17,7 @@ Current posture:
 
 ## Security Model
 
-FlipFlocks uses a shared database with strict tenant separation through Supabase Row Level Security.
+FlockFront uses a shared database with strict tenant separation through Supabase Row Level Security.
 
 Every sensitive business record must be scoped to the correct store and user. Never trust frontend permissions.
 
@@ -25,12 +25,12 @@ Ownership and access must be validated through `auth.uid()` and server-side role
 
 ## Foundational Security Assumptions
 
-- FlipFlocks is storefront infrastructure, not a centralized marketplace.
+- FlockFront is storefront infrastructure, not a centralized marketplace.
 - Each seller has an independent storefront.
 - Sellers remain merchant of record for animal sales.
-- FlipFlocks avoids custody of seller sale proceeds in V1.
+- FlockFront avoids custody of seller sale proceeds in V1.
 - Stripe payments use hosted/prebuilt flows. Stripe Connect, seller payouts, and marketplace-style payment splitting are deferred.
-- FlipFlocks minimizes tax/1099/platform payout complexity.
+- FlockFront minimizes tax/1099/platform payout complexity.
 - All sensitive data is protected by Supabase RLS.
 - All sensitive ownership is enforced with `auth.uid()` and store ownership/role checks.
 - Server-side APIs/functions are required for sensitive operations.
@@ -118,7 +118,7 @@ Stripe is the source of truth for payment status.
 
 Stripe webhooks must be cryptographically verified using Stripe signature validation.
 
-FlipFlocks must not collect or store:
+FlockFront must not collect or store:
 
 - raw credit card numbers
 - seller bank account information

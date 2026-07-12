@@ -1,6 +1,6 @@
 -- Development utility only. Do not add this file to Supabase migrations.
 --
--- Seeds repeatable, realistic FlipFlocks test data for five stable test sellers:
+-- Seeds repeatable, realistic FlockFront test data for five stable test sellers:
 -- - Willow Creek Poultry
 -- - High Mesa Waterfowl
 -- - Cedar Ridge Homestead

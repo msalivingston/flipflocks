@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FlipFlocks",
+  title: "FlockFront",
   description: "Independent poultry storefronts for local pickup.",
   robots: {
     index: false,

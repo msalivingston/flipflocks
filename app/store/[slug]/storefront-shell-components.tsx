@@ -204,10 +204,10 @@ export function StorefrontFooter({
             <span>Powered by</span>
             <a
               className="rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-              href="https://flipflocks.vercel.app/"
+              href="https://www.flockfront.com/"
             >
               <Image
-                alt="FlipFlocks"
+                alt="FlockFront"
                 className="h-8 w-auto object-contain"
                 height={40}
                 src="/landing-page/flockfront-logo-transparent.png"

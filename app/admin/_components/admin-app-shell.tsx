@@ -40,7 +40,7 @@ export function AdminAppShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden border-r border-stone-200 bg-white lg:flex lg:min-h-screen lg:flex-col">
         <div className="border-b border-stone-200 px-5 py-5">
           <Link href="/" className="text-lg font-bold text-stone-950">
-            FlipFlocks
+            FlockFront
           </Link>
           <p className="mt-1 text-sm font-semibold text-emerald-900">
             Platform Admin
@@ -66,7 +66,7 @@ export function AdminAppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div>
               <Link href="/admin" className="font-bold text-stone-950">
-                FlipFlocks
+                FlockFront
               </Link>
               <p className="text-xs font-semibold text-emerald-900">
                 Platform Admin

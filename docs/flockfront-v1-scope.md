@@ -1,4 +1,4 @@
-# FlipFlocks V1 Scope
+# FlockFront V1 Scope
 
 ## Current Implementation Status
 
@@ -14,7 +14,7 @@ The next phase is:
 
 ## V1 Product Scope
 
-FlipFlocks V1 is a direct-link seller storefront platform for livestock sellers, poultry-first but not poultry-only.
+FlockFront V1 is a direct-link seller storefront platform for livestock sellers, poultry-first but not poultry-only.
 
 V1 supports:
 
@@ -152,16 +152,16 @@ V1 intentionally does not include:
 
 ## Payment V1
 
-FlipFlocks supports two seller-facing order payment modes:
+FlockFront supports two seller-facing order payment modes:
 
 1. Pay at pickup
 2. Stripe-hosted/prebuilt checkout
 
 Sellers remain responsible for their animal sales. Stripe Connect, seller payout flows, split payments, and marketplace-style payment administration are deferred.
 
-FlipFlocks does not handle raw card data, hold funds, collect seller bank details, collect SSNs, or manage seller payout compliance.
+FlockFront does not handle raw card data, hold funds, collect seller bank details, collect SSNs, or manage seller payout compliance.
 
-Platform billing is separate from buyer payments. Sellers pay FlipFlocks for platform access through Stripe-hosted subscription billing.
+Platform billing is separate from buyer payments. Sellers pay FlockFront for platform access through Stripe-hosted subscription billing.
 
 ## Taxes and Fees V1
 

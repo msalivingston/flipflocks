@@ -527,7 +527,7 @@ function SalesTab({
             label="Export CSV"
             onClick={() =>
               downloadCsv({
-                filename: `flipflocks-sales-${formatFileDate(new Date())}.csv`,
+                filename: `flockfront-sales-${formatFileDate(new Date())}.csv`,
                 rows: buildSalesCsvRows(
                   report.filteredOrders,
                   itemSummaryByOrder,
@@ -667,7 +667,7 @@ function ItemsTab({
             label="Export CSV"
             onClick={() =>
               downloadCsv({
-                filename: `flipflocks-items-${formatFileDate(new Date())}.csv`,
+                filename: `flockfront-items-${formatFileDate(new Date())}.csv`,
                 rows: buildItemsCsvRows(itemRows, dateRangeLabel),
               })
             }
@@ -782,7 +782,7 @@ function CustomersTab({
             label="Export CSV"
             onClick={() =>
               downloadCsv({
-                filename: `flipflocks-customers-${formatFileDate(new Date())}.csv`,
+                filename: `flockfront-customers-${formatFileDate(new Date())}.csv`,
                 rows: buildCustomersCsvRows(customerRows, dateRangeLabel),
               })
             }

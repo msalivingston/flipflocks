@@ -483,7 +483,7 @@ export function StorefrontFooter({ store }: { store: StorefrontIdentity }) {
             Fresh availability from this seller storefront.
           </p>
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
-            Powered by FlipFlocks
+            Powered by FlockFront
           </p>
         </div>
         <div>

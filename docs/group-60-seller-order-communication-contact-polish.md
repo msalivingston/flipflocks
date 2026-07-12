@@ -37,7 +37,7 @@ The notes area was renamed to `Pickup / order notes` and uses plain empty-state 
 ## Deferred
 
 - In-app messaging
-- Sending emails or SMS from FlipFlocks
+- Sending emails or SMS from FlockFront
 - Buyer notification changes
 - Seller-editable order notes
 - Adding buyer business/company snapshot to the seller projection

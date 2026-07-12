@@ -1,4 +1,4 @@
-# Codex Development Rules for FlipFlocks
+# Codex Development Rules for FlockFront
 
 These rules are for AI-assisted development. They are intended to prevent architectural drift.
 
@@ -6,17 +6,17 @@ These rules are for AI-assisted development. They are intended to prevent archit
 
 Before making any code, schema, migration, or RLS changes, read:
 
-1. `docs/flipflocks-core-architecture.md`
-2. `docs/flipflocks-v1-scope.md`
-3. `docs/flipflocks-schema-plan.md`
-4. `docs/flipflocks-security-rls.md`
+1. `docs/flockfront-core-architecture.md`
+2. `docs/flockfront-v1-scope.md`
+3. `docs/flockfront-schema-plan.md`
+4. `docs/flockfront-security-rls.md`
 5. `docs/codex-development-rules.md`
 
 If existing code conflicts with these documents, report the conflict and stop before changing anything.
 
 ## Do Not Invent Product Direction
 
-FlipFlocks is not a centralized marketplace.
+FlockFront is not a centralized marketplace.
 
 Do not add or assume:
 
@@ -66,7 +66,7 @@ Future migrations should be limited to:
 Before editing Supabase schema or migrations:
 
 1. inspect current schema/migrations/app references
-2. compare against `docs/flipflocks-schema-plan.md`
+2. compare against `docs/flockfront-schema-plan.md`
 3. produce a gap analysis
 4. stop for review
 

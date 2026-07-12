@@ -6,8 +6,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Glyph Assets
 
-Prefer the production glyphs in `/public/glyphs` over Lucide, Heroicons, or newly generated icons whenever a suitable FlipFlocks glyph already exists.
+Prefer the production glyphs in `/public/glyphs` over Lucide, Heroicons, or newly generated icons whenever a suitable FlockFront glyph already exists.
 
 ## Brand Assets
 
-Treat `/public/branding/*` as FlipFlocks brand assets and `/public/glyphs/*` as application UI icons.
+Treat `/public/branding/*` as FlockFront brand assets and `/public/glyphs/*` as application UI icons.

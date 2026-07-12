@@ -299,7 +299,7 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
       [
         "Restore Catalog Defaults?",
         "",
-        "Restore this breed's information from the FlipFlocks breed library?",
+        "Restore this breed's information from the FlockFront breed library?",
         "",
         "This will replace your customized:",
         ...restoreItems.map((item) => `* ${item}`),
@@ -369,7 +369,7 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
           }
         : current,
     );
-    setSuccessMessage("Breed restored from the FlipFlocks breed library.");
+    setSuccessMessage("Breed restored from the FlockFront breed library.");
     setIsRestoringCatalogDefaults(false);
     setReloadKey((current) => current + 1);
   }
@@ -585,7 +585,7 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
                       compact
                     />
                     <p className="mt-2 text-sm leading-5 text-stone-500">
-                      Add the FlipFlocks catalog image to this photo set.
+                      Add the FlockFront catalog image to this photo set.
                     </p>
                     {isBreedPhotoLimitReached ? (
                       <p className="mt-2 text-sm font-semibold text-amber-800">

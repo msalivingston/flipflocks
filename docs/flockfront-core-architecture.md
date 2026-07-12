@@ -1,4 +1,4 @@
-# FlipFlocks V1 Core Architecture
+# FlockFront V1 Core Architecture
 
 ## Backend Architecture Status
 
@@ -16,7 +16,7 @@ The next implementation phase is:
 
 ## Platform Identity
 
-FlipFlocks is seller storefront infrastructure for livestock sellers. It is not a centralized public marketplace.
+FlockFront is seller storefront infrastructure for livestock sellers. It is not a centralized public marketplace.
 
 Each seller operates an independent storefront. Buyers primarily access storefronts through direct seller links, social media, breeder referrals, farm websites, QR codes, email campaigns, or local community groups.
 
@@ -35,7 +35,7 @@ Store
 
 ### Store
 
-A seller's storefront/business presence on FlipFlocks.
+A seller's storefront/business presence on FlockFront.
 
 The database table should be named `stores`. The public-facing experience may be called a storefront.
 
@@ -93,8 +93,8 @@ Each store may operate in only one storefront mode at a time to avoid duplicate 
 
 Supported V1 storefront modes:
 
-- `hosted` — seller uses a FlipFlocks-hosted storefront page
-- `embedded` — seller uses FlipFlocks inventory/order components embedded into their own website
+- `hosted` — seller uses a FlockFront-hosted storefront page
+- `embedded` — seller uses FlockFront inventory/order components embedded into their own website
 - `private` — storefront is not publicly active
 
 The storefront mode is controlled at the store level, not per batch or inventory item.
@@ -217,7 +217,7 @@ Communication occurs through seller email, optional seller phone number, order c
 
 Public phone visibility is controlled by the seller.
 
-FlipFlocks should remain minimally visible to buyers beyond basic platform branding such as "Powered by FlipFlocks."
+FlockFront should remain minimally visible to buyers beyond basic platform branding such as "Powered by FlockFront."
 
 ## Core Architecture Rule
 
