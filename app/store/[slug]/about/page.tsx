@@ -4,9 +4,12 @@ import {
   StorefrontPage,
   StorefrontShell,
   cx,
+  getStorefrontCropStyle,
   toPublicImageUrl,
 } from "../storefront-ui";
-import { loadStoreGallery } from "../storefront-data";
+import {
+  loadStoreGallery,
+} from "../storefront-data";
 import { loadStorefrontChrome } from "../storefront-chrome-data";
 import { storefrontSerifClass } from "../storefront-fonts";
 import { StorefrontChrome } from "../storefront-shell-components";
@@ -20,6 +23,8 @@ const aboutAssets = {
   sprigRight: "/about-page/quote-sprig-right-transparent.png",
   tallPlant: "/about-page/tall-plant-transparent.png",
 };
+
+export const revalidate = 0;
 
 export default async function StorefrontAboutPage({
   params,
@@ -94,15 +99,20 @@ export default async function StorefrontAboutPage({
                 width={1024}
               />
               {aboutPhoto ? (
-                <Image
-                  alt={aboutPhoto.alt_text || `${store.store_name} farm photo`}
-                  className="mx-auto aspect-[1.58/1] w-full max-w-[calc(94%-35px)] rounded-lg object-cover shadow-sm"
-                  height={640}
-                  priority
-                  src={toPublicImageUrl(aboutPhoto.public_url)}
-                  unoptimized
-                  width={928}
-                />
+                <div className="relative mx-auto aspect-[1.58/1] w-full max-w-[calc(94%-35px)] overflow-hidden rounded-lg bg-white/40 shadow-sm">
+                  <Image
+                    alt={aboutPhoto.alt_text || `${store.store_name} farm photo`}
+                    className={`absolute inset-0 h-full w-full object-center ${
+                      aboutPhoto.crop_metadata ? "object-contain" : "object-cover"
+                    }`}
+                    fill
+                    priority
+                    sizes="(max-width: 1024px) 94vw, 40rem"
+                    src={toPublicImageUrl(aboutPhoto.public_url)}
+                    style={getStorefrontCropStyle(aboutPhoto.crop_metadata)}
+                    unoptimized
+                  />
+                </div>
               ) : (
                 <div className="mx-auto flex aspect-[1.58/1] w-full max-w-[calc(94%-35px)] items-center justify-center rounded-lg border border-dashed border-[#d8cebd] bg-white/55 px-6 text-center text-sm font-semibold text-stone-500">
                   Farm photo coming soon

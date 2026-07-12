@@ -10,9 +10,7 @@ import {
 import { StorefrontProcessedPoultryItem } from "../../storefront-data";
 import {
   StorefrontButton,
-  StorefrontCard,
-  StorefrontInput,
-  StorefrontLabel,
+  cx,
   formatCurrency,
 } from "../../storefront-ui";
 
@@ -39,72 +37,111 @@ export function ProcessedPoultryOrderOptions({
   }
 
   return (
-    <StorefrontCard className="overflow-hidden p-0">
-      <div className="bg-[#fffdf8] p-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
-          Processed Poultry
-        </p>
-        <div className="mt-2 flex items-end justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-semibold text-stone-950">
-              Choose quantity
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-stone-600">
-              Local pickup order with seller confirmation.
-            </p>
-          </div>
-          <p className="shrink-0 text-right text-sm font-semibold text-[#24512f]">
-            {formatCurrency(item.unit_price)}
+    <section className="grid gap-3">
+      <div className="overflow-hidden rounded-lg border border-[#ded7c8] bg-white">
+        <div className="flex flex-col gap-2 border-b border-[#ded7c8] bg-[#f7faf4] px-4 py-4 sm:flex-row sm:items-center sm:gap-5">
+          <h2 className="text-lg font-semibold text-stone-950">Purchase details</h2>
+          <p className="text-sm leading-6 text-stone-600">
+            Choose the quantity you would like to add to your cart.
           </p>
         </div>
-      </div>
 
-      <div className="grid gap-4 border-y border-[#e7decd] bg-[#fbf7ef] p-5">
-        <div className="rounded-lg border border-[#ded7c8] bg-white p-4">
+        <div className="hidden md:block">
+          <table className="w-full table-fixed border-collapse text-left text-sm">
+            <thead>
+              <tr className="border-b border-[#e7decd] bg-[#fbf7ef] text-stone-950">
+                <TableHeading>Product</TableHeading>
+                <TableHeading>Poultry</TableHeading>
+                <TableHeading>Package</TableHeading>
+                <TableHeading>Available</TableHeading>
+                <TableHeading>Price</TableHeading>
+                <TableHeading className="text-right">Quantity</TableHeading>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <TableCell className="font-medium text-stone-950">
+                  {item.product_name}
+                </TableCell>
+                <TableCell>{item.poultry_type}</TableCell>
+                <TableCell>
+                  {[item.product_type, item.package_size]
+                    .filter(Boolean)
+                    .join(" - ") || "Not listed"}
+                </TableCell>
+                <TableCell className="font-semibold text-[#073f1e]">
+                  {formatQuantityAvailable(item.quantity_available)}
+                </TableCell>
+                <TableCell>
+                  <span className="font-semibold text-stone-950">
+                    {formatCurrency(item.unit_price)}
+                  </span>{" "}
+                  <span className="text-stone-500">each</span>
+                </TableCell>
+                <TableCell className="text-right">
+                  <QuantityStepper
+                    disabled={!item.can_checkout || item.quantity_available <= 0}
+                    max={item.quantity_available}
+                    onChange={updateQuantity}
+                    value={selectedQuantity}
+                  />
+                </TableCell>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <article className="grid gap-3 p-4 md:hidden">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-stone-950">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
+                Product
+              </p>
+              <h3 className="mt-1 font-semibold text-stone-950">
                 {item.product_name}
               </h3>
-              <p className="mt-1 text-sm text-stone-600">
-                {[item.poultry_type, item.product_type, item.package_size]
-                  .filter(Boolean)
-                  .join(" - ")}
-              </p>
             </div>
-            <p className="text-right text-sm font-semibold text-[#24512f]">
-              {item.quantity_available === 1
-                ? "1 available"
-                : `${item.quantity_available} available`}
+            <p className="font-semibold text-[#073f1e]">
+              {formatQuantityAvailable(item.quantity_available)}
             </p>
           </div>
-          <StorefrontLabel className="mt-4 text-xs uppercase tracking-[0.1em] text-stone-500">
-            Qty
-            <StorefrontInput
-              className="text-center"
-              inputMode="numeric"
-              max={item.quantity_available}
-              min={0}
-              onChange={(event) => {
-                const parsed = Number.parseInt(event.target.value, 10);
-                setQuantity(Number.isNaN(parsed) ? 0 : parsed);
-                setAddedItem(null);
-              }}
-              step={1}
-              type="number"
-              value={selectedQuantity}
-            />
-          </StorefrontLabel>
-        </div>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <MobileFact label="Poultry">{item.poultry_type}</MobileFact>
+            <MobileFact label="Package">
+              {[item.product_type, item.package_size].filter(Boolean).join(" - ") ||
+                "Not listed"}
+            </MobileFact>
+            <MobileFact label="Price">
+              <span className="font-semibold text-stone-950">
+                {formatCurrency(item.unit_price)}
+              </span>{" "}
+              <span className="text-stone-500">each</span>
+            </MobileFact>
+            <MobileFact label="Quantity">
+              <QuantityStepper
+                disabled={!item.can_checkout || item.quantity_available <= 0}
+                max={item.quantity_available}
+                onChange={updateQuantity}
+                value={selectedQuantity}
+              />
+            </MobileFact>
+          </div>
+        </article>
       </div>
 
-      <div className="grid gap-4 bg-white p-5">
+      <div className="grid gap-4 rounded-lg border border-[#ded7c8] bg-white p-4 md:grid-cols-[minmax(0,1fr)_minmax(12rem,0.45fr)_minmax(14rem,0.65fr)] md:items-center">
         <div>
-          <p className="text-sm font-semibold text-stone-950">Order summary</p>
+          <p className="font-semibold text-stone-950">Order summary</p>
           <p className="mt-1 text-sm text-stone-600">
             {summary.totalQuantity > 0
-              ? `${summary.totalQuantity} selected - Estimated total ${formatCurrency(summary.subtotal)}`
-              : "Select a quantity to add this item to your cart."}
+              ? `${summary.totalQuantity} selected`
+              : "Add a quantity above to see your total."}
+          </p>
+        </div>
+        <div>
+          <p className="text-sm text-stone-600">Estimated total</p>
+          <p className="text-2xl font-bold text-[#073f1e]">
+            {formatCurrency(summary.subtotal)}
           </p>
         </div>
         <StorefrontButton
@@ -155,8 +192,104 @@ export function ProcessedPoultryOrderOptions({
           </div>
         </div>
       ) : null}
-    </StorefrontCard>
+    </section>
   );
+
+  function updateQuantity(rawValue: string) {
+    const parsed = Number.parseInt(rawValue, 10);
+    setQuantity(Number.isNaN(parsed) ? 0 : parsed);
+    setAddedItem(null);
+  }
+}
+
+function TableHeading({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <th className={cx("px-4 py-4 font-semibold", className)} scope="col">
+      {children}
+    </th>
+  );
+}
+
+function TableCell({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <td className={cx("px-4 py-4 align-middle", className)}>{children}</td>;
+}
+
+function MobileFact({
+  children,
+  label,
+}: {
+  children: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
+        {label}
+      </p>
+      <div className="mt-1 min-w-0 text-stone-800">{children}</div>
+    </div>
+  );
+}
+
+function QuantityStepper({
+  disabled,
+  max,
+  onChange,
+  value,
+}: {
+  disabled: boolean;
+  max: number;
+  onChange: (value: string) => void;
+  value: number;
+}) {
+  return (
+    <div className="inline-grid grid-cols-[2.5rem_3.25rem_2.5rem] overflow-hidden rounded-md border border-[#ded7c8] bg-white align-middle">
+      <button
+        className="flex h-10 items-center justify-center border-r border-[#ded7c8] text-lg disabled:text-stone-300"
+        disabled={disabled || value <= 0}
+        onClick={() => onChange(String(value - 1))}
+        type="button"
+      >
+        -
+      </button>
+      <input
+        className="h-10 min-w-0 bg-white text-center text-sm focus:outline-none disabled:bg-stone-50 disabled:text-stone-400"
+        disabled={disabled}
+        inputMode="numeric"
+        max={Math.max(0, max)}
+        min={0}
+        onChange={(event) => onChange(event.target.value)}
+        step={1}
+        type="number"
+        value={value}
+      />
+      <button
+        className="flex h-10 items-center justify-center border-l border-[#ded7c8] text-lg disabled:text-stone-300"
+        disabled={disabled || value >= max}
+        onClick={() => onChange(String(value + 1))}
+        type="button"
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
+function formatQuantityAvailable(quantity: number) {
+  if (quantity <= 0) return "Sold out";
+  return quantity === 1 ? "1 available" : `${quantity} available`;
 }
 
 function toCartItem(

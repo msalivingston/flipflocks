@@ -1,11 +1,11 @@
 import { publicSupabase } from "@/lib/public-supabase";
+import type { StorefrontCropMetadata } from "./storefront-ui";
 
-export type StorefrontHeroCropMetadata = {
-  aspect: number;
-  x: number;
-  y: number;
-  zoom: number;
-  rotation: 0 | 90 | 180 | 270;
+export type StorefrontHeroCropMetadata = StorefrontCropMetadata;
+
+export type StorefrontCustomPolicy = {
+  title: string;
+  body: string;
 };
 
 export type StorefrontHome = {
@@ -20,6 +20,8 @@ export type StorefrontHome = {
   about_text: string | null;
   pickup_policy: string | null;
   cancellation_policy: string | null;
+  other_policies?: string | null;
+  custom_policies?: StorefrontCustomPolicy[] | null;
   pickup_instructions: string | null;
   pickup_method: "notes" | "manual_options" | string | null;
   public_email: string | null;
@@ -95,6 +97,7 @@ export type StorefrontMedia = {
   caption: string | null;
   sort_order: number;
   is_featured: boolean;
+  crop_metadata?: StorefrontHeroCropMetadata | null;
   width_px: number | null;
   height_px: number | null;
 };
@@ -143,6 +146,7 @@ export type StorefrontPurchaseOption = {
   inventoryType: string;
   label: string;
   ageLabel: string;
+  ageFilterDays: number | null;
   typeLabel: string;
   quantityAvailable: number;
   buyerAvailabilityCode: string;
@@ -458,6 +462,7 @@ export function toPurchaseOption(
     inventoryType: item.inventory_type,
     label: [ageLabel, typeLabel].filter(Boolean).join(" - ") || typeLabel,
     ageLabel,
+    ageFilterDays: getPurchaseOptionAgeFilterDays(item),
     typeLabel,
     quantityAvailable: item.quantity_available,
     buyerAvailabilityCode: item.buyer_availability_code,
@@ -468,6 +473,25 @@ export function toPurchaseOption(
     unitPrice: item.unit_price,
     fulfillmentNote: null,
   };
+}
+
+function getPurchaseOptionAgeFilterDays(item: StorefrontInventoryItem) {
+  if (item.batch_type === "hatching_eggs" || item.inventory_type === "hatching_eggs") {
+    return null;
+  }
+
+  if (item.buyer_availability_code === "ready_now") {
+    return getCurrentBirdAgeDays(item);
+  }
+
+  if (
+    item.age_at_availability_days !== null &&
+    Number.isFinite(item.age_at_availability_days)
+  ) {
+    return Math.max(0, Math.floor(item.age_at_availability_days));
+  }
+
+  return null;
 }
 
 export function findProduct(

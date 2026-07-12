@@ -643,6 +643,25 @@ export function StoreAdmin() {
     }
 
     const uploadedMedia = data.media as StoreMediaItem;
+    const mediaWithCrop =
+      role === "about"
+        ? {
+            ...uploadedMedia,
+            crop_metadata: buildAboutInitialCrop(uploadedMedia),
+          }
+        : uploadedMedia;
+
+    if (role === "about") {
+      const cropResult = await persistMediaCrop(
+        uploadedMedia.media_link_id,
+        mediaWithCrop.crop_metadata ?? null,
+        "The photo position",
+      );
+
+      if (!cropResult.ok) {
+        setMediaError(cropResult.message);
+      }
+    }
 
     setStoreMediaItems((current) =>
       sortStoreMedia([
@@ -651,7 +670,7 @@ export function StoreAdmin() {
             ? item.display_context !== "gallery"
             : item.display_context !== role,
         ),
-        uploadedMedia,
+        mediaWithCrop,
       ]),
     );
     setIsMediaUploading(null);
@@ -756,6 +775,22 @@ export function StoreAdmin() {
     );
   }
 
+  function saveAboutCrop(crop: PhotoCropMetadata | null) {
+    const about = getStoreMediaByRole(storeMediaItems, "about");
+
+    if (!about) return;
+
+    setSaveState("idle");
+    setSaveMessage(null);
+    setStoreMediaItems((current) =>
+      current.map((item) =>
+        item.media_link_id === about.media_link_id
+          ? { ...item, crop_metadata: crop }
+          : item,
+      ),
+    );
+  }
+
   function saveHeroLayout(layout: HeroLayout) {
     const hero = getStoreMediaByRole(storeMediaItems, "hero");
 
@@ -778,6 +813,8 @@ export function StoreAdmin() {
   > {
     const initialHero = getStoreMediaByRole(initialStoreMediaItems, "hero");
     const currentHero = findStoreMediaByContext(storeMediaItems, "hero");
+    const initialAbout = getStoreMediaByRole(initialStoreMediaItems, "about");
+    const currentAbout = findStoreMediaByContext(storeMediaItems, "gallery");
 
     if (currentHero?.draft_status === "remove") {
       if (initialHero) {
@@ -799,9 +836,10 @@ export function StoreAdmin() {
 
       if (!savedHero.ok) return savedHero;
 
-      const cropResult = await persistHeroCrop(
+      const cropResult = await persistMediaCrop(
         savedHero.media.media_link_id,
         currentHero.crop_metadata ?? buildHeroInitialCrop(currentHero),
+        "The hero image position",
       );
 
       if (!cropResult.ok) return cropResult;
@@ -817,9 +855,10 @@ export function StoreAdmin() {
         JSON.stringify(normalizeCrop(currentHero.crop_metadata)) !==
         JSON.stringify(normalizeCrop(initialHero.crop_metadata))
       ) {
-        const cropResult = await persistHeroCrop(
+        const cropResult = await persistMediaCrop(
           currentHero.media_link_id,
           currentHero.crop_metadata ?? null,
+          "The hero image position",
         );
 
         if (!cropResult.ok) return cropResult;
@@ -836,6 +875,21 @@ export function StoreAdmin() {
 
         if (!layoutResult.ok) return layoutResult;
       }
+    }
+
+    if (
+      currentAbout &&
+      initialAbout &&
+      JSON.stringify(normalizeCrop(currentAbout.crop_metadata)) !==
+        JSON.stringify(normalizeCrop(initialAbout.crop_metadata))
+    ) {
+      const cropResult = await persistMediaCrop(
+        currentAbout.media_link_id,
+        currentAbout.crop_metadata ?? null,
+        "The About photo position",
+      );
+
+      if (!cropResult.ok) return cropResult;
     }
 
     const refreshedMedia = await loadStoreMediaItems();
@@ -931,9 +985,10 @@ export function StoreAdmin() {
     return { ok: true, media: selected };
   }
 
-  async function persistHeroCrop(
+  async function persistMediaCrop(
     mediaLinkId: string,
     crop: PhotoCropMetadata | null,
+    label = "The photo position",
   ): Promise<{ ok: true } | { ok: false; message: string }> {
     const { error } = await supabase.rpc("seller_update_media_crop", {
       p_crop_metadata: crop,
@@ -943,7 +998,7 @@ export function StoreAdmin() {
     if (error) {
       return {
         ok: false,
-        message: "The hero image position was not saved. Please try again.",
+        message: `${label} was not saved. Please try again.`,
       };
     }
 
@@ -1824,6 +1879,7 @@ export function StoreAdmin() {
                 logo={getStoreMediaByRole(storeMediaItems, "logo")}
                 mediaError={mediaError}
                 onRemove={removeStoreMedia}
+                onSaveAboutCrop={(crop) => void saveAboutCrop(crop)}
                 onSaveHeroCrop={(crop) => void saveHeroCrop(crop)}
                 onSaveHeroLayout={(layout) => void saveHeroLayout(layout)}
                 onSelectHeroLibrary={(image) => void selectHeroLibraryImage(image)}
@@ -2427,6 +2483,7 @@ function PhotosTab({
   logo,
   mediaError,
   onRemove,
+  onSaveAboutCrop,
   onSaveHeroCrop,
   onSaveHeroLayout,
   onSelectHeroLibrary,
@@ -2441,6 +2498,7 @@ function PhotosTab({
   logo: StoreMediaItem | null;
   mediaError: string | null;
   onRemove: (item: StoreMediaItem | null) => void;
+  onSaveAboutCrop: (crop: PhotoCropMetadata | null) => void;
   onSaveHeroCrop: (crop: PhotoCropMetadata | null) => void;
   onSaveHeroLayout: (layout: HeroLayout) => void;
   onSelectHeroLibrary: (image: HeroLibraryImage) => void;
@@ -2486,9 +2544,11 @@ function PhotosTab({
       />
 
       <AboutPhotoSection
+        key={aboutPhoto?.media_link_id ?? "about-photo-empty"}
         aboutPhoto={aboutPhoto}
         isUploading={isUploading === "about"}
         onRemove={() => onRemove(aboutPhoto)}
+        onSaveCrop={onSaveAboutCrop}
         onUpload={(files) => onUpload("about", files)}
       />
 
@@ -2562,6 +2622,13 @@ function LogoPhotoSection({
 }
 
 type HeroLayout = "full" | "right";
+
+const aboutPhotoFrame = {
+  aspectRatio: 1.58,
+  setupPreviewScale: 0.68,
+  setupPreviewClass:
+    "relative aspect-[1.58/1] w-full max-w-[24.5rem] touch-none overflow-hidden rounded-lg border border-stone-200 bg-stone-50",
+};
 
 function HeroPhotoSection({
   heroSubheading,
@@ -2985,13 +3052,76 @@ function AboutPhotoSection({
   aboutPhoto,
   isUploading,
   onRemove,
+  onSaveCrop,
   onUpload,
 }: {
   aboutPhoto: StoreMediaItem | null;
   isUploading: boolean;
   onRemove: () => void;
+  onSaveCrop: (crop: PhotoCropMetadata | null) => void;
   onUpload: (files: FileList | null) => void;
 }) {
+  const [draftCrop, setDraftCrop] = useState<PhotoCropMetadata>(
+    buildAboutInitialCrop(aboutPhoto),
+  );
+  const dragStartRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  function updateDraftCrop(updates: Partial<PhotoCropMetadata>) {
+    const nextCrop = { ...draftCrop, ...updates };
+    setDraftCrop(nextCrop);
+    return nextCrop;
+  }
+
+  function commitCrop(crop = draftCrop) {
+    if (aboutPhoto) onSaveCrop({ ...crop, aspect: aboutPhotoFrame.aspectRatio });
+  }
+
+  function beginDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (!aboutPhoto) return;
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragStartRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      x: draftCrop.x,
+      y: draftCrop.y,
+    };
+  }
+
+  function moveImage(event: React.PointerEvent<HTMLDivElement>) {
+    const start = dragStartRef.current;
+
+    if (!start || start.pointerId !== event.pointerId) return;
+
+    setDraftCrop({
+      x: Math.round(
+        start.x +
+          (event.clientX - start.startX) / aboutPhotoFrame.setupPreviewScale,
+      ),
+      y: Math.round(
+        start.y +
+          (event.clientY - start.startY) / aboutPhotoFrame.setupPreviewScale,
+      ),
+      aspect: aboutPhotoFrame.aspectRatio,
+      zoom: draftCrop.zoom,
+      rotation: draftCrop.rotation,
+    });
+  }
+
+  function endDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (dragStartRef.current?.pointerId === event.pointerId) {
+      dragStartRef.current = null;
+      commitCrop();
+    }
+  }
+
   return (
     <section className="rounded-lg border border-stone-200 bg-white p-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -3004,16 +3134,39 @@ function AboutPhotoSection({
 
       <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_15rem]">
         <div className="flex flex-col gap-3 sm:flex-row">
-          <div className="relative aspect-[16/9] w-full overflow-hidden rounded-lg border border-stone-200 bg-stone-50 sm:max-w-[24rem]">
+          <div
+            className={aboutPhotoFrame.setupPreviewClass}
+            onPointerCancel={endDrag}
+            onPointerDown={beginDrag}
+            onPointerMove={moveImage}
+            onPointerUp={endDrag}
+          >
             {aboutPhoto ? (
-              <Image
-                alt={aboutPhoto.alt_text || "About photo"}
-                className="h-full w-full object-cover"
-                fill
-                sizes="416px"
-              src={toStoreAdminMediaImageUrl(aboutPhoto)}
-                unoptimized
-              />
+              <>
+                <div
+                  className="absolute left-0 top-0 h-[calc(100%/var(--about-preview-scale))] w-[calc(100%/var(--about-preview-scale))] origin-top-left scale-[var(--about-preview-scale)]"
+                  style={
+                    {
+                      "--about-preview-scale":
+                        aboutPhotoFrame.setupPreviewScale,
+                    } as CSSProperties
+                  }
+                >
+                  <Image
+                    alt={aboutPhoto.alt_text || "About photo"}
+                    className="absolute inset-0 h-full w-full select-none object-contain object-center"
+                    draggable={false}
+                    fill
+                    sizes="576px"
+                    src={toStoreAdminMediaImageUrl(aboutPhoto)}
+                    style={getCropImageStyle(draftCrop)}
+                    unoptimized
+                  />
+                </div>
+                <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-stone-950/70 px-3 py-1 text-xs font-semibold text-white">
+                  Drag to reposition
+                </div>
+              </>
             ) : (
               <div className="flex h-full items-center justify-center text-sm font-semibold text-stone-500">
                 No about photo yet
@@ -3028,13 +3181,42 @@ function AboutPhotoSection({
               onUpload={onUpload}
             />
             {aboutPhoto ? (
-              <button
-                className="seller-secondary-button border-red-200 text-red-700 hover:bg-red-50"
-                type="button"
-                onClick={onRemove}
-              >
-                Remove photo
-              </button>
+              <>
+                <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                  Zoom
+                  <input
+                    className="accent-emerald-800"
+                    max="3"
+                    min="0.5"
+                    step="0.05"
+                    type="range"
+                    value={draftCrop.zoom}
+                    onChange={(event) =>
+                      updateDraftCrop({ zoom: Number(event.target.value) })
+                    }
+                    onKeyUp={() => commitCrop()}
+                    onPointerUp={() => commitCrop()}
+                  />
+                </label>
+                <button
+                  className="seller-secondary-button"
+                  type="button"
+                  onClick={() => {
+                    const resetCrop = buildAboutDefaultCrop(aboutPhoto);
+                    setDraftCrop(resetCrop);
+                    onSaveCrop(resetCrop);
+                  }}
+                >
+                  Reset
+                </button>
+                <button
+                  className="seller-secondary-button border-red-200 text-red-700 hover:bg-red-50"
+                  type="button"
+                  onClick={onRemove}
+                >
+                  Remove photo
+                </button>
+              </>
             ) : null}
             <p className="text-xs font-medium leading-4 text-stone-500">
               Recommended: landscape image, JPG or PNG, at least 1200px wide.
@@ -3170,6 +3352,42 @@ function getHeroCoverZoom(media: StoreMediaItem | null | undefined) {
 
   const imageRatio = width / height;
   const frameRatio = storefrontHeroFrame.aspectRatio;
+  const zoom = Math.max(1, imageRatio / frameRatio, frameRatio / imageRatio);
+
+  return Math.round(zoom * 100) / 100;
+}
+
+function buildAboutInitialCrop(media: StoreMediaItem | null | undefined) {
+  if (media?.crop_metadata) {
+    const normalized = normalizeCrop(media.crop_metadata);
+
+    return {
+      ...normalized,
+      aspect: aboutPhotoFrame.aspectRatio,
+      zoom: Math.max(normalized.zoom, getAboutCoverZoom(media)),
+    };
+  }
+
+  return buildAboutDefaultCrop(media);
+}
+
+function buildAboutDefaultCrop(media: StoreMediaItem | null | undefined) {
+  return {
+    ...normalizeCrop(null),
+    aspect: aboutPhotoFrame.aspectRatio,
+    zoom: getAboutCoverZoom(media),
+  };
+}
+
+function getAboutCoverZoom(media: StoreMediaItem | null | undefined) {
+  const fallbackZoom = 1;
+  const width = media?.width_px ?? 0;
+  const height = media?.height_px ?? 0;
+
+  if (width <= 0 || height <= 0) return fallbackZoom;
+
+  const imageRatio = width / height;
+  const frameRatio = aboutPhotoFrame.aspectRatio;
   const zoom = Math.max(1, imageRatio / frameRatio, frameRatio / imageRatio);
 
   return Math.round(zoom * 100) / 100;

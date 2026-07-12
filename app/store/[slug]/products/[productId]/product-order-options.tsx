@@ -23,6 +23,9 @@ type ProductOrderOptionsProps = {
 export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addedItems, setAddedItems] = useState<StorefrontCartItem[] | null>(null);
+  const isHatchingEggProduct = product.options.every(
+    (option) => option.inventoryType === "hatching_eggs",
+  );
 
   const selectableOptions = useMemo(
     () =>
@@ -100,18 +103,22 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
     <section className="grid gap-3">
       <div className="overflow-hidden rounded-lg border border-[#ded7c8] bg-white">
         <div className="flex flex-col gap-2 border-b border-[#ded7c8] bg-[#f7faf4] px-4 py-4 sm:flex-row sm:items-center sm:gap-5">
-          <h2 className="text-lg font-semibold text-stone-950">Current age</h2>
+          <h2 className="text-lg font-semibold text-stone-950">
+            Purchase details
+          </h2>
           <p className="text-sm leading-6 text-stone-600">
-            Current age is based on the birds&apos; hatch date.
+            {isHatchingEggProduct
+              ? "Choose from the seller's available hatching egg options."
+              : "Choose the quantities you would like to add to your cart."}
           </p>
         </div>
 
         <div className="hidden md:block">
           <table className="w-full table-fixed border-collapse text-left text-sm">
             <thead>
-              <tr className="border-b border-[#e7decd] text-stone-950">
-                <TableHeading>Current age</TableHeading>
-                <TableHeading>Sex</TableHeading>
+              <tr className="border-b border-[#e7decd] bg-[#fbf7ef] text-stone-950">
+                <TableHeading>{isHatchingEggProduct ? "Item" : "Current age"}</TableHeading>
+                <TableHeading>{isHatchingEggProduct ? "Type" : "Sex"}</TableHeading>
                 <TableHeading>Ready Date</TableHeading>
                 <TableHeading>Available</TableHeading>
                 <TableHeading>Price</TableHeading>
@@ -184,7 +191,7 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
-                      Current age
+                      {isHatchingEggProduct ? "Item" : "Current age"}
                     </p>
                     <h3 className="mt-1 font-semibold text-stone-950">
                       {option.ageLabel}
@@ -193,7 +200,7 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
                   <ReadyPill option={option} />
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <MobileFact label="Sex">
+                  <MobileFact label={isHatchingEggProduct ? "Type" : "Sex"}>
                     <SexLabel label={option.typeLabel} />
                   </MobileFact>
                   <MobileFact label="Available">

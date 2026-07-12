@@ -1,14 +1,15 @@
+import Link from "next/link";
 import {
   EmptyStorefront,
-  InfoPanel,
-  StorefrontCard,
   StorefrontPage,
-  StoreLogo,
   StorefrontShell,
+  cx,
   formatLocation,
 } from "../storefront-ui";
 import { loadStorefrontChrome } from "../storefront-chrome-data";
+import { storefrontSerifClass } from "../storefront-fonts";
 import { StorefrontChrome } from "../storefront-shell-components";
+import type { StorefrontCustomPolicy } from "../storefront-data";
 
 export default async function StorefrontPoliciesPage({
   params,
@@ -44,72 +45,181 @@ export default async function StorefrontPoliciesPage({
     );
   }
 
+  const policySections = buildPolicySections({
+    customPolicies: store.custom_policies,
+    otherPolicies: store.other_policies,
+    pickupPolicy: store.pickup_policy,
+  });
+  const hasContact = Boolean(store.public_email || store.public_phone);
+  const location = formatLocation(store);
+
   return (
     <StorefrontChrome categories={categories} store={store}>
-      <StorefrontPage className="gap-7">
-        <StorefrontCard className="bg-[#fffdf8] p-6">
-          <div className="flex items-center gap-4">
-            <StoreLogo store={store} />
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800">
-                Pickup and policies
-              </p>
-              <h1 className="mt-1 text-4xl font-semibold leading-tight text-stone-950">
-                Buying from {store.store_name}
-              </h1>
+      <StorefrontPage className="max-w-[70rem] gap-4 py-5 lg:gap-5 lg:py-6">
+        <nav
+          aria-label="Breadcrumb"
+          className="flex flex-wrap items-center gap-2 text-xs font-medium text-stone-600"
+        >
+          <Link className="hover:text-[#073f1e]" href={`/store/${store.store_slug}`}>
+            Home
+          </Link>
+          <span aria-hidden="true">/</span>
+          <Link
+            className="hover:text-[#073f1e]"
+            href={`/store/${store.store_slug}#shop-listings`}
+          >
+            Shop
+          </Link>
+          <span aria-hidden="true">/</span>
+          <span className="text-[#073f1e]">Pickup & Policies</span>
+        </nav>
+
+        <header className="max-w-2xl">
+          <h1 className="text-xs font-bold uppercase tracking-[0.2em] text-[#596747]">
+            Pickup & Policies
+          </h1>
+          <div className="mt-3 h-px w-14 bg-[#cbbd96]" />
+          {policySections.length > 0 ? (
+            <div className="mt-3 grid gap-1.5 text-sm leading-6 text-stone-700">
+              <p>Please review pickup details and policies before placing your order.</p>
+              <p>The seller will confirm final timing after your order is placed.</p>
             </div>
-          </div>
-          <p className="mt-3 max-w-2xl text-sm leading-7 text-stone-600">
-            Review pickup details and seller policies before checkout. The
-            seller will confirm final timing after your order is placed.
-          </p>
-        </StorefrontCard>
+          ) : null}
+        </header>
 
-        <section className="grid gap-5 lg:grid-cols-[1fr_21rem]">
-          <div className="grid gap-4">
-            <PolicySection title="Pickup instructions">
-              {store.pickup_instructions || "Pickup instructions coming soon."}
-            </PolicySection>
-            <PolicySection title="Pickup policy">
-              {store.pickup_policy || "Pickup policy details coming soon."}
-            </PolicySection>
-            <PolicySection title="Cancellation policy">
-              {store.cancellation_policy ||
-                "Cancellation policy details coming soon."}
-            </PolicySection>
-          </div>
+        {policySections.length > 0 ? (
+          <section className="grid gap-3">
+            {policySections.map((section) => (
+              <PolicyCard body={section.body} key={section.title} title={section.title} />
+            ))}
+          </section>
+        ) : (
+          <EmptyStorefront
+            title="No pickup policies posted yet"
+            description="The seller will confirm pickup details after your order is placed."
+          />
+        )}
 
-          <aside className="grid h-fit gap-4">
-            <InfoPanel title="Pickup region">
-              <p>{formatLocation(store)}</p>
-            </InfoPanel>
-            <InfoPanel title="Contact">
-              {store.public_email ? <p>Email: {store.public_email}</p> : null}
-              {store.public_phone ? <p>Phone: {store.public_phone}</p> : null}
-              {!store.public_email && !store.public_phone ? (
-                <p>The seller will follow up after your order is placed.</p>
+        <section className="grid overflow-hidden rounded-lg border border-[#d8cbb5] bg-[#fffaf0] sm:grid-cols-2">
+          {location ? (
+            <InfoCard title="Pickup region">
+              <p>{location}</p>
+            </InfoCard>
+          ) : null}
+          {hasContact ? (
+            <InfoCard className="border-t border-[#ded7c8] sm:border-l sm:border-t-0" title="Contact">
+              {store.public_email ? (
+                <p>
+                  Email:{" "}
+                  <a className="font-medium text-[#073f1e]" href={`mailto:${store.public_email}`}>
+                    {store.public_email}
+                  </a>
+                </p>
               ) : null}
-            </InfoPanel>
-          </aside>
+              {store.public_phone ? (
+                <p>
+                  Phone:{" "}
+                  <a className="font-medium text-[#073f1e]" href={`tel:${store.public_phone}`}>
+                    {store.public_phone}
+                  </a>
+                </p>
+              ) : null}
+            </InfoCard>
+          ) : null}
         </section>
       </StorefrontPage>
     </StorefrontChrome>
   );
 }
 
-function PolicySection({
+function PolicyCard({ body, title }: { body: string; title: string }) {
+  return (
+    <section className="rounded-lg border border-[#d8cbb5] bg-[#fffaf0] px-4 py-4 sm:px-6 sm:py-5">
+      <h2
+        className={cx(
+          storefrontSerifClass,
+          "text-xl font-normal leading-tight text-stone-950 sm:text-2xl",
+        )}
+      >
+        {title}
+      </h2>
+      <div className="mt-3 grid gap-2 whitespace-pre-line text-sm leading-6 text-stone-700">
+        {body}
+      </div>
+    </section>
+  );
+}
+
+function InfoCard({
   children,
+  className,
   title,
 }: {
   children: React.ReactNode;
+  className?: string;
   title: string;
 }) {
   return (
-    <StorefrontCard className="border-l-4 border-l-[#24512f]">
-      <h2 className="text-xl font-semibold text-stone-950">{title}</h2>
-      <p className="mt-3 whitespace-pre-line text-sm leading-7 text-stone-700">
+    <section className={cx("px-4 py-4 sm:px-6", className)}>
+      <h2
+        className={cx(
+          storefrontSerifClass,
+          "text-lg font-normal leading-tight text-stone-950",
+        )}
+      >
+        {title}
+      </h2>
+      <div className="mt-2.5 h-px w-9 bg-[#cbbd96]" />
+      <div className="mt-3 grid gap-1.5 text-sm leading-6 text-stone-700">
         {children}
-      </p>
-    </StorefrontCard>
+      </div>
+    </section>
   );
+}
+
+function buildPolicySections({
+  customPolicies,
+  otherPolicies,
+  pickupPolicy,
+}: {
+  customPolicies?: StorefrontCustomPolicy[] | null;
+  otherPolicies?: string | null;
+  pickupPolicy: string | null;
+}) {
+  const sections: Array<{ body: string; title: string }> = [];
+
+  addSection(sections, "Pickup policy", pickupPolicy);
+  addSection(sections, "Other policies", otherPolicies);
+
+  for (const policy of normalizeCustomPolicies(customPolicies)) {
+    addSection(sections, policy.title, policy.body);
+  }
+
+  return sections;
+}
+
+function addSection(
+  sections: Array<{ body: string; title: string }>,
+  title: string,
+  body: string | null | undefined,
+) {
+  const trimmed = body?.trim();
+
+  if (!trimmed) return;
+
+  sections.push({ body: trimmed, title });
+}
+
+function normalizeCustomPolicies(
+  policies: StorefrontCustomPolicy[] | null | undefined,
+) {
+  if (!Array.isArray(policies)) return [];
+
+  return policies
+    .map((policy) => ({
+      body: policy.body?.trim() ?? "",
+      title: policy.title?.trim() ?? "",
+    }))
+    .filter((policy) => policy.title && policy.body)
+    .slice(0, 4);
 }

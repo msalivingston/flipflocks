@@ -22,6 +22,14 @@ type InventoryLabelSource = {
   custom_inventory_label: string | null;
 };
 
+export type StorefrontCropMetadata = {
+  aspect: number;
+  x: number;
+  y: number;
+  zoom: number;
+  rotation: 0 | 90 | 180 | 270;
+};
+
 export const storefrontTheme = {
   background: "bg-white",
   border: "border-[#ded7c8]",
@@ -38,6 +46,24 @@ export const storefrontTheme = {
 
 export function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
+}
+
+export function getStorefrontCropStyle(
+  crop: StorefrontCropMetadata | null | undefined,
+) {
+  if (!crop) return undefined;
+
+  const zoom = Number.isFinite(crop.zoom) && crop.zoom > 0 ? crop.zoom : 1;
+  const x = Number.isFinite(crop.x) ? Math.round(crop.x) : 0;
+  const y = Number.isFinite(crop.y) ? Math.round(crop.y) : 0;
+  const rotation = [0, 90, 180, 270].includes(crop.rotation)
+    ? crop.rotation
+    : 0;
+
+  return {
+    transform: `translate(${x}px, ${y}px) scale(${zoom}) rotate(${rotation}deg)`,
+    transformOrigin: "center center",
+  };
 }
 
 export const storefrontHeroTypography = {

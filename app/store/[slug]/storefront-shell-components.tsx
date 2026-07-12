@@ -67,7 +67,9 @@ export function StorefrontHeader({ store }: { store: StorefrontHome }) {
         <nav className="flex flex-wrap items-center justify-start gap-2 text-base font-semibold text-stone-950 lg:justify-end lg:gap-7 xl:gap-10">
           <Link href={`/store/${store.store_slug}#shop-listings`}>Shop</Link>
           <Link href={`/store/${store.store_slug}/about`}>About</Link>
-          <Link href={`/store/${store.store_slug}/policies`}>Contact</Link>
+          <Link href={`/store/${store.store_slug}/policies`}>
+            Pickup & Policies
+          </Link>
         </nav>
 
         <div className="flex items-center gap-1.5 lg:ml-4 lg:justify-end xl:ml-6">
@@ -82,21 +84,6 @@ export function StorefrontHeader({ store }: { store: StorefrontHome }) {
               className="h-6 w-6 object-contain lg:h-7 lg:w-7"
               height={128}
               src="/glyphs/looking-glass.png"
-              unoptimized
-              width={128}
-            />
-          </Link>
-          <Link
-            aria-label="Account"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 lg:h-11 lg:w-11"
-            href="/sign-in"
-          >
-            <Image
-              alt=""
-              aria-hidden="true"
-              className="h-6 w-6 object-contain lg:h-7 lg:w-7"
-              height={128}
-              src="/glyphs/person.png"
               unoptimized
               width={128}
             />
@@ -153,92 +140,133 @@ export function StorefrontFooter({
   categories: StorefrontCategoryAvailability;
   store: StorefrontHome;
 }) {
-  const socialLinks = getSocialLinks(store.social_url);
   const shopLinks = getStorefrontFooterShopLinks(store.store_slug, categories);
 
   return (
-    <footer className="border-t border-[#e3e3df] bg-[#f7f7f4]">
-      <div className="mx-auto grid max-w-[70rem] gap-9 px-5 py-10 text-sm text-stone-700 sm:grid-cols-2 sm:px-7 lg:grid-cols-[1.35fr_0.8fr_0.9fr_1fr]">
-        <div>
-          <p className="text-2xl font-semibold leading-none text-[#073f1e]">
-            {store.store_name}
-          </p>
-          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.22em] text-stone-700">
-            {formatLocation(store)}
-          </p>
-          <div className="mt-5 grid gap-2">
-            {store.public_email ? <p>{store.public_email}</p> : null}
-            {store.public_phone ? <p>{store.public_phone}</p> : null}
-            {!store.public_email && !store.public_phone ? (
-              <p>Seller contact follows after checkout.</p>
-            ) : null}
-          </div>
-          {socialLinks.length > 0 ? (
-            <div className="mt-5 flex items-center gap-3">
-              {socialLinks.map((link) => (
-                <a
-                  aria-label={link.label}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d5d5cf] bg-white text-sm font-bold text-stone-800 transition hover:border-[#073f1e] hover:text-[#073f1e]"
-                  href={link.href}
-                  key={link.label}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  {link.mark}
-                </a>
-              ))}
+    <footer className="relative overflow-hidden border-t border-[#e4dccb] bg-[#fbf6ec]">
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-0 bottom-14 h-[10rem] bg-[length:90rem_auto] bg-bottom bg-center bg-no-repeat opacity-75"
+        style={{
+          backgroundImage:
+            "url('/storefront-heroes/footer-fence-line.png')",
+        }}
+      />
+      <div className="relative mx-auto max-w-[70rem] px-5 py-5 sm:px-7 lg:py-7">
+        <div className="grid gap-7 text-sm text-[#1f2f37] sm:grid-cols-2 lg:grid-cols-[1.45fr_0.9fr_1fr_1fr] lg:gap-10">
+          <div>
+            <p
+              className={cx(
+                storefrontSerifClass,
+                "max-w-xs text-3xl font-normal leading-[1.05] text-[#073f1e]",
+              )}
+            >
+              {store.store_name}
+            </p>
+            <div className="mt-4">
+              <FooterContactLine glyph="/glyphs/map-pin.png">
+                <span>{formatLocation(store)}</span>
+              </FooterContactLine>
             </div>
-          ) : null}
-        </div>
-        <div>
-          <p
-            className={cx(
-              storefrontSerifClass,
-              "text-lg font-bold text-stone-950",
-            )}
-          >
-            Shop
-          </p>
-          <div className="mt-3 grid gap-2">
+          </div>
+
+          <FooterColumn title="Shop">
             {shopLinks.map((link) => (
               <Link href={link.href} key={link.href}>
                 {link.label}
               </Link>
             ))}
-          </div>
-        </div>
-        <div>
-          <p
-            className={cx(
-              storefrontSerifClass,
-              "text-lg font-bold text-stone-950",
-            )}
-          >
-            Quick Links
-          </p>
-          <div className="mt-3 grid gap-2">
+          </FooterColumn>
+
+          <FooterColumn title="Quick Links">
             <Link href={`/store/${store.store_slug}/about`}>About</Link>
-            <Link href={`/store/${store.store_slug}/policies`}>Contact</Link>
             <Link href={`/store/${store.store_slug}/policies`}>
-              Pickup & Delivery
+              Pickup & Policies
             </Link>
-          </div>
+          </FooterColumn>
+
+          <FooterColumn title="Contact">
+            {store.public_phone ? (
+              <FooterContactLine glyph="/glyphs/phone.png">
+                <a href={`tel:${store.public_phone}`}>{store.public_phone}</a>
+              </FooterContactLine>
+            ) : null}
+            {!store.public_phone && store.public_email ? (
+              <FooterContactLine glyph="/glyphs/envelope.png">
+                <a href={`mailto:${store.public_email}`}>{store.public_email}</a>
+              </FooterContactLine>
+            ) : null}
+            {!store.public_phone && !store.public_email ? (
+              <p className="leading-7">Seller contact follows after checkout.</p>
+            ) : null}
+          </FooterColumn>
         </div>
-        <div>
-          <p
-            className={cx(
-              storefrontSerifClass,
-              "text-lg font-bold text-stone-950",
-            )}
-          >
-            Powered by FlipFlocks
-          </p>
-          <p className="mt-3 leading-6">
-            Independent poultry storefronts for local pickup.
-          </p>
+
+        <div className="relative mt-5 border-t border-[#d5cbb9] pt-3">
+          <div className="flex items-center justify-center gap-3 text-sm font-medium text-[#1f2f37]">
+            <span>Powered by</span>
+            <a
+              className="rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+              href="https://flipflocks.vercel.app/"
+            >
+              <Image
+                alt="FlipFlocks"
+                className="h-8 w-auto object-contain"
+                height={40}
+                src="/landing-page/flockfront-logo-transparent.png"
+                unoptimized
+                width={180}
+              />
+            </a>
+          </div>
         </div>
       </div>
     </footer>
+  );
+}
+
+function FooterColumn({
+  children,
+  title,
+}: {
+  children: React.ReactNode;
+  title: string;
+}) {
+  return (
+    <div>
+      <p
+        className={cx(
+          storefrontSerifClass,
+          "text-xl font-normal leading-tight text-[#073f1e]",
+        )}
+      >
+        {title}
+      </p>
+      <div className="mt-3 grid gap-2 leading-6 text-[#1f2f37]">{children}</div>
+    </div>
+  );
+}
+
+function FooterContactLine({
+  children,
+  glyph,
+}: {
+  children: React.ReactNode;
+  glyph: string;
+}) {
+  return (
+    <p className="flex min-w-0 items-center gap-3 leading-6">
+      <Image
+        alt=""
+        aria-hidden="true"
+        className="h-6 w-6 shrink-0 object-contain opacity-80"
+        height={128}
+        src={glyph}
+        unoptimized
+        width={128}
+      />
+      <span className="min-w-0 break-words">{children}</span>
+    </p>
   );
 }
 
@@ -308,18 +336,3 @@ function buildTrustItems({
   return items;
 }
 
-function getSocialLinks(socialUrl: string | null) {
-  if (!socialUrl) return [];
-
-  const normalized = socialUrl.toLowerCase();
-
-  if (normalized.includes("facebook.com")) {
-    return [{ href: socialUrl, label: "Facebook", mark: "f" }];
-  }
-
-  if (normalized.includes("instagram.com")) {
-    return [{ href: socialUrl, label: "Instagram", mark: "IG" }];
-  }
-
-  return [];
-}

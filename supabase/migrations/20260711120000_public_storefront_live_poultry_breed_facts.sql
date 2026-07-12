@@ -39,7 +39,6 @@ select
     else 'Ready now'
   end as buyer_availability_label,
   public_storefront_breed_inventory.available_date,
-  listing_batches.origin_date,
   public_storefront_breed_inventory.is_available_now,
   (
     public_storefront_breed_inventory.quantity_available > 0
@@ -48,16 +47,17 @@ select
   public_storefront_breed_inventory.unit_price,
   public_storefront_breed_inventory.featured_image_url,
   public_storefront_breed_inventory.featured_image_alt_text,
+  public_storefront_breed_inventory.breed_sort_order,
+  public_storefront_breed_inventory.inventory_sort_order,
+  public_storefront_breed_inventory.batch_type,
+  public_storefront_breed_inventory.age_at_availability_days,
+  listing_batches.origin_date,
   coalesce(seller_breed_profiles.bird_type, breeds.bird_type) as breed_bird_type,
   coalesce(seller_breed_profiles.egg_color, breeds.egg_color) as breed_egg_color,
   coalesce(
     seller_breed_profiles.annual_egg_production,
     breeds.annual_egg_production
-  ) as breed_annual_egg_production,
-  public_storefront_breed_inventory.breed_sort_order,
-  public_storefront_breed_inventory.inventory_sort_order,
-  public_storefront_breed_inventory.batch_type,
-  public_storefront_breed_inventory.age_at_availability_days
+  ) as breed_annual_egg_production
 from public.public_storefront_breed_inventory
 join public.stores
   on stores.id = public_storefront_breed_inventory.store_id

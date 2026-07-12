@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import {
+  AvailabilityBadge,
   EmptyStorefront,
   ListingPhoto,
   StorefrontMediaFrame,
@@ -89,10 +90,13 @@ export default async function StorefrontProductPage({
   const livePoultryProducts = groupInventoryByProduct(
     inventoryResult.data.filter(isLivePoultryItem),
   );
-  const product = findProduct(livePoultryProducts, productId);
   const hatchingEggProducts = groupInventoryByProduct(
     inventoryResult.data.filter(isHatchingEggItem),
   );
+  const hatchingEggProduct = findProduct(hatchingEggProducts, productId);
+  const product =
+    findProduct(livePoultryProducts, productId) ?? hatchingEggProduct;
+  const isHatchingEggProduct = product?.productId === hatchingEggProduct?.productId;
   const categories = getStorefrontCategoryAvailability({
     equipmentCount: equipmentResult.data.length,
     hatchingEggCount: hatchingEggProducts.length,
@@ -122,7 +126,7 @@ export default async function StorefrontProductPage({
           <Link href={`/store/${store.store_slug}`}>Shop</Link>
           <span>/</span>
           <Link href={`/store/${store.store_slug}#shop-listings`}>
-            Live Poultry
+            {isHatchingEggProduct ? "Hatching Eggs" : "Live Birds"}
           </Link>
           <span>/</span>
           <span>{product.speciesName}</span>
@@ -159,21 +163,17 @@ export default async function StorefrontProductPage({
                 "This seller has not added a breed description yet. Current purchase options are listed below."}
             </p>
 
-            <div className="flex items-center gap-3 text-base text-stone-800">
-              <Image
-                alt=""
-                aria-hidden="true"
-                className="h-6 w-6"
-                height={24}
-                src="/glyphs/hen.png"
-                width={24}
+            <div className="flex flex-wrap items-center gap-3 text-base text-stone-800">
+              <AvailabilityBadge
+                code={product.availabilityCode}
+                label={formatProductAvailabilityLabel(product.availabilityCode)}
               />
               <p>
                 <span className="font-semibold text-stone-950">
                   {product.totalQuantityAvailable}
                 </span>{" "}
-                {product.totalQuantityAvailable === 1 ? "bird" : "birds"} available
-                across {formatOptionsCount(product.optionsCount)}.
+                {formatProductQuantityUnit(product.totalQuantityAvailable, isHatchingEggProduct)}{" "}
+                available{formatProductPriceSummary(product.pricingLabel)}.
               </p>
             </div>
 
@@ -303,8 +303,29 @@ function buildProductGallery(
   ];
 }
 
-function formatOptionsCount(count: number) {
-  return count === 1 ? "1 pickup option" : `${count} pickup options`;
+function formatProductQuantityUnit(quantity: number, isHatchingEggProduct: boolean) {
+  if (isHatchingEggProduct) return quantity === 1 ? "egg" : "eggs";
+
+  return quantity === 1 ? "bird" : "birds";
+}
+
+function formatProductAvailabilityLabel(
+  code: StorefrontProduct["availabilityCode"],
+) {
+  if (code === "ready_now") return "Available";
+  if (code === "reserve_now") return "Available later";
+  if (code === "mixed") return "Multiple dates";
+  return "Sold out";
+}
+
+function formatProductPriceSummary(pricingLabel: string | null) {
+  if (!pricingLabel) return "";
+
+  const label = pricingLabel.startsWith("From ")
+    ? pricingLabel.replace("From ", "from ")
+    : pricingLabel;
+
+  return ` at ${label} each`;
 }
 
 function formatProductDescription(description: string | null) {

@@ -3,13 +3,11 @@ import Link from "next/link";
 import {
   AvailabilityBadge,
   EmptyStorefront,
-  Fact,
-  InfoPanel,
   ListingPhoto,
-  StorefrontCard,
   StorefrontMediaFrame,
   StorefrontPage,
   StorefrontShell,
+  cx,
   formatCurrency,
   toPublicImageUrl,
 } from "../../storefront-ui";
@@ -27,6 +25,7 @@ import {
   StorefrontChrome,
   getStorefrontCategoryAvailability,
 } from "../../storefront-shell-components";
+import { storefrontSerifClass } from "../../storefront-fonts";
 import { EquipmentOrderOptions } from "./equipment-order-options";
 
 export default async function StorefrontEquipmentPage({
@@ -121,77 +120,66 @@ export default async function StorefrontEquipmentPage({
   return (
     <StorefrontChrome categories={categories} store={store}>
       <StorefrontPage className="gap-7">
-        <Link
-          className="text-sm font-semibold text-emerald-800 hover:text-emerald-950"
-          href={`/store/${store.store_slug}`}
-        >
-          Back to {store.store_name}
-        </Link>
+        <nav className="flex flex-wrap items-center gap-2 text-sm text-stone-700">
+          <Link href={`/store/${store.store_slug}`}>Shop</Link>
+          <span>/</span>
+          <Link href={`/store/${store.store_slug}#shop-listings`}>
+            Equipment & Supplies
+          </Link>
+          <span>/</span>
+          <span className="text-stone-950">{item.item_name}</span>
+        </nav>
 
-        <section className="grid gap-7 lg:grid-cols-[minmax(0,1.06fr)_24rem] lg:items-start">
-          <div className="grid gap-5">
-            <StorefrontCard className="overflow-hidden p-0">
-              <EquipmentGallery
-                fallbackAlt={item.featured_image_alt_text || item.item_name}
-                fallbackSrc={item.featured_image_url}
-                gallery={gallery}
-              />
-            </StorefrontCard>
+        <section className="grid gap-8 lg:grid-cols-[minmax(18rem,0.85fr)_minmax(0,1.15fr)] lg:items-start">
+          <div className="grid max-w-[28rem] gap-3 lg:max-w-none">
+            <EquipmentGallery
+              fallbackAlt={item.featured_image_alt_text || item.item_name}
+              fallbackSrc={item.featured_image_url}
+              gallery={gallery}
+            />
+          </div>
 
-            <StorefrontCard className="grid gap-5 p-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800">
-                    {item.category}
-                  </p>
-                  <h1 className="mt-2 text-4xl font-semibold leading-tight text-stone-950">
-                    {item.item_name}
-                  </h1>
-                  <p className="mt-3 text-xl font-semibold text-[#24512f]">
-                    {formatCurrency(item.unit_price)}
-                  </p>
-                </div>
+          <section className="grid gap-5 lg:pt-1">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#073f1e]">
+                {item.category}
+              </p>
+              <h1
+                className={cx(
+                  storefrontSerifClass,
+                  "mt-4 text-4xl font-bold leading-tight text-stone-950",
+                )}
+              >
+                {item.item_name}
+              </h1>
+            </div>
+
+            <p className="max-w-2xl whitespace-pre-line text-base leading-7 text-stone-700">
+              {item.description ||
+                "This seller has not added a description yet. Current purchase details are listed below."}
+            </p>
+
+            <div className="grid gap-3 text-base text-stone-800">
+              <div className="flex flex-wrap items-center gap-3">
                 <AvailabilityBadge
                   code={item.buyer_availability_code}
                   label={item.buyer_availability_label}
                 />
+                <p>
+                  <span className="font-semibold text-stone-950">
+                    {formatQuantityAvailable(item.quantity_available)}
+                  </span>{" "}
+                  at {formatCurrency(item.unit_price)} each.
+                </p>
               </div>
-
-              <p className="max-w-3xl whitespace-pre-line text-base leading-8 text-stone-700">
-                {item.description ||
-                  "This seller has not added a long description yet."}
+              <p className="text-sm text-stone-600">
+                {item.condition ? `${item.condition} condition` : "Condition not listed"}
               </p>
-
-              <dl className="grid gap-3 rounded-lg bg-[#fbf7ef] p-4 text-sm sm:grid-cols-3">
-                <Fact
-                  label="Available"
-                  value={
-                    item.quantity_available === 1
-                      ? "1 available"
-                      : `${item.quantity_available} available`
-                  }
-                />
-                <Fact label="Category" value={item.category} />
-                <Fact label="Condition" value={item.condition || "Not listed"} />
-              </dl>
-            </StorefrontCard>
-          </div>
-
-          <aside className="grid h-fit gap-4 lg:sticky lg:top-28">
-            <EquipmentOrderOptions item={item} />
-            <InfoPanel title="Pickup">
-              <p>{store.pickup_instructions || "Pickup details coming soon."}</p>
-              {store.pickup_policy ? <p>{store.pickup_policy}</p> : null}
-            </InfoPanel>
-            <InfoPanel title="Questions">
-              {store.public_email ? <p>Email: {store.public_email}</p> : null}
-              {store.public_phone ? <p>Phone: {store.public_phone}</p> : null}
-              {!store.public_email && !store.public_phone ? (
-                <p>The seller will follow up after your order is placed.</p>
-              ) : null}
-            </InfoPanel>
-          </aside>
+            </div>
+          </section>
         </section>
+
+        <EquipmentOrderOptions item={item} />
       </StorefrontPage>
     </StorefrontChrome>
   );
@@ -209,34 +197,51 @@ function EquipmentGallery({
   const [featured, ...rest] = gallery;
 
   if (!featured) {
-    return <ListingPhoto alt={fallbackAlt} src={fallbackSrc} />;
+    return (
+      <div className="grid gap-4">
+        <div className="overflow-hidden rounded-lg border border-[#ded7c8]">
+          <ListingPhoto alt={fallbackAlt} src={fallbackSrc} />
+        </div>
+        {fallbackSrc ? (
+          <div className="grid grid-cols-4 gap-3">
+            <Image
+              alt={fallbackAlt}
+              className="aspect-square w-full rounded-md border border-[#ded7c8] object-cover"
+              height={240}
+              src={toPublicImageUrl(fallbackSrc)}
+              unoptimized
+              width={320}
+            />
+          </div>
+        ) : null}
+      </div>
+    );
   }
+  const thumbnails = rest.length > 0 ? rest.slice(0, 4) : [featured];
 
   return (
-    <StorefrontMediaFrame className="grid gap-2 rounded-none p-2">
+    <StorefrontMediaFrame className="grid gap-4 border-0 bg-transparent p-0">
       <Image
         alt={featured.alt_text || fallbackAlt}
-        className="aspect-[4/3] w-full rounded-md object-cover"
+        className="aspect-[4/3] w-full rounded-lg border border-[#ded7c8] object-cover"
         height={720}
         src={toPublicImageUrl(featured.public_url)}
         unoptimized
         width={960}
       />
-      {rest.length > 0 ? (
-        <div className="grid grid-cols-3 gap-2">
-          {rest.slice(0, 3).map((image) => (
-            <Image
-              alt={image.alt_text || fallbackAlt}
-              className="aspect-[4/3] w-full rounded-md object-cover"
-              height={240}
-              key={`${image.entity_type}-${image.public_url}`}
-              src={toPublicImageUrl(image.public_url)}
-              unoptimized
-              width={320}
-            />
-          ))}
-        </div>
-      ) : null}
+      <div className="grid grid-cols-4 gap-3">
+        {thumbnails.map((image) => (
+          <Image
+            alt={image.alt_text || fallbackAlt}
+            className="aspect-square w-full rounded-md border border-[#ded7c8] object-cover"
+            height={240}
+            key={`${image.entity_type}-${image.public_url}`}
+            src={toPublicImageUrl(image.public_url)}
+            unoptimized
+            width={320}
+          />
+        ))}
+      </div>
     </StorefrontMediaFrame>
   );
 }
@@ -278,4 +283,9 @@ function isHatchingEggItem(item: { batch_type: string | null; inventory_type: st
 
 function isLivePoultryItem(item: { batch_type: string | null; inventory_type: string }) {
   return !isHatchingEggItem(item);
+}
+
+function formatQuantityAvailable(quantity: number) {
+  if (quantity <= 0) return "Sold out";
+  return quantity === 1 ? "1 available" : `${quantity} available`;
 }

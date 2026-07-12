@@ -126,7 +126,8 @@ export function PhotoCropEditor({
 
         <div className="grid min-h-0 flex-1 gap-2 overflow-hidden p-3">
           <div
-            className="relative mx-auto aspect-[4/3] w-full max-w-[300px] cursor-move touch-none overflow-hidden rounded-md border border-stone-300 bg-stone-100 sm:max-w-[320px]"
+            className="relative mx-auto w-full max-w-[300px] cursor-move touch-none overflow-hidden rounded-md border border-stone-300 bg-stone-100 sm:max-w-[320px]"
+            style={{ aspectRatio: crop.aspect }}
             onPointerCancel={endDrag}
             onPointerDown={beginDrag}
             onPointerMove={moveImage}
@@ -167,7 +168,7 @@ export function PhotoCropEditor({
             <button
               className="seller-secondary-button"
               type="button"
-              onClick={() => setCrop(defaultCrop)}
+              onClick={() => setCrop({ ...defaultCrop, aspect: crop.aspect })}
             >
               Center
             </button>

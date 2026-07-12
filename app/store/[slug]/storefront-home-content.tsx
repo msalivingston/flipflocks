@@ -5,6 +5,7 @@ import {
   cx,
   formatCurrency,
   formatLocation,
+  getStorefrontCropStyle,
   storefrontButtonClass,
   storefrontHeroFrame,
   storefrontHeroTypography,
@@ -230,7 +231,7 @@ function HeroBackdrop({
     );
   }
 
-  const cropStyle = getHeroCropStyle(crop);
+  const cropStyle = getStorefrontCropStyle(crop);
   const imageUrl = toPublicImageUrl(src);
 
   if (layout === "right") {
@@ -286,22 +287,6 @@ function HeroBackdrop({
   );
 }
 
-function getHeroCropStyle(crop: StorefrontHeroCropMetadata | null) {
-  if (!crop) return undefined;
-
-  const zoom = Number.isFinite(crop.zoom) && crop.zoom > 0 ? crop.zoom : 1;
-  const x = Number.isFinite(crop.x) ? Math.round(crop.x) : 0;
-  const y = Number.isFinite(crop.y) ? Math.round(crop.y) : 0;
-  const rotation = [0, 90, 180, 270].includes(crop.rotation)
-    ? crop.rotation
-    : 0;
-
-  return {
-    transform: `translate(${x}px, ${y}px) scale(${zoom}) rotate(${rotation}deg)`,
-    transformOrigin: "center center",
-  };
-}
-
 function buildListingSections({
   equipment,
   hatchingEggProducts,
@@ -315,18 +300,18 @@ function buildListingSections({
 }) {
   const sections: StorefrontListingSection[] = [
     {
-      cards: livePoultryProducts.map(toProductCard),
+      cards: sortListingCardsByTitle(livePoultryProducts.map(toProductCard)),
       description: "Available birds from this storefront.",
       emptyDescription: "This seller does not have visible live poultry right now.",
       emptyTitle: "No live poultry available",
       id: "live-poultry",
-      label: "Live Poultry",
+      label: "Live Birds",
     },
   ];
 
   if (hatchingEggProducts.length > 0) {
     sections.push({
-      cards: hatchingEggProducts.map(toProductCard),
+      cards: sortListingCardsByTitle(hatchingEggProducts.map(toProductCard)),
       description: "Available hatching eggs for local pickup.",
       emptyDescription: "This seller does not have visible hatching eggs right now.",
       emptyTitle: "No hatching eggs available",
@@ -335,9 +320,23 @@ function buildListingSections({
     });
   }
 
+  if (processedPoultry.length > 0) {
+    sections.push({
+      cards: sortListingCardsByTitle(
+        processedPoultry.map(toProcessedPoultryCard),
+      ),
+      description: "Processed poultry items available for local pickup.",
+      emptyDescription:
+        "This seller does not have visible processed poultry right now.",
+      emptyTitle: "No processed poultry available",
+      id: "processed-poultry",
+      label: "Poultry Products",
+    });
+  }
+
   if (equipment.length > 0) {
     sections.push({
-      cards: equipment.map(toEquipmentCard),
+      cards: sortListingCardsByTitle(equipment.map(toEquipmentCard)),
       description: "Equipment and supplies available from this seller.",
       emptyDescription:
         "This seller does not have visible equipment or supplies right now.",
@@ -347,19 +346,16 @@ function buildListingSections({
     });
   }
 
-  if (processedPoultry.length > 0) {
-    sections.push({
-      cards: processedPoultry.map(toProcessedPoultryCard),
-      description: "Processed poultry items available for local pickup.",
-      emptyDescription:
-        "This seller does not have visible processed poultry right now.",
-      emptyTitle: "No processed poultry available",
-      id: "processed-poultry",
-      label: "Processed Poultry",
-    });
-  }
-
   return sections;
+}
+
+function sortListingCardsByTitle(cards: StorefrontListingCard[]) {
+  return [...cards].sort((first, second) =>
+    first.title.localeCompare(second.title, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    }),
+  );
 }
 
 function toProcessedPoultryCard(
@@ -368,6 +364,7 @@ function toProcessedPoultryCard(
   return {
     availabilityCode: item.buyer_availability_code,
     availabilityLabel: formatAvailableBadge(item.quantity_available),
+    categoryFilter: item.product_type,
     description: item.description || item.package_size,
     detail: formatQuantity(item.quantity_available),
     href: `/store/${item.store_slug}/processed-poultry/${item.processed_poultry_inventory_item_id}`,
@@ -375,6 +372,7 @@ function toProcessedPoultryCard(
     imageUrl: item.featured_image_url,
     meta: [item.poultry_type, item.product_type].filter(Boolean).join(" - "),
     price: formatCurrency(item.unit_price),
+    speciesFilter: item.poultry_type,
     title: item.product_name,
   };
 }
@@ -383,6 +381,8 @@ function toEquipmentCard(item: StorefrontEquipmentItem): StorefrontListingCard {
   return {
     availabilityCode: item.buyer_availability_code,
     availabilityLabel: formatAvailableBadge(item.quantity_available),
+    categoryFilter: item.category,
+    conditionFilter: item.condition,
     description: item.description,
     detail: formatQuantity(item.quantity_available),
     href: `/store/${item.store_slug}/equipment/${item.equipment_inventory_item_id}`,
@@ -396,8 +396,13 @@ function toEquipmentCard(item: StorefrontEquipmentItem): StorefrontListingCard {
 
 function toProductCard(product: StorefrontProduct): StorefrontListingCard {
   return {
+    ageFilterDays: product.options
+      .filter((option) => option.quantityAvailable > 0)
+      .map((option) => option.ageFilterDays)
+      .filter((age): age is number => age !== null),
     availabilityCode: product.availabilityCode,
     availabilityLabel: formatAvailableBadge(product.totalQuantityAvailable),
+    breedFilter: product.name,
     description: product.description,
     detail: product.quantityLabel,
     href: `/store/${product.storeSlug}/products/${product.productId}`,
@@ -405,6 +410,7 @@ function toProductCard(product: StorefrontProduct): StorefrontListingCard {
     imageUrl: product.imageUrl,
     meta: product.speciesName,
     price: product.pricingLabel || "See options",
+    speciesFilter: product.speciesName,
     title: product.name,
   };
 }

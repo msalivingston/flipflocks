@@ -15,8 +15,12 @@ import {
 } from "./storefront-category-symbols";
 
 export type StorefrontListingCard = {
+  ageFilterDays?: number[];
   availabilityCode: string;
   availabilityLabel: string;
+  breedFilter?: string | null;
+  categoryFilter?: string | null;
+  conditionFilter?: string | null;
   description: string | null;
   detail: string;
   href: string;
@@ -24,6 +28,7 @@ export type StorefrontListingCard = {
   imageUrl: string | null;
   meta: string;
   price: string;
+  speciesFilter?: string | null;
   title: string;
 };
 
@@ -42,6 +47,7 @@ export function StorefrontListingTabs({
   sections: StorefrontListingSection[];
 }) {
   const [activeId, setActiveId] = useState(sections[0]?.id ?? "");
+  const [ageFilter, setAgeFilter] = useState("all");
   const [availabilityFilter, setAvailabilityFilter] = useState("all");
   const [breedFilter, setBreedFilter] = useState("all");
   const [priceFilter, setPriceFilter] = useState("all");
@@ -49,8 +55,29 @@ export function StorefrontListingTabs({
   const [speciesFilter, setSpeciesFilter] = useState("all");
   const activeSection =
     sections.find((section) => section.id === activeId) ?? sections[0];
+  const showAgeFilter = useMemo(
+    () =>
+      (activeSection?.cards ?? []).some(
+        (card) => (card.ageFilterDays ?? []).length > 0,
+      ),
+    [activeSection],
+  );
+  const showSpeciesFilter = activeSection?.id !== "equipment-supplies";
+  const showBreedFilter =
+    activeSection?.id === "live-poultry" || activeSection?.id === "hatching-eggs";
+  const showAvailabilityFilter = activeSection?.id !== "equipment-supplies";
+  const showCategoryFilter = activeSection?.id === "equipment-supplies";
+  const showConditionFilter = activeSection?.id === "equipment-supplies";
   const breedOptions = useMemo(
     () => buildBreedOptions(activeSection?.cards ?? []),
+    [activeSection],
+  );
+  const categoryOptions = useMemo(
+    () => buildCategoryOptions(activeSection?.cards ?? []),
+    [activeSection],
+  );
+  const conditionOptions = useMemo(
+    () => buildConditionOptions(activeSection?.cards ?? []),
     [activeSection],
   );
   const speciesOptions = useMemo(
@@ -60,15 +87,33 @@ export function StorefrontListingTabs({
   const filteredCards = useMemo(
     () =>
       filterCards(activeSection?.cards ?? [], {
-        availability: availabilityFilter,
-        breed: breedFilter,
+        availability: showAvailabilityFilter ? availabilityFilter : "all",
+        age: showAgeFilter ? ageFilter : "all",
+        breed: showBreedFilter ? breedFilter : "all",
+        category: showCategoryFilter ? speciesFilter : "all",
+        condition: showConditionFilter ? breedFilter : "all",
         price: priceFilter,
         query,
-        species: speciesFilter,
+        species: showSpeciesFilter ? speciesFilter : "all",
       }),
-    [activeSection, availabilityFilter, breedFilter, priceFilter, query, speciesFilter],
+    [
+      activeSection,
+      ageFilter,
+      availabilityFilter,
+      breedFilter,
+      priceFilter,
+      query,
+      showAgeFilter,
+      showAvailabilityFilter,
+      showBreedFilter,
+      showCategoryFilter,
+      showConditionFilter,
+      showSpeciesFilter,
+      speciesFilter,
+    ],
   );
   const hasActiveFilters =
+    ageFilter !== "all" ||
     availabilityFilter !== "all" ||
     breedFilter !== "all" ||
     priceFilter !== "all" ||
@@ -76,28 +121,63 @@ export function StorefrontListingTabs({
     speciesFilter !== "all";
 
   useEffect(() => {
-    function syncActiveTabFromHash() {
-      const hash = window.location.hash.replace(/^#/, "");
+    function activateSectionFromId(sectionId: string) {
+      if (!sections.some((section) => section.id === sectionId)) return false;
+
+      setActiveId(sectionId);
+      setAgeFilter("all");
+      setAvailabilityFilter("all");
+      setBreedFilter("all");
+      setPriceFilter("all");
+      setQuery("");
+      setSpeciesFilter("all");
+
+      return true;
+    }
+
+    function getSectionIdFromHash(hash: string) {
       const hashSectionId = hash
+        .replace(/^#/, "")
         .replace(/-tab$/, "")
         .replace(/-panel$/, "");
 
-      if (!hashSectionId || hashSectionId === "shop-listings") return;
+      if (!hashSectionId || hashSectionId === "shop-listings") return null;
 
-      if (sections.some((section) => section.id === hashSectionId)) {
-        setActiveId(hashSectionId);
-        setAvailabilityFilter("all");
-        setBreedFilter("all");
-        setPriceFilter("all");
-        setQuery("");
-        setSpeciesFilter("all");
+      return hashSectionId;
+    }
+
+    function syncActiveTabFromHash() {
+      const sectionId = getSectionIdFromHash(window.location.hash);
+
+      if (sectionId) {
+        activateSectionFromId(sectionId);
+      }
+    }
+
+    function syncActiveTabFromLinkClick(event: MouseEvent) {
+      const link = (event.target as Element | null)?.closest("a[href]");
+      const href = link?.getAttribute("href");
+
+      if (!href) return;
+
+      const hash = href.includes("#") ? href.slice(href.indexOf("#")) : "";
+      const sectionId = getSectionIdFromHash(hash);
+
+      if (sectionId && activateSectionFromId(sectionId)) {
+        window.requestAnimationFrame(() => {
+          document
+            .getElementById("shop-listings")
+            ?.scrollIntoView({ block: "start" });
+        });
       }
     }
 
     syncActiveTabFromHash();
+    document.addEventListener("click", syncActiveTabFromLinkClick);
     window.addEventListener("hashchange", syncActiveTabFromHash);
 
     return () => {
+      document.removeEventListener("click", syncActiveTabFromLinkClick);
       window.removeEventListener("hashchange", syncActiveTabFromHash);
     };
   }, [sections]);
@@ -106,6 +186,7 @@ export function StorefrontListingTabs({
 
   function changeCategory(sectionId: string) {
     setActiveId(sectionId);
+    setAgeFilter("all");
     setAvailabilityFilter("all");
     setBreedFilter("all");
     setPriceFilter("all");
@@ -114,6 +195,7 @@ export function StorefrontListingTabs({
   }
 
   function resetFilters() {
+    setAgeFilter("all");
     setAvailabilityFilter("all");
     setBreedFilter("all");
     setPriceFilter("all");
@@ -173,14 +255,26 @@ export function StorefrontListingTabs({
         {activeSection.cards.length > 0 ? (
           <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-5">
             <ListingFilters
+              age={ageFilter}
+              showAgeFilter={showAgeFilter}
+              showAvailabilityFilter={showAvailabilityFilter}
+              showBreedFilter={showBreedFilter}
+              showCategoryFilter={showCategoryFilter}
+              showConditionFilter={showConditionFilter}
+              showSpeciesFilter={showSpeciesFilter}
               availability={availabilityFilter}
               breed={breedFilter}
               breedOptions={breedOptions}
+              category={speciesFilter}
+              categoryOptions={categoryOptions}
+              condition={breedFilter}
+              conditionOptions={conditionOptions}
               hasActiveFilters={hasActiveFilters}
               price={priceFilter}
               query={query}
               species={speciesFilter}
               speciesOptions={speciesOptions}
+              onAgeChange={setAgeFilter}
               onAvailabilityChange={setAvailabilityFilter}
               onBreedChange={setBreedFilter}
               onPriceChange={setPriceFilter}
@@ -189,7 +283,7 @@ export function StorefrontListingTabs({
               onSpeciesChange={setSpeciesFilter}
             />
             {filteredCards.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
+              <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
                 {filteredCards.map((card) => (
                   <ListingCard card={card} key={card.href} />
                 ))}
@@ -213,10 +307,16 @@ export function StorefrontListingTabs({
 }
 
 function ListingFilters({
+  age,
   availability,
   breed,
   breedOptions,
+  category,
+  categoryOptions,
+  condition,
+  conditionOptions,
   hasActiveFilters,
+  onAgeChange,
   onAvailabilityChange,
   onBreedChange,
   onPriceChange,
@@ -225,13 +325,25 @@ function ListingFilters({
   onSpeciesChange,
   price,
   query,
+  showAgeFilter,
+  showAvailabilityFilter,
+  showBreedFilter,
+  showCategoryFilter,
+  showConditionFilter,
+  showSpeciesFilter,
   species,
   speciesOptions,
 }: {
+  age: string;
   availability: string;
   breed: string;
   breedOptions: string[];
+  category: string;
+  categoryOptions: string[];
+  condition: string;
+  conditionOptions: string[];
   hasActiveFilters: boolean;
+  onAgeChange: (value: string) => void;
   onAvailabilityChange: (value: string) => void;
   onBreedChange: (value: string) => void;
   onPriceChange: (value: string) => void;
@@ -240,6 +352,12 @@ function ListingFilters({
   onSpeciesChange: (value: string) => void;
   price: string;
   query: string;
+  showAgeFilter: boolean;
+  showAvailabilityFilter: boolean;
+  showBreedFilter: boolean;
+  showCategoryFilter: boolean;
+  showConditionFilter: boolean;
+  showSpeciesFilter: boolean;
   species: string;
   speciesOptions: string[];
 }) {
@@ -258,43 +376,90 @@ function ListingFilters({
           />
         </label>
 
-        <FilterSelect
-          label="Species"
-          value={species}
-          onChange={onSpeciesChange}
-          options={[
-            { label: "All species", value: "all" },
-            ...speciesOptions.map((option) => ({
-              label: toTitleCase(option),
-              value: option,
-            })),
-          ]}
-        />
+        {showSpeciesFilter ? (
+          <FilterSelect
+            label="Species"
+            value={species}
+            onChange={onSpeciesChange}
+            options={[
+              { label: "All species", value: "all" },
+              ...speciesOptions.map((option) => ({
+                label: option,
+                value: option,
+              })),
+            ]}
+          />
+        ) : null}
 
-        <FilterSelect
-          label="Breed"
-          value={breed}
-          onChange={onBreedChange}
-          options={[
-            { label: "All breeds", value: "all" },
-            ...breedOptions.map((option) => ({
-              label: toTitleCase(option),
-              value: option,
-            })),
-          ]}
-        />
+        {showCategoryFilter ? (
+          <FilterSelect
+            label="Category"
+            value={category}
+            onChange={onSpeciesChange}
+            options={[
+              { label: "All categories", value: "all" },
+              ...categoryOptions.map((option) => ({
+                label: option,
+                value: option,
+              })),
+            ]}
+          />
+        ) : null}
 
-        <FilterSelect
-          label="Availability"
-          value={availability}
-          onChange={onAvailabilityChange}
-          options={[
-            { label: "All availability", value: "all" },
-            { label: "Ready now", value: "ready_now" },
-            { label: "Reserve now", value: "reserve_now" },
-            { label: "Sold out", value: "sold_out" },
-          ]}
-        />
+        {showBreedFilter ? (
+          <FilterSelect
+            label="Breed"
+            value={breed}
+            onChange={onBreedChange}
+            options={[
+              { label: "All breeds", value: "all" },
+              ...breedOptions.map((option) => ({
+                label: option,
+                value: option,
+              })),
+            ]}
+          />
+        ) : null}
+
+        {showConditionFilter ? (
+          <FilterSelect
+            label="Condition"
+            value={condition}
+            onChange={onBreedChange}
+            options={[
+              { label: "All conditions", value: "all" },
+              ...conditionOptions.map((option) => ({
+                label: option,
+                value: option,
+              })),
+            ]}
+          />
+        ) : null}
+
+        {showAgeFilter ? (
+          <FilterSelect
+            label="Age"
+            value={age}
+            onChange={onAgeChange}
+            options={[
+              { label: "All ages", value: "all" },
+              ...ageRangeOptions,
+            ]}
+          />
+        ) : null}
+
+        {showAvailabilityFilter ? (
+          <FilterSelect
+            label="Availability"
+            value={availability}
+            onChange={onAvailabilityChange}
+            options={[
+              { label: "All availability", value: "all" },
+              { label: "Ready now", value: "ready_now" },
+              { label: "Reserve now", value: "reserve_now" },
+            ]}
+          />
+        ) : null}
 
         <FilterSelect
           label="Price"
@@ -352,9 +517,9 @@ function FilterSelect({
 
 function ListingCard({ card }: { card: StorefrontListingCard }) {
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-lg border border-[#ded7c8] bg-white transition hover:border-[#bfcfb6] hover:shadow-sm">
+    <article className="group flex flex-col overflow-hidden rounded-lg border border-[#ded7c8] bg-white transition hover:border-[#bfcfb6] hover:shadow-sm">
       <Link
-        className="flex h-full flex-col focus:outline-none focus:ring-2 focus:ring-emerald-700"
+        className="flex flex-col focus:outline-none focus:ring-2 focus:ring-emerald-700"
         href={card.href}
       >
         <div className="px-3.5 pb-2 pt-3 lg:px-4 lg:pb-2.5 lg:pt-4">
@@ -374,8 +539,8 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
             />
           </div>
         </div>
-        <div className="flex flex-1 flex-col p-3.5 pt-3 lg:p-4 lg:pt-3.5">
-          <div className="mt-auto flex items-end justify-between gap-3 lg:gap-4">
+        <div className="p-3.5 pt-3 lg:p-4 lg:pt-3">
+          <div className="flex items-end justify-between gap-3 lg:gap-4">
             <div className="min-w-0">
               <p className="truncate text-lg font-bold text-[#073f1e]">
                 {card.price}
@@ -392,30 +557,47 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
 }
 
 function buildSpeciesOptions(cards: StorefrontListingCard[]) {
-  return Array.from(
-    new Set(
-      cards
-        .map((card) => normalizeFilterValue(card.meta))
-        .filter(Boolean),
-    ),
-  ).sort();
+  return buildFilterOptions(cards.map((card) => card.speciesFilter));
 }
 
 function buildBreedOptions(cards: StorefrontListingCard[]) {
+  return buildFilterOptions(cards.map((card) => card.breedFilter));
+}
+
+function buildCategoryOptions(cards: StorefrontListingCard[]) {
+  return buildFilterOptions(cards.map((card) => card.categoryFilter));
+}
+
+function buildConditionOptions(cards: StorefrontListingCard[]) {
+  return buildFilterOptions(cards.map((card) => card.conditionFilter));
+}
+
+function buildFilterOptions(values: Array<string | null | undefined>) {
   return Array.from(
-    new Set(
-      cards
-        .map((card) => normalizeFilterValue(card.title))
-        .filter(Boolean),
+    new Map(
+      values
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value))
+        .map((value) => [normalizeFilterValue(value), value] as const),
     ),
-  ).sort();
+  )
+    .sort((first, second) =>
+      first[1].localeCompare(second[1], undefined, {
+        numeric: true,
+        sensitivity: "base",
+      }),
+    )
+    .map(([, label]) => label);
 }
 
 function filterCards(
   cards: StorefrontListingCard[],
   filters: {
+    age: string;
     availability: string;
     breed: string;
+    category: string;
+    condition: string;
     price: string;
     query: string;
     species: string;
@@ -436,15 +618,42 @@ function filterCards(
     }
 
     if (
+      filters.age !== "all" &&
+      !(card.ageFilterDays ?? []).some((ageInDays) =>
+        matchesAgeRange(ageInDays, filters.age),
+      )
+    ) {
+      return false;
+    }
+
+    if (
       filters.species !== "all" &&
-      normalizeFilterValue(card.meta) !== filters.species
+      normalizeFilterValue(card.speciesFilter ?? card.meta) !==
+        normalizeFilterValue(filters.species)
     ) {
       return false;
     }
 
     if (
       filters.breed !== "all" &&
-      normalizeFilterValue(card.title) !== filters.breed
+      normalizeFilterValue(card.breedFilter ?? card.title) !==
+        normalizeFilterValue(filters.breed)
+    ) {
+      return false;
+    }
+
+    if (
+      filters.category !== "all" &&
+      normalizeFilterValue(card.categoryFilter ?? "") !==
+        normalizeFilterValue(filters.category)
+    ) {
+      return false;
+    }
+
+    if (
+      filters.condition !== "all" &&
+      normalizeFilterValue(card.conditionFilter ?? "") !==
+        normalizeFilterValue(filters.condition)
     ) {
       return false;
     }
@@ -462,6 +671,28 @@ function filterCards(
 
     return true;
   });
+}
+
+const ageRangeOptions = [
+  { label: "1-14 days", value: "1-14-days" },
+  { label: "2-12 weeks", value: "2-12-weeks" },
+  { label: "12-20 weeks", value: "12-20-weeks" },
+  { label: "20-52 weeks", value: "20-52-weeks" },
+  { label: "1 year+", value: "1-year-plus" },
+];
+
+function matchesAgeRange(ageInDays: number, range: string) {
+  if (!Number.isFinite(ageInDays)) return false;
+
+  const wholeDays = Math.floor(ageInDays);
+
+  if (range === "1-14-days") return wholeDays >= 1 && wholeDays <= 14;
+  if (range === "2-12-weeks") return wholeDays >= 14 && wholeDays <= 84;
+  if (range === "12-20-weeks") return wholeDays >= 84 && wholeDays <= 140;
+  if (range === "20-52-weeks") return wholeDays >= 140 && wholeDays <= 364;
+  if (range === "1-year-plus") return wholeDays >= 365;
+
+  return true;
 }
 
 function matchesPriceFilter(price: string, filter: string) {
@@ -486,16 +717,10 @@ function normalizeFilterValue(value: string) {
   return value.trim().toLowerCase();
 }
 
-function toTitleCase(value: string) {
-  return value.replace(/\w\S*/g, (word) =>
-    word.charAt(0).toUpperCase() + word.slice(1),
-  );
-}
-
 function tabIconName(label: string): StorefrontCategorySymbolName {
   if (label.includes("Egg")) return "egg";
   if (label.includes("Equipment")) return "equipment";
-  if (label.includes("Processed")) return "processed";
+  if (label.includes("Product")) return "processed";
   return "poultry";
 }
 
