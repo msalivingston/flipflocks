@@ -205,7 +205,16 @@ export function PricingPageClient() {
               yearlySavings={pricing.fullYearlySavings}
             />
 
-            <div className="overflow-hidden rounded-lg border border-[#e8deca] bg-white/62">
+            <div className="overflow-hidden rounded-lg border border-[#e8deca] bg-white/62 text-[#111827]">
+              <div className="grid [grid-template-columns:minmax(0,1fr)_4.75rem_4.75rem] border-b border-[#e8deca] bg-[#fdf9ee]/60 text-[11px] font-bold uppercase tracking-[0.08em] text-[#5f665f]">
+                <div className="px-3 py-2">Feature</div>
+                <div className="grid place-items-center border-l border-[#e8deca] px-1 py-2 text-center">
+                  Small Flock
+                </div>
+                <div className="grid place-items-center border-l border-[#e8deca] px-1 py-2 text-center">
+                  Full Flock
+                </div>
+              </div>
               {comparisonRows.map((row) => (
                 <MobileComparisonRow key={row.label} row={row} />
               ))}
@@ -376,40 +385,34 @@ function MobileComparisonRow({
   row: (typeof comparisonRows)[number];
 }) {
   return (
-    <article className="border-t border-[#e8deca] px-4 py-3.5 first:border-t-0 sm:px-5 sm:py-5">
-      <h3 className="text-base font-bold leading-6 text-[#111827]">{row.label}</h3>
-      <dl className="mt-3 grid grid-cols-2 gap-3 text-center sm:mt-4">
-        <div>
-          <dt className="text-xs font-bold uppercase tracking-[0.08em] text-[#5f665f]">
-            Small Flock
-          </dt>
-          <dd className="mt-2 text-base text-[#111827]">
-            <PlanValue value={row.small} />
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs font-bold uppercase tracking-[0.08em] text-[#5f665f]">
-            Full Flock
-          </dt>
-          <dd className="mt-2 text-base text-[#111827]">
-            <PlanValue value={row.full} />
-          </dd>
-        </div>
-      </dl>
-    </article>
+    <div className="grid min-h-12 [grid-template-columns:minmax(0,1fr)_4.75rem_4.75rem] border-t border-[#e8deca] first:border-t-0">
+      <div className="min-w-0 px-3 py-2.5 text-[13px] font-bold leading-5 text-[#111827]">
+        {row.label}
+      </div>
+      <div className="grid place-items-center border-l border-[#e8deca] px-1 py-2 text-center text-[13px] text-[#111827]">
+        <PlanValue mobile value={row.small} />
+      </div>
+      <div className="grid place-items-center border-l border-[#e8deca] px-1 py-2 text-center text-[13px] text-[#111827]">
+        <PlanValue mobile value={row.full} />
+      </div>
+    </div>
   );
 }
 
 function PlanValue({
+  mobile = false,
   value,
 }: {
+  mobile?: boolean;
   value: "Up to 5" | "Unlimited" | "available" | "unavailable";
 }) {
   if (value === "available") {
     return (
       <span
         aria-label="Available"
-        className="text-[1.15rem] font-semibold leading-none text-[#123d27]"
+        className={`font-semibold leading-none text-[#123d27] ${
+          mobile ? "text-[1.3rem]" : "text-[1.15rem]"
+        }`}
         role="img"
       >
         &#10003;
@@ -421,7 +424,9 @@ function PlanValue({
     return (
       <span
         aria-label="Unavailable"
-        className="text-[1.15rem] font-normal leading-none text-[#b77918]"
+        className={`leading-none text-[#b77918] ${
+          mobile ? "text-[1.55rem] font-medium" : "text-[1.15rem] font-normal"
+        }`}
         role="img"
       >
         &#215;
