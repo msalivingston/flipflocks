@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { publicSupabase } from "@/lib/public-supabase";
 import {
@@ -19,7 +19,6 @@ import {
 import {
   StorefrontButton,
   StorefrontCard,
-  StorefrontGlyph,
   StorefrontInput,
   StorefrontLabel,
   StorefrontPage,
@@ -100,11 +99,6 @@ const initialForm: BuyerForm = {
 };
 
 const emptyCartItems: StorefrontCart["items"] = [];
-const checkoutEyebrowClass =
-  "[font-family:var(--storefront-body-font),Arial,Helvetica,sans-serif] text-xs font-extrabold uppercase tracking-[0.2em] text-[#073f1e]";
-const compactFieldClass = "checkout-compact-field";
-const compactLabelClass = "checkout-field-label min-w-0";
-const pickupLabelClass = "grid min-w-0 gap-1 text-sm font-semibold text-stone-800";
 
 export function CheckoutPage({ store }: { store: StorefrontHome }) {
   const router = useRouter();
@@ -122,10 +116,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
   const [isLoadingPickupOptions, setIsLoadingPickupOptions] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [pickupError, setPickupError] = useState<string | null>(null);
-  const [isPolicyOpen, setIsPolicyOpen] = useState(false);
   const [success, setSuccess] = useState<SuccessState | null>(null);
-  const policyModalRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -182,16 +173,6 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
       ? toNumber(summary.subtotal_amount)
       : null;
   const estimatedTotal = validatedSubtotal ?? cartSummary.subtotal;
-  const selectedPickupOption = useMemo(
-    () =>
-      pickupOptions.find(
-        (option) => option.pickup_option_id === form.pickupOptionId,
-      ) ?? null,
-    [form.pickupOptionId, pickupOptions],
-  );
-  const policySections = useMemo(() => buildPolicySections(store), [store]);
-  const policySummary = getPolicySummary(store);
-  const hasSellerContact = Boolean(store.public_phone || store.public_email);
 
   useEffect(() => {
     if (cart === null || checkoutItems.length === 0) {
@@ -242,67 +223,11 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
   }, [cart, checkoutItems, store.store_slug]);
 
   function updateField(field: keyof BuyerForm, value: string) {
-    if (field === "pickupNote" || field === "pickupOptionId") {
-      setPickupError(null);
-    }
-
     setForm((current) => ({
       ...current,
       [field]: value,
     }));
   }
-
-  useEffect(() => {
-    if (!isPolicyOpen) return;
-
-    const modal = policyModalRef.current;
-    const previousActiveElement = document.activeElement;
-
-    window.setTimeout(() => {
-      const firstFocusable = getFocusableElements(modal)[0];
-      firstFocusable?.focus();
-    }, 0);
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        setIsPolicyOpen(false);
-        return;
-      }
-
-      if (event.key !== "Tab" || !modal) return;
-
-      const focusable = getFocusableElements(modal);
-
-      if (focusable.length === 0) {
-        event.preventDefault();
-        return;
-      }
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown);
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
-
-      if (previousActiveElement instanceof HTMLElement) {
-        previousActiveElement.focus();
-      }
-    };
-  }, [isPolicyOpen]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -319,12 +244,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
     }
 
     if (usesManualPickupOptions && !form.pickupOptionId) {
-      setPickupError("Please choose a pickup option.");
-      return;
-    }
-
-    if (!usesManualPickupOptions && !form.pickupNote.trim()) {
-      setPickupError("Please suggest a pickup day and approximate time.");
+      setErrorMessage("Please choose a pickup option.");
       return;
     }
 
@@ -405,17 +325,18 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
   }
 
   return (
-    <StorefrontPage className="max-w-[70rem] gap-5 py-5 lg:gap-6 lg:py-6">
-      <header>
-        <h1 className="sr-only">Checkout</h1>
-        <p className={checkoutEyebrowClass}>
+    <StorefrontPage className="gap-7">
+      <div className="rounded-xl border border-[#ded7c8] bg-white p-6">
+        <p className="storefront-primary-color text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
           Checkout
         </p>
-        <div className="mt-3 h-px w-14 bg-[#cbbd96]" />
-        <p className="mt-1 text-sm leading-6 text-stone-600">
-          Enter your information and review your order.
+        <h1 className="mt-1 text-4xl font-semibold text-stone-950">
+          Place your order
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-stone-600">
+          Enter your contact details once and review your order summary.
         </p>
-      </header>
+      </div>
 
       {cart === null ? (
         <CheckoutPanel>
@@ -434,14 +355,19 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
           </StorefrontButton>
         </CheckoutPanel>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+        <div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
           <form
-            className="order-2 rounded-lg border border-[#ded7c8] bg-white p-3 sm:p-4 lg:order-1"
+            className="rounded-xl border border-[#ded7c8] bg-white p-6"
             onSubmit={handleSubmit}
           >
-            <div className="grid gap-3">
-              <CheckoutSection title="Contact information">
-                <div className="grid gap-1.5 sm:grid-cols-2">
+            <p className="storefront-primary-color text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
+              Buyer details
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-stone-950">
+              Contact and pickup information
+            </h2>
+            <div className="mt-5 grid gap-4">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <TextField
                   label="First name"
                   name="buyerFirstName"
@@ -454,7 +380,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                   onChange={(value) => updateField("buyerLastName", value)}
                   value={form.buyerLastName}
                 />
-                </div>
+              </div>
 
               <TextField
                 label="Email"
@@ -470,22 +396,60 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                 type="tel"
                 value={form.buyerPhone}
               />
-                <div className="grid gap-1.5 md:grid-cols-[1.15fr_0.85fr]">
-                  <TextField
-                    label="Address line 1"
-                    name="addressLine1"
-                    onChange={(value) => updateField("addressLine1", value)}
-                    value={form.addressLine1}
-                  />
-                  <TextField
-                    label="Address line 2"
-                    name="addressLine2"
-                    onChange={(value) => updateField("addressLine2", value)}
-                    required={false}
-                    value={form.addressLine2}
-                  />
-                </div>
-                <div className="checkout-city-grid grid gap-1.5">
+
+              <h2 className="border-t border-[#eee5d6] pt-5 text-xl font-semibold text-stone-950">
+                Pickup details
+              </h2>
+              {usesManualPickupOptions ? (
+                <label className="grid gap-2 text-sm font-semibold text-stone-800">
+                  Pickup choice
+                  <select
+                    className="min-h-11 rounded-md border border-[#ded7c8] bg-white px-3 text-sm text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                    disabled={isLoadingPickupOptions}
+                    onChange={(event) =>
+                      updateField("pickupOptionId", event.target.value)
+                    }
+                    required
+                    value={form.pickupOptionId}
+                  >
+                    <option value="">
+                      {isLoadingPickupOptions
+                        ? "Loading pickup choices..."
+                        : "Choose a pickup option"}
+                    </option>
+                    {pickupOptions.map((option) => (
+                      <option
+                        key={option.pickup_option_id}
+                        value={option.pickup_option_id}
+                      >
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-xs font-medium leading-5 text-stone-500">
+                    Choose a pickup option from this seller.
+                  </span>
+                </label>
+              ) : null}
+              {pickupOptionsError ? (
+                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900">
+                  Pickup choices could not load. Please refresh and try again.
+                </p>
+              ) : null}
+              <TextField
+                label="Address line 1"
+                name="addressLine1"
+                onChange={(value) => updateField("addressLine1", value)}
+                value={form.addressLine1}
+              />
+              <TextField
+                label="Address line 2"
+                name="addressLine2"
+                onChange={(value) => updateField("addressLine2", value)}
+                required={false}
+                value={form.addressLine2}
+              />
+              <div className="grid gap-3 sm:grid-cols-[1fr_5rem_7rem]">
                 <TextField
                   label="City"
                   name="city"
@@ -506,99 +470,20 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                   onChange={(value) => updateField("postalCode", value)}
                   value={form.postalCode}
                 />
-                </div>
-              </CheckoutSection>
+              </div>
 
-              <CheckoutSection title="Pickup arrangements">
-                {usesManualPickupOptions ? (
-                  <>
-                    <label className={pickupLabelClass}>
-                      Pickup option
-                      <select
-                        aria-describedby={
-                          pickupError ? "pickup-option-error" : undefined
-                        }
-                        aria-invalid={Boolean(pickupError)}
-                        className={`${compactFieldClass} rounded-md border border-stone-300 bg-white font-normal text-stone-950 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:bg-stone-100 disabled:text-stone-400`}
-                        disabled={isLoadingPickupOptions}
-                        onChange={(event) =>
-                          updateField("pickupOptionId", event.target.value)
-                        }
-                        required
-                        value={form.pickupOptionId}
-                      >
-                        <option value="">
-                          {isLoadingPickupOptions
-                            ? "Loading pickup choices..."
-                            : "Choose a pickup option"}
-                        </option>
-                        {pickupOptions.map((option) => (
-                          <option
-                            key={option.pickup_option_id}
-                            value={option.pickup_option_id}
-                          >
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    {selectedPickupOption ? (
-                      <PickupOptionSummary option={selectedPickupOption} />
-                    ) : null}
-                  </>
-                ) : (
-                  <TextArea
-                    helperText="Please suggest a day and approximate time. The seller will contact you to confirm."
-                    label="When would you like to pick up your order?"
-                    maxLength={1000}
-                    name="pickupNote"
-                    onChange={(value) => updateField("pickupNote", value)}
-                    required
-                    value={form.pickupNote}
-                  />
-                )}
-                {pickupError ? (
-                  <p
-                    className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-800"
-                    id="pickup-option-error"
-                  >
-                    {pickupError}
-                  </p>
-                ) : null}
-                {pickupOptionsError ? (
-                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900">
-                    Pickup choices could not load. Please refresh and try again.
-                  </p>
-                ) : null}
-              </CheckoutSection>
-
-              <CheckoutSection
-                helperText="Anything else the seller should know about your order?"
-                title="Order notes"
-              >
-                <TextArea
-                  label="Order notes"
-                  maxLength={500}
-                  name="buyerNotes"
-                  onChange={(value) => updateField("buyerNotes", value)}
-                  required={false}
-                  showLabel={false}
-                  value={form.buyerNotes}
-                />
-              </CheckoutSection>
-
-              <CheckoutSection title="Payment">
-                <div className="rounded-md border border-amber-200 bg-[#fff8e6] p-3 text-sm leading-6 text-stone-800">
-                  <p className="font-semibold text-stone-950">Pay at pickup</p>
-                  <p className="mt-1">
-                    No payment is required today. You will pay{" "}
-                    <span className="font-semibold">
-                      {formatCurrency(estimatedTotal)}
-                    </span>{" "}
-                    directly to {store.store_name} when you pick up your order.
-                  </p>
-                </div>
-              </CheckoutSection>
+              <TextArea
+                label="Notes for the seller"
+                name="buyerNotes"
+                onChange={(value) => updateField("buyerNotes", value)}
+                value={form.buyerNotes}
+              />
+              <TextArea
+                label="Pickup notes"
+                name="pickupNote"
+                onChange={(value) => updateField("pickupNote", value)}
+                value={form.pickupNote}
+              />
 
               {errorMessage ? (
                 <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-800">
@@ -607,55 +492,54 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
               ) : null}
 
               <StorefrontButton
-                className="w-full"
+                className="mt-2"
                 disabled={
                   isSubmitting ||
                   isChecking ||
                   isLoadingPickupOptions ||
                   checkoutItems.length === 0 ||
                   summary?.is_checkout_available === false ||
-                  (usesManualPickupOptions && !form.pickupOptionId) ||
-                  (!usesManualPickupOptions && !form.pickupNote.trim())
+                  (usesManualPickupOptions && !form.pickupOptionId)
                 }
                 type="submit"
               >
-                {isSubmitting ? "Placing order..." : "Place order — pay at pickup"}
+                {isSubmitting ? "Placing order..." : "Place order"}
               </StorefrontButton>
-              <p className="text-center text-xs leading-5 text-stone-500">
-                Your information is secure and will only be used for your order.
-              </p>
             </div>
           </form>
 
-          <aside className="order-1 grid h-fit gap-4 lg:order-2">
-            <StorefrontSummaryCard className="p-3 sm:p-4">
-              <p className={checkoutEyebrowClass}>
-                Your order
+          <aside className="grid h-fit gap-4 lg:sticky lg:top-28">
+            <StorefrontSummaryCard>
+              <p className="storefront-primary-color text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
+                Order summary
               </p>
-              <div className="mt-3 grid gap-3 divide-y divide-[#eee5d6]">
+              <h2 className="mt-2 text-2xl font-semibold text-stone-950">
+                Your order
+              </h2>
+              <div className="mt-4 grid gap-3">
                 {cartItems.map((item) => (
                   <div
-                    className="grid gap-1 pt-3 text-sm first:pt-0"
+                    className="rounded-lg border border-[#eee5d6] bg-[#fffdf8] p-3 text-sm"
                     key={cartItemKey(item)}
                   >
                     <div className="flex justify-between gap-3">
-                      <p className="min-w-0 font-semibold text-stone-950">
+                      <p className="font-semibold text-stone-950">
                         {item.productName}
                       </p>
-                      <p className="shrink-0 font-semibold text-stone-950">
+                      <p className="font-semibold text-stone-950">
                         {formatCurrency(item.unitPrice * item.quantity)}
                       </p>
                     </div>
-                    <p className="text-stone-600">
+                    <p className="mt-1 text-stone-600">
                       {item.quantity} x {item.optionLabel}
                     </p>
-                    <p className="text-stone-500">
+                    <p className="mt-1 text-stone-500">
                       {formatCartAvailability(item.availableDate)}
                     </p>
                   </div>
                 ))}
               </div>
-              <dl className="mt-4 grid gap-2 border-t border-[#eee5d6] pt-3 text-sm">
+              <dl className="mt-5 grid gap-2 text-sm">
                 <SummaryRow
                   label="Items"
                   value={String(summary?.total_quantity ?? cartSummary.totalQuantity)}
@@ -676,65 +560,30 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                 </p>
               ) : null}
               <StorefrontButton
-                className="mt-3 min-h-10 w-full"
+                className="mt-4 min-h-10 w-full"
                 href={`/store/${store.store_slug}/cart`}
                 variant="secondary"
               >
-                View cart & edit
+                View cart
               </StorefrontButton>
 
             </StorefrontSummaryCard>
 
-            <StorefrontSummaryCard className="bg-[#fffdf8] p-3 sm:p-4">
-              <div className="flex items-center gap-3">
-                <StorefrontGlyph
-                  className="storefront-primary-color h-7 w-7 text-[#073f1e]"
-                  src="/glyphs/clipboard.png"
-                />
-                <p className={checkoutEyebrowClass}>
-                  Pickup & policies
-                </p>
+            <StorefrontSummaryCard className="bg-[#fffdf8]">
+              <h2 className="text-lg font-semibold text-stone-950">
+                Pickup and policies
+              </h2>
+              <div className="mt-3 grid gap-3 whitespace-pre-line text-sm leading-6 text-stone-600">
+                <p>{store.pickup_instructions || "Pickup details coming soon."}</p>
+                {store.pickup_policy ? <p>{store.pickup_policy}</p> : null}
+                {store.cancellation_policy ? (
+                  <p>{store.cancellation_policy}</p>
+                ) : null}
               </div>
-              <div className="mt-3 grid gap-2 whitespace-pre-line text-[1.05rem] leading-[1.3] text-stone-600">
-        <p>{policySummary}</p>
-      </div>
-              {policySections.length > 0 ? (
-                <button
-                  className="storefront-primary-color mt-4 text-left text-sm font-semibold text-[#073f1e] underline underline-offset-4 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-                  onClick={() => setIsPolicyOpen(true)}
-                  type="button"
-                >
-                  View full policy
-                </button>
-              ) : null}
             </StorefrontSummaryCard>
-
-            {hasSellerContact ? (
-              <StorefrontSummaryCard className="p-3 sm:p-4">
-                <h2 className="text-base font-semibold text-stone-950">
-                  Questions?
-                </h2>
-                <div className="mt-3 grid gap-2 text-sm leading-6 text-stone-600">
-                  {store.public_phone ? (
-                    <a href={`tel:${store.public_phone}`}>{store.public_phone}</a>
-                  ) : null}
-                  {store.public_email ? (
-                    <a href={`mailto:${store.public_email}`}>{store.public_email}</a>
-                  ) : null}
-                </div>
-              </StorefrontSummaryCard>
-            ) : null}
           </aside>
         </div>
       )}
-      {isPolicyOpen ? (
-        <PolicyModal
-          onClose={() => setIsPolicyOpen(false)}
-          sections={policySections}
-          storeName={store.store_name}
-          modalRef={policyModalRef}
-        />
-      ) : null}
     </StorefrontPage>
   );
 }
@@ -765,10 +614,9 @@ function TextField({
   value: string;
 }) {
   return (
-    <StorefrontLabel className={compactLabelClass}>
+    <StorefrontLabel>
       {label}
       <StorefrontInput
-        className={compactFieldClass}
         maxLength={maxLength}
         name={name}
         onChange={(event) => onChange(event.target.value)}
@@ -781,142 +629,26 @@ function TextField({
 }
 
 function TextArea({
-  helperText,
   label,
-  maxLength = 2000,
   name,
   onChange,
-  required = false,
-  showLabel = true,
   value,
 }: {
-  helperText?: string;
   label: string;
-  maxLength?: number;
   name: string;
   onChange: (value: string) => void;
-  required?: boolean;
-  showLabel?: boolean;
   value: string;
 }) {
   return (
-    <StorefrontLabel className={compactLabelClass}>
-      {showLabel ? label : <span className="sr-only">{label}</span>}
+    <StorefrontLabel>
+      {label}
       <StorefrontTextarea
-        className="!min-h-12 w-full min-w-0 !px-2 !py-1 !text-[0.86rem] !leading-4"
-        maxLength={maxLength}
+        maxLength={2000}
         name={name}
         onChange={(event) => onChange(event.target.value)}
-        required={required}
         value={value}
       />
-      {helperText ? (
-        <span className="text-xs font-medium leading-5 text-stone-500">
-          {helperText}
-        </span>
-      ) : null}
     </StorefrontLabel>
-  );
-}
-
-function CheckoutSection({
-  children,
-  helperText,
-  title,
-}: {
-  children: React.ReactNode;
-  helperText?: string;
-  title: string;
-}) {
-  return (
-    <section className="grid gap-2 border-b border-[#eee5d6] pb-3.5 last:border-b-0 last:pb-0">
-      <div>
-        <h2 className="storefront-primary-color text-lg font-semibold text-[#073f1e]">
-          {title}
-        </h2>
-        {helperText ? (
-          <p className="mt-1 text-sm leading-6 text-stone-600">{helperText}</p>
-        ) : null}
-      </div>
-      <div className="grid gap-2">{children}</div>
-    </section>
-  );
-}
-
-function PickupOptionSummary({ option }: { option: StorefrontPickupOption }) {
-  const lines = parsePickupOptionSummary(option);
-
-  return (
-    <div className="rounded-md border border-emerald-100 bg-emerald-50/40 px-3 py-2 text-sm leading-6 text-stone-700">
-      <p className="font-semibold text-stone-950">{option.label}</p>
-      {lines.length > 0 ? (
-        <dl className="mt-1 grid gap-1">
-          {lines.map((line) => (
-            <div className="flex gap-2" key={`${line.label}-${line.value}`}>
-              <dt className="min-w-20 font-semibold text-stone-600">
-                {line.label}
-              </dt>
-              <dd>{line.value}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-    </div>
-  );
-}
-
-function PolicyModal({
-  modalRef,
-  onClose,
-  sections,
-  storeName,
-}: {
-  modalRef: React.RefObject<HTMLDivElement | null>;
-  onClose: () => void;
-  sections: Array<{ body: string; title: string }>;
-  storeName: string;
-}) {
-  return (
-    <div
-      aria-labelledby="checkout-policy-title"
-      aria-modal="true"
-      className="fixed inset-0 z-50 grid place-items-center bg-stone-950/45 p-4"
-      role="dialog"
-    >
-      <div
-        className="max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-hidden rounded-lg border border-[#ded7c8] bg-white shadow-xl sm:max-h-[42rem]"
-        ref={modalRef}
-      >
-        <div className="flex items-start justify-between gap-4 border-b border-[#eee5d6] px-4 py-3 sm:px-5">
-          <div>
-            <h2
-              className="text-xl font-semibold text-stone-950"
-              id="checkout-policy-title"
-            >
-              Pickup & policies
-            </h2>
-            <p className="mt-1 text-sm text-stone-600">{storeName}</p>
-          </div>
-          <button
-            className="rounded-md px-3 py-1.5 text-sm font-semibold text-stone-600 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-            onClick={onClose}
-            type="button"
-          >
-            Close
-          </button>
-        </div>
-        <div className="grid max-h-[calc(100vh-9rem)] gap-4 overflow-y-auto px-4 py-4 sm:px-5">
-          {sections.map((section) => (
-            <section className="grid gap-2" key={section.title}>
-              <h3 className="font-semibold text-stone-950">{section.title}</h3>
-              <p className="whitespace-pre-line text-sm leading-6 text-stone-700">
-                {section.body}
-              </p>
-            </section>
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -1042,102 +774,4 @@ function formatCartAvailability(availableDate: string) {
   if (availability <= normalizedToday) return "Available now";
 
   return `Available ${formatDate(availableDate)}`;
-}
-
-function parsePickupOptionSummary(option: StorefrontPickupOption) {
-  const description = option.description?.trim();
-
-  if (!description) return [];
-
-  const labeledLines = description
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const match = line.match(/^(date|time(?: window)?|location|address):\s*(.+)$/i);
-
-      if (!match) return null;
-
-      return {
-        label: normalizePickupSummaryLabel(match[1]),
-        value: match[2].trim(),
-      };
-    })
-    .filter((line): line is { label: string; value: string } => Boolean(line));
-
-  if (labeledLines.length > 0) return labeledLines;
-
-  return [{ label: "Details", value: description }];
-}
-
-function normalizePickupSummaryLabel(label: string) {
-  const normalized = label.toLowerCase();
-
-  if (normalized.startsWith("time")) return "Time";
-  if (normalized === "address") return "Address";
-  if (normalized === "location") return "Location";
-
-  return "Date";
-}
-
-function buildPolicySections(store: StorefrontHome) {
-  const sections: Array<{ body: string; title: string }> = [];
-
-  addPolicySection(sections, "Pickup policy", store.pickup_policy);
-  addPolicySection(sections, "Cancellation policy", store.cancellation_policy);
-  addPolicySection(sections, "Other policies", store.other_policies);
-
-  if (Array.isArray(store.custom_policies)) {
-    for (const policy of store.custom_policies) {
-      addPolicySection(sections, policy.title, policy.body);
-    }
-  }
-
-  return sections;
-}
-
-function addPolicySection(
-  sections: Array<{ body: string; title: string }>,
-  title: string | null | undefined,
-  body: string | null | undefined,
-) {
-  const trimmedTitle = title?.trim();
-  const trimmedBody = body?.trim();
-
-  if (!trimmedTitle || !trimmedBody) return;
-
-  sections.push({ body: trimmedBody, title: trimmedTitle });
-}
-
-function getPolicySummary(store: StorefrontHome) {
-  const summaryParts = [
-    store.pickup_instructions?.trim(),
-    store.pickup_policy?.trim(),
-  ].filter(Boolean) as string[];
-
-  if (summaryParts.length > 0) {
-    return previewText(summaryParts.join("\n\n"), 280);
-  }
-
-  return "The seller will confirm pickup details after your order is placed.";
-}
-
-function previewText(value: string, maxLength: number) {
-  if (value.length <= maxLength) return value;
-
-  return `${value.slice(0, maxLength - 3).trimEnd()}...`;
-}
-
-function getFocusableElements(root: HTMLElement | null) {
-  if (!root) return [];
-
-  return Array.from(
-    root.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    ),
-  ).filter(
-    (element) =>
-      !element.hasAttribute("disabled") &&
-      element.getAttribute("aria-hidden") !== "true",
-  );
 }
