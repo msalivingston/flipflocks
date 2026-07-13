@@ -53,10 +53,12 @@ export function PasswordResetRequest({
       // The reset still works if local storage is unavailable.
     }
 
+    const redirectTo = `${window.location.origin}/reset-password`;
+
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(
       email,
       {
-        redirectTo: getPasswordResetRedirectUrl(),
+        redirectTo,
       },
     );
 
@@ -150,20 +152,6 @@ export function clearStoredPasswordResetReturnPath() {
   } catch {
     // Nothing to clear.
   }
-}
-
-function getPasswordResetRedirectUrl() {
-  if (typeof window === "undefined") {
-    return "https://flockfront.com/reset-password";
-  }
-
-  const { origin } = window.location;
-
-  if (origin === "http://localhost:3000" || origin === "http://127.0.0.1:3000") {
-    return `${origin}/reset-password`;
-  }
-
-  return "https://flockfront.com/reset-password";
 }
 
 function friendlyResetError(message: string) {

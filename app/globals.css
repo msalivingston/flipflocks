@@ -76,6 +76,41 @@ body {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--storefront-primary-color) 20%, transparent);
 }
 
+.buyer-storefront .checkout-field-label {
+  row-gap: 0.25rem !important;
+  font-size: 0.78rem !important;
+  line-height: 1.1 !important;
+}
+
+.buyer-storefront .checkout-pickup-label {
+  row-gap: 0.25rem !important;
+  font-size: 0.82rem !important;
+  line-height: 1.15 !important;
+}
+
+.buyer-storefront .checkout-compact-field {
+  height: 1.875rem !important;
+  min-height: 0 !important;
+  width: 100%;
+  min-width: 0;
+  padding: 0.25rem 0.5rem !important;
+  font-size: 0.875rem !important;
+  line-height: 1.2 !important;
+}
+
+.buyer-storefront textarea.checkout-compact-field {
+  height: auto;
+  min-height: 2.75rem !important;
+  padding-top: 0.25rem !important;
+  padding-bottom: 0.25rem !important;
+}
+
+@media (min-width: 640px) {
+  .buyer-storefront .checkout-city-grid {
+    grid-template-columns: minmax(0, 1fr) 6rem 6rem;
+  }
+}
+
 .buyer-storefront .text-\[0\.68rem\]:not(.storefront-serif),
 .buyer-storefront .text-\[0\.7rem\]:not(.storefront-serif) {
   font-size: calc(0.7rem + 0.125rem);

@@ -79,7 +79,7 @@ export const PLAN_CAPABILITIES: Record<PlanId, PlanCapabilities> = {
     id: "full_flock",
     displayName: "Full Flock",
     monthlyPrice: 29,
-    yearlyPrice: 290,
+    yearlyPrice: 270,
     activeBirdLimit: null,
     allowedSaleCategories: [
       "live_birds",

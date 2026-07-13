@@ -112,7 +112,7 @@ function BrandLogo({
 export default function Home() {
   return (
     <main className="min-h-screen bg-white text-[#163824]">
-      <section className="relative isolate min-h-[530px] overflow-hidden text-white md:min-h-[560px]">
+      <section className="relative isolate min-h-[500px] overflow-hidden text-white md:min-h-[560px]">
         <Image
           src="/landing-page/hero-image.png"
           alt="Chickens in a pasture near a barn at golden hour"
@@ -124,20 +124,20 @@ export default function Home() {
         <div className="absolute inset-0 bg-[#160f08]/28" />
         <div className="absolute inset-0 bg-linear-to-b from-black/46 via-black/20 to-black/34" />
 
-        <div className="relative z-10 mx-auto flex min-h-[530px] w-full max-w-7xl flex-col px-5 py-5 md:min-h-[560px] md:px-8 md:py-6 lg:px-12">
+        <div className="relative z-10 mx-auto flex min-h-[500px] w-full max-w-7xl flex-col px-5 py-4 md:min-h-[560px] md:px-8 md:py-6 lg:px-12">
           <header className="grid items-center gap-4 md:grid-cols-[1fr_auto_1fr]">
             <PlaceholderLink className="inline-flex w-fit items-center">
-              <BrandLogo variant="hero" className="w-[225px] md:w-[295px]" />
+              <BrandLogo variant="hero" className="w-[195px] md:w-[295px]" />
             </PlaceholderLink>
 
             <nav
               aria-label="Primary navigation"
               className="hidden items-center gap-10 text-[19px] font-normal text-white/90 md:flex"
             >
-              <PlaceholderLink className="transition hover:text-white">
+              <PlaceholderLink className="transition hover:text-white" href="/#how-it-works">
                 How it works
               </PlaceholderLink>
-              <PlaceholderLink className="transition hover:text-white">
+              <PlaceholderLink className="transition hover:text-white" href="/pricing">
                 Pricing
               </PlaceholderLink>
               <PlaceholderLink className="transition hover:text-white" href="/login">
@@ -155,13 +155,28 @@ export default function Home() {
             </div>
           </header>
 
-          <div className="mx-auto flex max-w-5xl flex-1 flex-col items-center justify-center py-10 text-center md:pb-14 md:pt-10">
+          <nav
+            aria-label="Mobile primary navigation"
+            className="mt-3 flex items-center justify-center gap-5 rounded-md border border-white/25 bg-black/18 px-3 py-2 text-[15px] font-medium text-white/92 backdrop-blur-sm md:hidden"
+          >
+            <PlaceholderLink className="transition hover:text-white" href="/#how-it-works">
+              How it works
+            </PlaceholderLink>
+            <PlaceholderLink className="transition hover:text-white" href="/pricing">
+              Pricing
+            </PlaceholderLink>
+            <PlaceholderLink className="transition hover:text-white" href="/login">
+              Sign in
+            </PlaceholderLink>
+          </nav>
+
+          <div className="mx-auto flex max-w-5xl flex-1 flex-col items-center justify-center py-7 text-center md:pb-14 md:pt-10">
             <h1 className="text-balance font-serif text-[clamp(2.05rem,3.5vw,3.35rem)] leading-[1.05]">
               A better way to sell poultry.
               <br />
               List your birds once, sell from one simple link.
             </h1>
-            <p className="mt-5 max-w-2xl text-balance text-lg font-medium leading-8 text-white/95 md:text-[23px] md:leading-9">
+            <p className="mt-4 max-w-2xl text-balance text-[17px] font-medium leading-7 text-white/95 md:mt-5 md:text-[23px] md:leading-9">
               FlockFront gives poultry sellers a simple storefront and order
               tool&mdash;so you can stop chasing messages and focus on raising
               healthy birds.
@@ -320,10 +335,10 @@ export default function Home() {
             aria-label="Footer navigation"
             className="flex flex-wrap gap-x-9 gap-y-3 text-base font-medium text-[#303830]"
           >
-            <PlaceholderLink className="hover:text-[#0e4a2d]">
+            <PlaceholderLink className="hover:text-[#0e4a2d]" href="/#how-it-works">
               How it works
             </PlaceholderLink>
-            <PlaceholderLink className="hover:text-[#0e4a2d]">
+            <PlaceholderLink className="hover:text-[#0e4a2d]" href="/pricing">
               Pricing
             </PlaceholderLink>
             <PlaceholderLink className="hover:text-[#0e4a2d]" href="/login">
