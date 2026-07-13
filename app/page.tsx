@@ -112,7 +112,7 @@ function BrandLogo({
 export default function Home() {
   return (
     <main className="min-h-screen bg-white text-[#163824]">
-      <section className="relative isolate min-h-[500px] overflow-hidden text-white md:min-h-[560px]">
+      <section className="relative isolate min-h-[500px] overflow-hidden text-white max-[899px]:min-h-[430px] md:min-h-[560px]">
         <Image
           src="/landing-page/hero-image.png"
           alt="Chickens in a pasture near a barn at golden hour"
@@ -124,8 +124,8 @@ export default function Home() {
         <div className="absolute inset-0 bg-[#160f08]/28" />
         <div className="absolute inset-0 bg-linear-to-b from-black/46 via-black/20 to-black/34" />
 
-        <div className="relative z-10 mx-auto flex min-h-[500px] w-full max-w-7xl flex-col px-5 py-4 md:min-h-[560px] md:px-8 md:py-6 lg:px-12">
-          <header className="grid items-center gap-4 md:grid-cols-[1fr_auto_1fr]">
+        <div className="relative z-10 mx-auto flex min-h-[500px] w-full max-w-7xl flex-col px-5 py-4 max-[899px]:min-h-[430px] max-[899px]:px-4 max-[899px]:py-3 md:min-h-[560px] md:px-8 md:py-6 lg:px-12">
+          <header className="grid items-center gap-4 max-[899px]:gap-2 md:grid-cols-[1fr_auto_1fr]">
             <PlaceholderLink className="inline-flex w-fit items-center">
               <BrandLogo variant="hero" className="w-[195px] md:w-[295px]" />
             </PlaceholderLink>
@@ -147,7 +147,7 @@ export default function Home() {
 
             <div className="flex justify-start md:justify-end">
               <PlaceholderLink
-                className="inline-flex min-h-12 items-center justify-center rounded-md bg-[#075f38] px-6 text-[18px] font-normal text-white shadow-sm shadow-black/15 transition hover:bg-[#064a2d]"
+                className="inline-flex min-h-12 items-center justify-center rounded-md bg-[#075f38] px-6 text-[18px] font-normal text-white shadow-sm shadow-black/15 transition hover:bg-[#064a2d] max-[899px]:min-h-10 max-[899px]:px-5 max-[899px]:text-[16px]"
                 href="/signup"
               >
                 Sign up now
@@ -170,7 +170,7 @@ export default function Home() {
             </PlaceholderLink>
           </nav>
 
-          <div className="mx-auto flex max-w-5xl flex-1 flex-col items-center justify-center py-7 text-center md:pb-14 md:pt-10">
+          <div className="mx-auto flex max-w-5xl flex-1 flex-col items-center justify-center py-7 text-center max-[899px]:py-5 md:pb-14 md:pt-10">
             <h1 className="text-balance font-serif text-[clamp(2.05rem,3.5vw,3.35rem)] leading-[1.05]">
               A better way to sell poultry.
               <br />
@@ -185,12 +185,12 @@ export default function Home() {
         </div>
       </section>
 
-      <section aria-label="FlockFront benefits" className="px-5 py-4 md:px-8 md:py-5">
+      <section aria-label="FlockFront benefits" className="px-5 py-4 max-[899px]:px-4 max-[899px]:pb-3 max-[899px]:pt-2 md:px-8 md:py-5">
         <div className="mx-auto grid max-w-6xl overflow-hidden rounded-lg border border-[#e8e0d4] bg-white shadow-[0_8px_24px_rgb(39_31_18/0.035)] md:grid-cols-3">
           {benefits.map((benefit, index) => (
             <article
               key={benefit.title}
-              className={`flex items-center gap-4 px-5 py-4 md:px-6 md:py-4 ${
+              className={`flex items-center gap-4 px-5 py-4 max-[899px]:gap-3 max-[899px]:px-4 max-[899px]:py-3.5 md:px-6 md:py-4 ${
                 index > 0 ? "border-t border-[#e7dfd2] md:border-t-0 md:border-l" : ""
               }`}
             >
@@ -216,7 +216,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="px-5 py-3 md:px-8" aria-labelledby="how-it-works">
+      <section className="px-5 py-3 max-[899px]:px-4 md:px-8" aria-labelledby="how-it-works">
         <div className="mx-auto max-w-5xl text-center">
           <h2
             id="how-it-works"
@@ -225,7 +225,7 @@ export default function Home() {
             How it works
           </h2>
 
-          <div className="mt-4 grid gap-6 md:grid-cols-3 md:items-start">
+          <div className="mt-4 grid gap-6 max-[899px]:gap-4 md:grid-cols-3 md:items-start">
             {steps.map((step, index) => (
               <article key={step.title} className="relative px-4">
                 {index < steps.length - 1 ? (
@@ -256,8 +256,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="px-5 py-4 md:px-8">
-        <div className="mx-auto grid max-w-6xl items-center gap-5 overflow-hidden rounded-lg border border-[#e8e0d4] bg-[#f4f0e8] px-5 py-6 shadow-[0_8px_24px_rgb(39_31_18/0.035)] md:grid-cols-[0.72fr_1.68fr] md:px-8 md:py-6">
+      <section className="px-5 py-4 max-[899px]:px-4 md:px-8">
+        <div className="mx-auto grid max-w-6xl items-center gap-5 overflow-hidden rounded-lg border border-[#e8e0d4] bg-[#f4f0e8] px-5 py-6 shadow-[0_8px_24px_rgb(39_31_18/0.035)] max-[899px]:gap-4 max-[899px]:px-4 max-[899px]:py-5 md:grid-cols-[0.72fr_1.68fr] md:px-8 md:py-6">
           <div>
             <h2 className="whitespace-nowrap font-serif text-[1.8rem] font-bold leading-tight text-[#0e4a2d] md:text-[2rem]">
               Built on a small farm.
@@ -287,8 +287,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="px-5 py-4 md:px-8">
-        <div className="relative mx-auto grid max-w-6xl items-center overflow-hidden rounded-lg border border-[#e8e0d4] bg-white/72 px-6 py-3.5 text-center shadow-[0_8px_24px_rgb(39_31_18/0.035)] md:grid-cols-[0.85fr_2fr_0.85fr] md:px-8 md:py-3">
+      <section className="px-5 py-4 max-[899px]:px-4 max-[899px]:pb-6 md:px-8">
+        <div className="relative mx-auto grid max-w-6xl items-center overflow-hidden rounded-lg border border-[#e8e0d4] bg-white/72 px-6 py-3.5 text-center shadow-[0_8px_24px_rgb(39_31_18/0.035)] max-[899px]:px-4 max-[899px]:py-4 md:grid-cols-[0.85fr_2fr_0.85fr] md:px-8 md:py-3">
           <Image
             src="/landing-page/tree.png"
             alt=""
@@ -323,9 +323,9 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="border-t border-[#ddd5c6] bg-white/70 px-5 py-3 md:px-8">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-3 text-sm">
+      <footer className="border-t border-[#ddd5c6] bg-white/70 px-5 py-3 max-[899px]:px-4 md:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 max-[899px]:items-center max-[899px]:gap-3 max-[899px]:text-center md:flex-row md:items-center md:justify-between md:max-[899px]:flex-col">
+          <div className="flex items-center gap-3 text-sm max-[899px]:flex-col max-[899px]:gap-1.5">
             <BrandLogo className="w-[150px]" />
             <p className="text-base text-[#394137]">
               Simple tools for poultry sellers.
@@ -333,7 +333,7 @@ export default function Home() {
           </div>
           <nav
             aria-label="Footer navigation"
-            className="flex flex-wrap gap-x-9 gap-y-3 text-base font-medium text-[#303830]"
+            className="flex flex-wrap gap-x-9 gap-y-3 text-base font-medium text-[#303830] max-[899px]:grid max-[899px]:w-full max-[899px]:max-w-xs max-[899px]:grid-cols-2 max-[899px]:justify-items-center max-[899px]:gap-x-4 max-[899px]:gap-y-2"
           >
             <PlaceholderLink className="hover:text-[#0e4a2d]" href="/#how-it-works">
               How it works
