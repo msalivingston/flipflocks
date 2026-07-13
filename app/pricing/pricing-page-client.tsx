@@ -1,17 +1,17 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
 import { PLAN_CAPABILITIES } from "@/lib/plan-capabilities";
-
-type BillingCadence = "monthly" | "yearly";
 
 const smallFlock = PLAN_CAPABILITIES.small_flock;
 const fullFlock = PLAN_CAPABILITIES.full_flock;
-const fullFlockYearlyPrice = fullFlock.yearlyPrice ?? fullFlock.monthlyPrice * 12;
-const fullFlockYearlySavings =
-  fullFlock.monthlyPrice * 12 - fullFlockYearlyPrice;
+const pricing = {
+  fullMonthlyPrice: 29,
+  fullYearlyPrice: 270,
+  fullYearlySavings: 78,
+  smallMonthlyPrice: 5,
+  smallYearlyPrice: 50,
+  smallYearlySavings: 10,
+};
 
 const comparisonRows = [
   {
@@ -84,20 +84,6 @@ function BrandLogo({
 }
 
 export function PricingPageClient() {
-  const [billingCadence, setBillingCadence] =
-    useState<BillingCadence>("yearly");
-
-  const fullFlockPrice =
-    billingCadence === "yearly"
-      ? {
-          amount: fullFlockYearlyPrice,
-          suffix: "/year",
-        }
-      : {
-          amount: fullFlock.monthlyPrice,
-          suffix: "/month",
-        };
-
   return (
     <main className="min-h-screen bg-[#fffaf1] text-[#10281c]">
       <div className="mx-auto flex w-full max-w-7xl flex-col px-4 py-2.5 md:px-8 md:py-2.5 lg:px-10">
@@ -180,36 +166,19 @@ export function PricingPageClient() {
             <PlanHeader
               buttonLabel="Choose Small Flock"
               description="For occasional sellers who only need to list a few birds at a time."
+              monthlyPrice={pricing.smallMonthlyPrice}
               name={smallFlock.displayName}
-              price={
-                <>
-                  <span>${smallFlock.monthlyPrice}</span>
-                  <span className="ml-1 text-[14px] font-normal text-[#10281c]">
-                    /month
-                  </span>
-                </>
-              }
+              yearlyPrice={pricing.smallYearlyPrice}
+              yearlySavings={pricing.smallYearlySavings}
             />
             <PlanHeader
-              billingCadence={billingCadence}
               buttonLabel="Choose Full Flock"
               description="For active poultry sellers who need room to sell more birds and more types of poultry inventory."
               emphasized
+              monthlyPrice={pricing.fullMonthlyPrice}
               name={fullFlock.displayName}
-              onBillingCadenceChange={setBillingCadence}
-              price={
-                <>
-                  <span>${fullFlockPrice.amount}</span>
-                  <span className="ml-1 text-[14px] font-normal text-[#10281c]">
-                    {fullFlockPrice.suffix}
-                  </span>
-                </>
-              }
-              savings={
-                billingCadence === "yearly"
-                  ? `Save $${fullFlockYearlySavings} per year`
-                  : null
-              }
+              yearlyPrice={pricing.fullYearlyPrice}
+              yearlySavings={pricing.fullYearlySavings}
             />
 
             {comparisonRows.map((row) => (
@@ -221,22 +190,19 @@ export function PricingPageClient() {
             <PlanSummaryCard
               buttonLabel="Choose Small Flock"
               description="For occasional sellers who only need to list a few birds at a time."
+              monthlyPrice={pricing.smallMonthlyPrice}
               name={smallFlock.displayName}
-              price={`$${smallFlock.monthlyPrice}/month`}
+              yearlyPrice={pricing.smallYearlyPrice}
+              yearlySavings={pricing.smallYearlySavings}
             />
             <PlanSummaryCard
-              billingCadence={billingCadence}
               buttonLabel="Choose Full Flock"
               description="For active poultry sellers who need room to sell more birds and more types of poultry inventory."
               emphasized
+              monthlyPrice={pricing.fullMonthlyPrice}
               name={fullFlock.displayName}
-              onBillingCadenceChange={setBillingCadence}
-              price={`$${fullFlockPrice.amount}${fullFlockPrice.suffix}`}
-              savings={
-                billingCadence === "yearly"
-                  ? `Save $${fullFlockYearlySavings} per year`
-                  : null
-              }
+              yearlyPrice={pricing.fullYearlyPrice}
+              yearlySavings={pricing.fullYearlySavings}
             />
 
             <div className="overflow-hidden rounded-lg border border-[#e8deca] bg-white/62">
@@ -267,23 +233,21 @@ export function PricingPageClient() {
 }
 
 function PlanHeader({
-  billingCadence,
   buttonLabel,
   description,
   emphasized = false,
+  monthlyPrice,
   name,
-  onBillingCadenceChange,
-  price,
-  savings,
+  yearlyPrice,
+  yearlySavings,
 }: {
-  billingCadence?: BillingCadence;
   buttonLabel: string;
   description: string;
   emphasized?: boolean;
+  monthlyPrice: number;
   name: string;
-  onBillingCadenceChange?: (cadence: BillingCadence) => void;
-  price: React.ReactNode;
-  savings?: string | null;
+  yearlyPrice: number;
+  yearlySavings: number;
 }) {
   return (
     <div
@@ -301,23 +265,17 @@ function PlanHeader({
       <h3 className="font-serif text-[1.45rem] font-semibold leading-tight text-[#123d27]">
         {name}
       </h3>
-
-      {billingCadence && onBillingCadenceChange ? (
-        <BillingToggle
-          billingCadence={billingCadence}
-          onChange={onBillingCadenceChange}
-        />
-      ) : null}
-
       <p className="mt-2 font-serif text-[2.15rem] font-normal leading-none text-[#123d27]">
-        {price}
+        <span>${monthlyPrice}</span>
+        <span className="ml-1 text-[14px] font-normal text-[#10281c]">
+          /month
+        </span>
       </p>
-      <p
-        className={`mt-0.5 min-h-4 text-[12px] font-medium text-[#a86908] ${
-          savings ? "" : "invisible"
-        }`}
-      >
-        {savings ?? "No yearly savings"}
+      <p className="mt-1 text-[13px] font-medium text-[#10281c]">
+        or ${yearlyPrice}/year
+      </p>
+      <p className="mt-0.5 min-h-4 text-[12px] font-medium text-[#a86908]">
+        Save ${yearlySavings} yearly
       </p>
       <p className="mt-2 max-w-sm text-[13px] leading-5 text-[#111827]">
         {description}
@@ -335,23 +293,21 @@ function PlanHeader({
 }
 
 function PlanSummaryCard({
-  billingCadence,
   buttonLabel,
   description,
   emphasized = false,
+  monthlyPrice,
   name,
-  onBillingCadenceChange,
-  price,
-  savings,
+  yearlyPrice,
+  yearlySavings,
 }: {
-  billingCadence?: BillingCadence;
   buttonLabel: string;
   description: string;
   emphasized?: boolean;
+  monthlyPrice: number;
   name: string;
-  onBillingCadenceChange?: (cadence: BillingCadence) => void;
-  price: string;
-  savings?: string | null;
+  yearlyPrice: number;
+  yearlySavings: number;
 }) {
   return (
     <article
@@ -367,18 +323,18 @@ function PlanSummaryCard({
       <h3 className="font-serif text-[1.85rem] font-semibold leading-tight text-[#123d27] sm:text-[2.15rem]">
         {name}
       </h3>
-      {billingCadence && onBillingCadenceChange ? (
-        <BillingToggle
-          billingCadence={billingCadence}
-          onChange={onBillingCadenceChange}
-        />
-      ) : null}
       <p className="mt-4 font-serif text-[2.45rem] leading-none text-[#123d27] sm:mt-5 sm:text-[3rem]">
-        {price}
+        <span>${monthlyPrice}</span>
+        <span className="ml-1 text-[14px] font-normal text-[#10281c]">
+          /month
+        </span>
       </p>
-      {savings ? (
-        <p className="mt-1.5 text-sm font-medium text-[#a86908] sm:mt-2 sm:text-base">{savings}</p>
-      ) : null}
+      <p className="mt-2 text-sm font-medium text-[#10281c] sm:text-base">
+        or ${yearlyPrice}/year
+      </p>
+      <p className="mt-1 min-h-5 text-sm font-medium text-[#a86908] sm:text-base">
+        Save ${yearlySavings} yearly
+      </p>
       <p className="mx-auto mt-3 max-w-md text-[15px] leading-6 text-[#111827] sm:mt-4 sm:text-base sm:leading-7">
         {description}
       </p>
@@ -391,36 +347,6 @@ function PlanSummaryCard({
         </button>
       </form>
     </article>
-  );
-}
-
-function BillingToggle({
-  billingCadence,
-  onChange,
-}: {
-  billingCadence: BillingCadence;
-  onChange: (cadence: BillingCadence) => void;
-}) {
-  return (
-    <div className="mt-2.5" role="group" aria-label="Full Flock billing cadence">
-      <div className="grid grid-cols-2 overflow-hidden rounded-full border border-[#123d27] bg-white text-[13px] font-bold text-[#123d27]">
-        {(["monthly", "yearly"] as const).map((cadence) => (
-          <button
-            aria-pressed={billingCadence === cadence}
-            className={`flex min-h-8 min-w-24 items-center justify-center px-3 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f4329] focus-visible:ring-offset-2 ${
-              billingCadence === cadence
-                ? "bg-[#123d27] text-white"
-                : "bg-white text-[#123d27] hover:bg-[#f8f1e4]"
-            }`}
-            key={cadence}
-            onClick={() => onChange(cadence)}
-            type="button"
-          >
-            {cadence === "monthly" ? "Monthly" : "Yearly"}
-          </button>
-        ))}
-      </div>
-    </div>
   );
 }
 
