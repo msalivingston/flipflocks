@@ -43,6 +43,11 @@ import {
   storefrontFontVariablesClass,
   type StorefrontFontPairId,
 } from "@/app/store/[slug]/storefront-fonts";
+import {
+  DeliveryOptionsSection,
+  type DeliveryOptionDraft,
+} from "./delivery-options-section";
+import { SortableOptionList } from "./sortable-option-list";
 
 type StoreAdminForm = {
   store_name: string;
@@ -69,6 +74,7 @@ type StoreAdminForm = {
   pickup_location_text: string;
   pickup_instructions: string;
   default_pickup_option_id: string;
+  delivery_enabled: boolean;
   pickup_policy: string;
   cancellation_policy: string;
   other_policies: string;
@@ -98,6 +104,7 @@ type StoreDefaults = {
   pickup_location_text: string | null;
   default_pickup_option_id: string | null;
   default_pickup_option_label: string | null;
+  delivery_enabled: boolean | null;
   communication_email: string | null;
   order_notification_email: string | null;
   currency: string | null;
@@ -119,6 +126,15 @@ type PickupOptionDraft = {
   sort_order: number;
   is_active: boolean;
   isNew?: boolean;
+};
+
+type DeliveryOption = {
+  id: string;
+  store_id: string;
+  name: string;
+  price_amount: number | string;
+  sort_order: number;
+  is_active: boolean;
 };
 
 type StoreMediaItem = {
@@ -290,7 +306,7 @@ const storeSetupTabs: Array<{ id: StoreSetupTab; label: string }> = [
   { id: "storefront", label: "Storefront" },
   { id: "photos", label: "Images" },
   { id: "what-you-sell", label: "What You Sell" },
-  { id: "pickup", label: "Pickup Schedule" },
+  { id: "pickup", label: "Pickup/Delivery" },
   { id: "policies", label: "Policies" },
 ];
 
@@ -319,6 +335,7 @@ const blankForm: StoreAdminForm = {
   pickup_location_text: "",
   pickup_instructions: "",
   default_pickup_option_id: "",
+  delivery_enabled: false,
   pickup_policy: "",
   cancellation_policy: "",
   other_policies: "",
@@ -342,6 +359,15 @@ export function StoreAdmin() {
   const [initialPickupOptions, setInitialPickupOptions] = useState<
     PickupOptionDraft[]
   >([]);
+  const [deliveryOptions, setDeliveryOptions] = useState<DeliveryOptionDraft[]>(
+    [],
+  );
+  const [initialDeliveryOptions, setInitialDeliveryOptions] = useState<
+    DeliveryOptionDraft[]
+  >([]);
+  const [deliveryValidationMessage, setDeliveryValidationMessage] = useState<
+    string | null
+  >(null);
   const [storeMediaItems, setStoreMediaItems] = useState<StoreMediaItem[]>([]);
   const [initialStoreMediaItems, setInitialStoreMediaItems] = useState<
     StoreMediaItem[]
@@ -365,17 +391,6 @@ export function StoreAdmin() {
   const [moduleDisableDialog, setModuleDisableDialog] =
     useState<ModuleDisableDialogState | null>(null);
   const pendingPickupOptionFocusId = useRef<string | null>(null);
-  const pickupOptionRowRefs = useRef(new Map<string, HTMLElement>());
-  const pickupOptionDragChangedRef = useRef(false);
-  const [draggingPickupOptionId, setDraggingPickupOptionId] = useState<
-    string | null
-  >(null);
-  const [pickupOptionDragPreview, setPickupOptionDragPreview] = useState<{
-    label: string;
-    width: number;
-    x: number;
-    y: number;
-  } | null>(null);
   const customPolicyRowRefs = useRef(new Map<string, HTMLElement>());
   const customPolicyDragChangedRef = useRef(false);
   const [draggingCustomPolicyId, setDraggingCustomPolicyId] = useState<
@@ -402,12 +417,17 @@ export function StoreAdmin() {
       setSaveMessage(null);
       setSaveState("idle");
 
-      const [defaultsResult, pickupOptionsResult, readinessResult, mediaResult] =
-        await Promise.all([
+      const [
+        defaultsResult,
+        pickupOptionsResult,
+        deliveryOptionsResult,
+        readinessResult,
+        mediaResult,
+      ] = await Promise.all([
           supabase
             .from("seller_store_defaults")
             .select(
-              "store_id, pickup_method, pickup_instructions, pickup_location_text, default_pickup_option_id, default_pickup_option_label, communication_email, order_notification_email, currency",
+              "store_id, pickup_method, pickup_instructions, pickup_location_text, default_pickup_option_id, default_pickup_option_label, delivery_enabled, communication_email, order_notification_email, currency",
             )
             .eq("store_id", seller.store_id)
             .maybeSingle()
@@ -419,6 +439,13 @@ export function StoreAdmin() {
             .order("sort_order", { ascending: true })
             .order("label", { ascending: true })
             .returns<PickupOption[]>(),
+          supabase
+            .from("store_delivery_options")
+            .select("id, store_id, name, price_amount, sort_order, is_active")
+            .eq("store_id", seller.store_id)
+            .order("sort_order", { ascending: true })
+            .order("name", { ascending: true })
+            .returns<DeliveryOption[]>(),
           supabase.rpc("seller_get_store_launch_readiness", {
             p_store_id: seller.store_id,
           }),
@@ -440,7 +467,10 @@ export function StoreAdmin() {
       if (!isMounted) return;
 
       const firstError =
-        defaultsResult.error ?? pickupOptionsResult.error ?? mediaResult.error;
+        defaultsResult.error ??
+        pickupOptionsResult.error ??
+        deliveryOptionsResult.error ??
+        mediaResult.error;
 
       if (firstError) {
         setLoadError(firstError.message);
@@ -453,11 +483,17 @@ export function StoreAdmin() {
       const nextPickupOptions = (pickupOptionsResult.data ?? []).map(
         toPickupOptionDraft,
       );
+      const nextDeliveryOptions = (deliveryOptionsResult.data ?? []).map(
+        toDeliveryOptionDraft,
+      );
 
       setForm(nextForm);
       setInitialForm(nextForm);
       setPickupOptions(nextPickupOptions);
       setInitialPickupOptions(nextPickupOptions);
+      setDeliveryOptions(nextDeliveryOptions);
+      setInitialDeliveryOptions(nextDeliveryOptions);
+      setDeliveryValidationMessage(null);
       setStoreMediaItems(sortStoreMedia(mediaResult.data ?? []));
       setInitialStoreMediaItems(sortStoreMedia(mediaResult.data ?? []));
       setReadinessItems(
@@ -489,11 +525,15 @@ export function StoreAdmin() {
       JSON.stringify(form) !== JSON.stringify(initialForm) ||
       JSON.stringify(normalizePickupOptionDrafts(pickupOptions)) !==
         JSON.stringify(normalizePickupOptionDrafts(initialPickupOptions)) ||
+      JSON.stringify(normalizeDeliveryOptionDrafts(deliveryOptions)) !==
+        JSON.stringify(normalizeDeliveryOptionDrafts(initialDeliveryOptions)) ||
       JSON.stringify(toMediaDirtySignature(storeMediaItems)) !==
         JSON.stringify(toMediaDirtySignature(initialStoreMediaItems)),
     [
       form,
+      deliveryOptions,
       initialForm,
+      initialDeliveryOptions,
       initialPickupOptions,
       initialStoreMediaItems,
       pickupOptions,
@@ -513,7 +553,15 @@ export function StoreAdmin() {
   ) {
     setSaveState("idle");
     setSaveMessage(null);
+    if (key === "delivery_enabled") setDeliveryValidationMessage(null);
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateDeliveryOptions(nextOptions: DeliveryOptionDraft[]) {
+    setSaveState("idle");
+    setSaveMessage(null);
+    setDeliveryValidationMessage(null);
+    setDeliveryOptions(nextOptions);
   }
 
   async function reloadStoreMedia() {
@@ -1301,24 +1349,14 @@ export function StoreAdmin() {
     }
   }
 
-  function reorderPickupOptionToTarget(optionId: string, targetId: string) {
+  function reorderPickupOptions(orderedIds: string[]) {
     setSaveState("idle");
     setSaveMessage(null);
     setPickupOptions((current) => {
-      const ordered = getVisiblePickupOptions(current);
-      const fromIndex = ordered.findIndex((option) => option.id === optionId);
-      const toIndex = ordered.findIndex((option) => option.id === targetId);
-
-      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
-        return current;
-      }
-
-      const [moved] = ordered.splice(fromIndex, 1);
-      ordered.splice(toIndex, 0, moved);
       const sortOrderById = new Map(
-        ordered.map((option, index) => [option.id, index]),
+        orderedIds.map((optionId, index) => [optionId, index]),
       );
-      const nextInactiveSortOrder = ordered.length;
+      const nextInactiveSortOrder = orderedIds.length;
 
       return sortPickupOptions(
         current.map((option) => ({
@@ -1329,94 +1367,6 @@ export function StoreAdmin() {
         })),
       );
     });
-  }
-
-  function beginPickupOptionDrag(
-    optionId: string,
-    event: React.PointerEvent<HTMLButtonElement>,
-  ) {
-    const row = pickupOptionRowRefs.current.get(optionId);
-    const rect = row?.getBoundingClientRect();
-    const option = pickupOptions.find((item) => item.id === optionId);
-
-    event.currentTarget.setPointerCapture(event.pointerId);
-    pickupOptionDragChangedRef.current = false;
-    setPickupOptionDragPreview({
-      label: option?.label.trim() || "Pickup choice",
-      width: Math.min(rect?.width ?? 280, 520),
-      x: event.clientX + 12,
-      y: event.clientY + 12,
-    });
-    setDraggingPickupOptionId(optionId);
-  }
-
-  function movePickupOptionDrag(event: React.PointerEvent<HTMLButtonElement>) {
-    if (!draggingPickupOptionId) return;
-
-    setPickupOptionDragPreview((current) =>
-      current
-        ? {
-            ...current,
-            x: event.clientX + 12,
-            y: event.clientY + 12,
-          }
-        : current,
-    );
-
-    const targetId = findPickupOptionIdAtPoint(event.clientX, event.clientY);
-
-    if (!targetId || targetId === draggingPickupOptionId) return;
-
-    pickupOptionDragChangedRef.current = true;
-    reorderPickupOptionToTarget(draggingPickupOptionId, targetId);
-  }
-
-  function endPickupOptionDrag(event: React.PointerEvent<HTMLButtonElement>) {
-    if (!draggingPickupOptionId) return;
-
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-
-    if (pickupOptionDragChangedRef.current) {
-      setSaveState("idle");
-      setSaveMessage(null);
-    }
-
-    pickupOptionDragChangedRef.current = false;
-    setPickupOptionDragPreview(null);
-    setDraggingPickupOptionId(null);
-  }
-
-  function findPickupOptionIdAtPoint(clientX: number, clientY: number) {
-    for (const option of getVisiblePickupOptions(pickupOptions)) {
-      const row = pickupOptionRowRefs.current.get(option.id);
-      if (!row) continue;
-
-      const rect = row.getBoundingClientRect();
-
-      if (
-        clientX >= rect.left &&
-        clientX <= rect.right &&
-        clientY >= rect.top &&
-        clientY <= rect.bottom
-      ) {
-        return option.id;
-      }
-    }
-
-    return null;
-  }
-
-  function registerPickupOptionRow(
-    optionId: string,
-    element: HTMLElement | null,
-  ) {
-    if (element) {
-      pickupOptionRowRefs.current.set(optionId, element);
-    } else {
-      pickupOptionRowRefs.current.delete(optionId);
-    }
   }
 
   function addPickupOption() {
@@ -1451,8 +1401,10 @@ export function StoreAdmin() {
   function discardChanges() {
     setForm(initialForm);
     setPickupOptions(initialPickupOptions);
+    setDeliveryOptions(initialDeliveryOptions);
     setStoreMediaItems(initialStoreMediaItems);
     pendingPickupOptionFocusId.current = null;
+    setDeliveryValidationMessage(null);
     setSaveState("idle");
     setSaveMessage("Changes discarded.");
   }
@@ -1516,10 +1468,14 @@ export function StoreAdmin() {
     if (!seller) return;
 
     const validationMessage = validateForm(form, pickupOptions);
+    const nextDeliveryValidationMessage = validateDeliveryOptions(
+      deliveryOptions,
+    );
 
-    if (validationMessage) {
+    if (validationMessage || nextDeliveryValidationMessage) {
       setSaveState("error");
-      setSaveMessage(validationMessage);
+      setDeliveryValidationMessage(nextDeliveryValidationMessage);
+      setSaveMessage(validationMessage ?? nextDeliveryValidationMessage);
       return;
     }
 
@@ -1529,6 +1485,7 @@ export function StoreAdmin() {
 
     const idMap = new Map<string, string>();
     const persistedOptions: PickupOptionDraft[] = [];
+    const persistedDeliveryOptions: DeliveryOptionDraft[] = [];
     const normalizedCustomPolicies = normalizeCustomPoliciesForSave(
       form.custom_policies,
     );
@@ -1584,6 +1541,66 @@ export function StoreAdmin() {
         }
 
         persistedOptions.push(toPickupOptionDraft(data as PickupOption));
+      }
+    }
+
+    for (const option of normalizeDeliveryOptionsForSave(deliveryOptions)) {
+      const normalizedOption = {
+        ...option,
+        name: option.name.trim(),
+        price: option.price.trim(),
+      };
+      const isBlankNewOption =
+        option.isNew && !normalizedOption.name && !normalizedOption.price;
+
+      if (isBlankNewOption) continue;
+
+      const priceAmount = Number(normalizedOption.price);
+
+      if (option.isNew) {
+        const { data, error } = await supabase.rpc(
+          "seller_create_delivery_option",
+          {
+            p_store_id: seller.store_id,
+            p_name: normalizedOption.name,
+            p_price_amount: priceAmount,
+            p_sort_order: normalizedOption.sort_order,
+            p_is_active: normalizedOption.is_active,
+          },
+        );
+
+        if (error) {
+          setIsSaving(false);
+          setSaveState("error");
+          setSaveMessage(error.message);
+          return;
+        }
+
+        persistedDeliveryOptions.push(
+          toDeliveryOptionDraft(data as DeliveryOption),
+        );
+      } else {
+        const { data, error } = await supabase.rpc(
+          "seller_update_delivery_option",
+          {
+            p_delivery_option_id: option.id,
+            p_name: normalizedOption.name,
+            p_price_amount: priceAmount,
+            p_sort_order: normalizedOption.sort_order,
+            p_is_active: normalizedOption.is_active,
+          },
+        );
+
+        if (error) {
+          setIsSaving(false);
+          setSaveState("error");
+          setSaveMessage(error.message);
+          return;
+        }
+
+        persistedDeliveryOptions.push(
+          toDeliveryOptionDraft(data as DeliveryOption),
+        );
       }
     }
 
@@ -1653,6 +1670,21 @@ export function StoreAdmin() {
       return;
     }
 
+    const deliveryEnabledResult = await supabase.rpc(
+      "seller_update_delivery_enabled",
+      {
+        p_store_id: seller.store_id,
+        p_delivery_enabled: form.delivery_enabled,
+      },
+    );
+
+    if (deliveryEnabledResult.error) {
+      setIsSaving(false);
+      setSaveState("error");
+      setSaveMessage(deliveryEnabledResult.error.message);
+      return;
+    }
+
     const mediaSaveResult = await saveStoreMediaChanges();
 
     if (!mediaSaveResult.ok) {
@@ -1695,6 +1727,7 @@ export function StoreAdmin() {
       pickup_location_text: form.pickup_location_text.trim(),
       pickup_instructions: form.pickup_instructions.trim(),
       default_pickup_option_id: selectedDefaultId || "",
+      delivery_enabled: form.delivery_enabled,
       pickup_policy: form.pickup_policy.trim(),
       cancellation_policy: form.cancellation_policy.trim(),
       other_policies: form.other_policies.trim(),
@@ -1714,11 +1747,15 @@ export function StoreAdmin() {
         first.sort_order - second.sort_order ||
         first.label.localeCompare(second.label),
     );
+    const sortedDeliveryOptions = sortDeliveryOptions(persistedDeliveryOptions);
 
     setForm(savedForm);
     setInitialForm(savedForm);
     setPickupOptions(sortedOptions);
     setInitialPickupOptions(sortedOptions);
+    setDeliveryOptions(sortedDeliveryOptions);
+    setInitialDeliveryOptions(sortedDeliveryOptions);
+    setDeliveryValidationMessage(null);
     setStoreMediaItems(mediaSaveResult.mediaItems);
     setInitialStoreMediaItems(mediaSaveResult.mediaItems);
     setIsSaving(false);
@@ -2083,21 +2120,16 @@ export function StoreAdmin() {
                       >
                         {form.pickup_method === "manual_options" ? (
                           <ManualPickupChoiceBuilder
-                            dragPreview={pickupOptionDragPreview}
-                            draggingPickupOptionId={draggingPickupOptionId}
                             getVisiblePickupOptions={getVisiblePickupOptions}
                             handlePickupOptionInputRef={
                               handlePickupOptionInputRef
                             }
                             onAdd={addPickupOption}
-                            onBeginDrag={beginPickupOptionDrag}
-                            onEndDrag={endPickupOptionDrag}
                             onLabelChange={(optionId, label) =>
                               updatePickupOption(optionId, { label })
                             }
-                            onMoveDrag={movePickupOptionDrag}
-                            onRegisterRow={registerPickupOptionRow}
                             onRemove={removePickupOption}
+                            onReorder={reorderPickupOptions}
                             pickupOptions={pickupOptions}
                           />
                         ) : null}
@@ -2113,6 +2145,16 @@ export function StoreAdmin() {
                     </div>
                   </section>
                 </div>
+
+                <DeliveryOptionsSection
+                  deliveryEnabled={form.delivery_enabled}
+                  deliveryOptions={deliveryOptions}
+                  onChange={updateDeliveryOptions}
+                  onToggle={(enabled) =>
+                    updateField("delivery_enabled", enabled)
+                  }
+                  validationMessage={deliveryValidationMessage}
+                />
 
                 <input
                   readOnly
@@ -3825,6 +3867,30 @@ function PoliciesTab({
   );
 }
 
+function SortableRowDragPreview({
+  preview,
+}: {
+  preview: {
+    label: string;
+    width: number;
+    x: number;
+    y: number;
+  };
+}) {
+  return (
+    <div
+      className="pointer-events-none fixed z-50 rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-stone-950 shadow-lg"
+      style={{
+        left: preview.x,
+        top: preview.y,
+        width: preview.width,
+      }}
+    >
+      {preview.label}
+    </div>
+  );
+}
+
 function CustomPolicyCard({
   isDragging,
   onBeginDrag,
@@ -4041,11 +4107,11 @@ function PickupIntro() {
         </span>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-stone-950">
-            How should buyers handle pickup?
+            How should buyers receive their orders?
           </p>
           <p className="text-sm leading-6 text-stone-700">
-            Most sellers can start simple: buyers request a pickup time in
-            checkout notes, and you confirm the details after the order comes in.
+            Set up your pickup process and optionally offer delivery to specific
+            locations or areas.
           </p>
         </div>
       </div>
@@ -4169,26 +4235,14 @@ function PickupMethodRadio({
 }
 
 function ManualPickupChoiceBuilder({
-  dragPreview,
-  draggingPickupOptionId,
   getVisiblePickupOptions,
   handlePickupOptionInputRef,
   onAdd,
-  onBeginDrag,
-  onEndDrag,
   onLabelChange,
-  onMoveDrag,
-  onRegisterRow,
   onRemove,
+  onReorder,
   pickupOptions,
 }: {
-  dragPreview: {
-    label: string;
-    width: number;
-    x: number;
-    y: number;
-  } | null;
-  draggingPickupOptionId: string | null;
   getVisiblePickupOptions: (
     options: PickupOptionDraft[],
   ) => PickupOptionDraft[];
@@ -4197,15 +4251,9 @@ function ManualPickupChoiceBuilder({
     element: HTMLInputElement | null,
   ) => void;
   onAdd: () => void;
-  onBeginDrag: (
-    optionId: string,
-    event: React.PointerEvent<HTMLButtonElement>,
-  ) => void;
-  onEndDrag: (event: React.PointerEvent<HTMLButtonElement>) => void;
   onLabelChange: (optionId: string, label: string) => void;
-  onMoveDrag: (event: React.PointerEvent<HTMLButtonElement>) => void;
-  onRegisterRow: (optionId: string, element: HTMLElement | null) => void;
   onRemove: (optionId: string) => void;
+  onReorder: (orderedIds: string[]) => void;
   pickupOptions: PickupOptionDraft[];
 }) {
   const visibleOptions = getVisiblePickupOptions(pickupOptions);
@@ -4237,82 +4285,45 @@ function ManualPickupChoiceBuilder({
           No manual pickup choices yet.
         </p>
       ) : (
-        <div className="grid gap-2">
-          {visibleOptions.map((option) => (
+        <SortableOptionList
+          dragHandleLabel="Drag to reorder pickup choice"
+          emptyState={null}
+          getPreviewLabel={(option) => option.label.trim() || "Pickup choice"}
+          items={visibleOptions}
+          onReorder={onReorder}
+          renderRow={({ dragHandle, isDragging, item, rowRef }) => (
             <PickupChoiceRow
+              dragHandle={dragHandle}
               inputRef={(element) =>
-                handlePickupOptionInputRef(option.id, element)
+                handlePickupOptionInputRef(item.id, element)
               }
-              isDragging={draggingPickupOptionId === option.id}
-              key={option.id}
-              onDragHandlePointerCancel={onEndDrag}
-              onDragHandlePointerDown={(event) =>
-                onBeginDrag(option.id, event)
-              }
-              onDragHandlePointerMove={onMoveDrag}
-              onDragHandlePointerUp={onEndDrag}
-              onLabelChange={(label) => onLabelChange(option.id, label)}
-              onRemove={() => onRemove(option.id)}
-              option={option}
-              rowRef={(element) => onRegisterRow(option.id, element)}
+              isDragging={isDragging}
+              key={item.id}
+              onLabelChange={(label) => onLabelChange(item.id, label)}
+              onRemove={() => onRemove(item.id)}
+              option={item}
+              rowRef={rowRef}
             />
-          ))}
-        </div>
+          )}
+        />
       )}
-      {dragPreview ? <SortableRowDragPreview preview={dragPreview} /> : null}
-    </div>
-  );
-}
-
-function SortableRowDragPreview({
-  preview,
-}: {
-  preview: {
-    label: string;
-    width: number;
-    x: number;
-    y: number;
-  };
-}) {
-  return (
-    <div
-      className="pointer-events-none fixed z-50 rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-stone-950 shadow-lg"
-      style={{
-        left: preview.x,
-        top: preview.y,
-        width: preview.width,
-      }}
-    >
-      {preview.label}
     </div>
   );
 }
 
 function PickupChoiceRow({
+  dragHandle,
   inputRef,
   isDragging,
   onLabelChange,
-  onDragHandlePointerCancel,
-  onDragHandlePointerDown,
-  onDragHandlePointerMove,
-  onDragHandlePointerUp,
   onRemove,
   option,
   rowRef,
 }: {
+  dragHandle: React.ReactNode;
   inputRef: (element: HTMLInputElement | null) => void;
   isDragging: boolean;
   onLabelChange: (label: string) => void;
-  onDragHandlePointerCancel: (
-    event: React.PointerEvent<HTMLButtonElement>,
-  ) => void;
-  onDragHandlePointerDown: (
-    event: React.PointerEvent<HTMLButtonElement>,
-  ) => void;
-  onDragHandlePointerMove: (
-    event: React.PointerEvent<HTMLButtonElement>,
-  ) => void;
-  onDragHandlePointerUp: (event: React.PointerEvent<HTMLButtonElement>) => void;
   onRemove: () => void;
   option: PickupOptionDraft;
   rowRef: (element: HTMLDivElement | null) => void;
@@ -4327,17 +4338,7 @@ function PickupChoiceRow({
         }`}
         ref={rowRef}
       >
-        <button
-          aria-label="Drag to reorder pickup choice"
-          className="inline-flex size-10 touch-none cursor-grab items-center justify-center rounded-md border border-stone-200 bg-stone-50 text-lg font-semibold leading-none text-stone-400 transition hover:border-stone-300 hover:bg-stone-100 active:cursor-grabbing active:border-emerald-300 active:bg-emerald-50 active:text-emerald-800"
-          onPointerCancel={onDragHandlePointerCancel}
-          onPointerDown={onDragHandlePointerDown}
-          onPointerMove={onDragHandlePointerMove}
-          onPointerUp={onDragHandlePointerUp}
-          type="button"
-        >
-          ⋮⋮
-        </button>
+        {dragHandle}
         <input
           className="min-h-10 rounded-md border border-stone-200 bg-stone-50/70 px-3 text-sm font-medium text-stone-950 outline-none transition placeholder:text-stone-400 focus:border-emerald-700 focus:bg-white focus:ring-2 focus:ring-emerald-700/15"
           onChange={(event) => onLabelChange(event.target.value)}
@@ -4978,6 +4979,7 @@ function buildInitialForm(
     pickup_instructions:
       defaults?.pickup_instructions ?? seller.pickup_instructions ?? "",
     default_pickup_option_id: defaults?.default_pickup_option_id ?? "",
+    delivery_enabled: Boolean(defaults?.delivery_enabled),
     pickup_policy: seller.pickup_policy ?? "",
     cancellation_policy: seller.cancellation_policy ?? "",
     other_policies: seller.other_policies ?? "",
@@ -5001,6 +5003,16 @@ function toPickupOptionDraft(option: PickupOption): PickupOptionDraft {
   };
 }
 
+function toDeliveryOptionDraft(option: DeliveryOption): DeliveryOptionDraft {
+  return {
+    id: option.id,
+    name: option.name,
+    price: formatDeliveryPrice(option.price_amount),
+    sort_order: option.sort_order,
+    is_active: option.is_active,
+  };
+}
+
 function normalizePickupOptionDrafts(options: PickupOptionDraft[]) {
   return options.map((option) => ({
     id: option.id,
@@ -5010,6 +5022,52 @@ function normalizePickupOptionDrafts(options: PickupOptionDraft[]) {
     is_active: option.is_active,
     isNew: option.isNew ?? false,
   }));
+}
+
+function sortDeliveryOptions(options: DeliveryOptionDraft[]) {
+  return [...options].sort((first, second) => first.sort_order - second.sort_order || first.name.localeCompare(second.name));
+}
+
+function getVisibleDeliveryOptions(options: DeliveryOptionDraft[]) {
+  return sortDeliveryOptions(options).filter((option) => option.is_active);
+}
+
+function normalizeDeliveryOptionsForSave(options: DeliveryOptionDraft[]) {
+  const visibleOptions = getVisibleDeliveryOptions(options);
+  const visibleSortOrderById = new Map(
+    visibleOptions.map((option, index) => [option.id, index]),
+  );
+  let inactiveSortOrder = visibleOptions.length;
+
+  return sortDeliveryOptions(options).map((option) => {
+    if (option.is_active) {
+      return {
+        ...option,
+        sort_order: visibleSortOrderById.get(option.id) ?? option.sort_order,
+      };
+    }
+
+    const sortOrder = inactiveSortOrder;
+    inactiveSortOrder += 1;
+
+    return { ...option, sort_order: sortOrder };
+  });
+}
+
+function normalizeDeliveryOptionDrafts(options: DeliveryOptionDraft[]) {
+  return options.map((option) => ({
+    id: option.id,
+    name: option.name.trim(),
+    price: option.price.trim(),
+    sort_order: option.sort_order,
+    is_active: option.is_active,
+    isNew: option.isNew ?? false,
+  }));
+}
+
+function formatDeliveryPrice(value: number | string) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue.toFixed(2) : "";
 }
 
 function toCustomPolicyDrafts(value: unknown): CustomPolicyDraft[] {
@@ -5279,6 +5337,31 @@ function validateForm(form: StoreAdminForm, pickupOptions: PickupOptionDraft[]) 
 
     if (hasBody && !hasTitle) {
       return "Each custom policy with text needs a title.";
+    }
+  }
+
+  return null;
+}
+
+function validateDeliveryOptions(options: DeliveryOptionDraft[]) {
+  for (const option of options) {
+    if (!option.is_active) continue;
+
+    const hasName = Boolean(option.name.trim());
+    const hasPrice = Boolean(option.price.trim());
+
+    if (option.isNew && !hasName && !hasPrice) continue;
+    if (!hasName) return "Each delivery option needs a name.";
+    if (!hasPrice) return "Each delivery option needs a price.";
+
+    const price = Number(option.price.trim());
+
+    if (!Number.isFinite(price)) {
+      return "Delivery price must be a valid amount.";
+    }
+
+    if (price < 0) {
+      return "Delivery price cannot be negative.";
     }
   }
 
