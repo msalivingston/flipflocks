@@ -73,7 +73,7 @@ function BrandLogo({
 }>) {
   return (
     <Image
-      src="/landing-page/flockfront-logo-transparent.png"
+      src="/landing-page/flockfront-logo-final.png"
       alt="FlockFront"
       width={2172}
       height={724}

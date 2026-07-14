@@ -208,11 +208,11 @@ export function StorefrontFooter({
             >
               <Image
                 alt="FlockFront"
-                className="h-8 w-auto object-contain"
+                className="h-[37px] w-auto object-contain"
                 height={40}
-                src="/landing-page/flockfront-logo-transparent.png"
+                src="/landing-page/flockfront-logo-final.png"
                 unoptimized
-                width={180}
+                width={207}
               />
             </a>
           </div>

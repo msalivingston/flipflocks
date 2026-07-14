@@ -93,14 +93,14 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
         <div className="px-3.5 pb-2 pt-3">
           <Link className="block w-fit" href="/">
             <Image
-              src="/branding/flockfront-logo.png"
+              src="/branding/flockfront-logo-final-cropped.png"
               alt="FlockFront"
-              width={164}
-              height={69}
+              width={162}
+              height={25}
               priority
             />
           </Link>
-          <div className="mt-1.5">
+          <div className="mt-3">
             <p className="truncate text-base font-bold text-stone-950">
               {seller.store_name}
             </p>
@@ -140,11 +140,11 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
               <Link className="shrink-0" href="/dashboard">
                 <Image
-                  src="/branding/flockfront-logo.png"
+                  src="/branding/flockfront-logo-final-cropped.png"
                   alt="FlockFront"
-                  width={132}
-                  height={44}
-                  className="h-auto w-[132px] max-[360px]:w-28"
+                  width={130}
+                  height={20}
+                  className="h-auto w-[130px] max-[360px]:w-[110px]"
                   priority
                 />
               </Link>

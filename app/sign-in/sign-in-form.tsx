@@ -57,7 +57,7 @@ export function SignInForm() {
             className="mx-auto inline-flex rounded-md focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-4"
           >
             <Image
-              src="/branding/flockfront-logo.png"
+              src="/branding/flockfront-logo-final.png"
               alt="FlockFront"
               width={210}
               height={70}

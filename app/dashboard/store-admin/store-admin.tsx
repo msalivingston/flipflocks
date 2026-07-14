@@ -2822,7 +2822,7 @@ function LogoPhotoSection({
               width={128}
             />
           ) : (
-            <Image alt="" height={48} src="/branding/logo-no-words.png" width={48} />
+            <Image alt="" height={48} src="/branding/logo-no-words-final.png" width={48} />
           )}
         </div>
         <div className="grid gap-2 sm:min-w-56">

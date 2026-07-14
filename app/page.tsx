@@ -97,8 +97,8 @@ function BrandLogo({
     <Image
       src={
         variant === "hero"
-          ? "/landing-page/flockfront-logo-white-darkgreen.png"
-          : "/landing-page/flockfront-logo-transparent.png"
+          ? "/landing-page/flockfront-logo-final-white.png"
+          : "/landing-page/flockfront-logo-final.png"
       }
       alt="FlockFront"
       width={2172}
@@ -127,7 +127,7 @@ export default function Home() {
         <div className="relative z-10 mx-auto flex min-h-[500px] w-full max-w-7xl flex-col px-5 py-4 max-[899px]:min-h-[430px] max-[899px]:px-4 max-[899px]:py-3 md:min-h-[560px] md:px-8 md:py-6 lg:px-12">
           <header className="grid items-center gap-4 max-[899px]:gap-2 md:grid-cols-[1fr_auto_1fr]">
             <PlaceholderLink className="inline-flex w-fit items-center">
-              <BrandLogo variant="hero" className="w-[195px] md:w-[295px]" />
+              <BrandLogo variant="hero" className="w-[224px] md:w-[339px]" />
             </PlaceholderLink>
 
             <nav
@@ -326,7 +326,7 @@ export default function Home() {
       <footer className="border-t border-[#ddd5c6] bg-white/70 px-5 py-3 max-[899px]:px-4 md:px-8">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 max-[899px]:items-center max-[899px]:gap-3 max-[899px]:text-center md:flex-row md:items-center md:justify-between md:max-[899px]:flex-col">
           <div className="flex items-center gap-3 text-sm max-[899px]:flex-col max-[899px]:gap-1.5">
-            <BrandLogo className="w-[150px]" />
+            <BrandLogo className="w-[173px]" />
             <p className="text-base text-[#394137]">
               Simple tools for poultry sellers.
             </p>
