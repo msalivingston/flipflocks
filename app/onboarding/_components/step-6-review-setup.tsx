@@ -253,6 +253,7 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
 
         <ReviewSection title="Plan access">
           <ReviewRow label="Plan" value={formatPlanName(billing)} />
+          <ReviewRow label="Billing" value={formatBillingPlan(billing)} />
           <ReviewRow label="Access" value={formatPlanAccess(billing)} />
           {billing?.applied_promo_code ? (
             <ReviewRow
@@ -411,7 +412,24 @@ function formatPlanAccess(billing: BillingReview | null) {
     return "Beta access applied, no payment required during beta";
   }
 
+  if (billing.billing_plan === "yearly") {
+    return `7-day free trial, then $${plan.yearlyPrice}/year`;
+  }
+
   return `7-day free trial, then $${plan.monthlyPrice}/month`;
+}
+
+function formatBillingPlan(billing: BillingReview | null) {
+  if (!billing) return "Not saved";
+
+  if (
+    billing.subscription_status === "comped" ||
+    billing.billing_plan === "comped"
+  ) {
+    return "Comped";
+  }
+
+  return billing.billing_plan === "yearly" ? "Annual" : "Monthly";
 }
 
 function formatPlanName(billing: BillingReview | null) {

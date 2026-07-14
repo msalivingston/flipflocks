@@ -168,9 +168,9 @@ export function SignupForm() {
         ) : null}
 
         <p className="rounded-lg border border-[#dbe8d8] bg-[#fffaf1] px-3 py-2 text-xs font-semibold leading-5 text-stone-600 sm:text-[13px]">
-          Plans start at $5/month. Full Flock is $29/month for active
-          sellers who need more room and more sale types. You&apos;ll choose
-          your plan after setting up your farm basics.
+          Plans start at $5/month or $50/year. Full Flock is $29/month or
+          $270/year for active sellers who need more room and more sale types.
+          You&apos;ll choose your plan after setting up your farm basics.
         </p>
 
         <button

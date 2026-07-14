@@ -43,6 +43,9 @@ export function OnboardingFlow() {
     null,
   );
   const [selectedPlanKey, setSelectedPlanKey] = useState<string | null>(null);
+  const [selectedBillingPlan, setSelectedBillingPlan] = useState<string | null>(
+    null,
+  );
   const [pickupSettings, setPickupSettings] =
     useState<StorePickupSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +120,7 @@ export function OnboardingFlow() {
         setSeller(primarySeller);
         setOnboardingStoreId(primarySeller?.store_id ?? null);
         setSelectedPlanKey(primarySeller?.plan_key ?? null);
+        setSelectedBillingPlan(primarySeller?.billing_plan ?? null);
 
         if (!primarySeller?.profile_complete) {
           setView("step2");
@@ -220,7 +224,7 @@ export function OnboardingFlow() {
   if (view === "step3") {
     return (
       <OnboardingShell
-        body="Try FlockFront free for 7 days. Small Flock starts at $5/month. Full Flock is $29/month for active sellers who need more room and more sale types."
+        body="Try FlockFront free for 7 days. Choose the plan that fits how you sell now. You can change plans later."
         currentStep={3}
         headline="Choose your plan"
         subhead="Start with a 7-day free trial"
@@ -232,16 +236,20 @@ export function OnboardingFlow() {
             </p>
           ) : null}
           <Step5PlanAccessForm
+            initialBillingPlan={selectedBillingPlan ?? seller?.billing_plan}
             initialPlanKey={selectedPlanKey ?? seller?.plan_key}
             onBack={() => {
               setError(null);
               setView("step2");
             }}
-            onComplete={(planKey) => {
+            onComplete={(planKey, billingPlan) => {
               setError(null);
               setSelectedPlanKey(planKey);
+              setSelectedBillingPlan(billingPlan);
               setSeller((current) =>
-                current ? { ...current, plan_key: planKey } : current,
+                current
+                  ? { ...current, billing_plan: billingPlan, plan_key: planKey }
+                  : current,
               );
               setView("step4");
             }}
