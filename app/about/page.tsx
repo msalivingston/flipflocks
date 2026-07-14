@@ -71,12 +71,15 @@ export default function AboutPage() {
             <Link className="transition hover:text-[#0e4a2d]" href="/faq">
               FAQ
             </Link>
-            <Link className="transition hover:text-[#0e4a2d]" href="/login">
-              Log In
-            </Link>
           </nav>
 
-          <div className="flex justify-start justify-self-start md:justify-self-auto md:justify-end">
+          <div className="flex items-center gap-4 justify-start justify-self-start md:justify-self-auto md:justify-end">
+            <Link
+              className="hidden text-[18px] font-bold text-[#10281c] transition hover:text-[#0e4a2d] md:inline-flex"
+              href="/login"
+            >
+              Log In
+            </Link>
             <Link
               className="inline-flex min-h-9 items-center justify-center rounded-md border border-[#b77918] bg-transparent px-4 text-[15px] font-semibold text-[#a86908] transition hover:bg-[#fff4df] focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1]"
               href="/signup"
@@ -140,7 +143,7 @@ export default function AboutPage() {
         <div className="mx-auto max-w-3xl">
           <p className="font-serif text-[1.35rem] leading-[1.5] text-[#123d27] md:text-[1.55rem]">
             After ten years of selling poultry, I have learned that a good
-            online storefront sells more birds and saves an astonishing amount
+            online storefront sells more birds and saves a huge amount
             of time.
           </p>
 
@@ -203,10 +206,15 @@ export default function AboutPage() {
             </div>
           </div>
 
-          <div
-            aria-hidden="true"
-            className="min-h-[260px] rounded-lg border border-dashed border-[#d4c8b3] bg-white/45 shadow-[0_8px_24px_rgb(39_31_18/0.035)] md:min-h-[330px]"
-          />
+          <div className="relative min-h-[260px] overflow-hidden rounded-lg shadow-[0_8px_24px_rgb(39_31_18/0.08)] md:min-h-[330px]">
+            <Image
+              src="/about-page/who-we-are-livingstons.png"
+              alt="Michelle and David Livingston in western Colorado"
+              fill
+              sizes="(min-width: 768px) 420px, 100vw"
+              className="-translate-y-[10px] scale-[1.08] object-cover object-top"
+            />
+          </div>
         </div>
       </section>
 

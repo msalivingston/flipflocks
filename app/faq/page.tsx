@@ -106,12 +106,15 @@ export default async function FaqPage() {
             >
               FAQ
             </Link>
-            <Link className="transition hover:text-[#0e4a2d]" href="/login">
-              Log In
-            </Link>
           </nav>
 
-          <div className="flex justify-start justify-self-start md:justify-self-auto md:justify-end">
+          <div className="flex items-center gap-4 justify-start justify-self-start md:justify-self-auto md:justify-end">
+            <Link
+              className="hidden text-[18px] font-bold text-[#10281c] transition hover:text-[#0e4a2d] md:inline-flex"
+              href="/login"
+            >
+              Log In
+            </Link>
             <Link
               className="inline-flex min-h-9 items-center justify-center rounded-md border border-[#b77918] bg-transparent px-4 text-[15px] font-semibold text-[#a86908] transition hover:bg-[#fff4df] focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1]"
               href="/signup"

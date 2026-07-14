@@ -169,12 +169,15 @@ export default function Home() {
               <PlaceholderLink className="transition hover:text-white" href="/faq">
                 FAQ
               </PlaceholderLink>
-              <PlaceholderLink className="transition hover:text-white" href="/login">
-                Sign in
-              </PlaceholderLink>
             </nav>
 
-            <div className="flex justify-start justify-self-start md:justify-self-auto md:justify-end">
+            <div className="flex items-center gap-5 justify-start justify-self-start md:justify-self-auto md:justify-end">
+              <PlaceholderLink
+                className="hidden text-[19px] font-bold text-white/95 transition hover:text-white md:inline-flex"
+                href="/login"
+              >
+                Sign in
+              </PlaceholderLink>
               <PlaceholderLink
                 className="inline-flex min-h-12 items-center justify-center rounded-md bg-[#075f38] px-6 text-[18px] font-normal text-white shadow-sm shadow-black/15 transition hover:bg-[#064a2d] max-[899px]:min-h-10 max-[899px]:px-5 max-[899px]:text-[16px]"
                 href="/signup"

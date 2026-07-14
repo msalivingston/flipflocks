@@ -146,7 +146,7 @@ export function SellerDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fbfaf6]">
+    <div className="bg-[#fbfaf6]">
       <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4 px-4 py-4 sm:gap-5 sm:px-8 sm:py-5 lg:px-10 lg:py-6">
         {showFirstListingPrompt ? (
           <FirstListingWelcomeCard />
