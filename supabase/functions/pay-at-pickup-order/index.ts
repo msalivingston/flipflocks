@@ -32,6 +32,9 @@ type OrderRequest = {
   buyer_notes?: string | null;
   pickup_note?: string | null;
   pickup_option_id?: string | null;
+  fulfillment_method?: "pickup" | "delivery";
+  delivery_option_id?: string | null;
+  uses_order_v2: boolean;
   items: CheckoutItem[];
 };
 
@@ -183,6 +186,32 @@ function optionalUuid(
   return trimmed;
 }
 
+function optionalFulfillmentMethod(
+  body: Record<string, unknown>,
+): "pickup" | "delivery" | undefined {
+  const value = body.fulfillment_method;
+
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    throw new Error("fulfillment_method must be pickup or delivery.");
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return "pickup";
+  }
+
+  if (trimmed !== "pickup" && trimmed !== "delivery") {
+    throw new Error("fulfillment_method must be pickup or delivery.");
+  }
+
+  return trimmed;
+}
+
 function normalizeItems(value: unknown): CheckoutItem[] {
   if (!Array.isArray(value) || value.length === 0) {
     throw new Error("At least one checkout item is required.");
@@ -277,6 +306,8 @@ function parseOrderRequest(body: unknown): OrderRequest {
     "buyer_notes",
     "pickup_note",
     "pickup_option_id",
+    "fulfillment_method",
+    "delivery_option_id",
     "items",
   ]);
 
@@ -298,6 +329,10 @@ function parseOrderRequest(body: unknown): OrderRequest {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyerEmail)) {
     throw new Error("Buyer email is invalid.");
   }
+
+  const usesOrderV2 =
+    Object.prototype.hasOwnProperty.call(record, "fulfillment_method") ||
+    Object.prototype.hasOwnProperty.call(record, "delivery_option_id");
 
   return {
     store_slug: storeSlug,
@@ -323,6 +358,9 @@ function parseOrderRequest(body: unknown): OrderRequest {
     buyer_notes: optionalText(record, "buyer_notes", 2000),
     pickup_note: optionalText(record, "pickup_note", 1000),
     pickup_option_id: optionalUuid(record, "pickup_option_id"),
+    fulfillment_method: optionalFulfillmentMethod(record),
+    delivery_option_id: optionalUuid(record, "delivery_option_id"),
+    uses_order_v2: usesOrderV2,
     items: normalizeItems(record.items),
   };
 }
@@ -495,38 +533,49 @@ Deno.serve(async (request: Request) => {
     });
   }
 
+  const orderRpcName = orderRequest.uses_order_v2
+    ? "create_pay_at_pickup_order_v2"
+    : "create_pay_at_pickup_order";
+  const orderRpcArgs: Record<string, unknown> = {
+    p_store_id: storeId,
+    p_idempotency_key: orderRequest.idempotency_key,
+    p_buyer_email: orderRequest.buyer_email,
+    p_buyer_first_name: orderRequest.buyer_first_name,
+    p_buyer_last_name: orderRequest.buyer_last_name,
+    p_items: orderRequest.items,
+    p_buyer_phone: orderRequest.buyer_phone,
+    p_business_name: orderRequest.business_name,
+    p_city: orderRequest.city,
+    p_state: orderRequest.state,
+    p_country: orderRequest.country,
+    p_delivery_address_line1: orderRequest.delivery_address_line1,
+    p_delivery_address_line2: orderRequest.delivery_address_line2,
+    p_delivery_city: orderRequest.delivery_city,
+    p_delivery_state: orderRequest.delivery_state,
+    p_delivery_postal_code: orderRequest.delivery_postal_code,
+    p_delivery_country: orderRequest.delivery_country,
+    p_buyer_notes: orderRequest.buyer_notes,
+    p_pickup_note: orderRequest.pickup_note,
+    p_buyer_ip_address: parseBuyerIp(request),
+    p_buyer_user_agent: request.headers.get("user-agent"),
+    p_pickup_option_id: orderRequest.pickup_option_id,
+  };
+
+  if (orderRequest.uses_order_v2) {
+    orderRpcArgs.p_fulfillment_method =
+      orderRequest.fulfillment_method ?? "pickup";
+    orderRpcArgs.p_delivery_option_id = orderRequest.delivery_option_id;
+  }
+
   const { data: orderRows, error: orderError } = await supabase.rpc(
-    "create_pay_at_pickup_order",
-    {
-      p_store_id: storeId,
-      p_idempotency_key: orderRequest.idempotency_key,
-      p_buyer_email: orderRequest.buyer_email,
-      p_buyer_first_name: orderRequest.buyer_first_name,
-      p_buyer_last_name: orderRequest.buyer_last_name,
-      p_items: orderRequest.items,
-      p_buyer_phone: orderRequest.buyer_phone,
-      p_business_name: orderRequest.business_name,
-      p_city: orderRequest.city,
-      p_state: orderRequest.state,
-      p_country: orderRequest.country,
-      p_delivery_address_line1: orderRequest.delivery_address_line1,
-      p_delivery_address_line2: orderRequest.delivery_address_line2,
-      p_delivery_city: orderRequest.delivery_city,
-      p_delivery_state: orderRequest.delivery_state,
-      p_delivery_postal_code: orderRequest.delivery_postal_code,
-      p_delivery_country: orderRequest.delivery_country,
-      p_buyer_notes: orderRequest.buyer_notes,
-      p_pickup_note: orderRequest.pickup_note,
-      p_buyer_ip_address: parseBuyerIp(request),
-      p_buyer_user_agent: request.headers.get("user-agent"),
-      p_pickup_option_id: orderRequest.pickup_option_id,
-    },
+    orderRpcName,
+    orderRpcArgs,
   );
 
   if (orderError) {
     const message = orderError.message || "Unable to create order.";
     console.error(
-      "create_pay_at_pickup_order failed",
+      `${orderRpcName} failed`,
       JSON.stringify({
         rpc_error: serializeRpcError(orderError),
         normalized_items: orderRequest.items,
@@ -542,6 +591,8 @@ Deno.serve(async (request: Request) => {
       "Insufficient inventory quantity available.",
       "Invalid inventory type for listing batch type.",
       "Pickup option is not available for this store.",
+      "Store does not offer delivery.",
+      "Delivery option is not available for this store.",
     ];
     const safeValidationMessages = [
       "Store is required.",
@@ -561,6 +612,12 @@ Deno.serve(async (request: Request) => {
       "At least one valid order item is required.",
       "Invalid inventory relationship for checkout.",
       "pickup_option_id must be a valid ID.",
+      "delivery_option_id must be a valid ID.",
+      "fulfillment_method must be pickup or delivery.",
+      "Fulfillment method must be pickup or delivery.",
+      "Delivery option must be blank for pickup orders.",
+      "Pickup option must be blank for delivery orders.",
+      "Delivery option is required for delivery orders.",
       ...conflictMessages,
     ];
     const safeMessage = safeValidationMessages.includes(message)
