@@ -89,23 +89,42 @@ function PlaceholderLink({
 function BrandLogo({
   className = "",
   variant = "default",
+  mobileClassName,
 }: Readonly<{
   className?: string;
+  mobileClassName?: string;
   variant?: "default" | "hero";
 }>) {
+  const src =
+    variant === "hero"
+      ? "/landing-page/flockfront-logo-final-white.png"
+      : "/landing-page/flockfront-logo-final.png";
+
   return (
-    <Image
-      src={
-        variant === "hero"
-          ? "/landing-page/flockfront-logo-final-white.png"
-          : "/landing-page/flockfront-logo-final.png"
-      }
-      alt="FlockFront"
-      width={2172}
-      height={724}
-      priority
-      className={`h-auto object-contain ${className}`}
-    />
+    <>
+      {mobileClassName ? (
+        <Image
+          src={
+            variant === "hero"
+              ? "/landing-page/flockfront-logo-final-cropped-white.png"
+              : "/branding/flockfront-logo-final-cropped.png"
+          }
+          alt="FlockFront"
+          width={1549}
+          height={236}
+          priority
+          className={`h-auto object-contain md:hidden ${mobileClassName}`}
+        />
+      ) : null}
+      <Image
+        src={src}
+        alt="FlockFront"
+        width={2172}
+        height={724}
+        priority
+        className={`h-auto object-contain ${mobileClassName ? "hidden md:block" : ""} ${className}`}
+      />
+    </>
   );
 }
 
@@ -125,9 +144,13 @@ export default function Home() {
         <div className="absolute inset-0 bg-linear-to-b from-black/46 via-black/20 to-black/34" />
 
         <div className="relative z-10 mx-auto flex min-h-[500px] w-full max-w-7xl flex-col px-5 py-4 max-[899px]:min-h-[430px] max-[899px]:px-4 max-[899px]:py-3 md:min-h-[560px] md:px-8 md:py-6 lg:px-12">
-          <header className="grid items-center gap-4 max-[899px]:gap-2 md:grid-cols-[1fr_auto_1fr]">
-            <PlaceholderLink className="inline-flex w-fit items-center">
-              <BrandLogo variant="hero" className="w-[224px] md:w-[339px]" />
+          <header className="grid items-center gap-4 max-[899px]:gap-5 max-[899px]:py-4 md:grid-cols-[1fr_auto_1fr]">
+            <PlaceholderLink className="inline-flex w-fit justify-self-start items-center">
+              <BrandLogo
+                variant="hero"
+                className="md:w-[339px]"
+                mobileClassName="w-[175px]"
+              />
             </PlaceholderLink>
 
             <nav
@@ -145,7 +168,7 @@ export default function Home() {
               </PlaceholderLink>
             </nav>
 
-            <div className="flex justify-start md:justify-end">
+            <div className="flex justify-start justify-self-start md:justify-self-auto md:justify-end">
               <PlaceholderLink
                 className="inline-flex min-h-12 items-center justify-center rounded-md bg-[#075f38] px-6 text-[18px] font-normal text-white shadow-sm shadow-black/15 transition hover:bg-[#064a2d] max-[899px]:min-h-10 max-[899px]:px-5 max-[899px]:text-[16px]"
                 href="/signup"

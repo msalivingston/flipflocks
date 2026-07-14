@@ -68,18 +68,32 @@ const comparisonRows = [
 
 function BrandLogo({
   className = "",
+  mobileClassName,
 }: Readonly<{
   className?: string;
+  mobileClassName?: string;
 }>) {
   return (
-    <Image
-      src="/landing-page/flockfront-logo-final.png"
-      alt="FlockFront"
-      width={2172}
-      height={724}
-      priority
-      className={`h-auto object-contain ${className}`}
-    />
+    <>
+      {mobileClassName ? (
+        <Image
+          src="/branding/flockfront-logo-final-cropped.png"
+          alt="FlockFront"
+          width={1549}
+          height={236}
+          priority
+          className={`h-auto object-contain md:hidden ${mobileClassName}`}
+        />
+      ) : null}
+      <Image
+        src="/landing-page/flockfront-logo-final.png"
+        alt="FlockFront"
+        width={2172}
+        height={724}
+        priority
+        className={`h-auto object-contain ${mobileClassName ? "hidden md:block" : ""} ${className}`}
+      />
+    </>
   );
 }
 
@@ -87,12 +101,12 @@ export function PricingPageClient() {
   return (
     <main className="min-h-screen bg-[#fffaf1] text-[#10281c]">
       <div className="mx-auto flex w-full max-w-7xl flex-col px-4 py-2.5 md:px-8 md:py-2.5 lg:px-10">
-        <header className="grid items-center gap-4 md:grid-cols-[1fr_auto_1fr]">
+        <header className="grid items-center gap-5 py-4 md:grid-cols-[1fr_auto_1fr] md:gap-4 md:py-0">
           <Link
             href="/"
-            className="inline-flex w-fit rounded-md focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1]"
+            className="inline-flex w-fit justify-self-start rounded-md focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1]"
           >
-            <BrandLogo className="w-[165px] md:w-[195px]" />
+            <BrandLogo className="md:w-[195px]" mobileClassName="w-[130px]" />
           </Link>
 
           <nav
@@ -114,7 +128,7 @@ export function PricingPageClient() {
             </Link>
           </nav>
 
-          <div className="flex justify-start md:justify-end">
+          <div className="flex justify-start justify-self-start md:justify-self-auto md:justify-end">
             <Link
               className="inline-flex min-h-9 items-center justify-center rounded-md border border-[#b77918] bg-transparent px-4 text-[15px] font-semibold text-[#a86908] transition hover:bg-[#fff4df] focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1]"
               href="/signup"
