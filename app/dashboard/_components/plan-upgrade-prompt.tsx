@@ -20,12 +20,12 @@ export function PlanUpgradePrompt({
   compact = false,
   feature,
   message,
-  title = "Unlock this with Full Flock",
+  title = "Unlock this with Market",
 }: PlanUpgradePromptProps) {
   const body =
     message ??
     (feature ? LOCKED_PLAN_MESSAGES[feature] : null) ??
-    "Full Flock includes unlimited live bird quantities, flock/group listings, hatching eggs, equipment/supplies, processed poultry, and Age-Based Pricing.";
+    "Market includes unlimited live bird quantities, flock/group listings, hatching eggs, equipment/supplies, processed poultry, and Age-Based Pricing.";
 
   return (
     <div
@@ -49,10 +49,10 @@ export function PlanUpgradePrompt({
                 className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-semibold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
                 href="/dashboard/account"
               >
-                Upgrade to Full Flock
+                Upgrade to Market
               </Link>
               <span className="inline-flex min-h-10 items-center justify-center rounded-md border border-amber-300 bg-white/70 px-4 text-sm font-semibold text-amber-900">
-                Keep using Small Flock
+                Keep using Coop
               </span>
             </div>
           ) : null}
@@ -80,7 +80,7 @@ export function PlanUpgradeDialog({
   feature,
   message,
   onClose,
-  title = "Upgrade to Full Flock",
+  title = "Upgrade to Market",
 }: {
   feature?: LockedPlanFeature;
   message?: string;
@@ -105,7 +105,7 @@ export function PlanUpgradeDialog({
             type="button"
             onClick={onClose}
           >
-            Keep using Small Flock
+            Keep using Coop
           </button>
         </div>
       </div>
@@ -116,7 +116,7 @@ export function PlanUpgradeDialog({
 export function FullFlockPill() {
   return (
     <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-800">
-      Full Flock
+      Market
     </span>
   );
 }

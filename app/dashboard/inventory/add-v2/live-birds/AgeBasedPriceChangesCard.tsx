@@ -53,7 +53,7 @@ export function AgeBasedPriceChangesCard({
             }
           >
             <SwitchTrack enabled={priceAdjustment.enabled} />
-            <span>{locked ? "Full Flock" : priceAdjustment.enabled ? "On" : "Off"}</span>
+            <span>{locked ? "Market" : priceAdjustment.enabled ? "On" : "Off"}</span>
           </button>
         </div>
 

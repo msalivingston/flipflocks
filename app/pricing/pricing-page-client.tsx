@@ -16,7 +16,7 @@ const pricing = {
 const comparisonRows = [
   {
     label: "List and sell live birds",
-    small: "Up to 5",
+    small: "Up to 5 active at once",
     full: "Unlimited",
   },
   {
@@ -101,17 +101,17 @@ export function PricingPageClient() {
   return (
     <main className="min-h-screen bg-[#fffaf1] text-[#10281c]">
       <div className="mx-auto flex w-full max-w-7xl flex-col px-4 py-2.5 md:px-8 md:py-2.5 lg:px-10">
-        <header className="grid items-center gap-5 py-4 md:grid-cols-[1fr_auto_1fr] md:gap-4 md:py-0">
+        <header className="grid items-center gap-5 py-[19px] md:grid-cols-[1fr_auto_1fr] md:gap-4 md:py-[3px]">
           <Link
             href="/"
             className="inline-flex w-fit justify-self-start rounded-md focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1]"
           >
-            <BrandLogo className="md:w-[195px]" mobileClassName="w-[130px]" />
+            <BrandLogo className="md:w-[224px]" mobileClassName="w-[150px]" />
           </Link>
 
           <nav
             aria-label="Primary navigation"
-            className="hidden items-center gap-7 text-[15px] font-normal text-[#10281c] md:flex"
+            className="hidden items-center gap-7 text-[18px] font-normal text-[#10281c] md:flex"
           >
             <Link className="transition hover:text-[#0e4a2d]" href="/#how-it-works">
               How it works
@@ -122,6 +122,12 @@ export function PricingPageClient() {
               href="/pricing"
             >
               Pricing
+            </Link>
+            <Link className="transition hover:text-[#0e4a2d]" href="/about">
+              About
+            </Link>
+            <Link className="transition hover:text-[#0e4a2d]" href="/faq">
+              FAQ
             </Link>
             <Link className="transition hover:text-[#0e4a2d]" href="/login">
               Log In
@@ -140,7 +146,7 @@ export function PricingPageClient() {
 
         <nav
           aria-label="Mobile primary navigation"
-          className="mt-3 flex items-center justify-center gap-5 rounded-md border border-[#e8deca] bg-white/55 px-3 py-2 text-[15px] font-medium text-[#10281c] md:hidden"
+          className="mt-3 flex items-center justify-center gap-4 rounded-md border border-[#e8deca] bg-white/55 px-2 py-2 text-[16px] font-medium text-[#10281c] sm:gap-5 sm:px-3 sm:text-[18px] md:hidden"
         >
           <Link className="transition hover:text-[#0e4a2d]" href="/#how-it-works">
             How it works
@@ -152,6 +158,12 @@ export function PricingPageClient() {
           >
             Pricing
           </Link>
+          <Link className="transition hover:text-[#0e4a2d]" href="/about">
+            About
+          </Link>
+          <Link className="transition hover:text-[#0e4a2d]" href="/faq">
+            FAQ
+          </Link>
           <Link className="transition hover:text-[#0e4a2d]" href="/login">
             Log In
           </Link>
@@ -159,10 +171,10 @@ export function PricingPageClient() {
 
         <section className="mx-auto max-w-4xl px-2 pb-3 pt-4 text-center md:pb-3 md:pt-4">
           <h1 className="text-balance font-serif text-[clamp(2.05rem,3.5vw,3.35rem)] leading-[1.05] text-[#123d27]">
-            Simple pricing for poultry sellers
+            Pick the plan that fits your flock
           </h1>
           <p className="mx-auto mt-1.5 max-w-3xl text-balance text-[14px] leading-5 text-[#3f463f] md:text-[15px]">
-            Start small with Small Flock, or choose the full toolkit for an
+            Start small with Coop, or choose the full Market toolkit for an
             active poultry business.
           </p>
         </section>
@@ -178,7 +190,7 @@ export function PricingPageClient() {
           <div className="hidden overflow-hidden rounded-lg border border-[#e8deca] bg-white/54 lg:grid lg:grid-cols-[0.9fr_1fr_1.22fr]">
             <div className="border-r border-[#e8deca]" aria-hidden="true" />
             <PlanHeader
-              buttonLabel="Choose Small Flock"
+              buttonLabel="Choose Coop"
               description="For occasional sellers who only need to list a few birds at a time."
               monthlyPrice={pricing.smallMonthlyPrice}
               name={smallFlock.displayName}
@@ -186,7 +198,7 @@ export function PricingPageClient() {
               yearlySavings={pricing.smallYearlySavings}
             />
             <PlanHeader
-              buttonLabel="Choose Full Flock"
+              buttonLabel="Choose Market"
               description="For active poultry sellers who need room to sell more birds and more types of poultry inventory."
               emphasized
               monthlyPrice={pricing.fullMonthlyPrice}
@@ -202,7 +214,7 @@ export function PricingPageClient() {
 
           <div className="grid gap-3 lg:hidden">
             <PlanSummaryCard
-              buttonLabel="Choose Small Flock"
+              buttonLabel="Choose Coop"
               description="For occasional sellers who only need to list a few birds at a time."
               monthlyPrice={pricing.smallMonthlyPrice}
               name={smallFlock.displayName}
@@ -210,7 +222,7 @@ export function PricingPageClient() {
               yearlySavings={pricing.smallYearlySavings}
             />
             <PlanSummaryCard
-              buttonLabel="Choose Full Flock"
+              buttonLabel="Choose Market"
               description="For active poultry sellers who need room to sell more birds and more types of poultry inventory."
               emphasized
               monthlyPrice={pricing.fullMonthlyPrice}
@@ -223,10 +235,10 @@ export function PricingPageClient() {
               <div className="grid [grid-template-columns:minmax(0,1fr)_4.75rem_4.75rem] border-b border-[#e8deca] bg-[#fdf9ee]/60 text-[11px] font-bold uppercase tracking-[0.08em] text-[#5f665f]">
                 <div className="px-3 py-2">Feature</div>
                 <div className="grid place-items-center border-l border-[#e8deca] px-1 py-2 text-center">
-                  Small Flock
+                  Coop
                 </div>
                 <div className="grid place-items-center border-l border-[#e8deca] px-1 py-2 text-center">
-                  Full Flock
+                  Market
                 </div>
               </div>
               {comparisonRows.map((row) => (
@@ -418,7 +430,7 @@ function PlanValue({
   value,
 }: {
   mobile?: boolean;
-  value: "Up to 5" | "Unlimited" | "available" | "unavailable";
+  value: "Up to 5 active at once" | "Unlimited" | "available" | "unavailable";
 }) {
   if (value === "available") {
     return (

@@ -163,6 +163,12 @@ export default function Home() {
               <PlaceholderLink className="transition hover:text-white" href="/pricing">
                 Pricing
               </PlaceholderLink>
+              <PlaceholderLink className="transition hover:text-white" href="/about">
+                About
+              </PlaceholderLink>
+              <PlaceholderLink className="transition hover:text-white" href="/faq">
+                FAQ
+              </PlaceholderLink>
               <PlaceholderLink className="transition hover:text-white" href="/login">
                 Sign in
               </PlaceholderLink>
@@ -187,6 +193,12 @@ export default function Home() {
             </PlaceholderLink>
             <PlaceholderLink className="transition hover:text-white" href="/pricing">
               Pricing
+            </PlaceholderLink>
+            <PlaceholderLink className="transition hover:text-white" href="/about">
+              About
+            </PlaceholderLink>
+            <PlaceholderLink className="transition hover:text-white" href="/faq">
+              FAQ
             </PlaceholderLink>
             <PlaceholderLink className="transition hover:text-white" href="/login">
               Sign in
@@ -363,6 +375,12 @@ export default function Home() {
             </PlaceholderLink>
             <PlaceholderLink className="hover:text-[#0e4a2d]" href="/pricing">
               Pricing
+            </PlaceholderLink>
+            <PlaceholderLink className="hover:text-[#0e4a2d]" href="/about">
+              About
+            </PlaceholderLink>
+            <PlaceholderLink className="hover:text-[#0e4a2d]" href="/faq">
+              FAQ
             </PlaceholderLink>
             <PlaceholderLink className="hover:text-[#0e4a2d]" href="/login">
               Sign in

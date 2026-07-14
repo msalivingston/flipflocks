@@ -14,11 +14,11 @@ export function AdminPageHeader({
   description?: string;
 }) {
   return (
-    <header className="border-b border-stone-200 bg-white">
+    <header className="border-b border-[#c9ddd6] bg-white">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-5 py-6 sm:px-7 lg:flex-row lg:items-end lg:justify-between">
         <div>
           {eyebrow ? (
-            <p className="text-xs font-bold uppercase tracking-[0.12em] text-emerald-800">
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#176252]">
               {eyebrow}
             </p>
           ) : null}
@@ -37,7 +37,7 @@ export function AdminPageHeader({
 
 export function AdminCard({ children }: { children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-stone-200 bg-white shadow-sm">
+    <section className="rounded-lg border border-[#ceddd7] bg-white shadow-sm">
       {children}
     </section>
   );
@@ -45,7 +45,7 @@ export function AdminCard({ children }: { children: React.ReactNode }) {
 
 export function AdminLoadingState({ label }: { label: string }) {
   return (
-    <div className="rounded-lg border border-stone-200 bg-white p-6 text-sm font-semibold text-stone-600">
+    <div className="rounded-lg border border-[#ceddd7] bg-white p-6 text-sm font-semibold text-stone-600">
       {label}
     </div>
   );
@@ -141,8 +141,8 @@ export function AdminMetric({
   value: number | string;
 }) {
   return (
-    <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3">
-      <p className="text-xs font-bold uppercase tracking-[0.08em] text-stone-500">
+    <div className="rounded-lg border border-[#ceddd7] bg-[#f7faf8] px-4 py-3">
+      <p className="text-xs font-bold uppercase tracking-[0.08em] text-[#55776d]">
         {label}
       </p>
       <p className="mt-1 text-xl font-bold text-stone-950">{value}</p>

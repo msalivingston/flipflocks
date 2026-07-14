@@ -46,7 +46,7 @@ export type PlanCapabilities = {
 export const PLAN_CAPABILITIES: Record<PlanId, PlanCapabilities> = {
   small_flock: {
     id: "small_flock",
-    displayName: "Small Flock",
+    displayName: "Coop",
     monthlyPrice: 5,
     yearlyPrice: 50,
     activeBirdLimit: 5,
@@ -77,7 +77,7 @@ export const PLAN_CAPABILITIES: Record<PlanId, PlanCapabilities> = {
   },
   full_flock: {
     id: "full_flock",
-    displayName: "Full Flock",
+    displayName: "Market",
     monthlyPrice: 29,
     yearlyPrice: 270,
     activeBirdLimit: null,
@@ -134,15 +134,15 @@ export function isLiveBirdOfferingAllowed(
 
 export const LOCKED_PLAN_MESSAGES: Record<LockedPlanFeature, string> = {
   flock_group:
-    "Flock and group listings are included with Full Flock. Small Flock is designed for occasional live bird sales of single birds, pairs, and trios.",
+    "Flock and group listings are included with Market. Coop is designed for occasional live bird sales of single birds, pairs, and trios.",
   group_listing:
-    "Group listings are included with Full Flock. Small Flock keeps live bird selling simple with single birds, pairs, and trios.",
-  hatching_eggs: "Hatching egg listings are included with Full Flock.",
+    "Group listings are included with Market. Coop keeps live bird selling simple with single birds, pairs, and trios.",
+  hatching_eggs: "Hatching egg listings are included with Market.",
   equipment_supplies:
-    "Equipment and supply listings are included with Full Flock.",
-  processed_poultry: "Processed poultry listings are included with Full Flock.",
+    "Equipment and supply listings are included with Market.",
+  processed_poultry: "Processed poultry listings are included with Market.",
   age_based_pricing:
-    "Age-Based Pricing is included with Full Flock. List growing birds once and let pricing adjust as they age.",
+    "Age-Based Pricing is included with Market. List growing birds once and let pricing adjust as they age.",
   active_bird_limit:
-    "Small Flock includes up to 5 active birds for sale at one time. Upgrade to Full Flock for unlimited live bird quantities.",
+    "Coop includes up to 5 active birds for sale at one time. Upgrade to Market for unlimited live bird quantities.",
 };

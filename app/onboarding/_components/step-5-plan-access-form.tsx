@@ -33,7 +33,7 @@ const planCards: Array<{
 }> = [
   {
     id: "small_flock",
-    cta: "Choose Small Flock",
+    cta: "Choose Coop",
     purpose: "For occasional sellers",
     includes: [
       "Up to 5 birds for sale at once",
@@ -44,7 +44,7 @@ const planCards: Array<{
   {
     id: "full_flock",
     badge: "Best for active sellers",
-    cta: "Choose Full Flock",
+    cta: "Choose Market",
     purpose: "For active sellers",
     includes: [
       "Unlimited birds for sale",
@@ -436,7 +436,7 @@ function friendlyPlanAccessError(message: string) {
   }
 
   if (message.toLowerCase().includes("plan")) {
-    return "Choose Small Flock or Full Flock before continuing.";
+    return "Choose Coop or Market before continuing.";
   }
 
   if (message.toLowerCase().includes("promo")) {

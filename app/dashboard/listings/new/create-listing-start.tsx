@@ -361,7 +361,7 @@ function ChoiceCard({
                 if (lockedFeature) onLockedClick?.(lockedFeature);
               }}
             >
-              {isLocked ? "Full Flock" : "Coming Later"}
+              {isLocked ? "Market" : "Coming Later"}
             </button>
           ) : (
             <span className="inline-flex min-h-10 w-full items-center justify-center rounded-md bg-stone-950 px-4 text-sm font-semibold text-white">

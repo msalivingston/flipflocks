@@ -84,7 +84,7 @@ export function Step3SellingCategoriesForm({
 
   function showLockedCategoryMessage(feature: LockedPlanFeature) {
     setUpgradeMessage(
-      LOCKED_PLAN_MESSAGES[feature] || "This category is included with Full Flock.",
+      LOCKED_PLAN_MESSAGES[feature] || "This category is included with Market.",
     );
   }
 
@@ -125,7 +125,7 @@ export function Step3SellingCategoriesForm({
       </h2>
       <p className="mt-2 text-sm font-medium leading-6 text-stone-600">
         {isSmallFlock
-          ? "Small Flock includes live bird listings for single birds, pairs, and trios. Upgrade to Full Flock anytime to add hatching eggs, poultry products, equipment, flock/group listings, and Age-Based Pricing."
+          ? "Coop includes live bird listings for single birds, pairs, and trios. Upgrade to Market anytime to add hatching eggs, poultry products, equipment, flock/group listings, and Age-Based Pricing."
           : "Just choose what you expect to offer."}
       </p>
 
@@ -157,14 +157,14 @@ export function Step3SellingCategoriesForm({
                 onClick={onChooseFullFlock}
                 type="button"
               >
-                Choose Full Flock
+                Choose Market
               </button>
               <button
                 className="min-h-9 rounded-md border border-stone-300 bg-white px-3 text-sm font-bold text-stone-700 transition hover:border-[#246f38] hover:text-[#246f38] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2"
                 onClick={() => setUpgradeMessage(null)}
                 type="button"
               >
-                Stay with Small Flock
+                Stay with Coop
               </button>
             </div>
           </div>
@@ -222,8 +222,8 @@ function AlwaysIncludedCard({ isSmallFlock }: { isSmallFlock: boolean }) {
           </p>
           <p className="mt-2 text-sm font-semibold leading-5 text-[#246f38]">
             {isSmallFlock
-              ? "Included with Small Flock. Single birds, pairs, and trios are available."
-              : "Included with Full Flock. You can also use flock/group listings."}
+              ? "Included with Coop. Single birds, pairs, and trios are available."
+              : "Included with Market. You can also use flock/group listings."}
           </p>
         </div>
       </div>
@@ -278,7 +278,7 @@ function CategoryCard({
           {isLocked ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-stone-600 ring-1 ring-stone-200">
               <Image src="/glyphs/shield.png" alt="" width={13} height={13} />
-              Full Flock
+              Market
             </span>
           ) : null}
         </span>
@@ -287,7 +287,7 @@ function CategoryCard({
         </span>
         {isLocked ? (
           <span className="mt-2 block text-sm font-semibold leading-5 text-stone-500">
-            Available on Full Flock
+            Available on Market
           </span>
         ) : null}
       </span>
@@ -324,7 +324,7 @@ function friendlyCategoryError(message: string) {
   }
 
   if (message.toLowerCase().includes("full flock")) {
-    return "That category is included with Full Flock.";
+    return "That category is included with Market.";
   }
 
   return message || "We could not save your selling categories. Please try again.";

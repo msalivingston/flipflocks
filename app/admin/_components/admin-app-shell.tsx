@@ -8,6 +8,7 @@ import { isCurrentUserPlatformAdmin } from "../_lib/admin-auth";
 
 const adminNavItems = [
   { label: "Stores", href: "/admin/stores" },
+  { label: "FAQs", href: "/admin/faqs" },
   { label: "Breeds", href: "/admin/breeds" },
 ];
 
@@ -81,13 +82,36 @@ export function AdminAppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#eef1ed] text-stone-950 lg:grid lg:grid-cols-[260px_1fr]">
-      <aside className="hidden border-r border-stone-200 bg-white lg:flex lg:min-h-screen lg:flex-col">
-        <div className="border-b border-stone-200 px-5 py-5">
-          <Link href="/admin" className="text-lg font-bold text-stone-950">
+    <div className="platform-admin-shell min-h-screen bg-[#f2f6f3] text-stone-950 lg:grid lg:grid-cols-[260px_1fr]">
+      <style>{`
+        .platform-admin-shell .seller-primary-button {
+          background: #145447;
+          box-shadow: 0 1px 0 rgba(15, 51, 43, 0.08);
+        }
+
+        .platform-admin-shell .seller-primary-button:hover {
+          background: #0f3f35;
+        }
+
+        .platform-admin-shell .seller-secondary-button,
+        .platform-admin-shell .seller-small-button {
+          border-color: #b8d3ca;
+          color: #16483d;
+        }
+
+        .platform-admin-shell .seller-secondary-button:hover,
+        .platform-admin-shell .seller-small-button:hover {
+          border-color: #7eab9d;
+          background: #eef7f3;
+          color: #0f332b;
+        }
+      `}</style>
+      <aside className="hidden border-r border-[#17483d] bg-[#0f332b] text-white shadow-[inset_-1px_0_0_rgba(255,255,255,0.06)] lg:flex lg:min-h-screen lg:flex-col">
+        <div className="border-b border-white/10 px-5 py-5">
+          <Link href="/admin" className="text-lg font-bold text-white">
             FlockFront Platform Admin
           </Link>
-          <p className="mt-1 text-sm font-semibold text-emerald-900">
+          <p className="mt-1 inline-flex rounded-full border border-[#7fc8b2]/25 bg-[#163f35] px-2.5 py-1 text-xs font-bold uppercase tracking-[0.08em] text-[#a8dfd1]">
             Internal operations
           </p>
         </div>
@@ -96,8 +120,8 @@ export function AdminAppShell({ children }: { children: React.ReactNode }) {
           <AdminNavLinks />
         </nav>
 
-        <div className="border-t border-stone-200 px-5 py-4">
-          <p className="truncate text-xs font-semibold text-stone-500">
+        <div className="border-t border-white/10 px-5 py-4">
+          <p className="truncate text-xs font-semibold text-[#b8d8cf]">
             {email ?? "Signed out"}
           </p>
           <button className="seller-small-button mt-3" onClick={signOut}>
@@ -107,13 +131,13 @@ export function AdminAppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-h-screen flex-col">
-        <header className="sticky top-0 z-30 border-b border-stone-200 bg-white lg:hidden">
+        <header className="sticky top-0 z-30 border-b border-[#bdd5cd] bg-white lg:hidden">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div>
               <Link href="/admin" className="font-bold text-stone-950">
                 FlockFront Platform Admin
               </Link>
-              <p className="text-xs font-semibold text-emerald-900">
+              <p className="text-xs font-semibold text-[#1b5b4d]">
                 Internal operations
               </p>
             </div>
@@ -121,7 +145,7 @@ export function AdminAppShell({ children }: { children: React.ReactNode }) {
               Sign Out
             </button>
           </div>
-          <nav className="flex gap-2 overflow-x-auto border-t border-stone-100 px-3 py-2">
+          <nav className="flex gap-2 overflow-x-auto border-t border-[#dce8e3] px-3 py-2">
             <AdminNavLinks compact />
           </nav>
         </header>
@@ -144,8 +168,12 @@ function AdminNavLinks({ compact = false }: { compact?: boolean }) {
           compact ? "min-w-24 text-center text-xs" : ""
         } ${
           isActive
-            ? "bg-emerald-50 text-emerald-900"
-            : "text-stone-700 hover:bg-stone-100 hover:text-stone-950"
+            ? compact
+              ? "bg-[#dff3ec] text-[#11473c] ring-1 ring-[#a8d8ca]"
+              : "bg-[#1b5b4d] text-white shadow-sm ring-1 ring-[#79baa8]/40"
+            : compact
+              ? "text-stone-700 hover:bg-[#eef7f3] hover:text-[#11473c]"
+              : "text-[#d7ebe4] hover:bg-white/10 hover:text-white"
         }`}
         href={item.href}
         key={item.href}

@@ -4,7 +4,7 @@ import { PricingPageClient } from "./pricing-page-client";
 export const metadata: Metadata = {
   title: "Pricing | FlockFront",
   description:
-    "Simple FlockFront pricing for poultry sellers: Small Flock and Full Flock plans.",
+    "Simple FlockFront pricing for poultry sellers: Coop and Market plans.",
 };
 
 export default function PricingPage() {

@@ -91,7 +91,7 @@ begin
       or coalesce(p_equipment_supplies_enabled, false)
       or coalesce(p_processed_poultry_enabled, false)
     ) then
-    raise exception 'Small Flock includes live birds only. Upgrade to Full Flock to enable hatching eggs, equipment, or processed poultry.';
+    raise exception 'Coop includes live birds only. Upgrade to Market to enable hatching eggs, equipment, or processed poultry.';
   end if;
 end;
 $$;
@@ -125,15 +125,15 @@ begin
   end if;
 
   if p_batch_type = 'hatching_eggs' or p_inventory_type = 'hatching_eggs' then
-    raise exception 'Hatching egg listings are included with Full Flock.';
+    raise exception 'Hatching egg listings are included with Market.';
   end if;
 
   if p_inventory_type = 'other' then
-    raise exception 'Flock and group listings are included with Full Flock. Small Flock supports single birds, pairs, and trios.';
+    raise exception 'Flock and group listings are included with Market. Coop supports single birds, pairs, and trios.';
   end if;
 
   if p_inventory_type not in ('female', 'male', 'straight_run', 'unsexed', 'pair', 'trio') then
-    raise exception 'This live bird offering is included with Full Flock.';
+    raise exception 'This live bird offering is included with Market.';
   end if;
 
   select lb.visibility_status
@@ -154,7 +154,7 @@ begin
     );
 
     if v_existing_units + v_new_units > 5 then
-      raise exception 'Small Flock includes up to 5 active birds for sale at one time. Upgrade to Full Flock for unlimited live bird quantities.';
+      raise exception 'Coop includes up to 5 active birds for sale at one time. Upgrade to Market for unlimited live bird quantities.';
     end if;
   end if;
 end;
@@ -184,11 +184,11 @@ begin
   end if;
 
   if v_batch.batch_type = 'hatching_eggs' then
-    raise exception 'Hatching egg listings are included with Full Flock.';
+    raise exception 'Hatching egg listings are included with Market.';
   end if;
 
   if coalesce(v_batch.auto_price_adjustment_enabled, false) then
-    raise exception 'Age-Based Pricing is included with Full Flock. List growing birds once and let pricing adjust as they age.';
+    raise exception 'Age-Based Pricing is included with Market. List growing birds once and let pricing adjust as they age.';
   end if;
 
   if exists (
@@ -198,7 +198,7 @@ begin
       and ii.visibility_status = 'active'
       and ii.inventory_type = 'other'
   ) then
-    raise exception 'Flock and group listings are included with Full Flock. Small Flock supports single birds, pairs, and trios.';
+    raise exception 'Flock and group listings are included with Market. Coop supports single birds, pairs, and trios.';
   end if;
 
   v_existing_units := public.small_flock_active_live_bird_units(
@@ -218,7 +218,7 @@ begin
     and ii.quantity_available > 0;
 
   if v_existing_units + coalesce(v_batch_units, 0) > 5 then
-    raise exception 'Small Flock includes up to 5 active birds for sale at one time. Upgrade to Full Flock for unlimited live bird quantities.';
+    raise exception 'Coop includes up to 5 active birds for sale at one time. Upgrade to Market for unlimited live bird quantities.';
   end if;
 end;
 $$;
@@ -370,17 +370,17 @@ begin
 
   if coalesce(old.hatching_eggs_enabled, false) = false
     and coalesce(new.hatching_eggs_enabled, false) = true then
-    raise exception 'Hatching egg listings are included with Full Flock.';
+    raise exception 'Hatching egg listings are included with Market.';
   end if;
 
   if coalesce(old.equipment_supplies_enabled, false) = false
     and coalesce(new.equipment_supplies_enabled, false) = true then
-    raise exception 'Equipment and supply listings are included with Full Flock.';
+    raise exception 'Equipment and supply listings are included with Market.';
   end if;
 
   if coalesce(old.processed_poultry_enabled, false) = false
     and coalesce(new.processed_poultry_enabled, false) = true then
-    raise exception 'Processed poultry listings are included with Full Flock.';
+    raise exception 'Processed poultry listings are included with Market.';
   end if;
 
   return new;
@@ -403,33 +403,33 @@ as $$
 begin
   if public.get_store_plan_key(new.store_id) = 'small_flock' then
     if tg_op = 'INSERT' and new.batch_type = 'hatching_eggs' then
-      raise exception 'Hatching egg listings are included with Full Flock.';
+      raise exception 'Hatching egg listings are included with Market.';
     end if;
 
     if tg_op = 'UPDATE'
       and old.batch_type is distinct from new.batch_type
       and new.batch_type = 'hatching_eggs' then
-      raise exception 'Hatching egg listings are included with Full Flock.';
+      raise exception 'Hatching egg listings are included with Market.';
     end if;
 
     if tg_op = 'INSERT'
       and coalesce(new.auto_price_adjustment_enabled, false) then
-      raise exception 'Age-Based Pricing is included with Full Flock. List growing birds once and let pricing adjust as they age.';
+      raise exception 'Age-Based Pricing is included with Market. List growing birds once and let pricing adjust as they age.';
     end if;
 
     if tg_op = 'UPDATE'
       and coalesce(old.auto_price_adjustment_enabled, false) = false
       and coalesce(new.auto_price_adjustment_enabled, false) = true then
-      raise exception 'Age-Based Pricing is included with Full Flock. List growing birds once and let pricing adjust as they age.';
+      raise exception 'Age-Based Pricing is included with Market. List growing birds once and let pricing adjust as they age.';
     end if;
 
     if new.visibility_status = 'active' then
       if new.batch_type = 'hatching_eggs' then
-        raise exception 'Hatching egg listings are included with Full Flock.';
+        raise exception 'Hatching egg listings are included with Market.';
       end if;
 
       if coalesce(new.auto_price_adjustment_enabled, false) then
-        raise exception 'Age-Based Pricing is included with Full Flock. List growing birds once and let pricing adjust as they age.';
+        raise exception 'Age-Based Pricing is included with Market. List growing birds once and let pricing adjust as they age.';
       end if;
 
       if tg_op = 'INSERT'
@@ -544,7 +544,7 @@ begin
       return new;
     end if;
 
-    raise exception 'Equipment and supply listings are included with Full Flock.';
+    raise exception 'Equipment and supply listings are included with Market.';
   end if;
 
   return new;
@@ -578,7 +578,7 @@ begin
       return new;
     end if;
 
-    raise exception 'Processed poultry listings are included with Full Flock.';
+    raise exception 'Processed poultry listings are included with Market.';
   end if;
 
   return new;

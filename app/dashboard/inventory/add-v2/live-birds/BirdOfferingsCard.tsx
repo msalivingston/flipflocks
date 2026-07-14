@@ -549,7 +549,7 @@ function SelectField({
               value={getBreedOptionValue(option)}
             >
               {disabledOptionLabels.includes(option.label)
-                ? `${option.label} - Full Flock`
+                ? `${option.label} - Market`
                 : option.label}
             </option>
           ))}

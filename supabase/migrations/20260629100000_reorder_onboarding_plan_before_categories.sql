@@ -49,7 +49,7 @@ begin
 
   v_plan_key := nullif(trim(v_plan ->> 'plan_key'), '');
   if v_plan_key not in ('small_flock', 'full_flock') then
-    raise exception 'Choose Small Flock or Full Flock before continuing.';
+    raise exception 'Choose Coop or Market before continuing.';
   end if;
 
   v_promo_code := nullif(upper(trim(v_plan ->> 'promo_code')), '');
@@ -272,7 +272,7 @@ begin
       or v_processed_poultry_enabled
       or v_equipment_supplies_enabled
     ) then
-    raise exception 'This category is included with Full Flock.';
+    raise exception 'This category is included with Market.';
   end if;
 
   update public.stores as s

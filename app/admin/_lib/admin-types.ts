@@ -84,3 +84,13 @@ export type AdminCatalogBreedListRow = {
 export type AdminCatalogBreedDetailRow = AdminCatalogBreedListRow & {
   description: string | null;
 };
+
+export type AdminSiteFaqRow = {
+  id: string;
+  question: string;
+  answer: string;
+  is_published: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};

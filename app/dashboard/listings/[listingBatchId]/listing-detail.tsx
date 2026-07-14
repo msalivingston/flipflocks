@@ -2020,7 +2020,7 @@ function EditListingForm({
               />
               <span>
                 Automatically adjust this batch price after the available date{" "}
-                {!ageBasedPricingEnabled ? "(Full Flock)" : ""}
+                {!ageBasedPricingEnabled ? "(Market)" : ""}
               </span>
             </label>
 

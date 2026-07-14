@@ -44,7 +44,7 @@ begin
 
   v_plan_key := nullif(trim(v_plan ->> 'plan_key'), '');
   if v_plan_key not in ('small_flock', 'full_flock') then
-    raise exception 'Choose Small Flock or Full Flock before continuing.';
+    raise exception 'Choose Coop or Market before continuing.';
   end if;
 
   v_requested_billing_plan := coalesce(

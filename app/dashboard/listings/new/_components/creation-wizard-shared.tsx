@@ -425,7 +425,7 @@ export function PriceAdjustmentFields({
           onChange={(event) => updateField("enabled", event.target.checked)}
         />
         <span>
-          Adjust price as birds age {locked ? "(Full Flock)" : ""}
+          Adjust price as birds age {locked ? "(Market)" : ""}
           <span className="mt-1 block text-sm font-normal leading-6 text-stone-600">
             Set one automatic price change for this hatch date. It applies to
             each available bird price in this listing.
