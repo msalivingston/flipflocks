@@ -2380,11 +2380,11 @@ function StorefrontTab({
 
   return (
     <div className="grid gap-3">
-      <StorefrontAccordionSection
+      <StoreSetupAccordionSection
         glyph="/glyphs/checkmark.png"
         id="status"
         isOpen={openSection === "status"}
-        onToggle={setOpenSection}
+        onToggle={(id) => setOpenSection(id as StorefrontAccordionId | "none")}
         showStatusDot
         statusDotTone={isStorefrontLiveForCustomers ? "green" : "red"}
         summary={<span className="truncate">{statusSummary}</span>}
@@ -2434,13 +2434,13 @@ function StorefrontTab({
             warningItems={warningItems}
           />
         )}
-      </StorefrontAccordionSection>
+      </StoreSetupAccordionSection>
 
-      <StorefrontAccordionSection
+      <StoreSetupAccordionSection
         glyph="/glyphs/storefront.png"
         id="information"
         isOpen={openSection === "information"}
-        onToggle={setOpenSection}
+        onToggle={(id) => setOpenSection(id as StorefrontAccordionId | "none")}
         summary={
           <>
             <span className="truncate">
@@ -2536,13 +2536,13 @@ function StorefrontTab({
           Preview and adjust your hero image on the{" "}
           <span className="font-bold text-emerald-900">Images tab</span>.
         </StorefrontNote>
-      </StorefrontAccordionSection>
+      </StoreSetupAccordionSection>
 
-      <StorefrontAccordionSection
+      <StoreSetupAccordionSection
         glyph="/glyphs/open-book.png"
         id="about"
         isOpen={openSection === "about"}
-        onToggle={setOpenSection}
+        onToggle={(id) => setOpenSection(id as StorefrontAccordionId | "none")}
         summary={
           <span className="truncate">
             {aboutCharacterCount} characters ·{" "}
@@ -2571,13 +2571,13 @@ function StorefrontTab({
             Restore default story
           </button>
         </div>
-      </StorefrontAccordionSection>
+      </StoreSetupAccordionSection>
 
-      <StorefrontAccordionSection
+      <StoreSetupAccordionSection
         glyph="/glyphs/paint-palette.png"
         id="appearance"
         isOpen={openSection === "appearance"}
-        onToggle={setOpenSection}
+        onToggle={(id) => setOpenSection(id as StorefrontAccordionId | "none")}
         summary={
           <span className="truncate">
             {selectedFontPair.label} font style · Primary color:{" "}
@@ -2588,13 +2588,13 @@ function StorefrontTab({
         title="Appearance"
       >
         <StoreAppearanceSection form={form} onUpdateField={onUpdateField} />
-      </StorefrontAccordionSection>
+      </StoreSetupAccordionSection>
 
-      <StorefrontAccordionSection
+      <StoreSetupAccordionSection
         glyph="/glyphs/checkmark.png"
         id="business"
         isOpen={openSection === "business"}
-        onToggle={setOpenSection}
+        onToggle={(id) => setOpenSection(id as StorefrontAccordionId | "none")}
         summary={
           <span className="truncate">
             NPIP number: {form.npip_number.trim() || "Not provided"} · Contact
@@ -2632,7 +2632,7 @@ function StorefrontTab({
             </StorefrontNote>
           </div>
         </div>
-      </StorefrontAccordionSection>
+      </StoreSetupAccordionSection>
     </div>
   );
 }
@@ -2644,7 +2644,11 @@ type StorefrontAccordionId =
   | "about"
   | "business";
 
-function StorefrontAccordionSection({
+type ImagesAccordionId = "logo" | "hero" | "about-photo";
+type StoreSetupAccordionId = StorefrontAccordionId | ImagesAccordionId;
+
+function StoreSetupAccordionSection({
+  badge,
   children,
   glyph,
   id,
@@ -2653,27 +2657,32 @@ function StorefrontAccordionSection({
   showStatusDot = false,
   statusDotTone = "green",
   summary,
+  thumbnailAlt = "",
+  thumbnailSrc,
   title,
 }: {
+  badge?: React.ReactNode;
   children: React.ReactNode;
   glyph: string;
-  id: StorefrontAccordionId;
+  id: StoreSetupAccordionId;
   isOpen: boolean;
-  onToggle: (id: StorefrontAccordionId | "none") => void;
+  onToggle: (id: StoreSetupAccordionId | "none") => void;
   showStatusDot?: boolean;
   statusDotTone?: "green" | "red";
   summary: React.ReactNode;
+  thumbnailAlt?: string;
+  thumbnailSrc?: string | null;
   title: string;
 }) {
-  const panelId = `storefront-${id}-panel`;
-  const buttonId = `storefront-${id}-button`;
+  const panelId = `store-setup-${id}-panel`;
+  const buttonId = `store-setup-${id}-button`;
 
   return (
     <section className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-[0_1px_2px_rgba(41,37,36,0.04)]">
       <button
         aria-controls={panelId}
         aria-expanded={isOpen}
-        className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-700 sm:px-5"
+        className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 px-4 py-3 text-left transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-700 sm:px-5"
         id={buttonId}
         onClick={() => onToggle(isOpen ? "none" : id)}
         type="button"
@@ -2696,11 +2705,24 @@ function StorefrontAccordionSection({
             <span className="truncate text-base font-semibold text-stone-950">
               {title}
             </span>
+            {badge ? <span className="shrink-0">{badge}</span> : null}
           </span>
           <span className="grid min-w-0 gap-0.5 text-sm font-medium leading-5 text-stone-600">
             {summary}
           </span>
         </span>
+        {thumbnailSrc ? (
+          <span className="relative block size-10 shrink-0 overflow-hidden rounded-md border border-stone-200 bg-stone-50 sm:size-12">
+            <Image
+              alt={thumbnailAlt}
+              className="object-cover"
+              fill
+              sizes="48px"
+              src={thumbnailSrc}
+              unoptimized
+            />
+          </span>
+        ) : null}
         <span
           aria-hidden="true"
           className="flex size-8 items-center justify-center text-stone-700"
@@ -2948,56 +2970,109 @@ function PhotosTab({
   storeName: string;
   tagline: string;
 }) {
+  const [openSection, setOpenSection] =
+    useState<ImagesAccordionId | "none">("none");
+  const heroLayout = normalizeHeroLayout(heroImage?.hero_layout);
+  const heroLayoutLabel =
+    heroLayoutOptions.find((option) => option.value === heroLayout)?.label ??
+    "Full Width Photo";
+  const heroPositionSummary = heroImage
+    ? isDefaultHeroPosition(heroImage)
+      ? "Default position"
+      : "Custom position"
+    : "Default position";
+  const heroImageSummary = heroImage ? "Image added" : "Default stock image";
+
   return (
     <div className="grid gap-3">
-      <div>
-        <h2 className="text-xl font-semibold text-stone-950">Images</h2>
-        <p className="mt-1 text-sm leading-5 text-stone-600">
-          Add or update images that represent your farm and brand. These appear
-          on your storefront.
-        </p>
-      </div>
-
       {mediaError ? (
         <StoreSetupAlert tone="error">
           {mediaError}
         </StoreSetupAlert>
       ) : null}
 
-      <LogoPhotoSection
-        isUploading={isUploading === "logo"}
-        logo={logo}
-        onRemove={() => onRemove(logo)}
-        onUpload={(files) => onUpload("logo", files)}
-      />
+      <StoreSetupAccordionSection
+        glyph="/glyphs/camera.png"
+        id="logo"
+        isOpen={openSection === "logo"}
+        onToggle={(id) => setOpenSection(id as ImagesAccordionId | "none")}
+        summary={
+          <span className="truncate">
+            {logo ? "Logo added" : "No logo uploaded"}
+          </span>
+        }
+        thumbnailAlt={logo?.alt_text || "Store logo"}
+        thumbnailSrc={logo ? toStoreAdminImageUrl(logo.public_url) : null}
+        title="Logo"
+      >
+        <LogoPhotoSection
+          isUploading={isUploading === "logo"}
+          logo={logo}
+          onRemove={() => onRemove(logo)}
+          onUpload={(files) => onUpload("logo", files)}
+        />
+      </StoreSetupAccordionSection>
 
-      <HeroPhotoSection
-        key={heroImage?.media_link_id ?? "default-hero"}
-        heroImage={heroImage}
-        isUploading={isUploading === "hero"}
-        onRemove={() => onRemove(heroImage)}
-        onSaveCrop={onSaveHeroCrop}
-        onSaveLayout={onSaveHeroLayout}
-        onSelectLibrary={onSelectHeroLibrary}
-        onUpload={(files) => onUpload("hero", files)}
-        storeName={storeName}
-        tagline={tagline}
-        heroSubheading={heroSubheading}
-      />
+      <StoreSetupAccordionSection
+        badge={<RequiredBadge />}
+        glyph="/glyphs/farmhouse.png"
+        id="hero"
+        isOpen={openSection === "hero"}
+        onToggle={(id) => setOpenSection(id as ImagesAccordionId | "none")}
+        summary={
+          <span className="truncate">
+            {heroImageSummary} · {heroLayoutLabel} · {heroPositionSummary}
+          </span>
+        }
+        thumbnailAlt={heroImage?.alt_text || "Hero image"}
+        thumbnailSrc={
+          heroImage
+            ? toStoreAdminMediaImageUrl(heroImage)
+            : null
+        }
+        title="Hero image"
+      >
+        <HeroPhotoSection
+          key={heroImage?.media_link_id ?? "default-hero"}
+          heroImage={heroImage}
+          isUploading={isUploading === "hero"}
+          onRemove={() => onRemove(heroImage)}
+          onSaveCrop={onSaveHeroCrop}
+          onSaveLayout={onSaveHeroLayout}
+          onSelectLibrary={onSelectHeroLibrary}
+          onUpload={(files) => onUpload("hero", files)}
+          storeName={storeName}
+          tagline={tagline}
+          heroSubheading={heroSubheading}
+        />
+      </StoreSetupAccordionSection>
 
-      <AboutPhotoSection
-        key={aboutPhoto?.media_link_id ?? "about-photo-empty"}
-        aboutPhoto={aboutPhoto}
-        isUploading={isUploading === "about"}
-        onRemove={() => onRemove(aboutPhoto)}
-        onSaveCrop={onSaveAboutCrop}
-        onUpload={(files) => onUpload("about", files)}
-      />
-
-      <p className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm leading-5 text-stone-700">
-        Logo and About images are optional. Your storefront always has a hero
-        image: use one from the library or upload your own.
-      </p>
+      <StoreSetupAccordionSection
+        badge={<OptionalBadge />}
+        glyph="/glyphs/person.png"
+        id="about-photo"
+        isOpen={openSection === "about-photo"}
+        onToggle={(id) => setOpenSection(id as ImagesAccordionId | "none")}
+        summary={
+          <span className="truncate">
+            {aboutPhoto ? "Photo added" : "No photo uploaded"}
+          </span>
+        }
+        thumbnailAlt={aboutPhoto?.alt_text || "About photo"}
+        thumbnailSrc={
+          aboutPhoto ? toStoreAdminMediaImageUrl(aboutPhoto) : null
+        }
+        title="About photo"
+      >
+        <AboutPhotoSection
+          key={aboutPhoto?.media_link_id ?? "about-photo-empty"}
+          aboutPhoto={aboutPhoto}
+          isUploading={isUploading === "about"}
+          onRemove={() => onRemove(aboutPhoto)}
+          onSaveCrop={onSaveAboutCrop}
+          onUpload={(files) => onUpload("about", files)}
+        />
+      </StoreSetupAccordionSection>
     </div>
   );
 }
@@ -3014,17 +3089,13 @@ function LogoPhotoSection({
   onUpload: (files: FileList | null) => void;
 }) {
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-3">
+    <section className="grid gap-3">
       <div>
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-base font-semibold text-stone-950">Store logo</h3>
-          <OptionalBadge />
-        </div>
-        <p className="mt-1 text-sm leading-5 text-stone-600">
+        <p className="text-sm leading-5 text-stone-600">
           Your logo appears in the top left of your storefront.
         </p>
       </div>
-      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="flex size-28 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-stone-50">
           {logo ? (
             <Image
@@ -3098,6 +3169,7 @@ function HeroPhotoSection({
   const [layout, setLayout] = useState<HeroLayout>(
     normalizeHeroLayout(heroImage?.hero_layout),
   );
+  const [showTips, setShowTips] = useState(false);
   const [draftCrop, setDraftCrop] = useState<PhotoCropMetadata>(
     buildHeroInitialCrop(heroImage),
   );
@@ -3174,30 +3246,32 @@ function HeroPhotoSection({
       : null;
 
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-base font-semibold text-stone-950">Hero image</h3>
-        <span className="rounded-full bg-stone-950 px-2 py-0.5 text-xs font-semibold text-white">
-          Required
-        </span>
-      </div>
-      <p className="mt-1 text-sm leading-5 text-stone-600">
-        This wide image appears at the top of your storefront behind your title
-        and intro text.
-      </p>
-      <div className="mt-3">
-        <TipsPanel
-          tone="blue"
-          title="Hero image tips"
-          tips={[
-            "Text appears on the left side of your storefront hero.",
-            "Wide landscape photos work better than close-ups.",
-            "Choose from the library or upload your own.",
-          ]}
-        />
+    <section className="grid gap-3">
+      <div className="grid gap-2">
+        <p className="text-sm leading-5 text-stone-600">
+          This wide image appears at the top of your storefront behind your title
+          and intro text.
+        </p>
+        <button
+          className="w-fit text-sm font-semibold text-emerald-800 transition hover:text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+          onClick={() => setShowTips((value) => !value)}
+          type="button"
+        >
+          {showTips ? "Hide image tips" : "Image tips"}
+        </button>
+        {showTips ? (
+          <TipsPanel
+            title="Hero image tips"
+            tips={[
+              "Text appears on the left side of your storefront hero.",
+              "Wide landscape photos work better than close-ups.",
+              "Choose from the library or upload your own.",
+            ]}
+          />
+        ) : null}
       </div>
 
-      <div className="mt-3 grid gap-3">
+      <div className="grid gap-3">
         <div className="grid gap-2">
           <div>
             <p className="text-sm font-semibold text-stone-800">Hero layout</p>
@@ -3506,6 +3580,7 @@ function AboutPhotoSection({
   const [draftCrop, setDraftCrop] = useState<PhotoCropMetadata>(
     buildAboutInitialCrop(aboutPhoto),
   );
+  const [showTips, setShowTips] = useState(false);
   const dragStartRef = useRef<{
     pointerId: number;
     startX: number;
@@ -3565,16 +3640,31 @@ function AboutPhotoSection({
   }
 
   return (
-    <section className="rounded-lg border border-stone-200 bg-white p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-base font-semibold text-stone-950">About photo</h3>
-        <OptionalBadge />
+    <section className="grid gap-3">
+      <div className="grid gap-2">
+        <p className="text-sm leading-5 text-stone-600">
+          Shown with your farm story on the About section of your storefront.
+        </p>
+        <button
+          className="w-fit text-sm font-semibold text-emerald-800 transition hover:text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+          onClick={() => setShowTips((value) => !value)}
+          type="button"
+        >
+          {showTips ? "Hide image tips" : "Image tips"}
+        </button>
+        {showTips ? (
+          <TipsPanel
+            title="About photo tips"
+            tips={[
+              "Use a medium image, not a banner.",
+              "Great for you, your family, your flock, coop, chicks, or farm details.",
+              "This appears alongside your farm story.",
+            ]}
+          />
+        ) : null}
       </div>
-      <p className="mt-1 text-sm leading-5 text-stone-600">
-        Shown with your farm story on the About section of your storefront.
-      </p>
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_15rem]">
+      <div className="grid gap-3">
         <div className="flex flex-col gap-3 sm:flex-row">
           <div
             className={aboutPhotoFrame.setupPreviewClass}
@@ -3665,16 +3755,6 @@ function AboutPhotoSection({
             </p>
           </div>
         </div>
-
-        <TipsPanel
-          tone="amber"
-          title="About photo tips"
-          tips={[
-            "Use a medium image, not a banner.",
-            "Great for you, your family, your flock, coop, chicks, or farm details.",
-            "This appears alongside your farm story.",
-          ]}
-        />
       </div>
     </section>
   );
@@ -3722,24 +3802,25 @@ function OptionalBadge() {
   );
 }
 
+function RequiredBadge() {
+  return (
+    <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-semibold text-stone-700 ring-1 ring-stone-200">
+      Required
+    </span>
+  );
+}
+
 function TipsPanel({
   tips,
   title,
-  tone,
 }: {
   tips: string[];
   title: string;
-  tone: "amber" | "blue";
 }) {
-  const toneClass =
-    tone === "blue"
-      ? "border-blue-100 bg-blue-50/70 text-blue-950"
-      : "border-amber-100 bg-amber-50/60 text-amber-950";
-
   return (
-    <aside className={`rounded-lg border p-3 ${toneClass}`}>
-      <h4 className="text-sm font-semibold">{title}</h4>
-      <ul className="mt-2 grid gap-1.5 text-sm font-medium leading-[1.2]">
+    <aside className="rounded-md border border-stone-200 bg-stone-50/70 p-3 text-stone-700">
+      <h4 className="text-sm font-semibold text-stone-950">{title}</h4>
+      <ul className="mt-2 grid gap-1.5 text-sm font-medium leading-[1.25]">
         {tips.map((tip) => (
           <li className="flex gap-2" key={tip}>
             <span aria-hidden="true" className="mt-1.5 size-1.5 shrink-0 rounded-full bg-current" />
@@ -3761,6 +3842,15 @@ function HeroFade({ layout }: { layout: HeroLayout }) {
 
 function normalizeHeroLayout(value: string | null | undefined): HeroLayout {
   return value === "right" ? "right" : "full";
+}
+
+function isDefaultHeroPosition(media: StoreMediaItem | null | undefined) {
+  if (!media?.crop_metadata) return true;
+
+  return (
+    JSON.stringify(normalizeCrop(media.crop_metadata)) ===
+    JSON.stringify(normalizeCrop(buildHeroDefaultCrop(media)))
+  );
 }
 
 function buildHeroInitialCrop(media: StoreMediaItem | null | undefined) {
