@@ -2096,84 +2096,22 @@ export function StoreAdmin() {
             ) : null}
 
             {activeTab === "pickup" ? (
-              <div className="grid gap-5">
-                <PickupIntro />
-
-                <div className="grid gap-5">
-                  <section className="grid gap-3 rounded-lg border border-stone-200 bg-white p-4">
-                    <div>
-                      <h2 className="text-lg font-semibold text-stone-950">
-                        Pickup method
-                      </h2>
-                      <p className="mt-1 text-sm leading-6 text-stone-600">
-                        Choose how buyers will handle pickup for their orders.
-                      </p>
-                    </div>
-                    <div className="grid gap-3">
-                      <PickupMethodRow
-                        copy="Buyers enter their preferred pickup time or date in checkout notes. Best for most sellers."
-                        glyph="/glyphs/chat.png"
-                        onSelect={() => updateField("pickup_method", "notes")}
-                        state={form.pickup_method === "notes" ? "current" : "neutral"}
-                        title="Buyer requests pickup in notes"
-                      />
-                      <PickupMethodRow
-                        copy="Let buyers choose from a short list of pickup choices, such as Farm pickup, Meet in town, or Text to schedule."
-                        glyph="/glyphs/clipboard.png"
-                        onSelect={() =>
-                          updateField("pickup_method", "manual_options")
-                        }
-                        state={
-                          form.pickup_method === "manual_options"
-                            ? "current"
-                            : "neutral"
-                        }
-                        title="Manual pickup dropdown"
-                      >
-                        {form.pickup_method === "manual_options" ? (
-                          <ManualPickupChoiceBuilder
-                            getVisiblePickupOptions={getVisiblePickupOptions}
-                            handlePickupOptionInputRef={
-                              handlePickupOptionInputRef
-                            }
-                            onAdd={addPickupOption}
-                            onLabelChange={(optionId, label) =>
-                              updatePickupOption(optionId, { label })
-                            }
-                            onRemove={removePickupOption}
-                            onReorder={reorderPickupOptions}
-                            pickupOptions={pickupOptions}
-                          />
-                        ) : null}
-                      </PickupMethodRow>
-                      <PickupMethodRow
-                        badge="Coming soon"
-                        copy="Useful if you usually offer the same pickup times each week."
-                        glyph="/glyphs/calendar.png"
-                        isDisabled
-                        state="planned"
-                        title="Regular pickup windows"
-                      />
-                    </div>
-                  </section>
-                </div>
-
-                <DeliveryOptionsSection
-                  deliveryEnabled={form.delivery_enabled}
-                  deliveryOptions={deliveryOptions}
-                  onChange={updateDeliveryOptions}
-                  onToggle={(enabled) =>
-                    updateField("delivery_enabled", enabled)
-                  }
-                  validationMessage={deliveryValidationMessage}
-                />
-
-                <input
-                  readOnly
-                  type="hidden"
-                  value={form.default_pickup_option_id}
-                />
-              </div>
+              <PickupDeliveryTab
+                deliveryOptions={deliveryOptions}
+                deliveryValidationMessage={deliveryValidationMessage}
+                form={form}
+                getVisiblePickupOptions={getVisiblePickupOptions}
+                handlePickupOptionInputRef={handlePickupOptionInputRef}
+                onAddPickupOption={addPickupOption}
+                onDeliveryOptionsChange={updateDeliveryOptions}
+                onPickupOptionLabelChange={(optionId, label) =>
+                  updatePickupOption(optionId, { label })
+                }
+                onRemovePickupOption={removePickupOption}
+                onReorderPickupOptions={reorderPickupOptions}
+                onUpdateField={updateField}
+                pickupOptions={pickupOptions}
+              />
             ) : null}
 
             {activeTab === "policies" ? (
@@ -2322,6 +2260,142 @@ function StickySaveBar({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PickupDeliveryTab({
+  deliveryOptions,
+  deliveryValidationMessage,
+  form,
+  getVisiblePickupOptions,
+  handlePickupOptionInputRef,
+  onAddPickupOption,
+  onDeliveryOptionsChange,
+  onPickupOptionLabelChange,
+  onRemovePickupOption,
+  onReorderPickupOptions,
+  onUpdateField,
+  pickupOptions,
+}: {
+  deliveryOptions: DeliveryOptionDraft[];
+  deliveryValidationMessage: string | null;
+  form: StoreAdminForm;
+  getVisiblePickupOptions: (
+    options: PickupOptionDraft[],
+  ) => PickupOptionDraft[];
+  handlePickupOptionInputRef: (
+    optionId: string,
+    element: HTMLInputElement | null,
+  ) => void;
+  onAddPickupOption: () => void;
+  onDeliveryOptionsChange: (options: DeliveryOptionDraft[]) => void;
+  onPickupOptionLabelChange: (optionId: string, label: string) => void;
+  onRemovePickupOption: (optionId: string) => void;
+  onReorderPickupOptions: (orderedIds: string[]) => void;
+  onUpdateField: StoreAdminFieldUpdater;
+  pickupOptions: PickupOptionDraft[];
+}) {
+  const [openSection, setOpenSection] =
+    useState<PickupDeliveryAccordionId | "none">("none");
+  const visiblePickupOptions = getVisiblePickupOptions(pickupOptions);
+  const visibleDeliveryOptions = getVisibleDeliveryOptions(deliveryOptions);
+  const activePickupMethod =
+    form.pickup_method === "manual_options"
+      ? "Manual pickup dropdown"
+      : "Buyer pickup notes";
+  const pickupSummary =
+    visiblePickupOptions.length === 0
+      ? `${activePickupMethod} · No pickup options added`
+      : `${visiblePickupOptions.length} ${pluralize(
+          visiblePickupOptions.length,
+          "pickup option",
+          "pickup options",
+        )} · ${activePickupMethod}`;
+  const deliverySummary = form.delivery_enabled
+    ? `Enabled · ${visibleDeliveryOptions.length} ${pluralize(
+        visibleDeliveryOptions.length,
+        "delivery option",
+        "delivery options",
+      )}`
+    : "Not offered";
+
+  return (
+    <div className="grid gap-3">
+      <StoreSetupAccordionSection
+        glyph="/glyphs/map-pin.png"
+        id="pickup"
+        isOpen={openSection === "pickup"}
+        onToggle={(id) =>
+          setOpenSection(id as PickupDeliveryAccordionId | "none")
+        }
+        summary={<span className="truncate">{pickupSummary}</span>}
+        title="Pickup"
+      >
+        <div className="grid gap-3">
+          <StorefrontNote>
+            Choose how buyers will handle pickup for their orders.
+          </StorefrontNote>
+          <PickupMethodRow
+            copy="Buyers enter their preferred pickup time or date in checkout notes. Best for most sellers."
+            glyph="/glyphs/chat.png"
+            onSelect={() => onUpdateField("pickup_method", "notes")}
+            state={form.pickup_method === "notes" ? "current" : "neutral"}
+            title="Buyer requests pickup in notes"
+          />
+          <PickupMethodRow
+            copy="Let buyers choose from a short list of pickup choices, such as Farm pickup, Meet in town, or Text to schedule."
+            glyph="/glyphs/clipboard.png"
+            onSelect={() => onUpdateField("pickup_method", "manual_options")}
+            state={
+              form.pickup_method === "manual_options" ? "current" : "neutral"
+            }
+            title="Manual pickup dropdown"
+          >
+            {form.pickup_method === "manual_options" ? (
+              <ManualPickupChoiceBuilder
+                getVisiblePickupOptions={getVisiblePickupOptions}
+                handlePickupOptionInputRef={handlePickupOptionInputRef}
+                onAdd={onAddPickupOption}
+                onLabelChange={onPickupOptionLabelChange}
+                onRemove={onRemovePickupOption}
+                onReorder={onReorderPickupOptions}
+                pickupOptions={pickupOptions}
+              />
+            ) : null}
+          </PickupMethodRow>
+          <PickupMethodRow
+            badge="Coming soon"
+            copy="Useful if you usually offer the same pickup times each week."
+            glyph="/glyphs/calendar.png"
+            isDisabled
+            state="planned"
+            title="Regular pickup windows"
+          />
+        </div>
+      </StoreSetupAccordionSection>
+
+      <StoreSetupAccordionSection
+        glyph="/glyphs/truck.png"
+        id="delivery"
+        isOpen={openSection === "delivery"}
+        onToggle={(id) =>
+          setOpenSection(id as PickupDeliveryAccordionId | "none")
+        }
+        summary={<span className="truncate">{deliverySummary}</span>}
+        title="Local delivery"
+      >
+        <DeliveryOptionsSection
+          deliveryEnabled={form.delivery_enabled}
+          deliveryOptions={deliveryOptions}
+          isEmbedded
+          onChange={onDeliveryOptionsChange}
+          onToggle={(enabled) => onUpdateField("delivery_enabled", enabled)}
+          validationMessage={deliveryValidationMessage}
+        />
+      </StoreSetupAccordionSection>
+
+      <input readOnly type="hidden" value={form.default_pickup_option_id} />
     </div>
   );
 }
@@ -2645,7 +2719,13 @@ type StorefrontAccordionId =
   | "business";
 
 type ImagesAccordionId = "logo" | "hero" | "about-photo";
-type StoreSetupAccordionId = StorefrontAccordionId | ImagesAccordionId;
+type PickupDeliveryAccordionId = "pickup" | "delivery";
+type PoliciesAccordionId = "pickup-policy" | "custom-policies";
+type StoreSetupAccordionId =
+  | StorefrontAccordionId
+  | ImagesAccordionId
+  | PickupDeliveryAccordionId
+  | PoliciesAccordionId;
 
 function StoreSetupAccordionSection({
   badge,
@@ -3935,6 +4015,18 @@ function previewStoreText(value: string, maxLength = heroSubheadingMaxLength) {
     : trimmed;
 }
 
+function pluralize(count: number, singular: string, plural: string) {
+  return count === 1 ? singular : plural;
+}
+
+function truncateSummary(value: string, maxLength = 96) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+
+  if (normalized.length <= maxLength) return normalized;
+
+  return `${normalized.slice(0, maxLength - 3).trim()}...`;
+}
+
 function getStorefrontContactEmail(form: StoreAdminForm) {
   return (
     form.public_email.trim() ||
@@ -3995,133 +4087,135 @@ function PoliciesTab({
   pickupPolicy: string;
 }) {
   const canAddPolicy = customPolicies.length < 4;
+  const [openSection, setOpenSection] =
+    useState<PoliciesAccordionId | "none">("none");
+  const pickupPolicySummary = pickupPolicy.trim()
+    ? truncateSummary(pickupPolicy.trim())
+    : "No policy added";
+  const customPolicySummary =
+    customPolicies.length === 0
+      ? "No custom policies added"
+      : `${customPolicies.length} ${pluralize(
+          customPolicies.length,
+          "custom policy",
+          "custom policies",
+        )}`;
 
   return (
-    <div className="grid gap-6">
-      <section className="grid gap-4">
-        <div>
-          <h2 className="text-xl font-semibold text-stone-950">Policies</h2>
-          <p className="mt-1 text-sm leading-6 text-stone-600">
-            These appear on your storefront to help buyers understand pickup
-            expectations and any other important terms.
-          </p>
-        </div>
-        <div className="rounded-lg border border-emerald-100 bg-emerald-50/25 p-4">
-          <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-stone-100 ring-1 ring-stone-200">
-              <Image
-                alt=""
-                className="object-contain"
-                height={24}
-                src="/glyphs/truck.png"
-                width={24}
-              />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-base font-semibold text-stone-950">
-                Pickup policy
-              </h3>
-              <p className="mt-1 text-sm leading-6 text-stone-600">
-                Explain pickup expectations, timing, and what buyers should
-                bring.
-              </p>
-              <div className="mt-4">
-                <TextAreaField
-                  compact
-                  helper="Examples: Pickup is at our farm in Hotchkiss, CO. Bring a clean carrier or box. Please arrive on time."
-                  label="Pickup policy"
-                  onChange={onPickupPolicyChange}
-                  rows={4}
-                  value={pickupPolicy}
-                />
-              </div>
-              <div className="mt-3 flex justify-end">
-                <button
-                  className="seller-secondary-button bg-white"
-                  onClick={onRestoreDefaultPickupPolicy}
-                  type="button"
-                >
-                  Restore default pickup policy
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-4 border-t border-stone-200 pt-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-stone-950">
-              Custom policies
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-stone-600">
-              Add up to 4 extra policy sections if your farm has specific terms
-              buyers should know.
-            </p>
-            <p className="mt-2 text-xs font-medium leading-5 text-stone-500">
-              Examples: Cancellation policy, Deposit policy, Minimum order
-              policy, Health policy, Biosecurity policy, Livestock guarantee.
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-col gap-2 sm:items-end">
-            <span className="text-sm font-semibold text-stone-600">
-              {customPolicies.length} of 4 added
-            </span>
+    <div className="grid gap-3">
+      <StoreSetupAccordionSection
+        glyph="/glyphs/clipboard.png"
+        id="pickup-policy"
+        isOpen={openSection === "pickup-policy"}
+        onToggle={(id) => setOpenSection(id as PoliciesAccordionId | "none")}
+        summary={<span className="truncate">{pickupPolicySummary}</span>}
+        title="Pickup and delivery policy"
+      >
+        <div className="grid gap-3">
+          <StorefrontNote>
+            Explain pickup expectations, timing, and what buyers should bring.
+          </StorefrontNote>
+          <TextAreaField
+            compact
+            helper="Examples: Pickup is at our farm in Hotchkiss, CO. Bring a clean carrier or box. Please arrive on time."
+            label="Pickup policy"
+            onChange={onPickupPolicyChange}
+            rows={4}
+            value={pickupPolicy}
+          />
+          <div className="flex justify-end">
             <button
-              className="seller-small-button w-full sm:w-auto"
-              disabled={!canAddPolicy}
-              onClick={onAddCustomPolicy}
+              className="seller-secondary-button bg-white"
+              onClick={onRestoreDefaultPickupPolicy}
               type="button"
             >
-              + Add custom policy
+              Restore default pickup policy
             </button>
           </div>
         </div>
+      </StoreSetupAccordionSection>
 
-        {customPolicies.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-stone-300 bg-stone-50 px-4 py-4 text-sm leading-6 text-stone-600">
-            No custom policies yet.
-          </p>
-        ) : (
-          <div className="grid overflow-hidden rounded-lg border border-stone-200 bg-white">
-            {customPolicies.map((policy) => (
-              <CustomPolicyCard
-                isDragging={draggingCustomPolicyId === policy.id}
-                key={policy.id}
-                onBeginDrag={(event) => onBeginCustomPolicyDrag(policy.id, event)}
-                onChange={(updates) => onUpdateCustomPolicy(policy.id, updates)}
-                onEndDrag={onEndCustomPolicyDrag}
-                onMoveDrag={onMoveCustomPolicyDrag}
-                onRemove={() => onRemoveCustomPolicy(policy.id)}
-                policy={policy}
-                rowRef={(element) => onRegisterCustomPolicyRow(policy.id, element)}
-              />
-            ))}
+      <StoreSetupAccordionSection
+        glyph="/glyphs/open-book.png"
+        id="custom-policies"
+        isOpen={openSection === "custom-policies"}
+        onToggle={(id) => setOpenSection(id as PoliciesAccordionId | "none")}
+        summary={<span className="truncate">{customPolicySummary}</span>}
+        title="Custom policies"
+      >
+        <div className="grid gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <StorefrontNote>
+                Add up to 4 extra policy sections if your farm has specific
+                terms buyers should know.
+              </StorefrontNote>
+              <p className="mt-2 text-xs font-medium leading-5 text-stone-500">
+                Examples: Cancellation policy, Deposit policy, Minimum order
+                policy, Health policy, Biosecurity policy, Livestock guarantee.
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+              <span className="text-sm font-semibold text-stone-600">
+                {customPolicies.length} of 4 added
+              </span>
+              <button
+                className="seller-small-button w-full sm:w-auto"
+                disabled={!canAddPolicy}
+                onClick={onAddCustomPolicy}
+                type="button"
+              >
+                + Add custom policy
+              </button>
+            </div>
           </div>
-        )}
 
-        {customPolicies.length > 0 && canAddPolicy ? (
-          <button
-            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-dashed border-stone-300 bg-white px-4 text-sm font-semibold text-emerald-900 transition hover:border-emerald-200 hover:bg-emerald-50/30"
-            onClick={onAddCustomPolicy}
-            type="button"
-          >
-            + Add another custom policy (up to 4 total)
-          </button>
-        ) : null}
+          {customPolicies.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-stone-300 bg-stone-50 px-4 py-4 text-sm leading-6 text-stone-600">
+              No custom policies yet.
+            </p>
+          ) : (
+            <div className="grid overflow-hidden rounded-lg border border-stone-200 bg-white">
+              {customPolicies.map((policy) => (
+                <CustomPolicyCard
+                  isDragging={draggingCustomPolicyId === policy.id}
+                  key={policy.id}
+                  onBeginDrag={(event) =>
+                    onBeginCustomPolicyDrag(policy.id, event)
+                  }
+                  onChange={(updates) =>
+                    onUpdateCustomPolicy(policy.id, updates)
+                  }
+                  onEndDrag={onEndCustomPolicyDrag}
+                  onMoveDrag={onMoveCustomPolicyDrag}
+                  onRemove={() => onRemoveCustomPolicy(policy.id)}
+                  policy={policy}
+                  rowRef={(element) =>
+                    onRegisterCustomPolicyRow(policy.id, element)
+                  }
+                />
+              ))}
+            </div>
+          )}
 
-        {!canAddPolicy ? (
-          <p className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-medium leading-5 text-stone-600">
-            You can add up to 4 custom policies for now.
-          </p>
-        ) : null}
-      </section>
+          {customPolicies.length > 0 && canAddPolicy ? (
+            <button
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-dashed border-stone-300 bg-white px-4 text-sm font-semibold text-emerald-900 transition hover:border-emerald-200 hover:bg-emerald-50/30"
+              onClick={onAddCustomPolicy}
+              type="button"
+            >
+              + Add another custom policy (up to 4 total)
+            </button>
+          ) : null}
 
-      <p className="rounded-lg border border-stone-200 bg-stone-50/80 px-3 py-3 text-sm leading-6 text-stone-700">
-        Clear, upfront policies help build trust and prevent
-        misunderstandings.
-      </p>
+          {!canAddPolicy ? (
+            <p className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-medium leading-5 text-stone-600">
+              You can add up to 4 custom policies for now.
+            </p>
+          ) : null}
+        </div>
+      </StoreSetupAccordionSection>
+
       {customPolicyDragPreview ? (
         <SortableRowDragPreview preview={customPolicyDragPreview} />
       ) : null}
@@ -4314,33 +4408,6 @@ function StorefrontNote({
     <p className="text-xs font-medium leading-5 text-stone-500">
       {children}
     </p>
-  );
-}
-
-function PickupIntro() {
-  return (
-    <section className="rounded-lg border border-stone-200 bg-stone-50/70 px-3 py-2.5">
-      <div className="flex items-center gap-2.5">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-stone-200">
-          <Image
-            alt=""
-            className="object-contain"
-            height={20}
-            src="/glyphs/map-pin.png"
-            width={20}
-          />
-        </span>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-stone-950">
-            How should buyers receive their orders?
-          </p>
-          <p className="text-sm leading-6 text-stone-700">
-            Set up your pickup process and optionally offer delivery to specific
-            locations or areas.
-          </p>
-        </div>
-      </div>
-    </section>
   );
 }
 

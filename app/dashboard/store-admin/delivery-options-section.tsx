@@ -15,6 +15,7 @@ export type DeliveryOptionDraft = {
 type DeliveryOptionsSectionProps = {
   deliveryEnabled: boolean;
   deliveryOptions: DeliveryOptionDraft[];
+  isEmbedded?: boolean;
   onChange: (options: DeliveryOptionDraft[]) => void;
   onToggle: (enabled: boolean) => void;
   validationMessage: string | null;
@@ -36,6 +37,7 @@ const inputClass =
 export function DeliveryOptionsSection({
   deliveryEnabled,
   deliveryOptions,
+  isEmbedded = false,
   onChange,
   onToggle,
   validationMessage,
@@ -92,13 +94,25 @@ export function DeliveryOptionsSection({
   }
 
   return (
-    <section className="grid gap-3 rounded-lg border border-stone-200 bg-white p-4">
-      <div>
-        <h2 className="text-lg font-semibold text-stone-950">Delivery</h2>
-        <p className="mt-1 text-sm leading-6 text-stone-600">
+    <section
+      className={
+        isEmbedded
+          ? "grid gap-3"
+          : "grid gap-3 rounded-lg border border-stone-200 bg-white p-4"
+      }
+    >
+      {!isEmbedded ? (
+        <div>
+          <h2 className="text-lg font-semibold text-stone-950">Delivery</h2>
+          <p className="mt-1 text-sm leading-6 text-stone-600">
+            Choose whether buyers can have their orders delivered.
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs font-medium leading-5 text-stone-500">
           Choose whether buyers can have their orders delivered.
         </p>
-      </div>
+      )}
 
       <label className="inline-flex min-h-11 items-start gap-3 rounded-md border border-stone-200 bg-stone-50/70 px-3 py-3 text-sm font-semibold text-stone-800">
         <input
