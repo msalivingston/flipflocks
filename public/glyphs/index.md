@@ -42,6 +42,8 @@ Production glyphs are exported as 128x128 PNG files with transparent backgrounds
 - `heart.png`
 - `looking-glass.png`
 - `map-pin.png`
+- `open-book.png`
+- `paint-palette.png`
 - `pencil.png`
 - `person.png`
 - `phone.png`

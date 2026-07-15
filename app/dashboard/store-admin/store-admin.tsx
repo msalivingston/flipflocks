@@ -36,6 +36,7 @@ import {
 } from "@/app/store/[slug]/storefront-ui";
 import {
   defaultStorefrontTheme,
+  getStorefrontFontPair,
   isValidStorefrontHexColor,
   normalizeStorefrontFontPair,
   normalizeStorefrontHexColor,
@@ -405,6 +406,17 @@ export function StoreAdmin() {
   const [pendingNavigationUrl, setPendingNavigationUrl] = useState<
     string | null
   >(null);
+
+  useEffect(() => {
+    if (saveMessage !== "Changes discarded.") return;
+
+    const timeoutId = window.setTimeout(() => {
+      setSaveMessage(null);
+      setSaveState("idle");
+    }, 3500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [saveMessage]);
 
   useEffect(() => {
     let isMounted = true;
@@ -2353,11 +2365,29 @@ function StorefrontTab({
   const selectedStorefrontVisible = Boolean(form.storefront_enabled);
   const hasPendingVisibilityChange =
     isStoreLive && selectedStorefrontVisible !== isVisibleToCustomers;
+  const [openSection, setOpenSection] =
+    useState<StorefrontAccordionId | "none">("none");
+  const [showHeroExamples, setShowHeroExamples] = useState(false);
+  const selectedFontPair = getStorefrontFontPair(form.storefront_font_pair);
+  const aboutCharacterCount = form.about_text.length;
+  const hasAboutText = form.about_text.trim().length > 0;
+  const isStorefrontLiveForCustomers = isStoreLive && selectedStorefrontVisible;
+  const statusSummary = isStoreLive
+    ? selectedStorefrontVisible
+      ? "Storefront is live · Customers can view your store and place orders."
+      : "Storefront is hidden · Customers cannot view your store or place orders."
+    : "Storefront is not live · Complete launch requirements before customers can view it.";
 
   return (
     <div className="grid gap-3">
-      <StorefrontSection
-        description="Control whether your storefront is visible to customers."
+      <StorefrontAccordionSection
+        glyph="/glyphs/checkmark.png"
+        id="status"
+        isOpen={openSection === "status"}
+        onToggle={setOpenSection}
+        showStatusDot
+        statusDotTone={isStorefrontLiveForCustomers ? "green" : "red"}
+        summary={<span className="truncate">{statusSummary}</span>}
         title="Store status"
       >
         {isStoreLive ? (
@@ -2404,11 +2434,27 @@ function StorefrontTab({
             warningItems={warningItems}
           />
         )}
-      </StorefrontSection>
+      </StorefrontAccordionSection>
 
-      <StorefrontSection
-        description="Basic public information about your farm."
-        title="Store basics"
+      <StorefrontAccordionSection
+        glyph="/glyphs/storefront.png"
+        id="information"
+        isOpen={openSection === "information"}
+        onToggle={setOpenSection}
+        summary={
+          <>
+            <span className="truncate">
+              {form.store_name || "Store name not set"} ·{" "}
+              {[form.public_city, form.public_state].filter(Boolean).join(", ") ||
+                "Location not set"}
+            </span>
+            <span className="truncate">
+              Headline: {form.store_tagline || "Not set"} · Subheading:{" "}
+              {form.hero_subheading || "Not set"}
+            </span>
+          </>
+        }
+        title="Store information"
       >
         <div className="grid gap-3 md:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)_minmax(0,1fr)]">
           <TextField
@@ -2430,15 +2476,10 @@ function StorefrontTab({
             value={form.public_state}
           />
         </div>
-        <StorefrontNote tone="warm">
+        <StorefrontNote>
           Your store URL is created automatically from your store name.
         </StorefrontNote>
-      </StorefrontSection>
 
-      <StorefrontSection
-        description="These short lines appear over your main storefront photo."
-        title="Hero text"
-      >
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
             <TextField
@@ -2450,13 +2491,6 @@ function StorefrontTab({
               required
               showCounter
               value={form.store_tagline}
-            />
-            <FieldExamples
-              examples={[
-                "Started pullets in western Colorado",
-                "Local chicks and hatching eggs",
-                "Pasture-raised poultry",
-              ]}
             />
           </div>
           <div className="grid gap-2">
@@ -2470,25 +2504,54 @@ function StorefrontTab({
               showCounter
               value={form.hero_subheading}
             />
-            <FieldExamples
-              examples={[
-                "Local pickup in Hotchkiss with new birds added seasonally.",
-                "Healthy chicks, pullets, and hatching eggs from our family farm.",
-              ]}
-            />
           </div>
         </div>
-        <StorefrontNote tone="info">
+        <div className="grid gap-2">
+          <button
+            className="w-fit text-sm font-semibold text-emerald-800 transition hover:text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+            onClick={() => setShowHeroExamples((value) => !value)}
+            type="button"
+          >
+            {showHeroExamples ? "Hide examples" : "View examples"}
+          </button>
+          {showHeroExamples ? (
+            <div className="grid gap-3 rounded-md border border-stone-200 bg-stone-50/70 p-3 md:grid-cols-2">
+              <FieldExamples
+                examples={[
+                  "Started pullets in western Colorado",
+                  "Local chicks and hatching eggs",
+                  "Pasture-raised poultry",
+                ]}
+              />
+              <FieldExamples
+                examples={[
+                  "Local pickup in Hotchkiss with new birds added seasonally.",
+                  "Healthy chicks, pullets, and hatching eggs from our family farm.",
+                ]}
+              />
+            </div>
+          ) : null}
+        </div>
+        <StorefrontNote>
           Preview and adjust your hero image on the{" "}
           <span className="font-bold text-emerald-900">Images tab</span>.
         </StorefrontNote>
-      </StorefrontSection>
+      </StorefrontAccordionSection>
 
-      <StoreAppearanceSection form={form} onUpdateField={onUpdateField} />
-
-      <StorefrontSection
-        description="This appears on your About page next to your About photo."
-        title="Farm story (About page)"
+      <StorefrontAccordionSection
+        glyph="/glyphs/open-book.png"
+        id="about"
+        isOpen={openSection === "about"}
+        onToggle={setOpenSection}
+        summary={
+          <span className="truncate">
+            {aboutCharacterCount} characters ·{" "}
+            {hasAboutText
+              ? "About page content added"
+              : "About page content empty"}
+          </span>
+        }
+        title="About your farm"
       >
         <TextAreaField
           label="Farm story"
@@ -2508,50 +2571,166 @@ function StorefrontTab({
             Restore default story
           </button>
         </div>
-      </StorefrontSection>
+      </StorefrontAccordionSection>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <StorefrontSection
-          description="Share certifications or testing information."
-          title="Certifications"
-        >
-          <TextField
-            label="NPIP number"
-            onChange={(value) => onUpdateField("npip_number", value)}
-            optional
-            value={form.npip_number}
-          />
-          <ToggleField
-            checked={form.show_npip}
-            label="Show NPIP number on my storefront"
-            onChange={(value) => onUpdateField("show_npip", value)}
-          />
-          <StorefrontNote tone="info">
-            NPIP is optional. Add your number if you participate in the NPIP
-            program.
-          </StorefrontNote>
-        </StorefrontSection>
+      <StorefrontAccordionSection
+        glyph="/glyphs/paint-palette.png"
+        id="appearance"
+        isOpen={openSection === "appearance"}
+        onToggle={setOpenSection}
+        summary={
+          <span className="truncate">
+            {selectedFontPair.label} font style · Primary color:{" "}
+            {form.storefront_heading_color.toUpperCase()} · Top menu color:{" "}
+            {form.storefront_top_menu_color.toUpperCase()}
+          </span>
+        }
+        title="Appearance"
+      >
+        <StoreAppearanceSection form={form} onUpdateField={onUpdateField} />
+      </StorefrontAccordionSection>
 
-        <StorefrontSection
-          description="This is the email buyers can use to contact you and where order notifications are sent."
-          title="Contact"
-        >
-          <ReadOnlyField label="Contact email" value={contactEmail} />
-          <StorefrontNote tone="info">
-            This email is managed from your Account page.
-            <br />
-            <Link className="font-bold text-emerald-900" href="/dashboard/account">
-              Go to Account settings
-            </Link>
-          </StorefrontNote>
-        </StorefrontSection>
-      </div>
-
-      <StorefrontNote tone="warm">
-        Tip: Clear, friendly information helps buyers feel confident purchasing
-        from your farm.
-      </StorefrontNote>
+      <StorefrontAccordionSection
+        glyph="/glyphs/checkmark.png"
+        id="business"
+        isOpen={openSection === "business"}
+        onToggle={setOpenSection}
+        summary={
+          <span className="truncate">
+            NPIP number: {form.npip_number.trim() || "Not provided"} · Contact
+            email: {contactEmail}
+          </span>
+        }
+        title="Business details"
+      >
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-3 content-start">
+            <TextField
+              label="NPIP number"
+              onChange={(value) => onUpdateField("npip_number", value)}
+              optional
+              value={form.npip_number}
+            />
+            <ToggleField
+              checked={form.show_npip}
+              label="Show NPIP number on my storefront"
+              onChange={(value) => onUpdateField("show_npip", value)}
+            />
+            <StorefrontNote>
+              NPIP is optional. Add your number if you participate in the NPIP
+              program.
+            </StorefrontNote>
+          </div>
+          <div className="grid gap-3 content-start">
+            <ReadOnlyField label="Contact email" value={contactEmail} />
+            <StorefrontNote>
+              This email is managed from your Account page.
+              <br />
+              <Link className="font-bold text-emerald-900" href="/dashboard/account">
+                Go to Account settings
+              </Link>
+            </StorefrontNote>
+          </div>
+        </div>
+      </StorefrontAccordionSection>
     </div>
+  );
+}
+
+type StorefrontAccordionId =
+  | "status"
+  | "information"
+  | "appearance"
+  | "about"
+  | "business";
+
+function StorefrontAccordionSection({
+  children,
+  glyph,
+  id,
+  isOpen,
+  onToggle,
+  showStatusDot = false,
+  statusDotTone = "green",
+  summary,
+  title,
+}: {
+  children: React.ReactNode;
+  glyph: string;
+  id: StorefrontAccordionId;
+  isOpen: boolean;
+  onToggle: (id: StorefrontAccordionId | "none") => void;
+  showStatusDot?: boolean;
+  statusDotTone?: "green" | "red";
+  summary: React.ReactNode;
+  title: string;
+}) {
+  const panelId = `storefront-${id}-panel`;
+  const buttonId = `storefront-${id}-button`;
+
+  return (
+    <section className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-[0_1px_2px_rgba(41,37,36,0.04)]">
+      <button
+        aria-controls={panelId}
+        aria-expanded={isOpen}
+        className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-700 sm:px-5"
+        id={buttonId}
+        onClick={() => onToggle(isOpen ? "none" : id)}
+        type="button"
+      >
+        <span
+          aria-hidden="true"
+          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-50"
+        >
+          <Image alt="" className="object-contain" height={22} src={glyph} width={22} />
+        </span>
+        <span className="grid min-w-0 gap-1">
+          <span className="flex min-w-0 items-center gap-3">
+            {showStatusDot ? (
+              <span
+                className={`size-3 shrink-0 rounded-full ${
+                  statusDotTone === "green" ? "bg-emerald-500" : "bg-red-500"
+                }`}
+              />
+            ) : null}
+            <span className="truncate text-base font-semibold text-stone-950">
+              {title}
+            </span>
+          </span>
+          <span className="grid min-w-0 gap-0.5 text-sm font-medium leading-5 text-stone-600">
+            {summary}
+          </span>
+        </span>
+        <span
+          aria-hidden="true"
+          className="flex size-8 items-center justify-center text-stone-700"
+        >
+          <svg
+            className={`size-5 transition-transform ${isOpen ? "rotate-180" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M6 9l6 6 6-6"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+            />
+          </svg>
+        </span>
+      </button>
+      {isOpen ? (
+        <div
+          aria-labelledby={buttonId}
+          className="grid gap-4 border-t border-stone-200 px-4 py-4 sm:px-5"
+          id={panelId}
+          role="region"
+        >
+          {children}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -2576,107 +2755,100 @@ function StoreAppearanceSection({
   }
 
   return (
-    <StorefrontSection
-      description="Choose the fonts and colors used across your public storefront."
-      title="Store appearance"
-    >
-      <div className={cx(storefrontFontVariablesClass, "grid gap-5")}>
-        <section className="grid gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-stone-950">Font style</h3>
-          </div>
-          <div className="grid gap-2.5 md:grid-cols-2">
-            {storefrontFontPairs.map((pair) => {
-              const isSelected = pair.id === form.storefront_font_pair;
+    <div className={cx(storefrontFontVariablesClass, "grid gap-5")}>
+      <section className="grid gap-3">
+        <h3 className="text-sm font-semibold text-stone-950">Font style</h3>
+        <div className="grid gap-2.5 md:grid-cols-2">
+          {storefrontFontPairs.map((pair) => {
+            const isSelected = pair.id === form.storefront_font_pair;
 
-              return (
-                <button
-                  aria-pressed={isSelected}
-                  className={`grid min-h-36 gap-2.5 rounded-lg border p-3 text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 ${
-                    isSelected
-                      ? "border-emerald-700 bg-emerald-50 ring-1 ring-emerald-700"
-                      : "border-stone-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/40"
-                  }`}
-                  key={pair.id}
-                  onClick={() => onUpdateField("storefront_font_pair", pair.id)}
-                  type="button"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold text-stone-950">
-                        {pair.label}
-                      </p>
-                      <p className="mt-0.5 text-[0.7rem] font-medium leading-4 text-stone-500">
-                        {pair.headingFontLabel} / {pair.bodyFontLabel}
-                      </p>
-                    </div>
-                    {isSelected ? (
-                      <span className="rounded-full bg-emerald-700 px-2 py-0.5 text-[0.68rem] font-bold text-white">
-                        Selected
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="grid gap-1.5">
-                    <p
-                      className="text-[1.35rem] font-normal leading-[1.08] text-stone-950"
-                      style={{
-                        fontFamily: pair.headingFontVariable,
-                      }}
-                    >
-                      {headlinePreview}
+            return (
+              <button
+                aria-pressed={isSelected}
+                className={`grid min-h-32 gap-2.5 rounded-md border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 ${
+                  isSelected
+                    ? "border-emerald-700 bg-emerald-50/70 ring-1 ring-emerald-700"
+                    : "border-stone-200 bg-white hover:border-emerald-300 hover:bg-stone-50"
+                }`}
+                key={pair.id}
+                onClick={() => onUpdateField("storefront_font_pair", pair.id)}
+                type="button"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-stone-950">
+                      {pair.label}
                     </p>
-                    <p
-                      className="text-sm leading-5 text-stone-700"
-                      style={{ fontFamily: pair.bodyFontVariable }}
-                    >
-                      {subheadingPreview}
+                    <p className="mt-0.5 truncate text-[0.7rem] font-medium leading-4 text-stone-500">
+                      {pair.headingFontLabel} / {pair.bodyFontLabel}
                     </p>
                   </div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="grid gap-3">
-          <div className="grid gap-3 md:grid-cols-3">
-            <ColorSettingField
-              key={`heading-${form.storefront_heading_color}`}
-              helper="Headings, buttons, links, and glyphs."
-              label="Primary color"
-              onChange={(value) =>
-                onUpdateField("storefront_heading_color", value)
-              }
-              value={form.storefront_heading_color}
-            />
-            <ColorSettingField
-              key={`text-${form.storefront_text_color}`}
-              label="Text color"
-              onChange={(value) => onUpdateField("storefront_text_color", value)}
-              value={form.storefront_text_color}
-            />
-            <ColorSettingField
-              key={`top-menu-${form.storefront_top_menu_color}`}
-              label="Top menu color"
-              onChange={(value) =>
-                onUpdateField("storefront_top_menu_color", value)
-              }
-              value={form.storefront_top_menu_color}
-            />
-          </div>
-        </section>
-
-        <div className="flex justify-end">
-          <button
-            className="seller-secondary-button min-w-36 rounded-md bg-white"
-            onClick={resetToDefault}
-            type="button"
-          >
-            Reset to default
-          </button>
+                  {isSelected ? (
+                    <span className="rounded-full bg-emerald-700 px-2 py-0.5 text-[0.68rem] font-bold text-white">
+                      Selected
+                    </span>
+                  ) : null}
+                </div>
+                <div className="grid gap-1.5">
+                  <p
+                    className="line-clamp-2 text-[1.25rem] font-normal leading-[1.12] text-stone-950"
+                    style={{
+                      fontFamily: pair.headingFontVariable,
+                    }}
+                  >
+                    {headlinePreview}
+                  </p>
+                  <p
+                    className="line-clamp-2 text-sm leading-5 text-stone-700"
+                    style={{ fontFamily: pair.bodyFontVariable }}
+                  >
+                    {subheadingPreview}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
         </div>
+      </section>
+
+      <section className="grid gap-3">
+        <div className="grid gap-3 lg:grid-cols-3">
+          <ColorSettingField
+            key={`heading-${form.storefront_heading_color}`}
+            helper="Headings, buttons, links, and glyphs."
+            label="Primary color"
+            onChange={(value) =>
+              onUpdateField("storefront_heading_color", value)
+            }
+            value={form.storefront_heading_color}
+          />
+          <ColorSettingField
+            key={`text-${form.storefront_text_color}`}
+            label="Text color"
+            onChange={(value) => onUpdateField("storefront_text_color", value)}
+            value={form.storefront_text_color}
+          />
+          <ColorSettingField
+            key={`top-menu-${form.storefront_top_menu_color}`}
+            label="Top menu color"
+            onChange={(value) =>
+              onUpdateField("storefront_top_menu_color", value)
+            }
+            value={form.storefront_top_menu_color}
+          />
+        </div>
+      </section>
+
+      <div className="flex justify-end">
+        <button
+          className="seller-secondary-button min-w-36 rounded-md bg-white"
+          onClick={resetToDefault}
+          type="button"
+        >
+          Reset to default
+        </button>
       </div>
-    </StorefrontSection>
+    </div>
   );
 }
 
@@ -3981,28 +4153,6 @@ function SettingsSection({
   );
 }
 
-function StorefrontSection({
-  children,
-  description,
-  title,
-}: {
-  children: React.ReactNode;
-  description: string;
-  title: string;
-}) {
-  return (
-    <section className="grid gap-3 rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
-      <div>
-        <h2 className="text-lg font-semibold text-stone-950">{title}</h2>
-        <p className="mt-0.5 text-sm leading-5 text-stone-600">
-          {description}
-        </p>
-      </div>
-      <div className="grid gap-3">{children}</div>
-    </section>
-  );
-}
-
 function StorefrontStatusPanel({
   hasPendingVisibilityChange,
   isVisibleToCustomers,
@@ -4025,15 +4175,11 @@ function StorefrontStatusPanel({
 
   return (
     <div
-      className={`flex min-h-20 items-center gap-3 rounded-md border px-4 py-3 ${
-        isVisibleToCustomers
-          ? "border-emerald-100 bg-emerald-50"
-          : "border-amber-100 bg-amber-50"
-      }`}
+      className="flex min-h-14 items-center gap-3 rounded-md border border-stone-200 bg-stone-50/60 px-3 py-2"
     >
       <span
         className={`flex size-8 shrink-0 items-center justify-center rounded-full ${
-          isVisibleToCustomers ? "bg-emerald-700" : "bg-amber-600"
+          isVisibleToCustomers ? "bg-emerald-700" : "bg-red-600"
         }`}
       >
         <Image
@@ -4045,10 +4191,10 @@ function StorefrontStatusPanel({
         />
       </span>
       <div>
-        <p className="text-base font-semibold text-stone-950">
+        <p className="text-sm font-semibold text-stone-950">
           {title}
         </p>
-        <p className="mt-0.5 text-sm leading-5 text-stone-700">
+        <p className="mt-0.5 text-xs font-medium leading-4 text-stone-600">
           {description}
         </p>
       </div>
@@ -4071,22 +4217,11 @@ function FieldExamples({ examples }: { examples: string[] }) {
 
 function StorefrontNote({
   children,
-  tone = "neutral",
 }: {
   children: React.ReactNode;
-  tone?: "neutral" | "info" | "warm";
 }) {
-  const toneClass =
-    tone === "info"
-      ? "border-blue-100 bg-blue-50 text-stone-700"
-      : tone === "warm"
-        ? "border-amber-100 bg-amber-50/60 text-stone-700"
-        : "border-stone-200 bg-stone-50 text-stone-600";
-
   return (
-    <p
-      className={`rounded-md border px-3 py-1.5 text-xs font-medium leading-4 ${toneClass}`}
-    >
+    <p className="text-xs font-medium leading-5 text-stone-500">
       {children}
     </p>
   );
