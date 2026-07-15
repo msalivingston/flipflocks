@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../_components/seller-context";
 import {
@@ -673,14 +674,18 @@ function OrderRow({
                 ? `Hide items in order ${order.order_number}`
                 : `Show items in order ${order.order_number}`
             }
-            className="inline-flex min-w-0 items-center gap-1.5 text-left text-emerald-800 underline-offset-4 transition hover:text-emerald-900 hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+            className="inline-flex min-h-7 min-w-0 items-center gap-1.5 rounded-sm text-left text-emerald-800 underline-offset-4 transition hover:text-emerald-900 hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
             type="button"
             onClick={onToggleExpanded}
           >
             <span className="truncate">{itemSummary}</span>
-            <span aria-hidden="true" className="text-xs leading-none">
-              {isExpanded ? "\u25B4" : "\u25BE"}
-            </span>
+            <ChevronDown
+              aria-hidden="true"
+              className={`size-3.5 shrink-0 transition-transform ${
+                isExpanded ? "rotate-180" : ""
+              }`}
+              strokeWidth={2.25}
+            />
           </button>
         </div>
 
@@ -697,14 +702,18 @@ function OrderRow({
                 ? `Hide contact details for ${customerName}`
                 : `Show contact details for ${customerName}`
             }
-            className="inline-flex max-w-full items-center gap-1.5 text-left text-sm text-stone-950 transition hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+            className="inline-flex min-h-7 max-w-full items-center gap-1.5 rounded-sm text-left text-sm text-stone-950 transition hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
             type="button"
             onClick={onToggleBuyer}
           >
             <span className="truncate">{customerName}</span>
-            <span aria-hidden="true" className="text-xs leading-none">
-              {isBuyerExpanded ? "\u25B4" : "\u25BE"}
-            </span>
+            <ChevronDown
+              aria-hidden="true"
+              className={`size-3.5 shrink-0 transition-transform ${
+                isBuyerExpanded ? "rotate-180" : ""
+              }`}
+              strokeWidth={2.25}
+            />
           </button>
           {isBuyerExpanded ? (
             <div
@@ -740,13 +749,10 @@ function OrderRow({
         </p>
 
         <Link
-          className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1 rounded-md border border-stone-300 bg-white px-2.5 text-sm text-emerald-800 transition hover:border-emerald-700 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
+          className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-md border border-emerald-800 bg-emerald-800 px-3 text-sm font-semibold text-white transition hover:border-emerald-900 hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
           href={`/dashboard/orders/${order.order_id}`}
         >
           View
-          <span aria-hidden="true" className="text-lg leading-none">
-            &rarr;
-          </span>
         </Link>
       </div>
 
