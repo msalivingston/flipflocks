@@ -12,7 +12,9 @@ import {
   summarizeStorefrontCart,
 } from "../_components/storefront-cart-client";
 import {
+  loadStorefrontDeliveryOptions,
   loadStorefrontPickupOptions,
+  type StorefrontDeliveryOption,
   type StorefrontHome,
   type StorefrontPickupOption,
 } from "../storefront-data";
@@ -41,7 +43,11 @@ type BuyerForm = {
   buyerNotes: string;
   pickupNote: string;
   pickupOptionId: string;
+  fulfillmentMethod: FulfillmentMethod;
+  deliveryOptionId: string;
 };
+
+type FulfillmentMethod = "pickup" | "delivery";
 
 type CheckoutSummary = {
   is_checkout_available: boolean;
@@ -96,6 +102,8 @@ const initialForm: BuyerForm = {
   buyerNotes: "",
   pickupNote: "",
   pickupOptionId: "",
+  fulfillmentMethod: "pickup",
+  deliveryOptionId: "",
 };
 
 const emptyCartItems: StorefrontCart["items"] = [];
@@ -112,6 +120,9 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
   const [pickupOptionsError, setPickupOptionsError] = useState<string | null>(
     null,
   );
+  const [deliveryOptions, setDeliveryOptions] = useState<
+    StorefrontDeliveryOption[]
+  >([]);
   const [isChecking, setIsChecking] = useState(false);
   const [isLoadingPickupOptions, setIsLoadingPickupOptions] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -162,6 +173,53 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
     };
   }, [store.store_slug, usesManualPickupOptions]);
 
+  useEffect(() => {
+    let isActive = true;
+
+    loadStorefrontDeliveryOptions(store.store_slug).then((result) => {
+      if (!isActive) return;
+
+      if (result.error) {
+        setDeliveryOptions([]);
+        setForm((current) =>
+          current.fulfillmentMethod === "delivery"
+            ? {
+                ...current,
+                deliveryOptionId: "",
+                fulfillmentMethod: "pickup",
+              }
+            : { ...current, deliveryOptionId: "" },
+        );
+        return;
+      }
+
+      setDeliveryOptions(result.data);
+      setForm((current) => {
+        if (result.data.length === 0 && current.fulfillmentMethod === "delivery") {
+          return {
+            ...current,
+            deliveryOptionId: "",
+            fulfillmentMethod: "pickup",
+          };
+        }
+
+        const deliveryOptionStillExists = result.data.some(
+          (option) => option.delivery_option_id === current.deliveryOptionId,
+        );
+
+        if (current.deliveryOptionId && !deliveryOptionStillExists) {
+          return { ...current, deliveryOptionId: "" };
+        }
+
+        return current;
+      });
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [store.store_slug]);
+
   const cartItems = cart?.items ?? emptyCartItems;
   const cartSummary = useMemo(
     () => summarizeStorefrontCart(cartItems),
@@ -172,7 +230,16 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
     summary?.is_checkout_available === true
       ? toNumber(summary.subtotal_amount)
       : null;
-  const estimatedTotal = validatedSubtotal ?? cartSummary.subtotal;
+  const itemSubtotal = validatedSubtotal ?? cartSummary.subtotal;
+  const deliveryAvailable = deliveryOptions.length > 0;
+  const selectedDeliveryOption =
+    form.fulfillmentMethod === "delivery"
+      ? deliveryOptions.find(
+          (option) => option.delivery_option_id === form.deliveryOptionId,
+        ) ?? null
+      : null;
+  const selectedDeliveryFee = selectedDeliveryOption?.price_amount ?? 0;
+  const estimatedTotal = itemSubtotal + selectedDeliveryFee;
 
   useEffect(() => {
     if (cart === null || checkoutItems.length === 0) {
@@ -229,6 +296,27 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
     }));
   }
 
+  function chooseFulfillmentMethod(method: FulfillmentMethod) {
+    setErrorMessage(null);
+    setForm((current) => {
+      if (method === "pickup") {
+        return {
+          ...current,
+          deliveryOptionId: "",
+          fulfillmentMethod: "pickup",
+        };
+      }
+
+      return {
+        ...current,
+        deliveryOptionId: "",
+        fulfillmentMethod: "delivery",
+        pickupNote: "",
+        pickupOptionId: "",
+      };
+    });
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage(null);
@@ -243,8 +331,17 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
       return;
     }
 
-    if (usesManualPickupOptions && !form.pickupOptionId) {
+    if (
+      form.fulfillmentMethod === "pickup" &&
+      usesManualPickupOptions &&
+      !form.pickupOptionId
+    ) {
       setErrorMessage("Please choose a pickup option.");
+      return;
+    }
+
+    if (form.fulfillmentMethod === "delivery" && !form.deliveryOptionId) {
+      setErrorMessage("Please choose a delivery option.");
       return;
     }
 
@@ -264,8 +361,18 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
       delivery_postal_code: form.postalCode.trim(),
       delivery_country: "US",
       buyer_notes: form.buyerNotes.trim() || null,
-      pickup_note: form.pickupNote.trim() || null,
-      pickup_option_id: usesManualPickupOptions ? form.pickupOptionId : null,
+      fulfillment_method: form.fulfillmentMethod,
+      pickup_note:
+        form.fulfillmentMethod === "pickup"
+          ? form.pickupNote.trim() || null
+          : null,
+      pickup_option_id:
+        form.fulfillmentMethod === "pickup" && usesManualPickupOptions
+          ? form.pickupOptionId
+          : null,
+      ...(form.fulfillmentMethod === "delivery"
+        ? { delivery_option_id: form.deliveryOptionId }
+        : {}),
       items: checkoutItems,
     };
 
@@ -397,10 +504,35 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                 value={form.buyerPhone}
               />
 
+              {deliveryAvailable ? (
+                <section className="border-t border-[#eee5d6] pt-5">
+                  <h2 className="text-xl font-semibold text-stone-950">
+                    How would you like to receive your order?
+                  </h2>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <FulfillmentChoice
+                      checked={form.fulfillmentMethod === "pickup"}
+                      description="Use this seller's pickup process."
+                      label="Pickup"
+                      onChange={() => chooseFulfillmentMethod("pickup")}
+                    />
+                    <FulfillmentChoice
+                      checked={form.fulfillmentMethod === "delivery"}
+                      description="Choose one of this seller's delivery options."
+                      label="Delivery"
+                      onChange={() => chooseFulfillmentMethod("delivery")}
+                    />
+                  </div>
+                </section>
+              ) : null}
+
               <h2 className="border-t border-[#eee5d6] pt-5 text-xl font-semibold text-stone-950">
-                Pickup details
+                {form.fulfillmentMethod === "delivery"
+                  ? "Delivery details"
+                  : "Pickup details"}
               </h2>
-              {usesManualPickupOptions ? (
+              {form.fulfillmentMethod === "pickup" &&
+              usesManualPickupOptions ? (
                 <label className="grid gap-2 text-sm font-semibold text-stone-800">
                   Pickup choice
                   <select
@@ -431,7 +563,33 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                   </span>
                 </label>
               ) : null}
-              {pickupOptionsError ? (
+              {form.fulfillmentMethod === "delivery" ? (
+                <label className="grid gap-2 text-sm font-semibold text-stone-800">
+                  Choose a delivery option
+                  <select
+                    className="min-h-11 rounded-md border border-[#ded7c8] bg-white px-3 text-sm text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                    onChange={(event) =>
+                      updateField("deliveryOptionId", event.target.value)
+                    }
+                    required
+                    value={form.deliveryOptionId}
+                  >
+                    <option value="">Choose a delivery option</option>
+                    {deliveryOptions.map((option) => (
+                      <option
+                        key={option.delivery_option_id}
+                        value={option.delivery_option_id}
+                      >
+                        {formatDeliveryOptionLabel(option)}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-xs font-medium leading-5 text-stone-500">
+                    We will be in touch to coordinate your delivery.
+                  </span>
+                </label>
+              ) : null}
+              {form.fulfillmentMethod === "pickup" && pickupOptionsError ? (
                 <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900">
                   Pickup choices could not load. Please refresh and try again.
                 </p>
@@ -478,12 +636,14 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                 onChange={(value) => updateField("buyerNotes", value)}
                 value={form.buyerNotes}
               />
-              <TextArea
-                label="Pickup notes"
-                name="pickupNote"
-                onChange={(value) => updateField("pickupNote", value)}
-                value={form.pickupNote}
-              />
+              {form.fulfillmentMethod === "pickup" ? (
+                <TextArea
+                  label="Pickup notes"
+                  name="pickupNote"
+                  onChange={(value) => updateField("pickupNote", value)}
+                  value={form.pickupNote}
+                />
+              ) : null}
 
               {errorMessage ? (
                 <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-800">
@@ -499,7 +659,11 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                   isLoadingPickupOptions ||
                   checkoutItems.length === 0 ||
                   summary?.is_checkout_available === false ||
-                  (usesManualPickupOptions && !form.pickupOptionId)
+                  (form.fulfillmentMethod === "pickup" &&
+                    usesManualPickupOptions &&
+                    !form.pickupOptionId) ||
+                  (form.fulfillmentMethod === "delivery" &&
+                    !form.deliveryOptionId)
                 }
                 type="submit"
               >
@@ -544,6 +708,12 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                   label="Items"
                   value={String(summary?.total_quantity ?? cartSummary.totalQuantity)}
                 />
+                {selectedDeliveryOption ? (
+                  <SummaryRow
+                    label={`Delivery — ${selectedDeliveryOption.name}`}
+                    value={formatDeliveryPrice(selectedDeliveryOption.price_amount)}
+                  />
+                ) : null}
                 <SummaryRow
                   label="Estimated total"
                   value={formatCurrency(estimatedTotal)}
@@ -593,6 +763,42 @@ function CheckoutPanel({ children }: { children: React.ReactNode }) {
     <StorefrontCard>
       {children}
     </StorefrontCard>
+  );
+}
+
+function FulfillmentChoice({
+  checked,
+  description,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  description: string;
+  label: string;
+  onChange: () => void;
+}) {
+  return (
+    <label
+      className={`grid cursor-pointer gap-2 rounded-lg border p-3 text-sm transition ${
+        checked
+          ? "border-emerald-700 bg-emerald-50/50 text-emerald-950"
+          : "border-[#ded7c8] bg-white text-stone-700 hover:border-emerald-300"
+      }`}
+    >
+      <span className="flex items-center gap-2 font-semibold">
+        <input
+          checked={checked}
+          className="h-4 w-4 accent-emerald-800"
+          name="fulfillmentMethod"
+          onChange={onChange}
+          type="radio"
+        />
+        {label}
+      </span>
+      <span className="text-xs font-medium leading-5 text-stone-600">
+        {description}
+      </span>
+    </label>
   );
 }
 
@@ -659,6 +865,14 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
       <dd className="font-semibold text-stone-950">{value}</dd>
     </div>
   );
+}
+
+function formatDeliveryOptionLabel(option: StorefrontDeliveryOption) {
+  return `${option.name} — ${formatDeliveryPrice(option.price_amount)}`;
+}
+
+function formatDeliveryPrice(price: number) {
+  return price === 0 ? "Free" : formatCurrency(price);
 }
 
 function toCheckoutItems(items: StorefrontCartItem[]) {
@@ -741,6 +955,15 @@ async function readFunctionError(error: unknown) {
 }
 
 function toBuyerOrderError(message: string | undefined) {
+  if (
+    message === "Store does not offer delivery." ||
+    message === "Delivery option is not available for this store." ||
+    message === "Delivery option is required for delivery orders." ||
+    message === "delivery_option_id must be a valid ID."
+  ) {
+    return "The selected delivery option is no longer available. Please choose another option.";
+  }
+
   if (
     message === "Insufficient inventory quantity available." ||
     message === "One or more checkout items are unavailable." ||

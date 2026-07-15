@@ -58,6 +58,20 @@ export type StorefrontPickupOption = {
   sort_order: number;
 };
 
+export type StorefrontDeliveryOption = {
+  delivery_option_id: string;
+  name: string;
+  price_amount: number;
+  sort_order: number;
+};
+
+type StorefrontDeliveryOptionRow = {
+  delivery_option_id: string | number | null;
+  name: string | null;
+  price_amount: number | string | null;
+  sort_order: number | string | null;
+};
+
 export type StorefrontInventoryItem = {
   store_id: string;
   store_slug: string;
@@ -294,6 +308,25 @@ export async function loadStorefrontPickupOptions(slug: string) {
 
   return {
     data: (data ?? []) as StorefrontPickupOption[],
+    error,
+  };
+}
+
+export async function loadStorefrontDeliveryOptions(slug: string) {
+  const { data, error } = await publicSupabase.rpc(
+    "get_public_storefront_delivery_options",
+    {
+      p_store_slug: slug,
+    },
+  );
+
+  return {
+    data: ((data ?? []) as StorefrontDeliveryOptionRow[]).map((option) => ({
+      delivery_option_id: String(option.delivery_option_id),
+      name: String(option.name ?? ""),
+      price_amount: toSafeNumber(option.price_amount),
+      sort_order: toSafeNumber(option.sort_order),
+    })) as StorefrontDeliveryOption[],
     error,
   };
 }
@@ -630,6 +663,17 @@ function parseDateOnly(value: string) {
   const date = new Date(`${value}T00:00:00`);
 
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toSafeNumber(value: number | string | null | undefined) {
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : 0;
+
+  return Number.isFinite(numericValue) ? numericValue : 0;
 }
 
 function compareOptions(

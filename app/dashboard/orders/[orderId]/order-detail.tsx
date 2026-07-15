@@ -53,6 +53,15 @@ type SellerOrderDetailRow = {
   item_count: number | null;
   total_item_quantity: number | null;
   pickup_option_label_snapshot: string | null;
+  fulfillment_method: "pickup" | "delivery" | string | null;
+  delivery_option_name_snapshot: string | null;
+  delivery_fee_amount: number | null;
+};
+
+type SellerOrderFulfillmentSnapshotRow = {
+  fulfillment_method: "pickup" | "delivery" | string | null;
+  delivery_option_name_snapshot: string | null;
+  delivery_fee_amount: number | null;
 };
 
 type SellerOrderItemRow = {
@@ -139,7 +148,8 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       setIsLoading(true);
       setError(null);
 
-      const [orderResult, itemResult] = await Promise.all([
+      const [orderResult, itemResult, fulfillmentSnapshotResult] =
+        await Promise.all([
         supabase
           .from("seller_order_management")
           .select(
@@ -157,11 +167,20 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           .eq("order_id", orderId)
           .order("created_at", { ascending: true })
           .returns<SellerOrderItemRow[]>(),
+        supabase
+          .from("orders")
+          .select(
+            "fulfillment_method, delivery_option_name_snapshot, delivery_fee_amount",
+          )
+          .eq("store_id", seller.store_id)
+          .eq("id", orderId)
+          .maybeSingle<SellerOrderFulfillmentSnapshotRow>(),
       ]);
 
       if (!isMounted) return;
 
-      const firstError = orderResult.error ?? itemResult.error;
+      const firstError =
+        orderResult.error ?? itemResult.error ?? fulfillmentSnapshotResult.error;
 
       if (firstError) {
         setError(firstError.message);
@@ -175,7 +194,18 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       if (!isMounted) return;
 
       setData({
-        order: orderResult.data,
+        order: orderResult.data
+          ? {
+              ...orderResult.data,
+              fulfillment_method:
+                fulfillmentSnapshotResult.data?.fulfillment_method ?? "pickup",
+              delivery_option_name_snapshot:
+                fulfillmentSnapshotResult.data?.delivery_option_name_snapshot ??
+                null,
+              delivery_fee_amount:
+                fulfillmentSnapshotResult.data?.delivery_fee_amount ?? 0,
+            }
+          : null,
         items,
         mediaByItemId,
       });
@@ -202,6 +232,9 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       ),
     [data.items],
   );
+  const isDeliveryOrder = order?.fulfillment_method === "delivery";
+  const deliveryOptionName = order?.delivery_option_name_snapshot?.trim() ?? "";
+  const deliveryFeeAmount = order?.delivery_fee_amount ?? 0;
 
   if (isLoading) {
     return (
@@ -525,6 +558,14 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                       value={formatCurrency(order.tax_fee_amount)}
                     />
                   ) : null}
+                  {isDeliveryOrder ? (
+                    <RequestedTotalRow
+                      label={`Delivery${
+                        deliveryOptionName ? ` — ${deliveryOptionName}` : ""
+                      }`}
+                      value={formatCurrency(deliveryFeeAmount)}
+                    />
+                  ) : null}
                   <RequestedTotalRow
                     isStrong
                     label="Total"
@@ -544,25 +585,34 @@ export function OrderDetail({ orderId }: { orderId: string }) {
 
           <SellerCard className="p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)]">
             <h2 className="text-lg font-bold text-stone-950">
-              Pickup / order notes
+              {isDeliveryOrder ? "Delivery / order notes" : "Pickup / order notes"}
             </h2>
-            <div className="mt-3 grid gap-3 text-sm leading-6 text-stone-700 md:grid-cols-2">
-              <NoteBlock
-                label="Pickup choice"
-                value={order.pickup_option_label_snapshot}
-                empty="No pickup choice selected."
+            {isDeliveryOrder ? (
+              <DeliveryOrderNotes
+                address={formatBuyerAddress(order)}
+                buyerNote={order.buyer_notes}
+                deliveryFee={formatCurrency(deliveryFeeAmount)}
+                deliveryOptionName={deliveryOptionName}
               />
-              <NoteBlock
-                label="Note from buyer"
-                value={order.buyer_notes}
-                empty="No buyer note added."
-              />
-              <NoteBlock
-                label="Pickup note"
-                value={order.pickup_note}
-                empty="No pickup note added."
-              />
-            </div>
+            ) : (
+              <div className="mt-3 grid gap-3 text-sm leading-6 text-stone-700 md:grid-cols-2">
+                <NoteBlock
+                  label="Pickup choice"
+                  value={order.pickup_option_label_snapshot}
+                  empty="No pickup choice selected."
+                />
+                <NoteBlock
+                  label="Note from buyer"
+                  value={order.buyer_notes}
+                  empty="No buyer note added."
+                />
+                <NoteBlock
+                  label="Pickup note"
+                  value={order.pickup_note}
+                  empty="No pickup note added."
+                />
+              </div>
+            )}
           </SellerCard>
         </main>
 
@@ -698,6 +748,49 @@ function NoteBlock({
         {value || empty}
       </p>
     </section>
+  );
+}
+
+function DeliveryOrderNotes({
+  address,
+  buyerNote,
+  deliveryFee,
+  deliveryOptionName,
+}: {
+  address: string | null;
+  buyerNote: string | null;
+  deliveryFee: string;
+  deliveryOptionName: string;
+}) {
+  return (
+    <div className="mt-3 grid gap-4 text-sm leading-6 text-stone-700">
+      <div>
+        <h3 className="text-base font-bold text-stone-950">
+          {deliveryOptionName || "Delivery option"}
+        </h3>
+        <p className="mt-0.5 font-semibold text-stone-700">
+          Delivery fee: {deliveryFee}
+        </p>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-bold text-stone-950">Delivery address</h3>
+        <p className="mt-1 whitespace-pre-line leading-5">
+          {address || "No delivery address provided."}
+        </p>
+      </div>
+
+      <p className="font-semibold text-stone-800">
+        We will be in touch to coordinate delivery.
+      </p>
+
+      <div>
+        <h3 className="text-sm font-bold text-stone-950">Note from buyer</h3>
+        <p className="mt-1 whitespace-pre-line leading-5">
+          {buyerNote || "No buyer note added."}
+        </p>
+      </div>
+    </div>
   );
 }
 
