@@ -49,15 +49,35 @@ type SellerCustomerOrderRow = {
   order_status: string | null;
   payment_method: string | null;
   ready_for_pickup_at: string | null;
+  fulfilled_at: string | null;
   created_at: string;
   total_amount: number | null;
   item_count: number | null;
   total_item_quantity: number | null;
 };
 
+type CustomerTimelineNoteRow = {
+  id: string;
+  store_id: string;
+  customer_id: string;
+  note_date: string;
+  title: string | null;
+  body: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type OrderFulfillmentEventRow = {
+  id: string;
+  order_id: string;
+  created_at: string;
+};
+
 type CustomerDetailState = {
   customer: SellerCustomerDetailRow | null;
   orders: SellerCustomerOrderRow[];
+  timelineNotes: CustomerTimelineNoteRow[];
+  fulfillmentEvents: OrderFulfillmentEventRow[];
 };
 
 type CustomerContactForm = {
@@ -65,6 +85,34 @@ type CustomerContactForm = {
   phone: string;
   pickupLocation: string;
 };
+
+type ActivityView = "orders" | "timeline";
+
+type CustomerTimelineForm = {
+  noteDate: string;
+  title: string;
+  body: string;
+};
+
+type CustomerTimelineEntry =
+  | {
+      id: string;
+      type: "order_created";
+      occurredAt: string;
+      order: SellerCustomerOrderRow;
+    }
+  | {
+      id: string;
+      type: "order_fulfilled";
+      occurredAt: string;
+      order: SellerCustomerOrderRow;
+    }
+  | {
+      id: string;
+      type: "manual_note";
+      occurredAt: string;
+      note: CustomerTimelineNoteRow;
+    };
 
 /**
  * Read-only customer detail built from seller-safe customer and order
@@ -75,7 +123,11 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
   const [data, setData] = useState<CustomerDetailState>({
     customer: null,
     orders: [],
+    timelineNotes: [],
+    fulfillmentEvents: [],
   });
+  const [selectedActivityView, setSelectedActivityView] =
+    useState<ActivityView>("orders");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,7 +140,8 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
       setIsLoading(true);
       setError(null);
 
-      const [customerResult, ordersResult] = await Promise.all([
+      const [customerResult, ordersResult, timelineNotesResult] =
+        await Promise.all([
         supabase
           .from("seller_customer_detail")
           .select(
@@ -100,17 +153,28 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
         supabase
           .from("seller_order_management")
           .select(
-            "order_id, order_number, order_source, order_status, payment_method, ready_for_pickup_at, created_at, total_amount, item_count, total_item_quantity",
+            "order_id, order_number, order_source, order_status, payment_method, ready_for_pickup_at, fulfilled_at, created_at, total_amount, item_count, total_item_quantity",
           )
           .eq("store_id", seller.store_id)
           .eq("customer_id", customerId)
           .order("created_at", { ascending: false })
           .returns<SellerCustomerOrderRow[]>(),
+        supabase
+          .from("customer_timeline_notes")
+          .select(
+            "id, store_id, customer_id, note_date, title, body, created_at, updated_at",
+          )
+          .eq("store_id", seller.store_id)
+          .eq("customer_id", customerId)
+          .order("note_date", { ascending: false })
+          .order("created_at", { ascending: false })
+          .returns<CustomerTimelineNoteRow[]>(),
       ]);
 
       if (!isMounted) return;
 
-      const firstError = customerResult.error ?? ordersResult.error;
+      const firstError =
+        customerResult.error ?? ordersResult.error ?? timelineNotesResult.error;
 
       if (firstError) {
         setError(firstError.message);
@@ -118,9 +182,36 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
         return;
       }
 
+      const orders = ordersResult.data ?? [];
+      const orderIds = orders.map((order) => order.order_id);
+      let fulfillmentEvents: OrderFulfillmentEventRow[] = [];
+
+      if (orderIds.length > 0) {
+        const fulfillmentEventsResult = await supabase
+          .from("order_events")
+          .select("id, order_id, created_at")
+          .eq("store_id", seller.store_id)
+          .eq("event_type", "order_fulfilled")
+          .in("order_id", orderIds)
+          .order("created_at", { ascending: false })
+          .returns<OrderFulfillmentEventRow[]>();
+
+        if (!isMounted) return;
+
+        if (fulfillmentEventsResult.error) {
+          setError(fulfillmentEventsResult.error.message);
+          setIsLoading(false);
+          return;
+        }
+
+        fulfillmentEvents = fulfillmentEventsResult.data ?? [];
+      }
+
       setData({
         customer: customerResult.data,
-        orders: ordersResult.data ?? [],
+        orders,
+        timelineNotes: timelineNotesResult.data ?? [],
+        fulfillmentEvents,
       });
       setIsLoading(false);
     }
@@ -190,7 +281,18 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
       />
 
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(19rem,0.95fr)]">
-        <OrderHistoryCard orders={data.orders} />
+        <CustomerActivityCard
+          customerId={customer.customer_id}
+          fulfillmentEvents={data.fulfillmentEvents}
+          onTimelineNotesChange={(timelineNotes) => {
+            setData((current) => ({ ...current, timelineNotes }));
+          }}
+          orders={data.orders}
+          selectedView={selectedActivityView}
+          storeId={seller?.store_id ?? ""}
+          timelineNotes={data.timelineNotes}
+          onSelectedViewChange={setSelectedActivityView}
+        />
 
         <aside className="grid min-w-0 content-start gap-5">
           <ContactDetailsCard
@@ -328,36 +430,485 @@ function CustomerSummaryCard({
   );
 }
 
-function OrderHistoryCard({ orders }: { orders: SellerCustomerOrderRow[] }) {
+function CustomerActivityCard({
+  customerId,
+  fulfillmentEvents,
+  onSelectedViewChange,
+  onTimelineNotesChange,
+  orders,
+  selectedView,
+  storeId,
+  timelineNotes,
+}: {
+  customerId: string;
+  fulfillmentEvents: OrderFulfillmentEventRow[];
+  onSelectedViewChange: (view: ActivityView) => void;
+  onTimelineNotesChange: (timelineNotes: CustomerTimelineNoteRow[]) => void;
+  orders: SellerCustomerOrderRow[];
+  selectedView: ActivityView;
+  storeId: string;
+  timelineNotes: CustomerTimelineNoteRow[];
+}) {
   return (
-    <section className="min-w-0 rounded-xl border border-transparent bg-white p-5 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm">
-      <div className="flex min-w-0 items-start gap-3">
-        <IconBubble src="/glyphs/clipboard.png" />
-        <div className="min-w-0">
-          <h2 className="text-xl font-semibold text-stone-950">
-            Order history
-          </h2>
-          <p className="mt-1 text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
-            Previous requests and purchases from this customer.
-          </p>
+    <div className="min-w-0">
+      <ActivityTabs
+        selectedView={selectedView}
+        onSelectedViewChange={onSelectedViewChange}
+      />
+      <section className="min-w-0 rounded-b-xl rounded-tr-xl border border-transparent bg-white p-5 shadow-none sm:border-stone-200 sm:shadow-sm">
+        <div className="flex min-w-0 items-start gap-3">
+          <IconBubble src="/glyphs/clipboard.png" />
+          <div className="min-w-0">
+            <h2 className="text-xl font-semibold text-stone-950">
+              {selectedView === "orders" ? "Order history" : "Timeline"}
+            </h2>
+            <p className="mt-1 text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
+              {selectedView === "orders"
+                ? "Previous requests and purchases from this customer."
+                : "Dated customer activity, order milestones, and seller notes."}
+            </p>
+          </div>
         </div>
+
+        {selectedView === "orders" ? (
+          <OrderHistoryContent orders={orders} />
+        ) : (
+          <CustomerTimeline
+            customerId={customerId}
+            fulfillmentEvents={fulfillmentEvents}
+            onTimelineNotesChange={onTimelineNotesChange}
+            orders={orders}
+            storeId={storeId}
+            timelineNotes={timelineNotes}
+          />
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ActivityTabs({
+  selectedView,
+  onSelectedViewChange,
+}: {
+  selectedView: ActivityView;
+  onSelectedViewChange: (view: ActivityView) => void;
+}) {
+  const activityTabs: Array<{ id: ActivityView; label: string }> = [
+    { id: "orders", label: "Order History" },
+    { id: "timeline", label: "Timeline" },
+  ];
+
+  return (
+    <div
+      aria-label="Customer activity sections"
+      className="flex gap-1 overflow-x-auto border-b border-stone-200 pl-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      role="tablist"
+    >
+      {activityTabs.map((tab) => {
+        const isActive = selectedView === tab.id;
+
+        return (
+          <button
+            aria-selected={isActive}
+            className={`relative mb-[-1px] min-h-11 shrink-0 rounded-t-lg border px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-700 ${
+              isActive
+                ? "border-stone-200 border-b-white bg-white text-stone-950 shadow-[0_-1px_0_rgba(0,0,0,0.02)]"
+                : "border-transparent bg-stone-100/70 text-stone-600 hover:bg-white hover:text-stone-950"
+            }`}
+            key={tab.id}
+            onClick={() => onSelectedViewChange(tab.id)}
+            role="tab"
+            type="button"
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function OrderHistoryContent({ orders }: { orders: SellerCustomerOrderRow[] }) {
+  return orders.length > 0 ? (
+    <div className="mt-5 grid gap-3">
+      {orders.map((order) => (
+        <CustomerOrderCard key={order.order_id} order={order} />
+      ))}
+    </div>
+  ) : (
+    <div className="mt-5">
+      <EmptyState
+        title="No orders yet"
+        description="Order history will appear here after this customer places an order."
+      />
+    </div>
+  );
+}
+
+function CustomerTimeline({
+  customerId,
+  fulfillmentEvents,
+  onTimelineNotesChange,
+  orders,
+  storeId,
+  timelineNotes,
+}: {
+  customerId: string;
+  fulfillmentEvents: OrderFulfillmentEventRow[];
+  onTimelineNotesChange: (timelineNotes: CustomerTimelineNoteRow[]) => void;
+  orders: SellerCustomerOrderRow[];
+  storeId: string;
+  timelineNotes: CustomerTimelineNoteRow[];
+}) {
+  const [editingNote, setEditingNote] = useState<CustomerTimelineNoteRow | null>(
+    null,
+  );
+  const [form, setForm] = useState<CustomerTimelineForm>(() =>
+    getNewTimelineForm(),
+  );
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const entries = useMemo(
+    () => buildCustomerTimelineEntries(orders, fulfillmentEvents, timelineNotes),
+    [fulfillmentEvents, orders, timelineNotes],
+  );
+
+  function beginAdding() {
+    setEditingNote(null);
+    setForm(getNewTimelineForm());
+    setSaveError(null);
+    setIsFormOpen(true);
+  }
+
+  function beginEditing(note: CustomerTimelineNoteRow) {
+    setEditingNote(note);
+    setForm({
+      noteDate: note.note_date,
+      title: note.title ?? "",
+      body: note.body,
+    });
+    setSaveError(null);
+    setIsFormOpen(true);
+  }
+
+  function cancelForm() {
+    setEditingNote(null);
+    setForm(getNewTimelineForm());
+    setSaveError(null);
+    setIsFormOpen(false);
+  }
+
+  async function saveTimelineNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaveError(null);
+
+    const noteDate = form.noteDate;
+    const title = form.title.trim();
+    const body = form.body.trim();
+
+    if (!noteDate) {
+      setSaveError("Choose a date.");
+      return;
+    }
+
+    if (!title) {
+      setSaveError("Add a title.");
+      return;
+    }
+
+    if (!body) {
+      setSaveError("Add notes before saving.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    const noteSelect =
+      "id, store_id, customer_id, note_date, title, body, created_at, updated_at";
+
+    if (editingNote) {
+      const { data, error } = await supabase
+        .from("customer_timeline_notes")
+        .update({
+          note_date: noteDate,
+          title,
+          body,
+        })
+        .eq("id", editingNote.id)
+        .eq("store_id", storeId)
+        .eq("customer_id", customerId)
+        .select(noteSelect)
+        .single<CustomerTimelineNoteRow>();
+
+      setIsSaving(false);
+
+      if (error) {
+        setSaveError(error.message);
+        return;
+      }
+
+      onTimelineNotesChange(
+        timelineNotes.map((note) => (note.id === data.id ? data : note)),
+      );
+      cancelForm();
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("customer_timeline_notes")
+      .insert({
+        store_id: storeId,
+        customer_id: customerId,
+        note_date: noteDate,
+        title,
+        body,
+      })
+      .select(noteSelect)
+      .single<CustomerTimelineNoteRow>();
+
+    setIsSaving(false);
+
+    if (error) {
+      setSaveError(error.message);
+      return;
+    }
+
+    onTimelineNotesChange([data, ...timelineNotes]);
+    cancelForm();
+  }
+
+  async function deleteTimelineNote(note: CustomerTimelineNoteRow) {
+    if (!window.confirm("Delete this timeline entry?")) return;
+
+    setDeletingNoteId(note.id);
+    setSaveError(null);
+
+    const { error } = await supabase
+      .from("customer_timeline_notes")
+      .delete()
+      .eq("id", note.id)
+      .eq("store_id", storeId)
+      .eq("customer_id", customerId);
+
+    setDeletingNoteId(null);
+
+    if (error) {
+      setSaveError(error.message);
+      return;
+    }
+
+    onTimelineNotesChange(
+      timelineNotes.filter((timelineNote) => timelineNote.id !== note.id),
+    );
+  }
+
+  return (
+    <div className="mt-5 min-w-0">
+      <div className="flex min-w-0 flex-col gap-3 border-t border-stone-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-medium text-stone-600">
+          Showing order milestones and dated seller entries.
+        </p>
+        {!isFormOpen ? (
+          <button
+            className="inline-flex min-h-12 items-center justify-center rounded-md bg-emerald-800 px-4 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 sm:min-h-10 sm:text-sm sm:font-semibold"
+            onClick={beginAdding}
+            type="button"
+          >
+            Add entry
+          </button>
+        ) : null}
       </div>
 
-      {orders.length > 0 ? (
-        <div className="mt-5 grid gap-3">
-          {orders.map((order) => (
-            <CustomerOrderCard key={order.order_id} order={order} />
+      {isFormOpen ? (
+        <TimelineNoteForm
+          form={form}
+          isSaving={isSaving}
+          saveError={saveError}
+          saveLabel={editingNote ? "Save changes" : "Save entry"}
+          onCancel={cancelForm}
+          onChange={setForm}
+          onSubmit={saveTimelineNote}
+        />
+      ) : saveError ? (
+        <p className="mt-4 text-sm font-medium text-red-700">{saveError}</p>
+      ) : null}
+
+      {entries.length > 0 ? (
+        <ol className="mt-5 grid gap-0">
+          {entries.map((entry, index) => (
+            <TimelineRow
+              entry={entry}
+              isDeleting={entry.type === "manual_note" && deletingNoteId === entry.note.id}
+              isLast={index === entries.length - 1}
+              key={entry.id}
+              onDelete={deleteTimelineNote}
+              onEdit={beginEditing}
+            />
           ))}
-        </div>
+        </ol>
       ) : (
-        <div className="mt-5">
-          <EmptyState
-            title="No orders yet"
-            description="Order history will appear here after this customer places an order."
-          />
-        </div>
+        <p className="mt-5 rounded-md border border-dashed border-stone-200 bg-stone-50 px-4 py-6 text-center text-sm font-medium text-stone-500">
+          No timeline activity yet.
+        </p>
       )}
-    </section>
+    </div>
+  );
+}
+
+function TimelineNoteForm({
+  form,
+  isSaving,
+  onCancel,
+  onChange,
+  onSubmit,
+  saveError,
+  saveLabel,
+}: {
+  form: CustomerTimelineForm;
+  isSaving: boolean;
+  onCancel: () => void;
+  onChange: (form: CustomerTimelineForm) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  saveError: string | null;
+  saveLabel: string;
+}) {
+  return (
+    <form
+      className="mt-4 grid gap-4 rounded-lg border border-stone-200 bg-stone-50 p-4"
+      onSubmit={onSubmit}
+    >
+      <div className="grid gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
+        <EditableField
+          label="Date"
+          type="date"
+          value={form.noteDate}
+          onChange={(value) => onChange({ ...form, noteDate: value })}
+        />
+        <EditableField
+          label="Title"
+          value={form.title}
+          onChange={(value) => onChange({ ...form, title: value })}
+        />
+      </div>
+      <label className="grid gap-2">
+        <span className="text-sm font-semibold uppercase tracking-[0.12em] text-stone-500 sm:text-xs">
+          Notes
+        </span>
+        <textarea
+          className="min-h-28 w-full resize-y rounded-md border border-stone-300 bg-white px-3 py-2 text-base font-medium leading-6 text-stone-950 shadow-sm outline-none transition placeholder:text-stone-500 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100 sm:text-sm sm:font-normal"
+          onChange={(event) => onChange({ ...form, body: event.target.value })}
+          value={form.body}
+        />
+      </label>
+      {saveError ? (
+        <p className="text-sm font-medium text-red-700">{saveError}</p>
+      ) : null}
+      <FormActions
+        isSaving={isSaving}
+        onCancel={onCancel}
+        saveLabel={saveLabel}
+      />
+    </form>
+  );
+}
+
+function TimelineRow({
+  entry,
+  isDeleting,
+  isLast,
+  onDelete,
+  onEdit,
+}: {
+  entry: CustomerTimelineEntry;
+  isDeleting: boolean;
+  isLast: boolean;
+  onDelete: (note: CustomerTimelineNoteRow) => void;
+  onEdit: (note: CustomerTimelineNoteRow) => void;
+}) {
+  const isManual = entry.type === "manual_note";
+  const title =
+    entry.type === "order_created"
+      ? `Order ${formatOrderNumber(entry.order.order_number)} created`
+      : entry.type === "order_fulfilled"
+        ? `Order ${formatOrderNumber(entry.order.order_number)} fulfilled`
+        : entry.note.title ?? "Timeline note";
+  const body =
+    entry.type === "manual_note"
+      ? entry.note.body
+      : entry.type === "order_created"
+        ? `${formatCurrency(entry.order.total_amount)} - ${
+            entry.order.total_item_quantity ?? entry.order.item_count ?? 0
+          } items`
+        : formatOrderLifecycle(entry.order);
+  const order =
+    entry.type === "order_created" || entry.type === "order_fulfilled"
+      ? entry.order
+      : null;
+
+  return (
+    <li className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-3">
+      <div className="relative flex justify-center">
+        <span className="mt-1 flex size-3 rounded-full bg-emerald-700 ring-4 ring-emerald-50" />
+        {!isLast ? (
+          <span className="absolute bottom-0 top-5 w-px bg-stone-200" />
+        ) : null}
+      </div>
+      <div className="min-w-0 pb-5">
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-stone-500">
+              {isManual
+                ? formatDateOnly(entry.note.note_date)
+                : formatDateTime(entry.occurredAt)}
+            </p>
+            <h3 className="mt-1 text-base font-semibold text-stone-950">
+              {title}
+            </h3>
+          </div>
+          {isManual ? (
+            <div className="flex shrink-0 gap-2">
+              <IconButton
+                label="Edit timeline entry"
+                onClick={() => onEdit(entry.note)}
+                src="/glyphs/pencil.png"
+              />
+              <IconButton
+                disabled={isDeleting}
+                label={isDeleting ? "Deleting timeline entry" : "Delete timeline entry"}
+                onClick={() => {
+                  if (!isDeleting) onDelete(entry.note);
+                }}
+                src="/glyphs/trashcan.png"
+              />
+            </div>
+          ) : order ? (
+            <Link
+              className="inline-flex min-h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-950 transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900"
+              href={`/dashboard/orders/${order.order_id}`}
+            >
+              View order
+            </Link>
+          ) : null}
+        </div>
+        {body ? (
+          <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-stone-600">
+            {body}
+          </p>
+        ) : null}
+        {isManual ? (
+          <p className="mt-2 text-xs font-medium text-stone-500">
+            Created {formatDateTime(entry.note.created_at)}
+            {entry.note.updated_at !== entry.note.created_at
+              ? ` - Updated ${formatDateTime(entry.note.updated_at)}`
+              : ""}
+          </p>
+        ) : null}
+      </div>
+    </li>
   );
 }
 
@@ -706,7 +1257,7 @@ function EditableField({
   label: string;
   value: string;
   onChange: (value: string) => void;
-  type?: "email" | "text";
+  type?: "date" | "email" | "text";
 }) {
   return (
     <label className="grid gap-2">
@@ -733,10 +1284,12 @@ function ContactLine({ icon, value }: { icon: string; value: string }) {
 }
 
 function IconButton({
+  disabled = false,
   label,
   onClick,
   src,
 }: {
+  disabled?: boolean;
   label: string;
   onClick: () => void;
   src: string;
@@ -744,7 +1297,8 @@ function IconButton({
   return (
     <button
       aria-label={label}
-      className="inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-600 transition hover:border-emerald-700 hover:bg-emerald-50 sm:size-9"
+      className="inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-600 transition hover:border-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60 sm:size-9"
+      disabled={disabled}
       onClick={onClick}
       title={label}
       type="button"
@@ -822,6 +1376,86 @@ function BackToCustomersLink() {
       Back to Customers
     </Link>
   );
+}
+
+function buildCustomerTimelineEntries(
+  orders: SellerCustomerOrderRow[],
+  fulfillmentEvents: OrderFulfillmentEventRow[],
+  timelineNotes: CustomerTimelineNoteRow[],
+): CustomerTimelineEntry[] {
+  const fulfillmentEventByOrderId = new Map<string, OrderFulfillmentEventRow>();
+
+  for (const event of fulfillmentEvents) {
+    const current = fulfillmentEventByOrderId.get(event.order_id);
+
+    if (
+      !current ||
+      new Date(event.created_at).getTime() > new Date(current.created_at).getTime()
+    ) {
+      fulfillmentEventByOrderId.set(event.order_id, event);
+    }
+  }
+
+  const entries: CustomerTimelineEntry[] = [];
+
+  for (const order of orders) {
+    entries.push({
+      id: `order-created-${order.order_id}`,
+      type: "order_created",
+      occurredAt: order.created_at,
+      order,
+    });
+
+    const fulfillmentEvent = fulfillmentEventByOrderId.get(order.order_id);
+    const fulfilledAt = fulfillmentEvent?.created_at ?? order.fulfilled_at;
+
+    if (fulfilledAt) {
+      entries.push({
+        id: `order-fulfilled-${order.order_id}`,
+        type: "order_fulfilled",
+        occurredAt: fulfilledAt,
+        order,
+      });
+    }
+  }
+
+  for (const note of timelineNotes) {
+    entries.push({
+      id: `manual-note-${note.id}`,
+      type: "manual_note",
+      occurredAt: getTimelineNoteDateTime(note),
+      note,
+    });
+  }
+
+  return entries.sort((left, right) => {
+    const rightTime = new Date(right.occurredAt).getTime();
+    const leftTime = new Date(left.occurredAt).getTime();
+
+    if (rightTime !== leftTime) return rightTime - leftTime;
+
+    return right.id.localeCompare(left.id);
+  });
+}
+
+function getNewTimelineForm(): CustomerTimelineForm {
+  return {
+    noteDate: formatDateInputValue(new Date()),
+    title: "",
+    body: "",
+  };
+}
+
+function getTimelineNoteDateTime(note: CustomerTimelineNoteRow) {
+  return `${note.note_date}T12:00:00`;
+}
+
+function formatDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function formatCustomerName(customer: {
