@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   readStorefrontCart,
   summarizeStorefrontCart,
+  storefrontCartChangedEvent,
 } from "./_components/storefront-cart-client";
 import { StorefrontGlyph } from "./storefront-ui";
 
@@ -12,12 +13,29 @@ export function StorefrontHeaderCartLink({ storeSlug }: { storeSlug: string }) {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
+    function updateCount() {
       const cart = readStorefrontCart(storeSlug);
       setCount(summarizeStorefrontCart(cart.items).totalQuantity);
+    }
+
+    function handleCartChanged(event: Event) {
+      const detail = (event as CustomEvent<{ storeSlug?: string }>).detail;
+
+      if (!detail?.storeSlug || detail.storeSlug === storeSlug) {
+        updateCount();
+      }
+    }
+
+    const timeout = window.setTimeout(() => {
+      updateCount();
     }, 0);
 
-    return () => window.clearTimeout(timeout);
+    window.addEventListener(storefrontCartChangedEvent, handleCartChanged);
+
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener(storefrontCartChangedEvent, handleCartChanged);
+    };
   }, [storeSlug]);
 
   return (

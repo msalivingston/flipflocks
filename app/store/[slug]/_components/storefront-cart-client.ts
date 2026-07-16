@@ -26,6 +26,8 @@ export type StorefrontCart = {
   items: StorefrontCartItem[];
 };
 
+export const storefrontCartChangedEvent = "storefront-cart-changed";
+
 export function cartStorageKey(storeSlug: string) {
   return `flipflocks:storefront-cart:${storeSlug}`;
 }
@@ -73,6 +75,7 @@ export function writeStorefrontCart(
 
   if (typeof window !== "undefined") {
     window.localStorage.setItem(cartStorageKey(storeSlug), JSON.stringify(cart));
+    notifyStorefrontCartChanged(storeSlug);
   }
 
   return cart;
@@ -81,6 +84,7 @@ export function writeStorefrontCart(
 export function clearStorefrontCart(storeSlug: string) {
   if (typeof window !== "undefined") {
     window.localStorage.removeItem(cartStorageKey(storeSlug));
+    notifyStorefrontCartChanged(storeSlug);
   }
 }
 
@@ -233,4 +237,12 @@ function isCartItem(
 
 export function cartItemKey(item: Pick<StorefrontCartItem, "itemId" | "itemType">) {
   return `${item.itemType}:${item.itemId}`;
+}
+
+function notifyStorefrontCartChanged(storeSlug: string) {
+  window.dispatchEvent(
+    new CustomEvent(storefrontCartChangedEvent, {
+      detail: { storeSlug },
+    }),
+  );
 }

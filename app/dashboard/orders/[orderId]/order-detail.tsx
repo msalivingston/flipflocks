@@ -706,12 +706,12 @@ function OrderItemRow({
             {details.join(" - ")}
           </p>
           <p className="mt-0.5 break-words text-sm font-medium leading-5 text-stone-500 sm:text-xs">
-            {item.available_date_snapshot
-              ? `Available ${formatShortDate(item.available_date_snapshot)}`
-              : null}
             {item.hatch_date_snapshot
-              ? `${item.available_date_snapshot ? " - " : ""}Hatched ${formatShortDate(
-                  item.hatch_date_snapshot,
+              ? `Hatched ${formatShortDate(item.hatch_date_snapshot)}`
+              : null}
+            {item.available_date_snapshot
+              ? `${item.hatch_date_snapshot ? " - " : ""}Available ${formatShortDate(
+                  item.available_date_snapshot,
                 )}`
               : null}
           </p>

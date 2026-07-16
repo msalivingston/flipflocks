@@ -317,6 +317,14 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
     });
   }
 
+  function handleClearCart() {
+    clearStorefrontCart(store.store_slug);
+    setCart(readStorefrontCart(store.store_slug));
+    setSummary(null);
+    setSummaryMessage(null);
+    setErrorMessage(null);
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage(null);
@@ -432,15 +440,15 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
   }
 
   return (
-    <StorefrontPage className="gap-7">
-      <div className="rounded-xl border border-[#ded7c8] bg-white p-6">
-        <p className="storefront-primary-color text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
+    <StorefrontPage className="gap-4">
+      <div className="rounded-xl border border-[#ded7c8] bg-white p-4">
+        <p className="storefront-primary-color text-xs font-semibold uppercase tracking-[0.12em] text-emerald-800">
           Checkout
         </p>
-        <h1 className="mt-1 text-4xl font-semibold text-stone-950">
+        <h1 className="mt-1 text-3xl font-semibold text-stone-950">
           Place your order
         </h1>
-        <p className="mt-2 text-sm leading-6 text-stone-600">
+        <p className="mt-1 text-sm leading-5 text-stone-600">
           Enter your contact details once and review your order summary.
         </p>
       </div>
@@ -454,27 +462,27 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
           <h2 className="text-xl font-semibold text-stone-950">
             Your cart is empty
           </h2>
-          <p className="mt-2 text-sm leading-6 text-stone-600">
+          <p className="mt-1.5 text-sm leading-5 text-stone-600">
             Add available options before checkout.
           </p>
-          <StorefrontButton className="mt-4 min-h-10" href={`/store/${store.store_slug}`}>
+          <StorefrontButton className="mt-3 min-h-10" href={`/store/${store.store_slug}`}>
             Continue shopping
           </StorefrontButton>
         </CheckoutPanel>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
+        <div className="grid gap-4 lg:grid-cols-[1fr_21rem] lg:items-start">
           <form
-            className="rounded-xl border border-[#ded7c8] bg-white p-6"
+            className="rounded-xl border border-[#ded7c8] bg-white p-4"
             onSubmit={handleSubmit}
           >
             <p className="storefront-primary-color text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
               Buyer details
             </p>
-            <h2 className="mt-2 text-2xl font-semibold text-stone-950">
+            <h2 className="mt-1.5 text-xl font-semibold text-stone-950">
               Contact and pickup information
             </h2>
-            <div className="mt-5 grid gap-4">
-              <div className="grid gap-3 sm:grid-cols-2">
+            <div className="mt-3 grid gap-2.5">
+              <div className="grid gap-2.5 sm:grid-cols-2">
                 <TextField
                   label="First name"
                   name="buyerFirstName"
@@ -505,11 +513,11 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
               />
 
               {deliveryAvailable ? (
-                <section className="border-t border-[#eee5d6] pt-5">
-                  <h2 className="text-xl font-semibold text-stone-950">
+                <section className="border-t border-[#eee5d6] pt-3">
+                  <h2 className="text-lg font-semibold text-stone-950">
                     How would you like to receive your order?
                   </h2>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="mt-2 grid gap-2.5 sm:grid-cols-2">
                     <FulfillmentChoice
                       checked={form.fulfillmentMethod === "pickup"}
                       description="Use this seller's pickup process."
@@ -526,17 +534,17 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                 </section>
               ) : null}
 
-              <h2 className="border-t border-[#eee5d6] pt-5 text-xl font-semibold text-stone-950">
+              <h2 className="border-t border-[#eee5d6] pt-3 text-lg font-semibold text-stone-950">
                 {form.fulfillmentMethod === "delivery"
                   ? "Delivery details"
                   : "Pickup details"}
               </h2>
               {form.fulfillmentMethod === "pickup" &&
               usesManualPickupOptions ? (
-                <label className="grid gap-2 text-sm font-semibold text-stone-800">
+                <label className="grid gap-1 text-xs font-semibold text-stone-800">
                   Pickup choice
                   <select
-                    className="min-h-11 rounded-md border border-[#ded7c8] bg-white px-3 text-sm text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                    className="min-h-10 rounded-md border border-[#ded7c8] bg-white px-3 text-sm text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
                     disabled={isLoadingPickupOptions}
                     onChange={(event) =>
                       updateField("pickupOptionId", event.target.value)
@@ -558,16 +566,16 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                       </option>
                     ))}
                   </select>
-                  <span className="text-xs font-medium leading-5 text-stone-500">
+                  <span className="text-xs font-medium leading-4 text-stone-500">
                     Choose a pickup option from this seller.
                   </span>
                 </label>
               ) : null}
               {form.fulfillmentMethod === "delivery" ? (
-                <label className="grid gap-2 text-sm font-semibold text-stone-800">
+                <label className="grid gap-1 text-xs font-semibold text-stone-800">
                   Choose a delivery option
                   <select
-                    className="min-h-11 rounded-md border border-[#ded7c8] bg-white px-3 text-sm text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                    className="min-h-10 rounded-md border border-[#ded7c8] bg-white px-3 text-sm text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
                     onChange={(event) =>
                       updateField("deliveryOptionId", event.target.value)
                     }
@@ -584,7 +592,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                       </option>
                     ))}
                   </select>
-                  <span className="text-xs font-medium leading-5 text-stone-500">
+                  <span className="text-xs font-medium leading-4 text-stone-500">
                     We will be in touch to coordinate your delivery.
                   </span>
                 </label>
@@ -607,7 +615,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                 required={false}
                 value={form.addressLine2}
               />
-              <div className="grid gap-3 sm:grid-cols-[1fr_5rem_7rem]">
+              <div className="grid gap-2.5 sm:grid-cols-[1fr_5rem_7rem]">
                 <TextField
                   label="City"
                   name="city"
@@ -652,7 +660,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
               ) : null}
 
               <StorefrontButton
-                className="mt-2"
+                className="mt-1 min-h-10"
                 disabled={
                   isSubmitting ||
                   isChecking ||
@@ -672,18 +680,18 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
             </div>
           </form>
 
-          <aside className="grid h-fit gap-4 lg:sticky lg:top-28">
+          <aside className="grid h-fit gap-2.5 lg:sticky lg:top-28">
             <StorefrontSummaryCard>
               <p className="storefront-primary-color text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
                 Order summary
               </p>
-              <h2 className="mt-2 text-2xl font-semibold text-stone-950">
+              <h2 className="mt-1.5 text-xl font-semibold text-stone-950">
                 Your order
               </h2>
-              <div className="mt-4 grid gap-3">
+              <div className="mt-2.5 grid gap-1.5">
                 {cartItems.map((item) => (
                   <div
-                    className="rounded-lg border border-[#eee5d6] bg-[#fffdf8] p-3 text-sm"
+                    className="rounded-lg border border-[#eee5d6] bg-[#fffdf8] p-2 text-sm"
                     key={cartItemKey(item)}
                   >
                     <div className="flex justify-between gap-3">
@@ -694,16 +702,16 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                         {formatCurrency(item.unitPrice * item.quantity)}
                       </p>
                     </div>
-                    <p className="mt-1 text-stone-600">
+                    <p className="mt-0.5 text-xs text-stone-600">
                       {item.quantity} x {item.optionLabel}
                     </p>
-                    <p className="mt-1 text-stone-500">
+                    <p className="mt-0.5 text-xs text-stone-500">
                       {formatCartAvailability(item.availableDate)}
                     </p>
                   </div>
                 ))}
               </div>
-              <dl className="mt-5 grid gap-2 text-sm">
+              <dl className="mt-3 grid gap-1.5 text-sm">
                 <SummaryRow
                   label="Items"
                   value={String(summary?.total_quantity ?? cartSummary.totalQuantity)}
@@ -720,30 +728,40 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                 />
               </dl>
               {isChecking ? (
-                <p className="mt-3 text-sm text-stone-500">
+                <p className="mt-2 text-sm text-stone-500">
                   Checking availability...
                 </p>
               ) : null}
               {summaryMessage ? (
-                <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
                   {toBuyerOrderError(summaryMessage)}
                 </p>
               ) : null}
-              <StorefrontButton
-                className="mt-4 min-h-10 w-full"
-                href={`/store/${store.store_slug}/cart`}
-                variant="secondary"
-              >
-                View cart
-              </StorefrontButton>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <StorefrontButton
+                  className="min-h-10 w-full px-3 text-sm"
+                  href={`/store/${store.store_slug}/cart`}
+                  variant="secondary"
+                >
+                  View cart
+                </StorefrontButton>
+                <StorefrontButton
+                  className="min-h-10 w-full px-3 text-sm"
+                  disabled={isSubmitting}
+                  onClick={handleClearCart}
+                  variant="secondary"
+                >
+                  Clear cart
+                </StorefrontButton>
+              </div>
 
             </StorefrontSummaryCard>
 
             <StorefrontSummaryCard className="bg-[#fffdf8]">
-              <h2 className="text-lg font-semibold text-stone-950">
+              <h2 className="text-base font-semibold text-stone-950">
                 Pickup and policies
               </h2>
-              <div className="mt-3 grid gap-3 whitespace-pre-line text-sm leading-6 text-stone-600">
+              <div className="mt-2 grid gap-1.5 whitespace-pre-line text-xs leading-5 text-stone-600">
                 <p>{store.pickup_instructions || "Pickup details coming soon."}</p>
                 {store.pickup_policy ? <p>{store.pickup_policy}</p> : null}
                 {store.cancellation_policy ? (
@@ -779,7 +797,7 @@ function FulfillmentChoice({
 }) {
   return (
     <label
-      className={`grid cursor-pointer gap-2 rounded-lg border p-3 text-sm transition ${
+      className={`grid cursor-pointer gap-1.5 rounded-lg border p-2.5 text-sm transition ${
         checked
           ? "border-emerald-700 bg-emerald-50/50 text-emerald-950"
           : "border-[#ded7c8] bg-white text-stone-700 hover:border-emerald-300"
@@ -795,7 +813,7 @@ function FulfillmentChoice({
         />
         {label}
       </span>
-      <span className="text-xs font-medium leading-5 text-stone-600">
+      <span className="text-xs font-medium leading-4 text-stone-600">
         {description}
       </span>
     </label>
@@ -820,9 +838,10 @@ function TextField({
   value: string;
 }) {
   return (
-    <StorefrontLabel>
+    <StorefrontLabel className="gap-1 text-xs">
       {label}
       <StorefrontInput
+        className="min-h-9 py-1 text-sm"
         maxLength={maxLength}
         name={name}
         onChange={(event) => onChange(event.target.value)}
@@ -846,9 +865,10 @@ function TextArea({
   value: string;
 }) {
   return (
-    <StorefrontLabel>
+    <StorefrontLabel className="gap-1 text-xs">
       {label}
       <StorefrontTextarea
+        className="min-h-16 py-1 text-sm"
         maxLength={2000}
         name={name}
         onChange={(event) => onChange(event.target.value)}

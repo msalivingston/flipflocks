@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   StorefrontCart,
   cartItemKey,
+  clearStorefrontCart,
   readStorefrontCart,
   removeStorefrontCartItem,
   summarizeStorefrontCart,
@@ -26,6 +27,7 @@ const emptyItems: StorefrontCart["items"] = [];
 
 export function CartPage({ store }: { store: StorefrontHome }) {
   const [cart, setCart] = useState<StorefrontCart | null>(null);
+  const [isClearCartConfirmOpen, setIsClearCartConfirmOpen] = useState(false);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -53,16 +55,22 @@ export function CartPage({ store }: { store: StorefrontHome }) {
     setCart(removeStorefrontCartItem(store.store_slug, itemKey));
   }
 
+  function clearCart() {
+    clearStorefrontCart(store.store_slug);
+    setCart(readStorefrontCart(store.store_slug));
+    setIsClearCartConfirmOpen(false);
+  }
+
   return (
-    <StorefrontPage className="max-w-6xl gap-7">
-      <div className="rounded-xl border border-[#ded7c8] bg-white p-6">
-        <p className="storefront-primary-color text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
+    <StorefrontPage className="max-w-6xl gap-4">
+      <div className="rounded-xl border border-[#ded7c8] bg-white p-4">
+        <p className="storefront-primary-color text-xs font-semibold uppercase tracking-[0.12em] text-emerald-800">
           Cart
         </p>
         <h1 className="mt-1 text-3xl font-semibold text-stone-950">
           Your cart
         </h1>
-        <p className="mt-2 text-sm leading-6 text-stone-600">
+        <p className="mt-1 text-sm leading-5 text-stone-600">
           Review your selected items before checkout.
         </p>
       </div>
@@ -76,47 +84,47 @@ export function CartPage({ store }: { store: StorefrontHome }) {
           <h2 className="text-xl font-semibold text-stone-950">
             Your cart is empty
           </h2>
-          <p className="mt-2 text-sm leading-6 text-stone-600">
+          <p className="mt-1.5 text-sm leading-5 text-stone-600">
             Add available options from the storefront to start an order.
           </p>
-          <StorefrontButton className="mt-4 min-h-10" href={`/store/${store.store_slug}`}>
+          <StorefrontButton className="mt-3 min-h-10" href={`/store/${store.store_slug}`}>
             Continue shopping
           </StorefrontButton>
         </CartPanel>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
-          <div className="grid gap-4">
+        <div className="grid gap-4 lg:grid-cols-[1fr_21rem] lg:items-start">
+          <div className="grid gap-2.5">
             {items.map((item) => {
               const key = cartItemKey(item);
 
               return (
                 <article
-                  className="grid gap-4 rounded-xl border border-[#ded7c8] bg-white p-4 md:grid-cols-[1fr_8rem_6rem] md:items-center"
+                  className="grid gap-3 rounded-xl border border-[#ded7c8] bg-white p-3 md:grid-cols-[1fr_7rem_5.75rem] md:items-center"
                   key={key}
                 >
                   <div>
                     {item.speciesName ? (
-                      <p className="storefront-primary-color text-xs font-semibold uppercase tracking-[0.08em] text-emerald-700">
+                      <p className="storefront-primary-color text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-emerald-700">
                         {item.speciesName}
                       </p>
                     ) : null}
-                    <h2 className="mt-1 text-lg font-semibold text-stone-950">
+                    <h2 className="mt-0.5 text-base font-semibold text-stone-950">
                       {item.productName}
                     </h2>
-                    <p className="mt-1 text-sm text-stone-600">
+                    <p className="mt-0.5 text-sm text-stone-600">
                       {item.optionLabel}
                     </p>
-                    <p className="mt-2 text-sm text-stone-600">
+                    <p className="mt-1 text-xs text-stone-600">
                       {formatCartAvailability(item.availableDate)} -{" "}
                       {formatCurrency(item.unitPrice)} each -{" "}
                       {item.quantityAvailable} available
                     </p>
                   </div>
 
-                  <StorefrontLabel className="h-fit text-xs uppercase tracking-[0.1em] text-stone-500">
+                  <StorefrontLabel className="h-fit gap-1 text-xs uppercase tracking-[0.1em] text-stone-500">
                     Qty
                     <StorefrontInput
-                      className="text-center"
+                      className="min-h-9 py-1 text-center text-sm"
                       inputMode="numeric"
                       max={item.quantityAvailable}
                       min={0}
@@ -133,7 +141,7 @@ export function CartPage({ store }: { store: StorefrontHome }) {
                   </StorefrontLabel>
 
                   <div className="flex items-start justify-between gap-3 md:grid md:justify-items-end">
-                    <p className="font-semibold text-stone-950">
+                    <p className="text-sm font-semibold text-stone-950">
                       {formatCurrency(item.quantity * item.unitPrice)}
                     </p>
                     <StorefrontTextButton
@@ -151,34 +159,95 @@ export function CartPage({ store }: { store: StorefrontHome }) {
             <p className="storefront-primary-color text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
               Order summary
             </p>
-            <h2 className="mt-2 text-2xl font-semibold text-stone-950">
+            <h2 className="mt-1.5 text-xl font-semibold text-stone-950">
               Ready for checkout
             </h2>
-            <dl className="mt-4 grid gap-3 text-sm">
+            <dl className="mt-3 grid gap-1.5 text-sm">
               <SummaryRow label="Items" value={String(summary.totalQuantity)} />
               <SummaryRow
                 label="Estimated total"
                 value={formatCurrency(summary.subtotal)}
               />
             </dl>
-            <p className="mt-4 rounded-lg bg-[#fbf7ef] p-3 text-sm leading-6 text-stone-600">
+            <p className="mt-3 rounded-lg bg-[#fbf7ef] p-2.5 text-xs leading-5 text-stone-600">
               Final availability is checked again before your order is placed.
             </p>
-            <div className="mt-5 grid gap-2">
-              <StorefrontButton href={`/store/${store.store_slug}/checkout`}>
+            <div className="mt-3 grid gap-2">
+              <StorefrontButton
+                className="min-h-10"
+                href={`/store/${store.store_slug}/checkout`}
+              >
                 Checkout
               </StorefrontButton>
-              <StorefrontButton
-                href={`/store/${store.store_slug}`}
-                variant="secondary"
-              >
-                Continue shopping
-              </StorefrontButton>
+              <div className="grid grid-cols-2 gap-2">
+                <StorefrontButton
+                  className="min-h-10 px-3 text-sm"
+                  href={`/store/${store.store_slug}`}
+                  variant="secondary"
+                >
+                  Continue
+                </StorefrontButton>
+                <StorefrontButton
+                  className="min-h-10 px-3 text-sm"
+                  onClick={() => setIsClearCartConfirmOpen(true)}
+                  variant="secondary"
+                >
+                  Clear cart
+                </StorefrontButton>
+              </div>
             </div>
           </StorefrontSummaryCard>
         </div>
       )}
+      {isClearCartConfirmOpen ? (
+        <ClearCartConfirmModal
+          itemCount={summary.totalQuantity}
+          onCancel={() => setIsClearCartConfirmOpen(false)}
+          onConfirm={clearCart}
+        />
+      ) : null}
     </StorefrontPage>
+  );
+}
+
+function ClearCartConfirmModal({
+  itemCount,
+  onCancel,
+  onConfirm,
+}: {
+  itemCount: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/50 px-4"
+      role="dialog"
+    >
+      <div className="w-full max-w-sm rounded-lg border border-[#ded7c8] bg-white p-4 shadow-xl">
+        <h2 className="text-lg font-semibold text-stone-950">Clear cart?</h2>
+        <p className="mt-2 text-sm leading-5 text-stone-600">
+          This will remove {itemCount} item{itemCount === 1 ? "" : "s"} from
+          your cart.
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <StorefrontButton
+            className="min-h-10 px-3 text-sm"
+            onClick={onCancel}
+            variant="secondary"
+          >
+            Keep cart
+          </StorefrontButton>
+          <StorefrontButton
+            className="min-h-10 px-3 text-sm"
+            onClick={onConfirm}
+          >
+            Clear cart
+          </StorefrontButton>
+        </div>
+      </div>
+    </div>
   );
 }
 
