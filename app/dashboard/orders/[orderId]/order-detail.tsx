@@ -94,6 +94,7 @@ type SellerOrderItemRow = {
 type SellerMediaRow = {
   entity_type: string;
   entity_id: string;
+  display_context?: string;
   public_url: string;
   alt_text: string | null;
   sort_order: number | null;
@@ -107,6 +108,7 @@ type OrderDetailState = {
   items: SellerOrderItemRow[];
   mediaByItemId: Record<string, SellerMediaRow | null>;
   order: SellerOrderDetailRow | null;
+  storeLogo: SellerMediaRow | null;
 };
 
 const orderDetailButtonClass =
@@ -115,6 +117,7 @@ const orderDetailBackButtonClass =
   "inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-stone-300 bg-white px-3.5 text-base font-bold text-stone-950 shadow-sm transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:min-h-9 sm:text-sm";
 const requestedItemsGridClass =
   "grid gap-3 sm:grid-cols-[minmax(0,1fr)_3.25rem_5.75rem_6.5rem]";
+const supabasePublicUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 
 /**
  * Read-only seller order detail for the first public order intake workflow.
@@ -126,6 +129,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     items: [],
     mediaByItemId: {},
     order: null,
+    storeLogo: null,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -148,7 +152,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       setIsLoading(true);
       setError(null);
 
-      const [orderResult, itemResult, fulfillmentSnapshotResult] =
+      const [orderResult, itemResult, fulfillmentSnapshotResult, storeLogo] =
         await Promise.all([
         supabase
           .from("seller_order_management")
@@ -175,6 +179,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           .eq("store_id", seller.store_id)
           .eq("id", orderId)
           .maybeSingle<SellerOrderFulfillmentSnapshotRow>(),
+        loadStoreLogo(seller.store_id),
       ]);
 
       if (!isMounted) return;
@@ -208,6 +213,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           : null,
         items,
         mediaByItemId,
+        storeLogo,
       });
       setIsLoading(false);
     }
@@ -417,6 +423,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   }
 
   return (
+    <>
     <div className="mx-auto flex w-full max-w-[1260px] flex-col gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-7">
       <header className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
@@ -583,37 +590,13 @@ export function OrderDetail({ orderId }: { orderId: string }) {
             )}
           </SellerCard>
 
-          <SellerCard className="p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)]">
-            <h2 className="text-lg font-bold text-stone-950">
-              {isDeliveryOrder ? "Delivery / order notes" : "Pickup / order notes"}
-            </h2>
-            {isDeliveryOrder ? (
-              <DeliveryOrderNotes
-                address={formatBuyerAddress(order)}
-                buyerNote={order.buyer_notes}
-                deliveryFee={formatCurrency(deliveryFeeAmount)}
-                deliveryOptionName={deliveryOptionName}
-              />
-            ) : (
-              <div className="mt-3 grid gap-3 text-sm leading-6 text-stone-700 md:grid-cols-2">
-                <NoteBlock
-                  label="Pickup choice"
-                  value={order.pickup_option_label_snapshot}
-                  empty="No pickup choice selected."
-                />
-                <NoteBlock
-                  label="Note from buyer"
-                  value={order.buyer_notes}
-                  empty="No buyer note added."
-                />
-                <NoteBlock
-                  label="Pickup note"
-                  value={order.pickup_note}
-                  empty="No pickup note added."
-                />
-              </div>
-            )}
-          </SellerCard>
+          <FulfillmentNotesSection
+            address={formatBuyerAddress(order)}
+            deliveryFee={formatCurrency(deliveryFeeAmount)}
+            deliveryOptionName={deliveryOptionName}
+            isDeliveryOrder={isDeliveryOrder}
+            order={order}
+          />
         </main>
 
         <aside className="grid h-fit gap-4">
@@ -644,6 +627,17 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         </aside>
       </div>
     </div>
+    <OrderPrintSheet
+      address={formatBuyerAddress(order)}
+      customerName={customerName}
+      deliveryFeeAmount={deliveryFeeAmount}
+      deliveryOptionName={deliveryOptionName}
+      isDeliveryOrder={isDeliveryOrder}
+      items={data.items}
+      order={order}
+      storeLogo={data.storeLogo}
+    />
+    </>
   );
 }
 
@@ -732,65 +726,213 @@ function OrderItemRow({
   );
 }
 
-function NoteBlock({
-  empty,
-  label,
-  value,
+function FulfillmentNotesSection({
+  address,
+  deliveryFee,
+  deliveryOptionName,
+  isDeliveryOrder,
+  order,
 }: {
-  empty: string;
-  label: string;
-  value: string | null;
+  address: string | null;
+  deliveryFee: string;
+  deliveryOptionName: string;
+  isDeliveryOrder: boolean;
+  order: SellerOrderDetailRow;
 }) {
+  const rows = getFulfillmentNoteRows({
+    address,
+    deliveryFee,
+    deliveryOptionName,
+    isDeliveryOrder,
+    order,
+  });
+
+  if (rows.length === 0) return null;
+
   return (
-    <section className="min-h-20 rounded-lg border border-stone-200 bg-[#fffdf8] px-3.5 py-2.5">
-      <h3 className="text-sm font-semibold text-stone-950">{label}</h3>
-      <p className="mt-1 whitespace-pre-line text-sm leading-5 text-stone-700">
-        {value || empty}
-      </p>
-    </section>
+    <SellerCard className="p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)]">
+      <h2 className="text-lg font-bold text-stone-950">
+        {isDeliveryOrder ? "Delivery" : "Pickup"}
+      </h2>
+      <dl className="mt-2 grid gap-1.5 text-sm leading-5 text-stone-700">
+        {rows.map((row) => (
+          <div
+            className="grid gap-1 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-3"
+            key={row.label}
+          >
+            <dt className="font-bold text-stone-950">{row.label}</dt>
+            <dd className="whitespace-pre-line break-words">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </SellerCard>
   );
 }
 
-function DeliveryOrderNotes({
+function OrderPrintSheet({
   address,
-  buyerNote,
-  deliveryFee,
+  customerName,
+  deliveryFeeAmount,
   deliveryOptionName,
+  isDeliveryOrder,
+  items,
+  order,
+  storeLogo,
 }: {
   address: string | null;
-  buyerNote: string | null;
-  deliveryFee: string;
+  customerName: string;
+  deliveryFeeAmount: number;
   deliveryOptionName: string;
+  isDeliveryOrder: boolean;
+  items: SellerOrderItemRow[];
+  order: SellerOrderDetailRow;
+  storeLogo: SellerMediaRow | null;
 }) {
+  const hasTaxFee = Boolean(order.tax_fee_amount);
+  const hasDeliveryFee = isDeliveryOrder && deliveryFeeAmount > 0;
+  const shouldShowBreakdown = hasTaxFee || hasDeliveryFee;
+  const pickupOption = order.pickup_option_label_snapshot?.trim() ?? "";
+  const pickupNote = order.pickup_note?.trim() ?? "";
+  const customerNote = order.buyer_notes?.trim() ?? "";
+
   return (
-    <div className="mt-3 grid gap-4 text-sm leading-6 text-stone-700">
-      <div>
-        <h3 className="text-base font-bold text-stone-950">
-          {deliveryOptionName || "Delivery option"}
-        </h3>
-        <p className="mt-0.5 font-semibold text-stone-700">
-          Delivery fee: {deliveryFee}
-        </p>
-      </div>
+    <section aria-label="Printable order sheet" className="order-print-sheet">
+      <header className="order-print-header">
+        <div className="order-print-title-group">
+          {storeLogo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              className="order-print-logo"
+              src={toPrintImageUrl(storeLogo.public_url)}
+              alt={storeLogo.alt_text ?? "Seller logo"}
+              loading="eager"
+            />
+          ) : null}
+          <h1>Order {formatPrintOrderNumber(order.order_number)}</h1>
+        </div>
+        <time>{formatPrintDateTime(order.created_at)}</time>
+      </header>
 
-      <div>
-        <h3 className="text-sm font-bold text-stone-950">Delivery address</h3>
-        <p className="mt-1 whitespace-pre-line leading-5">
-          {address || "No delivery address provided."}
-        </p>
-      </div>
+      <section className="order-print-customer-payment">
+        <div className="order-print-customer">
+          <p className="order-print-strong">{customerName}</p>
+          {order.buyer_phone_snapshot ? <p>{order.buyer_phone_snapshot}</p> : null}
+          {order.buyer_email_snapshot ? <p>{order.buyer_email_snapshot}</p> : null}
+          {address ? <p className="order-print-address">{address}</p> : null}
+        </div>
+        <dl className="order-print-payment">
+          <div>
+            <dt>Payment method:</dt>
+            <dd>{formatPaymentMethod(order.payment_method)}</dd>
+          </div>
+          <div>
+            <dt>Payment status:</dt>
+            <dd>{formatPrintPaymentStatus(order.payment_status)}</dd>
+          </div>
+        </dl>
+      </section>
 
-      <p className="font-semibold text-stone-800">
-        We will be in touch to coordinate delivery.
-      </p>
+      <table className="order-print-items">
+        <thead>
+          <tr>
+            <th scope="col">Item</th>
+            <th scope="col">Qty</th>
+            <th scope="col">Unit price</th>
+            <th scope="col">Line total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.order_item_id}>
+              <td>
+                <p className="order-print-item-name">{getPrintableItemTitle(item)}</p>
+                <p className="order-print-item-details">
+                  {getPrintableItemDetails(item).join(" • ")}
+                </p>
+              </td>
+              <td>{item.quantity}</td>
+              <td>{formatCurrency(item.unit_price_snapshot)}</td>
+              <td>{formatCurrency(item.line_subtotal)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
-      <div>
-        <h3 className="text-sm font-bold text-stone-950">Note from buyer</h3>
-        <p className="mt-1 whitespace-pre-line leading-5">
-          {buyerNote || "No buyer note added."}
-        </p>
-      </div>
-    </div>
+      <section className="order-print-lower">
+        <dl className="order-print-totals">
+          {shouldShowBreakdown ? (
+            <>
+              <div>
+                <dt>Subtotal</dt>
+                <dd>{formatCurrency(order.subtotal_amount)}</dd>
+              </div>
+              {hasTaxFee ? (
+                <div>
+                  <dt>{order.tax_fee_label_snapshot ?? "Tax/fee"}</dt>
+                  <dd>{formatCurrency(order.tax_fee_amount)}</dd>
+                </div>
+              ) : null}
+              {hasDeliveryFee ? (
+                <div>
+                  <dt>Delivery fee</dt>
+                  <dd>{formatCurrency(deliveryFeeAmount)}</dd>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+          <div className="order-print-total">
+            <dt>Total</dt>
+            <dd>{formatCurrency(order.total_amount)}</dd>
+          </div>
+        </dl>
+
+        <section className="order-print-fulfillment">
+          <h2>Pickup / Delivery</h2>
+          <dl>
+            <div>
+              <dt>Method:</dt>
+              <dd>{isDeliveryOrder ? "Delivery" : "Pickup"}</dd>
+            </div>
+            {isDeliveryOrder ? (
+              <>
+                {deliveryOptionName ? (
+                  <div>
+                    <dt>Delivery option:</dt>
+                    <dd>{deliveryOptionName}</dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>Delivery fee:</dt>
+                  <dd>{formatCurrency(deliveryFeeAmount)}</dd>
+                </div>
+                {address ? (
+                  <div>
+                    <dt>Delivery address:</dt>
+                    <dd>{address}</dd>
+                  </div>
+                ) : null}
+              </>
+            ) : pickupOption ? (
+              <div>
+                <dt>Pickup option:</dt>
+                <dd>{pickupOption}</dd>
+              </div>
+            ) : pickupNote ? (
+              <div>
+                <dt>Pickup note:</dt>
+                <dd>{pickupNote}</dd>
+              </div>
+            ) : null}
+            {customerNote ? (
+              <div>
+                <dt>Customer note:</dt>
+                <dd>{customerNote}</dd>
+              </div>
+            ) : null}
+          </dl>
+        </section>
+      </section>
+    </section>
   );
 }
 
@@ -937,6 +1079,118 @@ function formatCustomerName(order: SellerOrderDetailRow) {
       .filter(Boolean)
       .join(" ") || "Buyer"
   );
+}
+
+function getPrintableItemTitle(item: SellerOrderItemRow) {
+  if (
+    item.order_item_source === "equipment_inventory" ||
+    item.order_item_source === "processed_poultry_inventory"
+  ) {
+    return item.item_name_snapshot || item.breed_display_name_snapshot;
+  }
+
+  return item.custom_item_name_snapshot || item.breed_display_name_snapshot;
+}
+
+function getPrintableItemDetails(item: SellerOrderItemRow) {
+  const isCustomItem = item.order_item_source === "custom";
+  const isEquipmentItem = item.order_item_source === "equipment_inventory";
+  const isProcessedPoultryItem =
+    item.order_item_source === "processed_poultry_inventory";
+  const label = formatInventoryLabel({
+    custom_inventory_label: item.custom_inventory_label_snapshot,
+    inventory_type: item.inventory_type_snapshot,
+  });
+
+  if (isCustomItem) return ["Custom item"];
+
+  if (isEquipmentItem || isProcessedPoultryItem) {
+    return [item.item_category_snapshot, item.custom_inventory_label_snapshot]
+      .filter((detail): detail is string => Boolean(detail));
+  }
+
+  return [
+    item.species_name_snapshot,
+    formatSellerItemDetail(label),
+    formatPrintAge(item.age_at_sale_days_snapshot),
+    item.hatch_date_snapshot
+      ? `Hatched ${formatShortDate(item.hatch_date_snapshot)}`
+      : null,
+  ].filter((detail): detail is string => Boolean(detail));
+}
+
+function getFulfillmentNoteRows({
+  address,
+  deliveryFee,
+  deliveryOptionName,
+  isDeliveryOrder,
+  order,
+}: {
+  address: string | null;
+  deliveryFee: string;
+  deliveryOptionName: string;
+  isDeliveryOrder: boolean;
+  order: SellerOrderDetailRow;
+}) {
+  const pickupOption = order.pickup_option_label_snapshot?.trim() ?? "";
+  const pickupNote = order.pickup_note?.trim() ?? "";
+  const customerNote = order.buyer_notes?.trim() ?? "";
+  const rows: Array<{ label: string; value: string }> = [];
+
+  if (isDeliveryOrder) {
+    if (deliveryOptionName) {
+      rows.push({ label: "Delivery option", value: deliveryOptionName });
+    }
+
+    rows.push({ label: "Delivery fee", value: deliveryFee });
+
+    if (address) {
+      rows.push({ label: "Delivery address", value: address });
+    }
+  } else if (pickupOption) {
+    rows.push({ label: "Pickup option", value: pickupOption });
+  } else if (pickupNote) {
+    rows.push({ label: "Pickup note", value: pickupNote });
+  }
+
+  if (customerNote) {
+    rows.push({ label: "Customer note", value: customerNote });
+  }
+
+  return rows;
+}
+
+function formatPrintAge(days: number | null | undefined) {
+  if (days == null || days < 0) return null;
+  if (days < 7) return `${days} day${days === 1 ? "" : "s"}`;
+
+  const weeks = Math.floor(days / 7);
+
+  return `${weeks} week${weeks === 1 ? "" : "s"}`;
+}
+
+function formatPrintOrderNumber(value: string) {
+  return value.trim().startsWith("#") ? value : `#${value}`;
+}
+
+function formatPrintDateTime(value: string | null) {
+  if (!value) return "Not set";
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatPrintPaymentStatus(value: string | null) {
+  if (value === "pay_at_pickup") return "Unpaid";
+  if (value === "paid") return "Paid";
+  if (value === "refunded") return "Refunded";
+
+  return value ? value.replaceAll("_", " ") : "Not set";
 }
 
 function formatBuyerAddress(order: SellerOrderDetailRow) {
@@ -1459,6 +1713,29 @@ function pickMediaForItem(
   return null;
 }
 
+async function loadStoreLogo(storeId: string) {
+  const { data, error } = await supabase
+    .from("seller_media_management")
+    .select(
+      "entity_type, entity_id, display_context, public_url, alt_text, sort_order, is_featured, moderation_status, asset_status, visibility_status",
+    )
+    .eq("store_id", storeId)
+    .eq("entity_type", "store")
+    .eq("entity_id", storeId)
+    .eq("display_context", "logo")
+    .eq("visibility_status", "active")
+    .eq("asset_status", "active")
+    .eq("moderation_status", "approved")
+    .order("is_featured", { ascending: false })
+    .order("sort_order", { ascending: true })
+    .limit(1)
+    .returns<SellerMediaRow[]>();
+
+  if (error) return null;
+
+  return data?.[0] ?? null;
+}
+
 function getItemMediaEntityKeys(item: SellerOrderItemRow) {
   if (item.order_item_source === "equipment_inventory") {
     return [
@@ -1501,6 +1778,15 @@ function toDisplayImageUrl(value: string | null | undefined) {
   if (value.startsWith("/")) return value;
 
   return `/storage/v1/object/public/${value}`;
+}
+
+function toPrintImageUrl(value: string | null | undefined) {
+  if (!value) return "";
+  if (value.startsWith("http://") || value.startsWith("https://")) return value;
+  if (value.startsWith("/storage/")) return `${supabasePublicUrl}${value}`;
+  if (value.startsWith("/")) return value;
+
+  return `${supabasePublicUrl}/storage/v1/object/public/${value}`;
 }
 
 function getCustomerInitials(name: string) {

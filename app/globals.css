@@ -331,6 +331,257 @@ body {
   display: none;
 }
 
+.order-print-sheet {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+  height: 1px;
+  width: 1px;
+  overflow: hidden;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+@media print {
+  @page {
+    margin: 0.67in;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  body {
+    color: #000000 !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .order-print-sheet,
+  .order-print-sheet * {
+    visibility: visible;
+  }
+
+  .order-print-sheet {
+    display: block;
+    position: absolute;
+    inset: 0 auto auto 0;
+    height: auto;
+    width: 100%;
+    overflow: visible;
+    pointer-events: auto;
+    visibility: visible;
+    color: #000000;
+    background: #ffffff;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.22;
+  }
+
+  .order-print-sheet p,
+  .order-print-sheet h1,
+  .order-print-sheet h2,
+  .order-print-sheet dl,
+  .order-print-sheet dd {
+    margin: 0;
+  }
+
+  .order-print-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.25in;
+    border-bottom: 1.5pt solid #000000;
+    padding-bottom: 0.12in;
+  }
+
+  .order-print-header h1 {
+    font-size: 22pt;
+    line-height: 1;
+    font-weight: 700;
+  }
+
+  .order-print-header time {
+    font-size: 12pt;
+    white-space: nowrap;
+  }
+
+  .order-print-title-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.055in;
+    min-width: 0;
+  }
+
+  .order-print-logo {
+    display: block;
+    width: auto;
+    max-width: 2.7in;
+    max-height: 1.04in;
+    object-fit: contain;
+  }
+
+  .order-print-customer-payment {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(2.55in, 0.72fr);
+    gap: 0.28in;
+    padding: 0.17in 0 0.2in;
+    border-bottom: 1.2pt solid #000000;
+  }
+
+  .order-print-customer,
+  .order-print-payment {
+    display: grid;
+    gap: 0.045in;
+  }
+
+  .order-print-strong {
+    font-weight: 700;
+  }
+
+  .order-print-address {
+    margin-top: 0.08in !important;
+    white-space: pre-line;
+  }
+
+  .order-print-payment div,
+  .order-print-totals div,
+  .order-print-fulfillment dl div {
+    display: grid;
+    grid-template-columns: 1.15in minmax(0, 1fr);
+    gap: 0.12in;
+  }
+
+  .order-print-payment dt,
+  .order-print-totals dt,
+  .order-print-fulfillment dt {
+    font-weight: 700;
+  }
+
+  .order-print-payment dd,
+  .order-print-totals dd,
+  .order-print-fulfillment dd {
+    white-space: pre-line;
+  }
+
+  .order-print-items {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    margin-top: 0.12in;
+  }
+
+  .order-print-items th {
+    border-bottom: 1pt solid #000000;
+    padding: 0.06in 0.06in 0.075in;
+    font-weight: 700;
+    text-align: left;
+  }
+
+  .order-print-items th:nth-child(2),
+  .order-print-items th:nth-child(3),
+  .order-print-items th:nth-child(4),
+  .order-print-items td:nth-child(2),
+  .order-print-items td:nth-child(3),
+  .order-print-items td:nth-child(4) {
+    text-align: right;
+  }
+
+  .order-print-items th:nth-child(1) {
+    width: auto;
+  }
+
+  .order-print-items th:nth-child(2) {
+    width: 0.52in;
+  }
+
+  .order-print-items th:nth-child(3) {
+    width: 0.95in;
+  }
+
+  .order-print-items th:nth-child(4) {
+    width: 1.05in;
+  }
+
+  .order-print-items td {
+    border-bottom: 0.6pt solid #999999;
+    padding: 0.085in 0.06in;
+    vertical-align: middle;
+  }
+
+  .order-print-items tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .order-print-item-name {
+    font-weight: 700;
+  }
+
+  .order-print-item-details {
+    margin-top: 0.025in !important;
+    font-size: 9.5pt;
+    line-height: 1.18;
+  }
+
+  .order-print-lower {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .order-print-totals {
+    width: 2.25in;
+    margin: 0.09in 0 0 auto !important;
+    padding-bottom: 0.08in;
+  }
+
+  .order-print-totals div {
+    grid-template-columns: minmax(0, 1fr) 0.95in;
+    padding: 0.025in 0;
+  }
+
+  .order-print-totals dd {
+    text-align: right;
+  }
+
+  .order-print-total {
+    border-top: 1pt solid #000000;
+    margin-top: 0.025in;
+    padding-top: 0.055in !important;
+    font-size: 12pt;
+    font-weight: 700;
+  }
+
+  .order-print-fulfillment {
+    border-top: 1.2pt solid #000000;
+    padding-top: 0.12in;
+  }
+
+  .order-print-fulfillment h2 {
+    font-size: 12.5pt;
+    line-height: 1.1;
+    font-weight: 700;
+  }
+
+  .order-print-fulfillment dl {
+    display: grid;
+    gap: 0.055in;
+    margin-top: 0.1in;
+    max-width: 5.65in;
+  }
+
+  .order-print-fulfillment dl div {
+    grid-template-columns: 1.18in minmax(0, 1fr);
+  }
+}
+
 .seller-money-field {
   padding-left: 3rem;
 }
