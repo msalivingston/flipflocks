@@ -8,6 +8,7 @@ import {
   normalizeQuantity,
   summarizeStorefrontCart,
 } from "../../_components/storefront-cart-client";
+import { useAddToCartConfirmation } from "../../_components/use-add-to-cart-confirmation";
 import { StorefrontProduct } from "../../storefront-data";
 import {
   StorefrontButton,
@@ -79,6 +80,12 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
 
   const summary = summarizeStorefrontCart(selectedItems);
   const addedSummary = addedItems ? summarizeStorefrontCart(addedItems) : null;
+  const {
+    confirmationPanelRef,
+    isButtonConfirmed,
+    isPanelHighlighted,
+    showAddToCartConfirmation,
+  } = useAddToCartConfirmation();
 
   function updateQuantity(inventoryItemId: string, rawValue: string, max: number) {
     const parsed = Number.parseInt(rawValue, 10);
@@ -97,6 +104,7 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
     addItemsToStorefrontCart(product.storeSlug, selectedItems);
     setAddedItems(selectedItems);
     setQuantities({});
+    showAddToCartConfirmation();
   }
 
   return (
@@ -258,12 +266,20 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
           onClick={handleAddToCart}
         >
           <StorefrontGlyph className="h-5 w-5" src="/glyphs/cart.png" />
-          Add to cart
+          {isButtonConfirmed ? "Added to cart" : "Add to cart"}
         </StorefrontButton>
       </div>
 
       {addedItems && addedSummary ? (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-5">
+        <div
+          className={cx(
+            "rounded-lg border border-emerald-200 bg-emerald-50 p-5 transition-[box-shadow,opacity] duration-500 ease-out",
+            isPanelHighlighted
+              ? "shadow-[0_0_0_3px_rgba(16,185,129,0.22)]"
+              : "shadow-none",
+          )}
+          ref={confirmationPanelRef}
+        >
           <h3 className="font-semibold text-emerald-950">Added to cart</h3>
           <div className="mt-3 grid gap-2 text-sm text-emerald-950">
             {addedItems.map((item) => (

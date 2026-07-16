@@ -35,10 +35,11 @@ type CustomerDetailRow = CustomerRow & {
   delivery_country: string | null;
 };
 
-type InventorySearchRow = {
+type ListingInventoryRow = {
   inventory_item_id: string;
   listing_batch_id: string;
   breed_display_name: string;
+  batch_type: string;
   inventory_type: string;
   custom_inventory_label: string | null;
   origin_date: string | null;
@@ -52,10 +53,53 @@ type InventorySearchRow = {
   operational_availability_status: string;
 };
 
+type EquipmentInventoryRow = {
+  equipment_inventory_item_id: string;
+  item_name: string;
+  category: string;
+  condition: string | null;
+  quantity_available: number;
+  price: number;
+  visibility_status: string;
+  moderation_status: string;
+  operational_availability_status: string;
+};
+
+type ProcessedPoultryInventoryRow = {
+  processed_poultry_inventory_item_id: string;
+  product_name: string;
+  poultry_type: string;
+  product_type: string;
+  package_size: string | null;
+  quantity_available: number;
+  price: number;
+  visibility_status: string;
+  moderation_status: string;
+  operational_availability_status: string;
+};
+
+type InventoryItemType =
+  | "listing_inventory"
+  | "equipment_inventory"
+  | "processed_poultry_inventory";
+
+type InventorySearchRow = {
+  id: string;
+  itemType: InventoryItemType;
+  title: string;
+  category: InventoryCategory;
+  detailLabel: string;
+  quantity_available: number;
+  effective_unit_price: number;
+  operational_availability_status: string;
+  allowInventoryOverride: boolean;
+};
+
 type OrderLine = {
   type: "inventory" | "custom";
   id: string;
   inventoryItemId: string;
+  inventoryItemType: InventoryItemType | "";
   customItemName: string;
   customItemDescription: string;
   search: string;
@@ -73,7 +117,13 @@ type DiscountType = "fixed" | "percent";
 
 type CustomerMode = "existing" | "new";
 
-type BrowseInventoryFilter = "all" | "poultry";
+type BrowseInventoryFilter =
+  | "all"
+  | "poultry"
+  | "hatching_eggs"
+  | "processed_poultry"
+  | "equipment";
+type InventoryCategory = Exclude<BrowseInventoryFilter, "all">;
 
 type FulfillmentMethod = "pickup" | "delivery";
 
@@ -120,6 +170,7 @@ const emptyLine = (): OrderLine => ({
   customItemName: "",
   customItemDescription: "",
   inventoryItemId: "",
+  inventoryItemType: "",
   quantity: "1",
   search: "",
   unitPrice: "",
@@ -131,6 +182,7 @@ const customLine = (): OrderLine => ({
   customItemName: "",
   customItemDescription: "",
   inventoryItemId: "",
+  inventoryItemType: "",
   quantity: "1",
   search: "",
   unitPrice: "",
@@ -198,6 +250,8 @@ export function NewManualOrder() {
       const [
         customerResult,
         inventoryResult,
+        equipmentResult,
+        processedPoultryResult,
         defaultsResult,
         pickupOptionsResult,
         deliveryOptionsResult,
@@ -216,7 +270,7 @@ export function NewManualOrder() {
         supabase
           .from("seller_inventory_management")
           .select(
-            "inventory_item_id, listing_batch_id, breed_display_name, inventory_type, custom_inventory_label, origin_date, available_date, quantity_available, effective_unit_price, inventory_visibility_status, inventory_moderation_status, listing_batch_visibility_status, listing_batch_moderation_status, operational_availability_status",
+            "inventory_item_id, listing_batch_id, breed_display_name, batch_type, inventory_type, custom_inventory_label, origin_date, available_date, quantity_available, effective_unit_price, inventory_visibility_status, inventory_moderation_status, listing_batch_visibility_status, listing_batch_moderation_status, operational_availability_status",
           )
           .eq("store_id", seller.store_id)
           .neq("inventory_visibility_status", "archived")
@@ -224,7 +278,27 @@ export function NewManualOrder() {
           .eq("inventory_moderation_status", "normal")
           .eq("listing_batch_moderation_status", "normal")
           .order("breed_display_name", { ascending: true })
-          .returns<InventorySearchRow[]>(),
+          .returns<ListingInventoryRow[]>(),
+        supabase
+          .from("seller_equipment_inventory_management")
+          .select(
+            "equipment_inventory_item_id, item_name, category, condition, quantity_available, price, visibility_status, moderation_status, operational_availability_status",
+          )
+          .eq("store_id", seller.store_id)
+          .neq("visibility_status", "archived")
+          .eq("moderation_status", "normal")
+          .order("item_name", { ascending: true })
+          .returns<EquipmentInventoryRow[]>(),
+        supabase
+          .from("seller_processed_poultry_inventory_management")
+          .select(
+            "processed_poultry_inventory_item_id, product_name, poultry_type, product_type, package_size, quantity_available, price, visibility_status, moderation_status, operational_availability_status",
+          )
+          .eq("store_id", seller.store_id)
+          .neq("visibility_status", "archived")
+          .eq("moderation_status", "normal")
+          .order("product_name", { ascending: true })
+          .returns<ProcessedPoultryInventoryRow[]>(),
         supabase
           .from("seller_store_defaults")
           .select("pickup_method, delivery_enabled")
@@ -254,6 +328,8 @@ export function NewManualOrder() {
       const firstError =
         customerResult.error ??
         inventoryResult.error ??
+        equipmentResult.error ??
+        processedPoultryResult.error ??
         defaultsResult.error ??
         pickupOptionsResult.error ??
         deliveryOptionsResult.error;
@@ -265,7 +341,13 @@ export function NewManualOrder() {
       }
 
       setCustomers(customerResult.data ?? []);
-      setInventory(inventoryResult.data ?? []);
+      setInventory(
+        normalizeSellableInventoryRows({
+          equipmentRows: equipmentResult.data ?? [],
+          listingRows: inventoryResult.data ?? [],
+          processedPoultryRows: processedPoultryResult.data ?? [],
+        }),
+      );
       setPickupMethod(
         defaultsResult.data?.pickup_method === "manual_options"
           ? "manual_options"
@@ -393,14 +475,16 @@ export function NewManualOrder() {
   }
 
   function addInventoryItem(inventoryItemId: string) {
-    const item = inventory.find((row) => row.inventory_item_id === inventoryItemId);
+    const item = inventory.find((row) => row.id === inventoryItemId);
 
     if (!item) return;
 
     setLines((current) => {
       const existingLine = current.find(
         (line) =>
-          line.type === "inventory" && line.inventoryItemId === inventoryItemId,
+          line.type === "inventory" &&
+          line.inventoryItemId === inventoryItemId &&
+          line.inventoryItemType === item.itemType,
       );
 
       if (existingLine) {
@@ -416,6 +500,7 @@ export function NewManualOrder() {
         {
           ...emptyLine(),
           inventoryItemId,
+          inventoryItemType: item.itemType,
           search: formatInventorySearchLabel(item),
           unitPrice: formatMoneyInput(item.effective_unit_price ?? 0),
         },
@@ -520,15 +605,24 @@ export function NewManualOrder() {
       p_store_id: seller.store_id,
       p_idempotency_key: crypto.randomUUID(),
       p_items: discountedLines.map((line) => ({
-        item_type: line.type,
+        item_type:
+          line.type === "custom" ? "custom" : getManualOrderPayloadItemType(line),
         inventory_item_id:
-          line.type === "inventory" ? line.inventoryItemId : undefined,
+          line.type === "inventory" && line.inventoryItemType === "listing_inventory"
+            ? line.inventoryItemId
+            : undefined,
+        item_id:
+          line.type === "inventory" && line.inventoryItemType !== "listing_inventory"
+            ? line.inventoryItemId
+            : undefined,
+        inventory_item_type:
+          line.type === "inventory" ? line.inventoryItemType : undefined,
         custom_item_name:
           line.type === "custom" ? formatCustomItemPayloadName(line) : undefined,
         quantity: Number(line.quantity),
         unit_price: line.discountedUnitPrice,
         allow_inventory_override:
-          line.type === "inventory"
+          line.type === "inventory" && line.inventoryItemType === "listing_inventory"
             ? quantityExceedsAvailable(line, inventory)
             : undefined,
       })),
@@ -1264,13 +1358,13 @@ function InventorySearchResults({
         results.map((item) => (
           <button
             className="grid min-h-10 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-stone-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none"
-            key={item.inventory_item_id}
+            key={item.id}
             type="button"
-            onClick={() => onSelect(item.inventory_item_id)}
+            onClick={() => onSelect(item.id)}
           >
             <span className="min-w-0">
               <span className="block truncate font-semibold text-stone-950">
-                {item.breed_display_name}
+                {item.title}
               </span>
               <span className="block truncate text-xs text-stone-600">
                 {formatInventoryMetadata(item)} &middot; {item.quantity_available ?? 0} available
@@ -1310,7 +1404,10 @@ function BrowseInventoryDialog({
   const rows = getBrowseInventoryRows(inventory, filter, query).slice(0, 60);
   const filters: { label: string; value: BrowseInventoryFilter }[] = [
     { label: "All", value: "all" },
-    { label: "Poultry", value: "poultry" },
+    { label: "Live poultry", value: "poultry" },
+    { label: "Hatching eggs", value: "hatching_eggs" },
+    { label: "Poultry products", value: "processed_poultry" },
+    { label: "Equipment", value: "equipment" },
   ];
 
   return (
@@ -1369,16 +1466,16 @@ function BrowseInventoryDialog({
         <div className="min-h-0 overflow-y-auto bg-white">
           {rows.length > 0 ? (
             rows.map((item) => {
-              const wasAdded = addedInventoryItemId === item.inventory_item_id;
+              const wasAdded = addedInventoryItemId === item.id;
 
               return (
                 <div
                   className="grid grid-cols-[minmax(0,1fr)_5rem_5.25rem_4rem] items-center gap-2 border-b border-stone-100 px-4 py-2 text-sm last:border-b-0"
-                  key={item.inventory_item_id}
+                  key={item.id}
                 >
                   <div className="min-w-0">
                     <p className="truncate font-bold text-stone-950">
-                      {item.breed_display_name}
+                      {item.title}
                     </p>
                     <p className="truncate text-xs text-stone-600">
                       {formatBrowseInventoryMetadata(item)}
@@ -1397,7 +1494,7 @@ function BrowseInventoryDialog({
                         : "text-emerald-800 hover:bg-emerald-50"
                     }`}
                     type="button"
-                    onClick={() => onSelect(item.inventory_item_id)}
+                    onClick={() => onSelect(item.id)}
                   >
                     {wasAdded ? "Added" : "Add"}
                   </button>
@@ -1433,12 +1530,15 @@ function OrderItemRow({
   updateLine: (updates: Partial<OrderLine>) => void;
 }) {
   const selectedItem = inventory.find(
-    (row) => row.inventory_item_id === line.inventoryItemId,
+    (row) => row.id === line.inventoryItemId,
   );
   const quantity = Number(line.quantity || 0);
   const unitPrice = Number(line.unitPrice || 0);
   const exceedsAvailable =
-    line.type === "inventory" && quantityExceedsAvailable(line, inventory);
+    line.type === "inventory" &&
+    selectedItem != null &&
+    isPositiveWholeNumber(line.quantity) &&
+    quantity > selectedItem.quantity_available;
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_72px_96px_90px_28px] items-start gap-2 px-1 py-2">
@@ -1467,14 +1567,16 @@ function OrderItemRow({
         ) : (
           <>
             <p className="truncate text-sm font-bold text-stone-950">
-              {selectedItem?.breed_display_name ?? "Inventory item"}
+              {selectedItem?.title ?? "Inventory item"}
             </p>
             <p className="mt-1 truncate text-xs text-stone-600">
               {selectedItem ? formatInventoryMetadata(selectedItem) : line.search}
             </p>
             {exceedsAvailable ? (
               <p className="mt-1 text-xs font-semibold text-amber-800">
-                Quantity exceeds available inventory.
+                {selectedItem?.allowInventoryOverride
+                  ? "Quantity exceeds available inventory."
+                  : "Quantity exceeds available inventory and cannot be saved."}
               </p>
             ) : null}
           </>
@@ -1675,9 +1777,7 @@ function validateOrder({
   }
 
   selectedLines.forEach((line, index) => {
-    const item = inventory.find(
-      (row) => row.inventory_item_id === line.inventoryItemId,
-    );
+    const item = inventory.find((row) => row.id === line.inventoryItemId);
     const label = `Item ${index + 1}`;
 
     if (line.type === "inventory" && !item) {
@@ -1691,6 +1791,15 @@ function validateOrder({
     }
     if (!isValidMoney(line.unitPrice)) {
       errors.push(`${label}: price must be a valid amount.`);
+    }
+    if (
+      line.type === "inventory" &&
+      item &&
+      !item.allowInventoryOverride &&
+      isPositiveWholeNumber(line.quantity) &&
+      Number(line.quantity) > item.quantity_available
+    ) {
+      errors.push(`${label}: quantity exceeds available inventory.`);
     }
   });
 
@@ -1734,9 +1843,7 @@ function distributeDiscount(
         : roundCurrency((lineTotal / subtotal) * discountAmount);
     remainingDiscount = roundCurrency(remainingDiscount - lineDiscount);
 
-    const item = inventory.find(
-      (row) => row.inventory_item_id === line.inventoryItemId,
-    );
+    const item = inventory.find((row) => row.id === line.inventoryItemId);
 
     return {
       ...line,
@@ -1782,6 +1889,84 @@ function filterCustomers(customers: CustomerRow[], query: string) {
   );
 }
 
+function normalizeSellableInventoryRows({
+  equipmentRows,
+  listingRows,
+  processedPoultryRows,
+}: {
+  equipmentRows: EquipmentInventoryRow[];
+  listingRows: ListingInventoryRow[];
+  processedPoultryRows: ProcessedPoultryInventoryRow[];
+}): InventorySearchRow[] {
+  return [
+    ...listingRows.map(normalizeListingInventoryRow),
+    ...processedPoultryRows.map(normalizeProcessedPoultryInventoryRow),
+    ...equipmentRows.map(normalizeEquipmentInventoryRow),
+  ].sort((firstItem, secondItem) => {
+    const categorySort =
+      getInventoryCategorySort(firstItem.category) -
+      getInventoryCategorySort(secondItem.category);
+
+    return categorySort || firstItem.title.localeCompare(secondItem.title);
+  });
+}
+
+function normalizeListingInventoryRow(row: ListingInventoryRow): InventorySearchRow {
+  const category =
+    row.batch_type === "hatching_eggs" || row.inventory_type === "hatching_eggs"
+      ? "hatching_eggs"
+      : "poultry";
+  const inventoryType =
+    row.custom_inventory_label || formatInventoryTypeLabel(row.inventory_type);
+  const age = formatAgeAtAvailabilityFromDates(row.origin_date, row.available_date);
+
+  return {
+    allowInventoryOverride: true,
+    category,
+    detailLabel: [inventoryType, age].filter(Boolean).join(" - "),
+    effective_unit_price: row.effective_unit_price ?? 0,
+    id: row.inventory_item_id,
+    itemType: "listing_inventory",
+    operational_availability_status: row.operational_availability_status,
+    quantity_available: row.quantity_available ?? 0,
+    title: row.breed_display_name,
+  };
+}
+
+function normalizeEquipmentInventoryRow(
+  row: EquipmentInventoryRow,
+): InventorySearchRow {
+  return {
+    allowInventoryOverride: false,
+    category: "equipment",
+    detailLabel: [row.category, row.condition].filter(Boolean).join(" - "),
+    effective_unit_price: row.price ?? 0,
+    id: row.equipment_inventory_item_id,
+    itemType: "equipment_inventory",
+    operational_availability_status: row.operational_availability_status,
+    quantity_available: row.quantity_available ?? 0,
+    title: row.item_name,
+  };
+}
+
+function normalizeProcessedPoultryInventoryRow(
+  row: ProcessedPoultryInventoryRow,
+): InventorySearchRow {
+  return {
+    allowInventoryOverride: false,
+    category: "processed_poultry",
+    detailLabel: [row.poultry_type, row.product_type, row.package_size]
+      .filter(Boolean)
+      .join(" - "),
+    effective_unit_price: row.price ?? 0,
+    id: row.processed_poultry_inventory_item_id,
+    itemType: "processed_poultry_inventory",
+    operational_availability_status: row.operational_availability_status,
+    quantity_available: row.quantity_available ?? 0,
+    title: row.product_name,
+  };
+}
+
 function filterInventory(inventory: InventorySearchRow[], query: string) {
   const normalized = query.trim().toLowerCase();
 
@@ -1790,9 +1975,9 @@ function filterInventory(inventory: InventorySearchRow[], query: string) {
     if (!normalized) return false;
 
     return [
-      item.breed_display_name,
-      formatInventoryType(item),
-      formatAge(item),
+      item.title,
+      item.detailLabel,
+      formatInventoryCategoryLabel(item.category),
       item.operational_availability_status,
     ].some((value) => value.toLowerCase().includes(normalized));
   });
@@ -1814,21 +1999,39 @@ function getBrowseInventoryRows(
       if (!normalized) return true;
 
       return [
-        item.breed_display_name,
-        formatInventoryType(item),
-        formatAge(item),
+        item.title,
+        item.detailLabel,
+        formatInventoryCategoryLabel(item.category),
         item.operational_availability_status,
       ].some((value) => value.toLowerCase().includes(normalized));
     })
     .sort((firstItem, secondItem) =>
-      firstItem.breed_display_name.localeCompare(secondItem.breed_display_name),
+      firstItem.title.localeCompare(secondItem.title),
     );
 }
 
 function getBrowseInventoryCategory(
   item: InventorySearchRow,
 ): Exclude<BrowseInventoryFilter, "all"> {
-  return item.inventory_type ? "poultry" : "poultry";
+  return item.category;
+}
+
+function getInventoryCategorySort(category: BrowseInventoryFilter) {
+  if (category === "poultry") return 1;
+  if (category === "hatching_eggs") return 2;
+  if (category === "processed_poultry") return 3;
+  if (category === "equipment") return 4;
+
+  return 0;
+}
+
+function formatInventoryCategoryLabel(category: BrowseInventoryFilter) {
+  if (category === "poultry") return "Live poultry";
+  if (category === "hatching_eggs") return "Hatching eggs";
+  if (category === "processed_poultry") return "Poultry product";
+  if (category === "equipment") return "Equipment";
+
+  return "Inventory";
 }
 
 function isActiveLine(line: OrderLine) {
@@ -1846,19 +2049,16 @@ function quantityExceedsAvailable(
   if (line.type !== "inventory") return false;
   if (!isPositiveWholeNumber(line.quantity)) return false;
 
-  const item = inventory.find(
-    (row) => row.inventory_item_id === line.inventoryItemId,
-  );
+  const item = inventory.find((row) => row.id === line.inventoryItemId);
 
   if (!item) return false;
+  if (!item.allowInventoryOverride) return false;
 
   return Number(line.quantity) > (item.quantity_available ?? 0);
 }
 
 function formatInventorySearchLabel(item: InventorySearchRow) {
-  return `${item.breed_display_name} ${formatInventoryType(item)} - ${formatAge(
-    item,
-  )} - ${item.quantity_available ?? 0} available - ${formatCurrency(
+  return `${item.title} ${item.detailLabel} - ${item.quantity_available} available - ${formatCurrency(
     item.effective_unit_price,
   )}`;
 }
@@ -1870,22 +2070,24 @@ function formatCustomItemPayloadName(line: OrderLine) {
   return description ? `${name} - ${description}` : name;
 }
 
+function getManualOrderPayloadItemType(line: OrderLine) {
+  if (line.inventoryItemType === "equipment_inventory") {
+    return "equipment_inventory";
+  }
+
+  if (line.inventoryItemType === "processed_poultry_inventory") {
+    return "processed_poultry_inventory";
+  }
+
+  return "inventory";
+}
+
 function formatInventoryMetadata(item: InventorySearchRow) {
-  return `${formatInventoryType(item)} · ${formatAge(item)} · Inventory`;
+  return `${item.detailLabel} - ${formatInventoryCategoryLabel(item.category)}`;
 }
 
 function formatBrowseInventoryMetadata(item: InventorySearchRow) {
-  return `${formatInventoryType(item)} · ${formatAge(item)} · Poultry`;
-}
-
-function formatInventoryType(item: InventorySearchRow) {
-  return (
-    item.custom_inventory_label || formatInventoryTypeLabel(item.inventory_type)
-  );
-}
-
-function formatAge(item: InventorySearchRow) {
-  return formatAgeAtAvailabilityFromDates(item.origin_date, item.available_date);
+  return `${item.detailLabel} - ${formatInventoryCategoryLabel(item.category)}`;
 }
 
 function formatCustomerName(customer: {

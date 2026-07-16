@@ -7,6 +7,7 @@ import {
   normalizeQuantity,
   summarizeStorefrontCart,
 } from "../../_components/storefront-cart-client";
+import { useAddToCartConfirmation } from "../../_components/use-add-to-cart-confirmation";
 import { StorefrontEquipmentItem } from "../../storefront-data";
 import {
   StorefrontButton,
@@ -29,6 +30,12 @@ export function EquipmentOrderOptions({
   const summary = selectedItem
     ? summarizeStorefrontCart([selectedItem])
     : { itemCount: 0, subtotal: 0, totalQuantity: 0 };
+  const {
+    confirmationPanelRef,
+    isButtonConfirmed,
+    isPanelHighlighted,
+    showAddToCartConfirmation,
+  } = useAddToCartConfirmation();
 
   function handleAddToCart() {
     if (!selectedItem) return;
@@ -36,6 +43,7 @@ export function EquipmentOrderOptions({
     addItemsToStorefrontCart(item.store_slug, [selectedItem]);
     setAddedItem(selectedItem);
     setQuantity(0);
+    showAddToCartConfirmation();
   }
 
   return (
@@ -146,12 +154,20 @@ export function EquipmentOrderOptions({
           disabled={!selectedItem}
           onClick={handleAddToCart}
         >
-          Add to cart
+          {isButtonConfirmed ? "Added to cart" : "Add to cart"}
         </StorefrontButton>
       </div>
 
       {addedItem ? (
-        <div className="border-t border-emerald-200 bg-emerald-50 p-5">
+        <div
+          className={cx(
+            "border-t border-emerald-200 bg-emerald-50 p-5 transition-[box-shadow,opacity] duration-500 ease-out",
+            isPanelHighlighted
+              ? "shadow-[0_0_0_3px_rgba(16,185,129,0.22)]"
+              : "shadow-none",
+          )}
+          ref={confirmationPanelRef}
+        >
           <h3 className="font-semibold text-emerald-950">Added to cart</h3>
           <div className="mt-3 rounded-md bg-white/70 px-3 py-2 text-sm text-emerald-950">
             <div className="flex flex-wrap items-center justify-between gap-3">
