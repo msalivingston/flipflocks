@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../../_components/seller-context";
@@ -23,6 +24,15 @@ type CustomerRow = {
   last_name: string | null;
   phone: string | null;
   business_name: string | null;
+};
+
+type CustomerDetailRow = CustomerRow & {
+  delivery_address_line1: string | null;
+  delivery_address_line2: string | null;
+  delivery_city: string | null;
+  delivery_state: string | null;
+  delivery_postal_code: string | null;
+  delivery_country: string | null;
 };
 
 type InventorySearchRow = {
@@ -65,6 +75,45 @@ type CustomerMode = "existing" | "new";
 
 type BrowseInventoryFilter = "all" | "poultry";
 
+type FulfillmentMethod = "pickup" | "delivery";
+
+type PickupMethod = "notes" | "manual_options";
+
+type StoreDefaults = {
+  pickup_method: PickupMethod | null;
+  delivery_enabled: boolean | null;
+};
+
+type PickupOption = {
+  id: string;
+  label: string;
+  description: string | null;
+};
+
+type DeliveryOption = {
+  id: string;
+  name: string;
+  price_amount: number | null;
+};
+
+type DeliveryAddress = {
+  line1: string;
+  line2: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+};
+
+const emptyDeliveryAddress = (): DeliveryAddress => ({
+  line1: "",
+  line2: "",
+  city: "",
+  state: "",
+  postalCode: "",
+  country: "US",
+});
+
 const emptyLine = (): OrderLine => ({
   type: "inventory",
   id: crypto.randomUUID(),
@@ -91,6 +140,10 @@ export function NewManualOrder() {
   const { seller } = useSellerContext();
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [inventory, setInventory] = useState<InventorySearchRow[]>([]);
+  const [pickupMethod, setPickupMethod] = useState<PickupMethod>("notes");
+  const [deliveryEnabled, setDeliveryEnabled] = useState(false);
+  const [pickupOptions, setPickupOptions] = useState<PickupOption[]>([]);
+  const [deliveryOptions, setDeliveryOptions] = useState<DeliveryOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [customerMode, setCustomerMode] = useState<CustomerMode>("existing");
@@ -114,8 +167,19 @@ export function NewManualOrder() {
   const [lines, setLines] = useState<OrderLine[]>([]);
   const [discountType, setDiscountType] = useState<DiscountType>("fixed");
   const [discountValue, setDiscountValue] = useState("");
+  const [fulfillmentMethod, setFulfillmentMethod] =
+    useState<FulfillmentMethod>("pickup");
   const [buyerNotes, setBuyerNotes] = useState("");
   const [pickupNote, setPickupNote] = useState("");
+  const [pickupOptionId, setPickupOptionId] = useState("");
+  const [deliveryOptionId, setDeliveryOptionId] = useState("");
+  const [deliveryAddress, setDeliveryAddress] =
+    useState<DeliveryAddress>(emptyDeliveryAddress);
+  const [deliveryAddressCustomerId, setDeliveryAddressCustomerId] = useState<
+    string | null
+  >(null);
+  const [hasEditedDeliveryAddress, setHasEditedDeliveryAddress] =
+    useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
@@ -131,7 +195,13 @@ export function NewManualOrder() {
       setIsLoading(true);
       setLoadError(null);
 
-      const [customerResult, inventoryResult] = await Promise.all([
+      const [
+        customerResult,
+        inventoryResult,
+        defaultsResult,
+        pickupOptionsResult,
+        deliveryOptionsResult,
+      ] = await Promise.all([
         supabase
           .from("seller_customer_summary")
           .select("customer_id, email, first_name, last_name, phone, business_name")
@@ -155,11 +225,38 @@ export function NewManualOrder() {
           .eq("listing_batch_moderation_status", "normal")
           .order("breed_display_name", { ascending: true })
           .returns<InventorySearchRow[]>(),
+        supabase
+          .from("seller_store_defaults")
+          .select("pickup_method, delivery_enabled")
+          .eq("store_id", seller.store_id)
+          .maybeSingle()
+          .returns<StoreDefaults>(),
+        supabase
+          .from("store_pickup_options")
+          .select("id, label, description")
+          .eq("store_id", seller.store_id)
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true })
+          .order("label", { ascending: true })
+          .returns<PickupOption[]>(),
+        supabase
+          .from("store_delivery_options")
+          .select("id, name, price_amount")
+          .eq("store_id", seller.store_id)
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true })
+          .order("name", { ascending: true })
+          .returns<DeliveryOption[]>(),
       ]);
 
       if (!isMounted) return;
 
-      const firstError = customerResult.error ?? inventoryResult.error;
+      const firstError =
+        customerResult.error ??
+        inventoryResult.error ??
+        defaultsResult.error ??
+        pickupOptionsResult.error ??
+        deliveryOptionsResult.error;
 
       if (firstError) {
         setLoadError(firstError.message);
@@ -169,6 +266,14 @@ export function NewManualOrder() {
 
       setCustomers(customerResult.data ?? []);
       setInventory(inventoryResult.data ?? []);
+      setPickupMethod(
+        defaultsResult.data?.pickup_method === "manual_options"
+          ? "manual_options"
+          : "notes",
+      );
+      setDeliveryEnabled(Boolean(defaultsResult.data?.delivery_enabled));
+      setPickupOptions(pickupOptionsResult.data ?? []);
+      setDeliveryOptions(deliveryOptionsResult.data ?? []);
       setIsLoading(false);
     }
 
@@ -178,6 +283,62 @@ export function NewManualOrder() {
       isMounted = false;
     };
   }, [seller]);
+
+  const usesConfiguredPickupOptions = pickupMethod === "manual_options";
+  const canUseDelivery = deliveryEnabled && deliveryOptions.length > 0;
+  const currentFulfillmentMethod =
+    canUseDelivery || fulfillmentMethod === "pickup" ? fulfillmentMethod : "pickup";
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function syncDeliveryAddressFromCustomer() {
+      if (currentFulfillmentMethod !== "delivery") return;
+
+      if (!seller || customerMode !== "existing" || !selectedCustomerId) {
+        setDeliveryAddress(emptyDeliveryAddress());
+        setDeliveryAddressCustomerId(null);
+        setHasEditedDeliveryAddress(false);
+        return;
+      }
+
+      if (
+        hasEditedDeliveryAddress &&
+        deliveryAddressCustomerId === selectedCustomerId
+      ) {
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("seller_customer_detail")
+        .select(
+          "customer_id, email, first_name, last_name, phone, business_name, delivery_address_line1, delivery_address_line2, delivery_city, delivery_state, delivery_postal_code, delivery_country",
+        )
+        .eq("store_id", seller.store_id)
+        .eq("customer_id", selectedCustomerId)
+        .maybeSingle()
+        .returns<CustomerDetailRow>();
+
+      if (!isMounted || error) return;
+
+      setDeliveryAddress(formatSavedDeliveryAddress(data));
+      setDeliveryAddressCustomerId(selectedCustomerId);
+      setHasEditedDeliveryAddress(false);
+    }
+
+    void syncDeliveryAddressFromCustomer();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    currentFulfillmentMethod,
+    customerMode,
+    deliveryAddressCustomerId,
+    hasEditedDeliveryAddress,
+    selectedCustomerId,
+    seller,
+  ]);
 
   useEffect(() => {
     if (!isBrowseOpen) return;
@@ -214,7 +375,14 @@ export function NewManualOrder() {
   );
   const discountedLines = distributeDiscount(lines, inventory, discountAmount);
   const taxAmount = 0;
-  const total = Math.max(subtotal - discountAmount + taxAmount, 0);
+  const selectedDeliveryOption = deliveryOptions.find(
+    (option) => option.id === deliveryOptionId,
+  );
+  const deliveryFee =
+    currentFulfillmentMethod === "delivery"
+      ? selectedDeliveryOption?.price_amount ?? 0
+      : 0;
+  const total = Math.max(subtotal - discountAmount + taxAmount + deliveryFee, 0);
 
   function updateLine(lineId: string, updates: Partial<OrderLine>) {
     setLines((current) =>
@@ -289,6 +457,20 @@ export function NewManualOrder() {
     setSaveError(null);
   }
 
+  function chooseFulfillmentMethod(method: FulfillmentMethod) {
+    setFulfillmentMethod(method);
+    setValidationErrors([]);
+    setSaveError(null);
+
+    if (method === "pickup") {
+      setDeliveryOptionId("");
+      return;
+    }
+
+    setPickupNote("");
+    setPickupOptionId("");
+  }
+
   function addNewCustomerInline() {
     const parsedName = parseFullName(newCustomer.firstName);
 
@@ -309,13 +491,19 @@ export function NewManualOrder() {
     if (!seller || isSaving) return;
 
     const errors = validateOrder({
+      canUseDelivery,
       customerMode,
+      deliveryAddress,
+      deliveryOptionId,
       discountType,
       discountValue,
+      fulfillmentMethod: currentFulfillmentMethod,
       lines,
       newCustomer,
+      pickupOptionId,
       selectedCustomer,
       inventory,
+      usesConfiguredPickupOptions,
     });
     setValidationErrors(errors);
     setSaveError(null);
@@ -369,7 +557,41 @@ export function NewManualOrder() {
       p_order_source: "manual",
       p_payment_status: "pay_at_pickup",
       p_buyer_notes: buyerNotes.trim() || null,
-      p_pickup_note: pickupNote.trim() || "Pickup",
+      p_pickup_note:
+        currentFulfillmentMethod === "pickup" && !usesConfiguredPickupOptions
+          ? pickupNote.trim() || null
+          : null,
+      p_pickup_option_id:
+        currentFulfillmentMethod === "pickup" && usesConfiguredPickupOptions
+          ? pickupOptionId
+          : null,
+      p_fulfillment_method: currentFulfillmentMethod,
+      p_delivery_option_id:
+        currentFulfillmentMethod === "delivery" ? deliveryOptionId : null,
+      p_delivery_address_line1:
+        currentFulfillmentMethod === "delivery"
+          ? deliveryAddress.line1.trim()
+          : null,
+      p_delivery_address_line2:
+        currentFulfillmentMethod === "delivery"
+          ? deliveryAddress.line2.trim() || null
+          : null,
+      p_delivery_city:
+        currentFulfillmentMethod === "delivery"
+          ? deliveryAddress.city.trim()
+          : null,
+      p_delivery_state:
+        currentFulfillmentMethod === "delivery"
+          ? deliveryAddress.state.trim()
+          : null,
+      p_delivery_postal_code:
+        currentFulfillmentMethod === "delivery"
+          ? deliveryAddress.postalCode.trim()
+          : null,
+      p_delivery_country:
+        currentFulfillmentMethod === "delivery"
+          ? deliveryAddress.country.trim() || "US"
+          : null,
       p_tax_fee_amount: taxAmount,
       p_send_buyer_notification: shouldSendBuyerConfirmation,
       p_send_seller_notification: false,
@@ -562,24 +784,168 @@ export function NewManualOrder() {
           <h2 className="text-lg font-semibold text-stone-950">Order Details</h2>
           <div className="mt-2 grid gap-2 md:grid-cols-2">
             <label className="grid gap-1 text-sm font-semibold text-stone-700">
-              Delivery method
-              <select className="seller-form-field seller-compact-field" value="pickup" disabled>
+              Fulfillment method
+              <select
+                className="seller-form-field seller-compact-field"
+                value={currentFulfillmentMethod}
+                onChange={(event) =>
+                  chooseFulfillmentMethod(event.target.value as FulfillmentMethod)
+                }
+              >
                 <option value="pickup">Pickup</option>
+                {canUseDelivery ? <option value="delivery">Delivery</option> : null}
               </select>
             </label>
 
-            <label className="grid gap-1 text-sm font-semibold text-stone-700">
-              Pickup note
-              <input
-                className="seller-form-field seller-compact-field"
-                placeholder="Optional pickup details"
-                value={pickupNote}
-                onChange={(event) => setPickupNote(event.target.value)}
-              />
-            </label>
+            {currentFulfillmentMethod === "pickup" && usesConfiguredPickupOptions ? (
+              <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                Pickup option
+                <select
+                  className="seller-form-field seller-compact-field"
+                  value={pickupOptionId}
+                  onChange={(event) => {
+                    setPickupOptionId(event.target.value);
+                    setValidationErrors([]);
+                    setSaveError(null);
+                  }}
+                >
+                  <option value="">Choose pickup option</option>
+                  {pickupOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
+            {currentFulfillmentMethod === "pickup" && !usesConfiguredPickupOptions ? (
+              <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                Pickup note
+                <input
+                  className="seller-form-field seller-compact-field"
+                  placeholder="Optional pickup details"
+                  value={pickupNote}
+                  onChange={(event) => setPickupNote(event.target.value)}
+                />
+              </label>
+            ) : null}
+
+            {currentFulfillmentMethod === "delivery" ? (
+              <>
+                <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                  Delivery option
+                  <select
+                    className="seller-form-field seller-compact-field"
+                    value={deliveryOptionId}
+                    onChange={(event) => {
+                      setDeliveryOptionId(event.target.value);
+                      setValidationErrors([]);
+                      setSaveError(null);
+                    }}
+                  >
+                    <option value="">Choose delivery option</option>
+                    {deliveryOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {formatDeliveryOptionLabel(option)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="grid gap-2 md:col-span-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_7rem_7rem]">
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    Delivery address
+                    <input
+                      className="seller-form-field seller-compact-field"
+                      placeholder="Street address"
+                      value={deliveryAddress.line1}
+                      onChange={(event) =>
+                        updateDeliveryAddress(
+                          setDeliveryAddress,
+                          { line1: event.target.value },
+                          () => setHasEditedDeliveryAddress(true),
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    Apt / unit
+                    <input
+                      className="seller-form-field seller-compact-field"
+                      placeholder="Optional"
+                      value={deliveryAddress.line2}
+                      onChange={(event) =>
+                        updateDeliveryAddress(
+                          setDeliveryAddress,
+                          { line2: event.target.value },
+                          () => setHasEditedDeliveryAddress(true),
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    City
+                    <input
+                      className="seller-form-field seller-compact-field"
+                      value={deliveryAddress.city}
+                      onChange={(event) =>
+                        updateDeliveryAddress(
+                          setDeliveryAddress,
+                          { city: event.target.value },
+                          () => setHasEditedDeliveryAddress(true),
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    State
+                    <input
+                      className="seller-form-field seller-compact-field"
+                      value={deliveryAddress.state}
+                      onChange={(event) =>
+                        updateDeliveryAddress(
+                          setDeliveryAddress,
+                          { state: event.target.value },
+                          () => setHasEditedDeliveryAddress(true),
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    ZIP
+                    <input
+                      className="seller-form-field seller-compact-field"
+                      value={deliveryAddress.postalCode}
+                      onChange={(event) =>
+                        updateDeliveryAddress(
+                          setDeliveryAddress,
+                          { postalCode: event.target.value },
+                          () => setHasEditedDeliveryAddress(true),
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    Country
+                    <input
+                      className="seller-form-field seller-compact-field"
+                      value={deliveryAddress.country}
+                      onChange={(event) =>
+                        updateDeliveryAddress(
+                          setDeliveryAddress,
+                          { country: event.target.value },
+                          () => setHasEditedDeliveryAddress(true),
+                        )
+                      }
+                    />
+                  </label>
+                </div>
+              </>
+            ) : null}
 
             <label className="grid gap-1 text-sm font-semibold text-stone-700 md:col-span-2">
-              Order note
+              Customer note
               <textarea
                 className="seller-form-field seller-compact-field min-h-16 resize-y py-2"
                 placeholder="Add a note for this order"
@@ -629,6 +995,12 @@ export function NewManualOrder() {
               value={`-${formatCurrency(discountAmount)}`}
             />
             <SummaryRow label="Tax" value={formatCurrency(taxAmount)} />
+            {currentFulfillmentMethod === "delivery" ? (
+              <SummaryRow
+                label="Delivery fee"
+                value={formatCurrency(deliveryFee)}
+              />
+            ) : null}
             <div className="flex items-center justify-between border-t border-stone-200 pt-3 text-base font-semibold text-stone-950">
               <dt>Total</dt>
               <dd>{formatCurrency(total)}</dd>
@@ -1156,6 +1528,29 @@ function QuantityInput({
     />
   );
 }
+
+function updateDeliveryAddress(
+  setDeliveryAddress: Dispatch<SetStateAction<DeliveryAddress>>,
+  updates: Partial<DeliveryAddress>,
+  markEdited: () => void,
+) {
+  markEdited();
+  setDeliveryAddress((current) => ({ ...current, ...updates }));
+}
+
+function formatSavedDeliveryAddress(
+  customer: CustomerDetailRow | null,
+): DeliveryAddress {
+  return {
+    line1: customer?.delivery_address_line1 ?? "",
+    line2: customer?.delivery_address_line2 ?? "",
+    city: customer?.delivery_city ?? "",
+    state: customer?.delivery_state ?? "",
+    postalCode: customer?.delivery_postal_code ?? "",
+    country: customer?.delivery_country ?? "US",
+  };
+}
+
 function TextField({
   label,
   min,
@@ -1214,17 +1609,27 @@ function ValidationMessage({ errors }: { errors: string[] }) {
 }
 
 function validateOrder({
+  canUseDelivery,
   customerMode,
+  deliveryAddress,
+  deliveryOptionId,
   discountType,
   discountValue,
+  fulfillmentMethod,
   inventory,
   lines,
   newCustomer,
+  pickupOptionId,
   selectedCustomer,
+  usesConfiguredPickupOptions,
 }: {
+  canUseDelivery: boolean;
   customerMode: CustomerMode;
+  deliveryAddress: DeliveryAddress;
+  deliveryOptionId: string;
   discountType: DiscountType;
   discountValue: string;
+  fulfillmentMethod: FulfillmentMethod;
   inventory: InventorySearchRow[];
   lines: OrderLine[];
   newCustomer: {
@@ -1232,7 +1637,9 @@ function validateOrder({
     firstName: string;
     lastName: string;
   };
+  pickupOptionId: string;
   selectedCustomer: CustomerRow | undefined;
+  usesConfiguredPickupOptions: boolean;
 }) {
   const errors: string[] = [];
   const selectedLines = lines.filter(isActiveLine);
@@ -1247,6 +1654,25 @@ function validateOrder({
   }
 
   if (selectedLines.length === 0) errors.push("Add at least one inventory item.");
+
+  if (fulfillmentMethod === "pickup" && usesConfiguredPickupOptions) {
+    if (!pickupOptionId) errors.push("Choose a pickup option.");
+  }
+
+  if (fulfillmentMethod === "delivery") {
+    if (!canUseDelivery) {
+      errors.push("Delivery is not enabled for this store.");
+    }
+    if (!deliveryOptionId) errors.push("Choose a delivery option.");
+    if (!deliveryAddress.line1.trim()) {
+      errors.push("Add the delivery street address.");
+    }
+    if (!deliveryAddress.city.trim()) errors.push("Add the delivery city.");
+    if (!deliveryAddress.state.trim()) errors.push("Add the delivery state.");
+    if (!deliveryAddress.postalCode.trim()) {
+      errors.push("Add the delivery ZIP code.");
+    }
+  }
 
   selectedLines.forEach((line, index) => {
     const item = inventory.find(
@@ -1495,6 +1921,10 @@ function formatInlineCustomerSummary(customer: {
   ]
     .filter(Boolean)
     .join(" - ");
+}
+
+function formatDeliveryOptionLabel(option: DeliveryOption) {
+  return `${option.name} - ${formatCurrency(option.price_amount ?? 0)}`;
 }
 
 function formatNewCustomerName(customer: {
