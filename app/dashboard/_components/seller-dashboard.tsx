@@ -10,7 +10,6 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
-  PrimaryActionLink,
   SellerCard,
   StatusBadge,
 } from "./seller-ui";
@@ -21,15 +20,21 @@ import type {
 } from "../_lib/seller-types";
 
 type DashboardState = {
+  activeListingCount: number | null;
   home: SellerDashboardHome | null;
   orders: SellerOrderSummary[];
   inventory: SellerInventoryRow[];
 };
 
+const DASHBOARD_ORDER_SELECT =
+  "order_id, order_number, order_status, payment_status, created_at, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, total_amount, item_count, total_item_quantity, pickup_option_label_snapshot";
+const DASHBOARD_ORDER_LIMIT = 5;
+const DASHBOARD_OPEN_ORDER_STATUSES = ["pending", "open"];
+
 type MetricCardProps = {
   label: string;
   value: number | string | null | undefined;
-  helper: string;
+  helper?: string;
   glyph: string;
   glyphAlt: string;
   tone?: "amber" | "green";
@@ -38,6 +43,7 @@ type MetricCardProps = {
 export function SellerDashboard() {
   const { seller } = useSellerContext();
   const [data, setData] = useState<DashboardState>({
+    activeListingCount: null,
     home: null,
     orders: [],
     inventory: [],
@@ -57,7 +63,15 @@ export function SellerDashboard() {
       setIsLoading(true);
       setError(null);
 
-      const [homeResult, orderResult, inventoryResult] = await Promise.all([
+      const [
+        homeResult,
+        openOrderResult,
+        fulfilledOrderResult,
+        canceledOrderResult,
+        inventoryResult,
+        equipmentCountResult,
+        processedPoultryCountResult,
+      ] = await Promise.all([
         supabase
           .rpc("get_seller_dashboard_home", {
             p_store_id: seller.store_id,
@@ -65,12 +79,27 @@ export function SellerDashboard() {
           .maybeSingle<SellerDashboardHome>(),
         supabase
           .from("seller_order_management")
-          .select(
-            "order_id, order_number, order_status, payment_status, created_at, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, total_amount, item_count, total_item_quantity, pickup_option_label_snapshot",
-          )
+          .select(DASHBOARD_ORDER_SELECT)
           .eq("store_id", seller.store_id)
+          .in("order_status", DASHBOARD_OPEN_ORDER_STATUSES)
           .order("created_at", { ascending: false })
-          .limit(5)
+          .limit(DASHBOARD_ORDER_LIMIT)
+          .returns<SellerOrderSummary[]>(),
+        supabase
+          .from("seller_order_management")
+          .select(DASHBOARD_ORDER_SELECT)
+          .eq("store_id", seller.store_id)
+          .eq("order_status", "fulfilled")
+          .order("created_at", { ascending: false })
+          .limit(DASHBOARD_ORDER_LIMIT)
+          .returns<SellerOrderSummary[]>(),
+        supabase
+          .from("seller_order_management")
+          .select(DASHBOARD_ORDER_SELECT)
+          .eq("store_id", seller.store_id)
+          .eq("order_status", "canceled")
+          .order("created_at", { ascending: false })
+          .limit(DASHBOARD_ORDER_LIMIT)
           .returns<SellerOrderSummary[]>(),
         supabase
           .from("seller_inventory_management")
@@ -86,12 +115,32 @@ export function SellerDashboard() {
           .order("breed_display_name", { ascending: true })
           .limit(100)
           .returns<SellerInventoryRow[]>(),
+        supabase
+          .from("seller_equipment_inventory_management")
+          .select("*", { count: "exact", head: true })
+          .eq("store_id", seller.store_id)
+          .eq("visibility_status", "active")
+          .eq("moderation_status", "normal")
+          .gt("quantity_available", 0),
+        supabase
+          .from("seller_processed_poultry_inventory_management")
+          .select("*", { count: "exact", head: true })
+          .eq("store_id", seller.store_id)
+          .eq("visibility_status", "active")
+          .eq("moderation_status", "normal")
+          .gt("quantity_available", 0),
       ]);
 
       if (!isMounted) return;
 
       const firstError =
-        homeResult.error ?? orderResult.error ?? inventoryResult.error;
+        homeResult.error ??
+        openOrderResult.error ??
+        fulfilledOrderResult.error ??
+        canceledOrderResult.error ??
+        inventoryResult.error ??
+        equipmentCountResult.error ??
+        processedPoultryCountResult.error;
 
       if (firstError) {
         setError(firstError.message);
@@ -99,9 +148,20 @@ export function SellerDashboard() {
         return;
       }
 
+      const baseActiveListingCount = homeResult.data?.active_listing_count ?? 0;
+      const activeListingCount =
+        baseActiveListingCount +
+        (equipmentCountResult.count ?? 0) +
+        (processedPoultryCountResult.count ?? 0);
+
       setData({
+        activeListingCount,
         home: homeResult.data,
-        orders: orderResult.data ?? [],
+        orders: getPrioritizedDashboardOrders([
+          ...(openOrderResult.data ?? []),
+          ...(fulfilledOrderResult.data ?? []),
+          ...(canceledOrderResult.data ?? []),
+        ]),
         inventory: inventoryResult.data ?? [],
       });
       setIsLoading(false);
@@ -121,12 +181,12 @@ export function SellerDashboard() {
 
   const storefrontIsLive =
     data.home?.is_publicly_available ?? seller?.is_publicly_available ?? false;
-  const storefrontEnabled =
-    data.home?.storefront_enabled ?? seller?.storefront_enabled ?? false;
   const storefrontHref = `/store/${seller?.store_slug ?? ""}`;
   const storeName = seller?.store_name?.trim();
   const hasListings =
-    (data.home?.active_listing_count ?? data.inventory.length) > 0;
+    (data.activeListingCount ??
+      data.home?.active_listing_count ??
+      data.inventory.length) > 0;
   const showFirstListingPrompt = !isLoading && !error && !hasListings;
   const welcomeMessage = storefrontIsLive
     ? `Hello${storeName ? `, ${storeName}` : ""} - your storefront is live.`
@@ -151,7 +211,7 @@ export function SellerDashboard() {
         {showFirstListingPrompt ? (
           <FirstListingWelcomeCard />
         ) : (
-          <section className="flex flex-col gap-2.5 rounded-xl border border-emerald-950/5 bg-[#f4f8ef] px-3 py-2.5 shadow-[0_12px_32px_rgba(46,39,25,0.04)] sm:gap-3 sm:px-5 sm:py-3 lg:min-h-14 lg:flex-row lg:items-center lg:justify-between">
+          <section className="flex flex-col gap-2.5 rounded-xl border border-emerald-950/5 bg-[#f4f8ef] px-3 py-2 shadow-[0_12px_32px_rgba(46,39,25,0.04)] sm:gap-3 sm:px-5 sm:py-2.5 lg:min-h-12 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-3">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-900/10 sm:size-10">
                 <Image
@@ -166,12 +226,15 @@ export function SellerDashboard() {
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <PrimaryActionLink href="/dashboard/inventory/add-v2">
+              <Link
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-emerald-800 px-4 text-sm font-bold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
+                href="/dashboard/inventory/add-v2"
+              >
                 <span aria-hidden="true" className="mr-2 text-xl leading-none">
                   +
                 </span>
                 Add Inventory
-              </PrimaryActionLink>
+              </Link>
               <Link
                 className="seller-secondary-button gap-2"
                 href={storefrontHref}
@@ -208,15 +271,15 @@ export function SellerDashboard() {
           <>
             <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <MetricCard
-                label="New orders"
+                label="Open orders"
                 value={data.home?.pending_open_order_count}
-                helper="Recent orders"
+                helper="Need attention"
                 glyph="/glyphs/shopping-bag.png"
                 glyphAlt="Shopping bag"
                 tone="amber"
               />
               <MetricCard
-                label="Available birds"
+                label="Birds available"
                 value={
                   data.home?.total_active_inventory_quantity ??
                   liveInventoryQuantity
@@ -226,16 +289,15 @@ export function SellerDashboard() {
                 glyphAlt="Hen"
               />
               <MetricCard
-                label="Total items for sale"
-                value={data.home?.active_listing_count}
-                helper="Across all active listings"
+                label="Active listings"
+                value={data.activeListingCount ?? data.home?.active_listing_count}
+                helper="Visible for sale"
                 glyph="/glyphs/incubator.png"
                 glyphAlt="Incubator"
               />
               <MetricCard
-                label="Storefront"
-                value={storefrontIsLive ? "Live" : "Not live"}
-                helper={storefrontEnabled ? "Enabled" : "Disabled"}
+                label="Storefront status"
+                value={storefrontIsLive ? "Live" : "Hidden"}
                 glyph="/glyphs/storefront.png"
                 glyphAlt="Storefront"
               />
@@ -363,9 +425,11 @@ function MetricCard({
           <p className={`mt-0.5 font-serif text-2xl font-bold sm:mt-1 sm:text-3xl lg:text-2xl xl:text-3xl ${valueTone}`}>
             {value ?? 0}
           </p>
-          <p className="mt-0.5 text-sm leading-6 text-stone-500 sm:mt-1 sm:leading-5 lg:text-xs xl:text-sm">
-            {helper}
-          </p>
+          {helper ? (
+            <p className="mt-0.5 text-sm leading-6 text-stone-500 sm:mt-1 sm:leading-5 lg:text-xs xl:text-sm">
+              {helper}
+            </p>
+          ) : null}
         </div>
       </div>
     </SellerCard>
@@ -558,6 +622,39 @@ function getOrderStatusLabel(status: string | null | undefined) {
   if (!status || status === "pending") return "open";
 
   return status;
+}
+
+function getPrioritizedDashboardOrders(orders: SellerOrderSummary[]) {
+  const uniqueOrders = new Map<string, SellerOrderSummary>();
+
+  orders.forEach((order) => {
+    if (!uniqueOrders.has(order.order_id)) {
+      uniqueOrders.set(order.order_id, order);
+    }
+  });
+
+  return Array.from(uniqueOrders.values())
+    .sort((first, second) => {
+      const priorityDelta =
+        getDashboardOrderPriority(first.order_status) -
+        getDashboardOrderPriority(second.order_status);
+
+      if (priorityDelta !== 0) return priorityDelta;
+
+      return (
+        new Date(second.created_at).getTime() -
+        new Date(first.created_at).getTime()
+      );
+    })
+    .slice(0, DASHBOARD_ORDER_LIMIT);
+}
+
+function getDashboardOrderPriority(status: string | null | undefined) {
+  if (DASHBOARD_OPEN_ORDER_STATUSES.includes(status ?? "")) return 0;
+  if (status === "fulfilled") return 1;
+  if (status === "canceled") return 2;
+
+  return 1;
 }
 
 function summarizeLiveInventoryQuantity(rows: SellerInventoryRow[]) {

@@ -726,7 +726,7 @@ export function InventoryManagement() {
               }
               action={
                 <Link
-                  className="seller-primary-button"
+                  className="inline-flex min-h-10 items-center justify-center rounded-full bg-emerald-800 px-4 text-sm font-bold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
                   href="/dashboard/inventory/add-v2"
                 >
                   Add Inventory

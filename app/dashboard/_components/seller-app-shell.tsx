@@ -9,6 +9,7 @@ import { SellerContextProvider, useSellerContext } from "./seller-context";
 import { ErrorState, LoadingState } from "./seller-ui";
 
 const SUPPORT_EMAIL = "hello@flockfront.com";
+const ADD_INVENTORY_HREF = "/dashboard/inventory/add-v2";
 
 const sellerNavItems = [
   { label: "Dashboard", href: "/dashboard", glyph: "/glyphs/farmhouse.png" },
@@ -106,11 +107,23 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
             <p className="truncate text-base font-bold text-stone-950">
               {seller.store_name}
             </p>
-            <span className="mt-0.5 inline-flex items-center gap-2 text-xs font-semibold text-emerald-800">
-              <span className="size-2 rounded-full bg-green-500" />
-              {isLive ? "Storefront is live" : "Storefront not live"}
-            </span>
+            <StorefrontStatusLink
+              href={isLive ? storefrontHref : `${storefrontHref}?preview=1`}
+              isLive={isLive}
+            />
           </div>
+        </div>
+
+        <div className="px-3.5 pb-3 pt-2">
+          <Link
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-emerald-800 px-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
+            href={ADD_INVENTORY_HREF}
+          >
+            <span aria-hidden="true" className="text-lg leading-none">
+              +
+            </span>
+            Add Inventory
+          </Link>
         </div>
 
         <nav className="shrink-0 space-y-1 px-2.5 pt-1.5">
@@ -197,6 +210,32 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
         </nav>
       </div>
     </div>
+  );
+}
+
+function StorefrontStatusLink({
+  href,
+  isLive,
+}: {
+  href: string;
+  isLive: boolean;
+}) {
+  const label = isLive ? "Storefront is live" : "Storefront not live";
+  const ariaLabel = isLive
+    ? "Open public storefront in a new tab"
+    : "Open hidden storefront preview in a new tab";
+
+  return (
+    <Link
+      aria-label={ariaLabel}
+      className="mt-0.5 inline-flex cursor-pointer items-center gap-2 rounded-md text-xs font-semibold text-emerald-800 transition hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 focus:ring-offset-white"
+      href={href}
+      rel="noopener noreferrer"
+      target="_blank"
+    >
+      <span className="size-2 rounded-full bg-green-500" />
+      {label}
+    </Link>
   );
 }
 
