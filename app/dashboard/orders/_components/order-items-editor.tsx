@@ -17,6 +17,7 @@ import type {
 } from "../_lib/order-form-types";
 
 export function OrderItemsEditor({
+  allowInventoryOversell = false,
   browseAddedInventoryItemId,
   browseFilter,
   browseQuery,
@@ -34,6 +35,7 @@ export function OrderItemsEditor({
   onRemoveLine,
   onUpdateLine,
 }: {
+  allowInventoryOversell?: boolean;
   browseAddedInventoryItemId: string | null;
   browseFilter: BrowseInventoryFilter;
   browseQuery: string;
@@ -112,6 +114,7 @@ export function OrderItemsEditor({
               <div className="divide-y divide-stone-200">
                 {lines.map((line) => (
                   <OrderItemRow
+                    allowInventoryOversell={allowInventoryOversell}
                     inventory={inventory}
                     key={line.id}
                     line={line}
@@ -325,22 +328,30 @@ function BrowseInventoryDialog({
 }
 
 function OrderItemRow({
+  allowInventoryOversell,
   inventory,
   line,
   onRemove,
   updateLine,
 }: {
+  allowInventoryOversell: boolean;
   inventory: InventorySearchRow[];
   line: OrderLine;
   onRemove: () => void;
   updateLine: (updates: Partial<OrderLine>) => void;
 }) {
   const selectedItem = inventory.find(
-    (row) => row.id === line.inventoryItemId,
+    (row) =>
+      row.id === line.inventoryItemId && row.itemType === line.inventoryItemType,
   );
+  const itemName = selectedItem?.title ?? line.savedItemName ?? "Inventory item";
+  const itemDetail = selectedItem
+    ? formatInventoryMetadata(selectedItem)
+    : line.savedItemDetail || line.search;
   const quantity = Number(line.quantity || 0);
   const unitPrice = Number(line.unitPrice || 0);
   const exceedsAvailable =
+    !allowInventoryOversell &&
     line.type === "inventory" &&
     selectedItem != null &&
     isPositiveWholeNumber(line.quantity) &&
@@ -373,10 +384,10 @@ function OrderItemRow({
         ) : (
           <>
             <p className="truncate text-sm font-bold text-stone-950">
-              {selectedItem?.title ?? "Inventory item"}
+              {itemName}
             </p>
             <p className="mt-1 truncate text-xs text-stone-600">
-              {selectedItem ? formatInventoryMetadata(selectedItem) : line.search}
+              {itemDetail}
             </p>
             {exceedsAvailable ? (
               <p className="mt-1 text-xs font-semibold text-amber-800">

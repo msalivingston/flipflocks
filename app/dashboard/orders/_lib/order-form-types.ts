@@ -70,10 +70,14 @@ export type InventorySearchRow = {
 export type OrderLine = {
   type: "inventory" | "custom";
   id: string;
+  orderItemId?: string;
   inventoryItemId: string;
   inventoryItemType: InventoryItemType | "";
   customItemName: string;
   customItemDescription: string;
+  savedItemCategory?: InventoryCategory;
+  savedItemDetail?: string;
+  savedItemName?: string;
   search: string;
   quantity: string;
   unitPrice: string;

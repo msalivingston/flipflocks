@@ -448,6 +448,15 @@ export function OrderDetail({ orderId }: { orderId: string }) {
               <Image src="/glyphs/clipboard.png" alt="" width={18} height={18} />
               Print order
             </button>
+            {canEditOrder(order) ? (
+              <Link
+                className={orderDetailButtonClass}
+                href={`/dashboard/orders/${order.order_id}/edit`}
+              >
+                <Image src="/glyphs/pencil.png" alt="" width={18} height={18} />
+                Edit order
+              </Link>
+            ) : null}
             <QuickActionsMenu
               canCancel={canCancelOrder(order)}
               canMarkComplete={canMarkComplete(order, remainingPickupQuantity)}
@@ -1262,6 +1271,15 @@ function canMarkPaymentPaid(order: SellerOrderDetailRow) {
   );
 }
 
+function canEditOrder(order: SellerOrderDetailRow) {
+  return (
+    !order.canceled_at &&
+    !order.fulfilled_at &&
+    order.order_status !== "canceled" &&
+    order.order_status !== "fulfilled"
+  );
+}
+
 function getOrderLifecycleTone(order: SellerOrderDetailRow) {
   const lifecycle = getOrderLifecycleState(order);
 
@@ -1366,7 +1384,7 @@ function QuickActionsMenu({
   return (
     <details className="relative">
       <summary className={`${orderDetailButtonClass} cursor-pointer list-none`}>
-        Quick actions
+        More actions
         <ChevronDown aria-hidden="true" className="size-4" />
       </summary>
       <div className="absolute right-0 z-20 mt-2 w-60 rounded-xl border border-stone-200 bg-white p-2 shadow-[0_18px_40px_rgba(46,39,25,0.14)]">
@@ -1391,12 +1409,6 @@ function QuickActionsMenu({
               : "This order cannot be marked fulfilled right now."
           }
           onClick={onMarkComplete}
-        />
-        <QuickActionButton
-          disabled
-          glyph="/glyphs/pencil.png"
-          label="Edit order"
-          title="Order editing is not wired for this workflow yet."
         />
         <QuickActionButton
           glyph="/glyphs/clipboard.png"
