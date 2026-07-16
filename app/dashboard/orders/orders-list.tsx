@@ -21,16 +21,31 @@ import {
   getOrderLifecycleState,
   type OrderLifecycleState,
 } from "./order-formatters";
+import { downloadPickupSummaryReports } from "./pickup-summary-report-downloads";
+import {
+  type PickupSummaryExportFormat,
+  type PickupSummaryLine,
+  type PickupSummaryPayload,
+  type PickupSummaryReport,
+} from "./pickup-summary-report-data";
 
 type OrderFilter =
-  | "needs_attention"
   | "ready_for_pickup"
   | "completed"
   | "canceled"
   | "all";
 
 type OrderSort = "newest" | "oldest" | "buyer_name" | "order_total";
-type PickupNoteFilter = "__all__" | "__none__" | string;
+type PickupOptionFilter = "__all__" | string;
+
+type PickupOption = {
+  id: string;
+  label: string;
+};
+
+type StoreDefaults = {
+  pickup_method: "notes" | "manual_options" | null;
+};
 
 type SellerOrderRow = {
   order_id: string;
@@ -52,6 +67,7 @@ type SellerOrderRow = {
   total_amount: number | null;
   item_count: number | null;
   total_item_quantity: number | null;
+  pickup_option_id: string | null;
   pickup_option_label_snapshot: string | null;
 };
 
@@ -75,8 +91,12 @@ type SellerOrderItemRow = {
   line_subtotal: number | null;
 };
 
+type PickupSummaryOrder = {
+  items: SellerOrderItemRow[];
+  order: SellerOrderRow;
+};
+
 const orderFilters: { label: string; value: OrderFilter }[] = [
-  { label: "Needs attention", value: "needs_attention" },
   { label: "Ready for pickup", value: "ready_for_pickup" },
   { label: "Completed", value: "completed" },
   { label: "Canceled", value: "canceled" },
@@ -100,11 +120,15 @@ export function OrdersList() {
   const [orderItemsByOrderId, setOrderItemsByOrderId] = useState<
     Record<string, SellerOrderItemRow[]>
   >({});
-  const [filter, setFilter] = useState<OrderFilter>("needs_attention");
-  const [pickupNoteFilter, setPickupNoteFilter] =
-    useState<PickupNoteFilter>("__all__");
+  const [filter, setFilter] = useState<OrderFilter>("ready_for_pickup");
+  const [pickupOptionFilter, setPickupOptionFilter] =
+    useState<PickupOptionFilter>("__all__");
+  const [pickupMethod, setPickupMethod] =
+    useState<StoreDefaults["pickup_method"]>("notes");
+  const [pickupOptions, setPickupOptions] = useState<PickupOption[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [sort, setSort] = useState<OrderSort>("newest");
+  const [isPickupSummaryOpen, setIsPickupSummaryOpen] = useState(false);
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -123,20 +147,39 @@ export function OrdersList() {
       setIsLoading(true);
       setError(null);
 
-      const orderResult = await supabase
-        .from("seller_order_management")
-        .select(
-          "order_id, order_number, order_source, order_status, payment_method, payment_status, created_at, ready_for_pickup_at, fulfilled_at, canceled_at, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, pickup_note, buyer_notes, total_amount, item_count, total_item_quantity, pickup_option_label_snapshot",
-        )
-        .eq("store_id", seller.store_id)
-        .order("created_at", { ascending: false })
-        .limit(100)
-        .returns<SellerOrderRow[]>();
+      const [orderResult, defaultsResult, pickupOptionsResult] =
+        await Promise.all([
+          supabase
+            .from("seller_order_management")
+            .select(
+              "order_id, order_number, order_source, order_status, payment_method, payment_status, created_at, ready_for_pickup_at, fulfilled_at, canceled_at, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, pickup_note, buyer_notes, total_amount, item_count, total_item_quantity, pickup_option_id, pickup_option_label_snapshot",
+            )
+            .eq("store_id", seller.store_id)
+            .order("created_at", { ascending: false })
+            .limit(100)
+            .returns<SellerOrderRow[]>(),
+          supabase
+            .from("seller_store_defaults")
+            .select("pickup_method")
+            .eq("store_id", seller.store_id)
+            .maybeSingle<StoreDefaults>(),
+          supabase
+            .from("store_pickup_options")
+            .select("id, label")
+            .eq("store_id", seller.store_id)
+            .eq("is_active", true)
+            .order("sort_order", { ascending: true })
+            .order("label", { ascending: true })
+            .returns<PickupOption[]>(),
+        ]);
 
       if (!isMounted) return;
 
-      if (orderResult.error) {
-        setError(orderResult.error.message);
+      const firstError =
+        orderResult.error ?? defaultsResult.error ?? pickupOptionsResult.error;
+
+      if (firstError) {
+        setError(firstError.message);
         setIsLoading(false);
         return;
       }
@@ -169,6 +212,9 @@ export function OrdersList() {
 
       setOrders(nextOrders);
       setOrderItemsByOrderId(nextItemsByOrderId);
+      setPickupMethod(defaultsResult.data?.pickup_method ?? "notes");
+      setPickupOptions(pickupOptionsResult.data ?? []);
+      setPickupOptionFilter("__all__");
       setExpandedOrderId(null);
       setExpandedBuyerOrderId(null);
       setIsLoading(false);
@@ -181,18 +227,16 @@ export function OrdersList() {
     };
   }, [seller]);
 
-  const pickupNoteOptions = useMemo(
-    () => getPickupNoteOptions(orders),
-    [orders],
-  );
+  const showPickupOptionFilter =
+    pickupMethod === "manual_options";
   const baseFilteredOrders = useMemo(
     () =>
       orders.filter(
         (order) =>
           matchesSearch(order, searchQuery, orderItemsByOrderId[order.order_id]) &&
-          matchesPickupNoteFilter(order, pickupNoteFilter),
+          matchesPickupOptionFilter(order, pickupOptionFilter),
       ),
-    [orderItemsByOrderId, orders, pickupNoteFilter, searchQuery],
+    [orderItemsByOrderId, orders, pickupOptionFilter, searchQuery],
   );
   const visibleOrders = useMemo(
     () =>
@@ -213,11 +257,21 @@ export function OrdersList() {
   const selectedVisibleCount = visibleOrderIds.filter((orderId) =>
     selectedOrderIds.has(orderId),
   ).length;
+  const selectedOrdersForSummary = useMemo(
+    () =>
+      orders
+        .filter((order) => selectedOrderIds.has(order.order_id))
+        .map((order) => ({
+          items: orderItemsByOrderId[order.order_id] ?? [],
+          order,
+        })),
+    [orderItemsByOrderId, orders, selectedOrderIds],
+  );
   const hasVisibleOrders = visibleOrders.length > 0;
   const allVisibleSelected =
     hasVisibleOrders && selectedVisibleCount === visibleOrders.length;
   const hasSearchOrPickupFilter =
-    searchQuery.trim().length > 0 || pickupNoteFilter !== "__all__";
+    searchQuery.trim().length > 0 || pickupOptionFilter !== "__all__";
 
   function clearSelection() {
     setSelectedOrderIds(new Set());
@@ -228,8 +282,8 @@ export function OrdersList() {
     clearSelection();
   }
 
-  function updatePickupNoteFilter(nextFilter: string) {
-    setPickupNoteFilter(nextFilter);
+  function updatePickupOptionFilter(nextFilter: string) {
+    setPickupOptionFilter(nextFilter);
     clearSelection();
   }
 
@@ -268,6 +322,12 @@ export function OrdersList() {
     });
   }
 
+  function openPickupSummary() {
+    if (selectedOrderIds.size === 0) return;
+
+    setIsPickupSummaryOpen(true);
+  }
+
   if (isLoading) {
     return <LoadingState label="Loading orders" />;
   }
@@ -285,7 +345,7 @@ export function OrdersList() {
     <div className="grid gap-4">
       <SellerCard className="rounded-2xl p-3 shadow-[0_16px_38px_rgba(46,39,25,0.05)] sm:p-4">
         <div className="grid gap-3">
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_13rem_11rem]">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_11rem]">
             <label className="relative block">
               <span className="sr-only">Search orders</span>
               <Image
@@ -304,21 +364,6 @@ export function OrdersList() {
                 value={searchQuery}
                 onChange={(event) => updateSearchQuery(event.target.value)}
               />
-            </label>
-            <label>
-              <span className="sr-only">Pickup notes filter</span>
-              <select
-                className="seller-form-field min-h-12 rounded-lg font-medium"
-                value={pickupNoteFilter}
-                onChange={(event) => updatePickupNoteFilter(event.target.value)}
-              >
-                <option value="__all__">All pickup notes</option>
-                {pickupNoteOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
             </label>
             <label>
               <span className="sr-only">Sort orders</span>
@@ -341,6 +386,14 @@ export function OrdersList() {
             value={filter}
             onChange={updateFilter}
           />
+
+          {showPickupOptionFilter ? (
+            <PickupOptionFilterControl
+              options={pickupOptions}
+              value={pickupOptionFilter}
+              onChange={updatePickupOptionFilter}
+            />
+          ) : null}
         </div>
       </SellerCard>
 
@@ -354,6 +407,7 @@ export function OrdersList() {
           selectedOrderIds={selectedOrderIds}
           selectedVisibleCount={selectedVisibleCount}
           onClearSelection={clearSelection}
+          onOpenPickupSummary={openPickupSummary}
           onToggleExpandedBuyer={toggleExpandedBuyer}
           onToggleExpandedOrder={toggleExpandedOrder}
           onToggleOrderSelection={toggleOrderSelection}
@@ -364,11 +418,17 @@ export function OrdersList() {
           title={getEmptyTitle(filter, hasSearchOrPickupFilter)}
           description={
             hasSearchOrPickupFilter
-              ? "Try a different search or pickup notes filter."
+              ? "Try a different search or pickup option filter."
               : "Try a different status to review older orders."
           }
         />
       )}
+      {isPickupSummaryOpen ? (
+        <PickupSummaryModal
+          orders={selectedOrdersForSummary}
+          onClose={() => setIsPickupSummaryOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -382,6 +442,7 @@ function OrdersTableCard({
   selectedOrderIds,
   selectedVisibleCount,
   onClearSelection,
+  onOpenPickupSummary,
   onToggleExpandedBuyer,
   onToggleExpandedOrder,
   onToggleOrderSelection,
@@ -395,6 +456,7 @@ function OrdersTableCard({
   selectedOrderIds: Set<string>;
   selectedVisibleCount: number;
   onClearSelection: () => void;
+  onOpenPickupSummary: () => void;
   onToggleExpandedBuyer: (orderId: string) => void;
   onToggleExpandedOrder: (orderId: string) => void;
   onToggleOrderSelection: (orderId: string) => void;
@@ -429,6 +491,7 @@ function OrdersTableCard({
           <BulkActions
             selectedCount={selectedVisibleCount}
             onClearSelection={onClearSelection}
+            onOpenPickupSummary={onOpenPickupSummary}
           />
         ) : null}
       </div>
@@ -468,9 +531,11 @@ function OrdersTableCard({
 function BulkActions({
   selectedCount,
   onClearSelection,
+  onOpenPickupSummary,
 }: {
   selectedCount: number;
   onClearSelection: () => void;
+  onOpenPickupSummary: () => void;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2 sm:justify-end">
@@ -478,12 +543,20 @@ function BulkActions({
         {selectedCount} selected
       </span>
       <button
+        className="seller-small-button min-h-11 gap-2 rounded-md border-emerald-800 bg-emerald-800 px-3 text-white hover:border-emerald-900 hover:bg-emerald-900 sm:min-h-10"
+        type="button"
+        onClick={onOpenPickupSummary}
+      >
+        <Image src="/glyphs/clipboard.png" alt="" width={16} height={16} />
+        Pickup Summary
+      </button>
+      <button
         className="seller-small-button min-h-11 gap-2 rounded-md px-3 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10"
         disabled
         title="Print orders is not wired yet."
         type="button"
       >
-        <Image src="/glyphs/clipboard.png" alt="" width={16} height={16} />
+        <Image src="/glyphs/printer.png" alt="" width={16} height={16} />
         Print orders
       </button>
       <button
@@ -503,6 +576,611 @@ function BulkActions({
       </button>
     </div>
   );
+}
+
+function PickupSummaryModal({
+  onClose,
+  orders,
+}: {
+  onClose: () => void;
+  orders: PickupSummaryOrder[];
+}) {
+  const summaryLines = useMemo(() => getPickupSummaryLines(orders), [orders]);
+  const [includedLineIds, setIncludedLineIds] = useState<Set<string>>(
+    () =>
+      new Set(
+        summaryLines
+          .filter((line) => isReadyForPickupSummary(line.readyDate))
+          .map((line) => line.id),
+      ),
+  );
+  const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(
+    () => new Set(orders.map(({ order }) => order.order_id)),
+  );
+  const [reports, setReports] = useState<Record<PickupSummaryReport, boolean>>({
+    order_summary: true,
+    pull_sheet: true,
+  });
+  const [exportFormat, setExportFormat] =
+    useState<PickupSummaryExportFormat>("pdf");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const includedLines = useMemo(
+    () => summaryLines.filter((line) => includedLineIds.has(line.id)),
+    [includedLineIds, summaryLines],
+  );
+  const summaryTotals = useMemo(
+    () => getPickupSummaryTotals(includedLines),
+    [includedLines],
+  );
+  const selectedReports = useMemo(
+    () =>
+      (Object.entries(reports) as Array<[PickupSummaryReport, boolean]>)
+        .filter(([, isSelected]) => isSelected)
+        .map(([report]) => report),
+    [reports],
+  );
+
+  function toggleLine(lineId: string) {
+    setIncludedLineIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(lineId)) {
+        next.delete(lineId);
+      } else {
+        next.add(lineId);
+      }
+
+      return next;
+    });
+    setMessage(null);
+  }
+
+  function toggleOrder(orderId: string) {
+    setExpandedOrderIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+
+      return next;
+    });
+  }
+
+  function toggleReport(report: PickupSummaryReport) {
+    setReports((current) => {
+      const selectedCount = Object.values(current).filter(Boolean).length;
+
+      if (current[report] && selectedCount === 1) {
+        setMessage("Select at least one report.");
+        return current;
+      }
+
+      setMessage(null);
+      return { ...current, [report]: !current[report] };
+    });
+  }
+
+  async function generateReports() {
+    if (includedLines.length === 0) {
+      setMessage("Select at least one hatch date group.");
+      return;
+    }
+
+    if (selectedReports.length === 0) {
+      setMessage("Select at least one report.");
+      return;
+    }
+
+    const payload = buildPickupSummaryPayload({
+      exportFormat,
+      includedLines,
+      reports: selectedReports,
+    });
+
+    try {
+      setIsGenerating(true);
+      setMessage(null);
+      await downloadPickupSummaryReports(payload);
+      setMessage(
+        `Reports downloaded: ${payload.overallBirdTotal} birds from ${payload.includedOrders.length} orders.`,
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while generating reports.",
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-stone-950/60 px-3 py-2 sm:items-center"
+      role="dialog"
+    >
+      <section className="max-h-[calc(100vh-1rem)] w-full max-w-[58rem] overflow-y-auto rounded-lg bg-white p-4 shadow-2xl sm:p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-[1.65rem] font-bold leading-tight text-stone-950">
+              Create Pickup Summary
+            </h2>
+            <p className="mt-1.5 text-sm leading-5 text-stone-700">
+              Choose which hatch date groups to include in this pickup. All birds
+              from the selected dates will be included.
+            </p>
+          </div>
+          <button
+            aria-label="Close pickup summary"
+            className="flex size-9 shrink-0 items-center justify-center rounded-md text-3xl font-light leading-none text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700/30 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isGenerating}
+            type="button"
+            onClick={onClose}
+          >
+            &times;
+          </button>
+        </div>
+
+        <div className="mt-4 grid rounded-md border border-stone-200 sm:grid-cols-3 sm:divide-x sm:divide-stone-200">
+          <SummaryMetric
+            glyphSrc="/glyphs/calendar.png"
+            label="Selected orders"
+            value={orders.length}
+          />
+          <SummaryMetric
+            glyphSrc="/glyphs/hen.png"
+            label="Birds included"
+            value={summaryTotals.birds}
+          />
+          <SummaryMetric
+            glyphSrc="/glyphs/cart.png"
+            label="Pickup value"
+            value={formatCurrency(summaryTotals.value)}
+          />
+        </div>
+
+        <div className="mt-4">
+          <h3 className="text-lg font-bold leading-tight text-stone-950">
+            Choose items for this pickup
+          </h3>
+          <p className="mt-1 text-sm leading-5 text-stone-600">
+            Select the hatch date groups you are including in this pickup.
+          </p>
+          <div className="mt-3 grid gap-2.5">
+            {orders.map(({ order }) => {
+              const orderLines = summaryLines.filter(
+                (line) => line.orderId === order.order_id,
+              );
+              const isExpanded = expandedOrderIds.has(order.order_id);
+
+              return (
+                <section
+                  className="overflow-hidden rounded-md border border-stone-200 bg-white"
+                  key={order.order_id}
+                >
+                  <button
+                    aria-expanded={isExpanded}
+                    className="flex min-h-10 w-full items-center justify-between gap-3 border-b border-stone-200 bg-white px-4 text-left text-sm font-bold text-stone-950 transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+                    type="button"
+                    onClick={() => toggleOrder(order.order_id)}
+                  >
+                    <span>
+                      Order #{order.order_number} &bull; {formatCustomerName(order)}
+                    </span>
+                    <ChevronDown
+                      aria-hidden="true"
+                      className={`size-5 shrink-0 transition-transform ${
+                        isExpanded ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+                  {isExpanded ? (
+                    <div className="divide-y divide-stone-200 px-4">
+                      {orderLines.length > 0 ? (
+                        orderLines.map((line) => (
+                          <label
+                            className="grid min-h-10 cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-0.5 py-1.5 text-sm sm:grid-cols-[auto_minmax(0,1fr)_minmax(10rem,14rem)_4.5rem]"
+                            key={line.id}
+                          >
+                            <input
+                              checked={includedLineIds.has(line.id)}
+                              className="peer sr-only"
+                              type="checkbox"
+                              onChange={() => toggleLine(line.id)}
+                            />
+                            <span
+                              aria-hidden="true"
+                              className={`flex size-5 shrink-0 items-center justify-center rounded border text-sm font-bold leading-none transition peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-emerald-700 ${
+                                includedLineIds.has(line.id)
+                                  ? "border-emerald-800 bg-emerald-800 text-white"
+                                  : "border-stone-300 bg-white"
+                              }`}
+                            >
+                              {includedLineIds.has(line.id) ? (
+                                <span>&#10003;</span>
+                              ) : null}
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-medium text-stone-950">
+                                {line.breedOrVariety}
+                              </span>
+                            </span>
+                            <span className="col-start-2 whitespace-nowrap text-sm text-stone-600 sm:col-start-auto">
+                              {line.readyDate
+                                ? `Ready ${formatShortDate(line.readyDate)}`
+                                : "Ready date not set"}
+                            </span>
+                            <span className="col-start-2 text-sm text-stone-950 sm:col-start-auto sm:justify-self-end sm:text-right">
+                              Qty {line.quantity}
+                            </span>
+                          </label>
+                        ))
+                      ) : (
+                        <p className="py-3 text-sm text-stone-600">
+                          No bird hatch-date groups found for this order.
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
+                </section>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mt-3 rounded-md border border-emerald-100 bg-emerald-50/50 px-4 py-2.5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span
+                aria-hidden="true"
+                className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border-2 border-emerald-800 text-sm font-bold leading-none text-emerald-800"
+              >
+                &#10003;
+              </span>
+              <div>
+                <p className="text-sm font-bold text-emerald-950">
+                  {summaryTotals.birds} birds will be included in this pickup
+                </p>
+                <p className="text-sm text-stone-600">
+                  From {summaryTotals.orderCount} orders
+                </p>
+              </div>
+            </div>
+            <p className="text-sm font-bold text-stone-950">
+              Pickup value:{" "}
+              <span className="text-emerald-800">
+                {formatCurrency(summaryTotals.value)}
+              </span>
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-4 border-t border-stone-200 pt-3 md:grid-cols-2 md:gap-0 md:divide-x md:divide-stone-200">
+          <fieldset className="md:pr-6">
+            <legend className="text-lg font-bold leading-tight text-stone-950">
+              Reports to generate
+            </legend>
+            <p className="mt-1 text-sm text-stone-600">
+              Choose one or both reports.
+            </p>
+            <div className="mt-3 grid gap-2.5">
+              <ReportCheckbox
+                checked={reports.pull_sheet}
+                description="Totals birds by breed/variety."
+                glyphSrc="/glyphs/clipboard.png"
+                label="Pull Sheet"
+                onChange={() => toggleReport("pull_sheet")}
+              />
+              <ReportCheckbox
+                checked={reports.order_summary}
+                description="List of customers with bird counts and amounts."
+                glyphSrc="/glyphs/customers.png"
+                label="Order Summary"
+                onChange={() => toggleReport("order_summary")}
+              />
+            </div>
+          </fieldset>
+
+          <fieldset className="md:pl-6">
+            <legend className="text-lg font-bold leading-tight text-stone-950">
+              Export format
+            </legend>
+            <p className="mt-1 text-sm text-stone-600">
+              Choose the format for your report(s).
+            </p>
+            <div className="mt-3 grid gap-2.5">
+              <FormatRadio
+                checked={exportFormat === "pdf"}
+                description="Print-friendly format."
+                label="PDF (recommended)"
+                onChange={() => setExportFormat("pdf")}
+              />
+              <FormatRadio
+                checked={exportFormat === "xlsx"}
+                description="Editable spreadsheet."
+                label="Excel (.xlsx)"
+                onChange={() => setExportFormat("xlsx")}
+              />
+            </div>
+          </fieldset>
+        </div>
+
+        {message ? (
+          <p className="mt-3 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900">
+            {message}
+          </p>
+        ) : null}
+
+        <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            className="seller-secondary-button min-h-10 rounded-md px-7 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isGenerating}
+            type="button"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-8 text-sm font-bold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
+            disabled={isGenerating}
+            type="button"
+            onClick={generateReports}
+          >
+            {isGenerating ? "Generating..." : "Generate Reports"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SummaryMetric({
+  glyphSrc,
+  label,
+  value,
+}: {
+  glyphSrc: string;
+  label: string;
+  value: number | string;
+}) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 sm:px-6">
+      <Image
+        alt=""
+        aria-hidden="true"
+        className="size-7 shrink-0 object-contain"
+        height={28}
+        src={glyphSrc}
+        width={28}
+      />
+      <div>
+        <p className="text-sm font-bold text-stone-600">{label}</p>
+        <p className="mt-0.5 text-xl font-bold leading-tight text-stone-950">
+          {value}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ReportCheckbox({
+  checked,
+  description,
+  glyphSrc,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  description: string;
+  glyphSrc: string;
+  label: string;
+  onChange: () => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-2.5">
+      <input
+        checked={checked}
+        className="peer sr-only"
+        type="checkbox"
+        onChange={onChange}
+      />
+      <span
+        aria-hidden="true"
+        className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded border text-sm font-bold leading-none transition peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-emerald-700 ${
+          checked
+            ? "border-emerald-800 bg-emerald-800 text-white"
+            : "border-stone-300 bg-white"
+        }`}
+      >
+        {checked ? <span>&#10003;</span> : null}
+      </span>
+      <Image
+        alt=""
+        aria-hidden="true"
+        className="mt-0.5 size-7 shrink-0 object-contain"
+        height={28}
+        src={glyphSrc}
+        width={28}
+      />
+      <span>
+        <span className="block text-sm font-bold text-stone-950">{label}</span>
+        <span className="mt-0.5 block text-sm text-stone-600">
+          {description}
+        </span>
+      </span>
+    </label>
+  );
+}
+
+function FormatRadio({
+  checked,
+  description,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  description: string;
+  label: string;
+  onChange: () => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-2.5">
+      <input
+        checked={checked}
+        className="peer sr-only"
+        name="pickup-summary-export-format"
+        type="radio"
+        onChange={onChange}
+      />
+      <span
+        aria-hidden="true"
+        className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-emerald-700 ${
+          checked ? "border-emerald-800" : "border-stone-300"
+        }`}
+      >
+        {checked ? (
+          <span className="size-2.5 rounded-full bg-emerald-800" />
+        ) : null}
+      </span>
+      <span>
+        <span className="block text-sm font-bold text-stone-950">{label}</span>
+        <span className="mt-0.5 block text-sm text-stone-600">
+          {description}
+        </span>
+      </span>
+    </label>
+  );
+}
+
+function getPickupSummaryLines(orders: PickupSummaryOrder[]) {
+  return orders.flatMap(({ items, order }) =>
+    items.filter(isPickupSummaryBirdLine).map((item) => {
+      const summary = formatOrderItemSummary(item);
+      const quantity = item.quantity ?? 0;
+      const lineValue =
+        item.line_subtotal ?? (item.unit_price_snapshot ?? 0) * quantity;
+
+      return {
+        breedOrVariety: summary.title,
+        customerEmail: order.buyer_email_snapshot,
+        customerName: formatCustomerName(order),
+        customerPhone: order.buyer_phone_snapshot,
+        id: item.order_item_id,
+        lineValue,
+        orderId: order.order_id,
+        orderNumber: order.order_number,
+        quantity,
+        readyDate: item.available_date_snapshot,
+        sex: formatPickupSummarySex(item),
+      };
+    }),
+  );
+}
+
+function isPickupSummaryBirdLine(item: SellerOrderItemRow) {
+  if (
+    item.order_item_source === "custom" ||
+    item.order_item_source === "equipment_inventory" ||
+    item.order_item_source === "processed_poultry_inventory"
+  ) {
+    return false;
+  }
+
+  return item.inventory_type_snapshot !== "hatching_eggs";
+}
+
+function formatPickupSummarySex(item: SellerOrderItemRow) {
+  const label = formatInventoryLabel({
+    custom_inventory_label: item.custom_inventory_label_snapshot,
+    inventory_type: item.inventory_type_snapshot,
+  });
+
+  return formatSellerItemDetail(label);
+}
+
+function isReadyForPickupSummary(value: string | null) {
+  if (!value) return false;
+
+  const readyDate = new Date(`${value.slice(0, 10)}T00:00:00`);
+
+  if (!Number.isFinite(readyDate.getTime())) return false;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return readyDate.getTime() <= today.getTime();
+}
+
+function getPickupSummaryTotals(lines: PickupSummaryLine[]) {
+  return {
+    birds: lines.reduce((total, line) => total + line.quantity, 0),
+    orderCount: new Set(lines.map((line) => line.orderId)).size,
+    value: lines.reduce((total, line) => total + line.lineValue, 0),
+  };
+}
+
+function buildPickupSummaryPayload({
+  exportFormat,
+  includedLines,
+  reports,
+}: {
+  exportFormat: PickupSummaryExportFormat;
+  includedLines: PickupSummaryLine[];
+  reports: PickupSummaryReport[];
+}): PickupSummaryPayload {
+  const includedOrders = new Map<
+    string,
+    PickupSummaryPayload["includedOrders"][number]
+  >();
+  const customerTotals = new Map<
+    string,
+    PickupSummaryPayload["includedBirdTotalPerCustomer"][number]
+  >();
+
+  includedLines.forEach((line) => {
+    includedOrders.set(line.orderId, {
+      customerName: line.customerName,
+      email: line.customerEmail,
+      orderId: line.orderId,
+      orderNumber: line.orderNumber,
+      phone: line.customerPhone,
+    });
+
+    const existing = customerTotals.get(line.orderId) ?? {
+      customerName: line.customerName,
+      email: line.customerEmail,
+      orderId: line.orderId,
+      orderNumber: line.orderNumber,
+      phone: line.customerPhone,
+      totalBirds: 0,
+      totalValue: 0,
+    };
+
+    existing.totalBirds += line.quantity;
+    existing.totalValue += line.lineValue;
+    customerTotals.set(line.orderId, existing);
+  });
+
+  const totals = getPickupSummaryTotals(includedLines);
+
+  return {
+    defaultSelectionRule:
+      "Lines with ready dates today or earlier are selected by default; future or unreadable ready dates are unchecked.",
+    exportFormat,
+    includedBirdTotalPerCustomer: Array.from(customerTotals.values()),
+    includedOrderLines: includedLines,
+    includedOrders: Array.from(includedOrders.values()),
+    overallBirdTotal: totals.birds,
+    overallPickupValue: totals.value,
+    reports,
+  };
 }
 
 function OrderRow({
@@ -564,7 +1242,7 @@ function OrderRow({
               {customerName}
             </p>
             <p className="mt-1 text-sm leading-5 text-stone-600">
-              {formatOrderItems(order)} · {formatCurrency(order.total_amount)}
+              {formatOrderItems(order)} &bull; {formatCurrency(order.total_amount)}
             </p>
             <p className="mt-0.5 text-sm leading-5 text-stone-500">
               {formatDateTime(order.created_at)}
@@ -855,6 +1533,49 @@ function OrderLifecycleFilters({
   );
 }
 
+function PickupOptionFilterControl({
+  onChange,
+  options,
+  value,
+}: {
+  onChange: (value: string) => void;
+  options: PickupOption[];
+  value: PickupOptionFilter;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-emerald-100 bg-[#f4f8ef] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-emerald-100">
+          <Image src="/glyphs/calendar.png" alt="" width={20} height={20} />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-stone-950">
+            Filter by pickup option
+          </p>
+          <p className="text-sm leading-5 text-stone-600">
+            Quickly find orders for a specific pickup time or method.
+          </p>
+        </div>
+      </div>
+      <label className="shrink-0">
+        <span className="sr-only">Filter by pickup option</span>
+        <select
+          className="seller-form-field min-h-11 rounded-lg bg-white font-medium sm:min-w-64"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          <option value="__all__">All pickup options</option>
+          {options.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
+
 function OrderContactButtons({
   order,
   variant = "mobile",
@@ -943,20 +1664,20 @@ function OrderLifecycleBadge({
 function matchesFilter(order: SellerOrderRow, filter: OrderFilter) {
   if (filter === "all") return true;
 
-  return getOrderLifecycleState(order) === filter;
+  const lifecycle = getOrderLifecycleState(order);
+
+  if (filter === "ready_for_pickup") {
+    return lifecycle === "ready_for_pickup" || lifecycle === "needs_attention";
+  }
+
+  return lifecycle === filter;
 }
 
-function matchesPickupNoteFilter(
+function matchesPickupOptionFilter(
   order: SellerOrderRow,
-  filter: PickupNoteFilter,
+  filter: PickupOptionFilter,
 ) {
-  if (filter === "__all__") return true;
-
-  const pickupNote = normalizeFilterText(order.pickup_note);
-
-  if (filter === "__none__") return !pickupNote;
-
-  return pickupNote === normalizeFilterText(filter);
+  return filter === "__all__" || order.pickup_option_id === filter;
 }
 
 function matchesSearch(
@@ -1009,41 +1730,20 @@ function getFilterCounts(orders: SellerOrderRow[]) {
     all: orders.length,
     canceled: 0,
     completed: 0,
-    needs_attention: 0,
     ready_for_pickup: 0,
   };
 
   for (const order of orders) {
-    counts[getOrderLifecycleState(order)] += 1;
+    const lifecycle = getOrderLifecycleState(order);
+
+    if (lifecycle === "needs_attention") {
+      counts.ready_for_pickup += 1;
+    } else {
+      counts[lifecycle] += 1;
+    }
   }
 
   return counts;
-}
-
-function getPickupNoteOptions(orders: SellerOrderRow[]) {
-  const notes = new Map<string, string>();
-  let hasEmptyNote = false;
-
-  for (const order of orders) {
-    const note = order.pickup_note?.trim();
-
-    if (!note) {
-      hasEmptyNote = true;
-      continue;
-    }
-
-    notes.set(normalizeFilterText(note), note);
-  }
-
-  const options = [...notes.values()]
-    .sort((first, second) => first.localeCompare(second))
-    .map((note) => ({ label: note, value: note }));
-
-  if (hasEmptyNote) {
-    options.push({ label: "No pickup notes", value: "__none__" });
-  }
-
-  return options;
 }
 
 function sortOrders(orders: SellerOrderRow[], sort: OrderSort) {
@@ -1190,7 +1890,6 @@ function formatShortDate(value: string | null) {
 function getEmptyTitle(filter: OrderFilter, hasSearchOrPickupFilter: boolean) {
   if (hasSearchOrPickupFilter) return "No orders match that search.";
 
-  if (filter === "needs_attention") return "No orders need attention right now.";
   if (filter === "ready_for_pickup") return "No orders are ready for pickup.";
   if (filter === "completed") return "No completed orders yet.";
   if (filter === "canceled") return "No canceled orders.";

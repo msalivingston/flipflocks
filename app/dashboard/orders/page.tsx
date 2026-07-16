@@ -9,7 +9,10 @@ export default function SellerOrdersPage() {
         title="Orders"
         description="Review pickup requests by status and open each order for next steps."
         action={
-          <Link className="seller-primary-button gap-2" href="/dashboard/orders/new">
+          <Link
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-emerald-800 px-4 text-sm font-bold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
+            href="/dashboard/orders/new"
+          >
             <span aria-hidden="true" className="text-xl leading-none">
               +
             </span>

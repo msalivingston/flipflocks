@@ -47,6 +47,7 @@ Production glyphs are exported as 128x128 PNG files with transparent backgrounds
 - `pencil.png`
 - `person.png`
 - `phone.png`
+- `printer.png`
 - `reports.png`
 - `shield.png`
 - `trashcan.png`
