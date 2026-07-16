@@ -1,8 +1,6 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
-import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../../_components/seller-context";
@@ -11,10 +9,46 @@ import {
   LoadingState,
   SellerCard,
 } from "../../_components/seller-ui";
+import { OrderFulfillmentSection } from "../_components/order-fulfillment-section";
+import { OrderItemsEditor } from "../_components/order-items-editor";
 import {
-  formatAgeAtAvailabilityFromDates,
-  formatInventoryTypeLabel,
-} from "../../_lib/listing-formatters";
+  calculateDeliveryFee,
+  calculateDiscountAmount,
+  calculateFinalTotal,
+  calculateOrderSubtotal,
+  customLine,
+  distributeDiscount,
+  emptyLine,
+  formatCustomItemPayloadName,
+  formatMoneyInput,
+  validateSharedOrderForm,
+} from "../_lib/order-form-calculations";
+import {
+  emptyDeliveryAddress,
+  formatSavedDeliveryAddress,
+  updateDeliveryAddress,
+} from "../_lib/order-form-fulfillment";
+import {
+  formatInventorySearchLabel,
+  getManualOrderPayloadItemType,
+  normalizeSellableInventoryRows,
+  quantityExceedsAvailable,
+} from "../_lib/order-form-inventory";
+import type {
+  BrowseInventoryFilter,
+  DeliveryAddress,
+  DeliveryOption,
+  DiscountType,
+  EquipmentInventoryRow,
+  FulfillmentMethod,
+  InventorySearchRow,
+  ListingInventoryRow,
+  OrderLine,
+  PickupMethod,
+  PickupOption,
+  ProcessedPoultryInventoryRow,
+  StoreDefaults,
+} from "../_lib/order-form-types";
 import { formatCurrency } from "../order-formatters";
 
 type CustomerRow = {
@@ -35,158 +69,13 @@ type CustomerDetailRow = CustomerRow & {
   delivery_country: string | null;
 };
 
-type ListingInventoryRow = {
-  inventory_item_id: string;
-  listing_batch_id: string;
-  breed_display_name: string;
-  batch_type: string;
-  inventory_type: string;
-  custom_inventory_label: string | null;
-  origin_date: string | null;
-  available_date: string;
-  quantity_available: number | null;
-  effective_unit_price: number | null;
-  inventory_visibility_status: string;
-  inventory_moderation_status: string;
-  listing_batch_visibility_status: string;
-  listing_batch_moderation_status: string;
-  operational_availability_status: string;
-};
-
-type EquipmentInventoryRow = {
-  equipment_inventory_item_id: string;
-  item_name: string;
-  category: string;
-  condition: string | null;
-  quantity_available: number;
-  price: number;
-  visibility_status: string;
-  moderation_status: string;
-  operational_availability_status: string;
-};
-
-type ProcessedPoultryInventoryRow = {
-  processed_poultry_inventory_item_id: string;
-  product_name: string;
-  poultry_type: string;
-  product_type: string;
-  package_size: string | null;
-  quantity_available: number;
-  price: number;
-  visibility_status: string;
-  moderation_status: string;
-  operational_availability_status: string;
-};
-
-type InventoryItemType =
-  | "listing_inventory"
-  | "equipment_inventory"
-  | "processed_poultry_inventory";
-
-type InventorySearchRow = {
-  id: string;
-  itemType: InventoryItemType;
-  title: string;
-  category: InventoryCategory;
-  detailLabel: string;
-  quantity_available: number;
-  effective_unit_price: number;
-  operational_availability_status: string;
-  allowInventoryOverride: boolean;
-};
-
-type OrderLine = {
-  type: "inventory" | "custom";
-  id: string;
-  inventoryItemId: string;
-  inventoryItemType: InventoryItemType | "";
-  customItemName: string;
-  customItemDescription: string;
-  search: string;
-  quantity: string;
-  unitPrice: string;
-};
-
 type CreatedOrder = {
   order_id: string;
   order_number: string;
   total_amount: number | null;
 };
 
-type DiscountType = "fixed" | "percent";
-
 type CustomerMode = "existing" | "new";
-
-type BrowseInventoryFilter =
-  | "all"
-  | "poultry"
-  | "hatching_eggs"
-  | "processed_poultry"
-  | "equipment";
-type InventoryCategory = Exclude<BrowseInventoryFilter, "all">;
-
-type FulfillmentMethod = "pickup" | "delivery";
-
-type PickupMethod = "notes" | "manual_options";
-
-type StoreDefaults = {
-  pickup_method: PickupMethod | null;
-  delivery_enabled: boolean | null;
-};
-
-type PickupOption = {
-  id: string;
-  label: string;
-  description: string | null;
-};
-
-type DeliveryOption = {
-  id: string;
-  name: string;
-  price_amount: number | null;
-};
-
-type DeliveryAddress = {
-  line1: string;
-  line2: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
-};
-
-const emptyDeliveryAddress = (): DeliveryAddress => ({
-  line1: "",
-  line2: "",
-  city: "",
-  state: "",
-  postalCode: "",
-  country: "US",
-});
-
-const emptyLine = (): OrderLine => ({
-  type: "inventory",
-  id: crypto.randomUUID(),
-  customItemName: "",
-  customItemDescription: "",
-  inventoryItemId: "",
-  inventoryItemType: "",
-  quantity: "1",
-  search: "",
-  unitPrice: "",
-});
-
-const customLine = (): OrderLine => ({
-  type: "custom",
-  id: crypto.randomUUID(),
-  customItemName: "",
-  customItemDescription: "",
-  inventoryItemId: "",
-  inventoryItemType: "",
-  quantity: "1",
-  search: "",
-  unitPrice: "",
-});
 
 export function NewManualOrder() {
   const { seller } = useSellerContext();
@@ -443,13 +332,7 @@ export function NewManualOrder() {
     newCustomer,
   );
   const canEmailBuyerConfirmation = isEmail(buyerConfirmationEmail);
-  const activeLines = lines.filter(isActiveLine);
-  const subtotal = activeLines.reduce((total, line) => {
-    const quantity = Number(line.quantity || 0);
-    const unitPrice = Number(line.unitPrice || 0);
-
-    return total + quantity * unitPrice;
-  }, 0);
+  const subtotal = calculateOrderSubtotal(lines);
   const discountAmount = calculateDiscountAmount(
     subtotal,
     discountType,
@@ -460,11 +343,16 @@ export function NewManualOrder() {
   const selectedDeliveryOption = deliveryOptions.find(
     (option) => option.id === deliveryOptionId,
   );
-  const deliveryFee =
-    currentFulfillmentMethod === "delivery"
-      ? selectedDeliveryOption?.price_amount ?? 0
-      : 0;
-  const total = Math.max(subtotal - discountAmount + taxAmount + deliveryFee, 0);
+  const deliveryFee = calculateDeliveryFee({
+    deliveryFee: selectedDeliveryOption?.price_amount ?? 0,
+    fulfillmentMethod: currentFulfillmentMethod,
+  });
+  const total = calculateFinalTotal({
+    deliveryFee,
+    discountAmount,
+    subtotal,
+    taxAmount,
+  });
 
   function updateLine(lineId: string, updates: Partial<OrderLine>) {
     setLines((current) =>
@@ -575,7 +463,7 @@ export function NewManualOrder() {
   async function createOrder() {
     if (!seller || isSaving) return;
 
-    const errors = validateOrder({
+    const errors = validateOrderForCreate({
       canUseDelivery,
       customerMode,
       deliveryAddress,
@@ -798,257 +686,57 @@ export function NewManualOrder() {
           setSelectedCustomerId={setSelectedCustomerId}
         />
 
-        <SellerCard className="min-w-0 overflow-hidden p-3">
-          <h2 className="text-lg font-semibold text-stone-950">Order Items</h2>
-          <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-            <label className="sr-only" htmlFor="manual-order-inventory-search">
-              Search inventory by breed, type, or age
-            </label>
-            <input
-              className="seller-form-field seller-compact-field seller-action-search-field"
-              id="manual-order-inventory-search"
-              placeholder="Quick add: type breed, age, or item name"
-              type="text"
-              value={inventoryQuery}
-              onChange={(event) => {
-                setInventoryQuery(event.target.value);
-                setIsBrowseOpen(false);
-              }}
-            />
-            <div className="flex items-center gap-1.5">
-              <button
-                className="inline-flex min-h-9 items-center rounded-md border border-emerald-100 bg-emerald-50 px-2.5 text-xs font-bold text-emerald-900 transition hover:border-emerald-200 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-700/25"
-                type="button"
-                onClick={() => {
-                  setIsBrowseOpen((current) => !current);
-                  setInventoryQuery("");
-                }}
-              >
-                Browse inventory
-              </button>
-              <button
-                className="inline-flex min-h-9 items-center rounded-md px-2.5 text-xs font-bold text-emerald-800 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/25"
-                type="button"
-                onClick={addCustomItem}
-              >
-                + Custom item
-              </button>
-            </div>
-          </div>
+        <OrderItemsEditor
+          browseAddedInventoryItemId={browseAddedInventoryItemId}
+          browseFilter={browseFilter}
+          browseQuery={browseQuery}
+          inventory={inventory}
+          inventoryQuery={inventoryQuery}
+          isBrowseOpen={isBrowseOpen}
+          lines={lines}
+          onAddCustomItem={addCustomItem}
+          onAddInventoryItem={addInventoryItem}
+          onBrowseInventoryItem={addBrowseInventoryItem}
+          onBrowseFilterChange={setBrowseFilter}
+          onBrowseOpenChange={setIsBrowseOpen}
+          onBrowseQueryChange={setBrowseQuery}
+          onInventoryQueryChange={setInventoryQuery}
+          onRemoveLine={removeLine}
+          onUpdateLine={updateLine}
+        />
 
-          <InventorySearchResults
-            inventory={inventory}
-            query={inventoryQuery}
-            onSelect={addInventoryItem}
-          />
-
-          <div className="mt-3 max-w-full overflow-hidden">
-            <div className="min-w-0">
-              <div className="grid grid-cols-[minmax(0,1fr)_72px_96px_90px_28px] gap-2 border-b border-stone-200 px-1 pb-2 text-xs font-bold uppercase tracking-[0.04em] text-stone-500">
-                <span>Item</span>
-                <span className="text-center">Qty</span>
-                <span>Unit price</span>
-                <span className="text-right">Line total</span>
-                <span className="text-right">
-                  <span className="sr-only">Remove</span>
-                </span>
-              </div>
-              {lines.length > 0 ? (
-                <div className="divide-y divide-stone-200">
-                  {lines.map((line) => (
-                    <OrderItemRow
-                      inventory={inventory}
-                      key={line.id}
-                      line={line}
-                      onRemove={() => removeLine(line.id)}
-                      updateLine={(updates) => updateLine(line.id, updates)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="px-1 py-5 text-sm text-stone-600">
-                  Search inventory above or add a custom item to start the order.
-                </p>
-              )}
-            </div>
-          </div>
-        </SellerCard>
-
-        <SellerCard className="min-w-0 p-3">
-          <h2 className="text-lg font-semibold text-stone-950">Order Details</h2>
-          <div className="mt-2 grid gap-2 md:grid-cols-2">
-            <label className="grid gap-1 text-sm font-semibold text-stone-700">
-              Fulfillment method
-              <select
-                className="seller-form-field seller-compact-field"
-                value={currentFulfillmentMethod}
-                onChange={(event) =>
-                  chooseFulfillmentMethod(event.target.value as FulfillmentMethod)
-                }
-              >
-                <option value="pickup">Pickup</option>
-                {canUseDelivery ? <option value="delivery">Delivery</option> : null}
-              </select>
-            </label>
-
-            {currentFulfillmentMethod === "pickup" && usesConfiguredPickupOptions ? (
-              <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                Pickup option
-                <select
-                  className="seller-form-field seller-compact-field"
-                  value={pickupOptionId}
-                  onChange={(event) => {
-                    setPickupOptionId(event.target.value);
-                    setValidationErrors([]);
-                    setSaveError(null);
-                  }}
-                >
-                  <option value="">Choose pickup option</option>
-                  {pickupOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-
-            {currentFulfillmentMethod === "pickup" && !usesConfiguredPickupOptions ? (
-              <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                Pickup note
-                <input
-                  className="seller-form-field seller-compact-field"
-                  placeholder="Optional pickup details"
-                  value={pickupNote}
-                  onChange={(event) => setPickupNote(event.target.value)}
-                />
-              </label>
-            ) : null}
-
-            {currentFulfillmentMethod === "delivery" ? (
-              <>
-                <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                  Delivery option
-                  <select
-                    className="seller-form-field seller-compact-field"
-                    value={deliveryOptionId}
-                    onChange={(event) => {
-                      setDeliveryOptionId(event.target.value);
-                      setValidationErrors([]);
-                      setSaveError(null);
-                    }}
-                  >
-                    <option value="">Choose delivery option</option>
-                    {deliveryOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {formatDeliveryOptionLabel(option)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <div className="grid gap-2 md:col-span-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_7rem_7rem]">
-                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                    Delivery address
-                    <input
-                      className="seller-form-field seller-compact-field"
-                      placeholder="Street address"
-                      value={deliveryAddress.line1}
-                      onChange={(event) =>
-                        updateDeliveryAddress(
-                          setDeliveryAddress,
-                          { line1: event.target.value },
-                          () => setHasEditedDeliveryAddress(true),
-                        )
-                      }
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                    Apt / unit
-                    <input
-                      className="seller-form-field seller-compact-field"
-                      placeholder="Optional"
-                      value={deliveryAddress.line2}
-                      onChange={(event) =>
-                        updateDeliveryAddress(
-                          setDeliveryAddress,
-                          { line2: event.target.value },
-                          () => setHasEditedDeliveryAddress(true),
-                        )
-                      }
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                    City
-                    <input
-                      className="seller-form-field seller-compact-field"
-                      value={deliveryAddress.city}
-                      onChange={(event) =>
-                        updateDeliveryAddress(
-                          setDeliveryAddress,
-                          { city: event.target.value },
-                          () => setHasEditedDeliveryAddress(true),
-                        )
-                      }
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                    State
-                    <input
-                      className="seller-form-field seller-compact-field"
-                      value={deliveryAddress.state}
-                      onChange={(event) =>
-                        updateDeliveryAddress(
-                          setDeliveryAddress,
-                          { state: event.target.value },
-                          () => setHasEditedDeliveryAddress(true),
-                        )
-                      }
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                    ZIP
-                    <input
-                      className="seller-form-field seller-compact-field"
-                      value={deliveryAddress.postalCode}
-                      onChange={(event) =>
-                        updateDeliveryAddress(
-                          setDeliveryAddress,
-                          { postalCode: event.target.value },
-                          () => setHasEditedDeliveryAddress(true),
-                        )
-                      }
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                    Country
-                    <input
-                      className="seller-form-field seller-compact-field"
-                      value={deliveryAddress.country}
-                      onChange={(event) =>
-                        updateDeliveryAddress(
-                          setDeliveryAddress,
-                          { country: event.target.value },
-                          () => setHasEditedDeliveryAddress(true),
-                        )
-                      }
-                    />
-                  </label>
-                </div>
-              </>
-            ) : null}
-
-            <label className="grid gap-1 text-sm font-semibold text-stone-700 md:col-span-2">
-              Customer note
-              <textarea
-                className="seller-form-field seller-compact-field min-h-16 resize-y py-2"
-                placeholder="Add a note for this order"
-                value={buyerNotes}
-                onChange={(event) => setBuyerNotes(event.target.value)}
-              />
-            </label>
-          </div>
-        </SellerCard>
+        <OrderFulfillmentSection
+          buyerNotes={buyerNotes}
+          canUseDelivery={canUseDelivery}
+          currentFulfillmentMethod={currentFulfillmentMethod}
+          deliveryAddress={deliveryAddress}
+          deliveryOptions={deliveryOptions}
+          deliveryOptionId={deliveryOptionId}
+          pickupNote={pickupNote}
+          pickupOptionId={pickupOptionId}
+          pickupOptions={pickupOptions}
+          usesConfiguredPickupOptions={usesConfiguredPickupOptions}
+          onBuyerNotesChange={setBuyerNotes}
+          onDeliveryAddressChange={(updates) =>
+            updateDeliveryAddress(
+              setDeliveryAddress,
+              updates,
+              () => setHasEditedDeliveryAddress(true),
+            )
+          }
+          onDeliveryOptionChange={(optionId) => {
+            setDeliveryOptionId(optionId);
+            setValidationErrors([]);
+            setSaveError(null);
+          }}
+          onFulfillmentMethodChange={chooseFulfillmentMethod}
+          onPickupNoteChange={setPickupNote}
+          onPickupOptionChange={(optionId) => {
+            setPickupOptionId(optionId);
+            setValidationErrors([]);
+            setSaveError(null);
+          }}
+        />
       </div>
 
       <SellerCard className="p-3 lg:sticky lg:top-3">
@@ -1140,18 +828,6 @@ export function NewManualOrder() {
         </div>
       </SellerCard>
 
-      {isBrowseOpen ? (
-        <BrowseInventoryDialog
-          addedInventoryItemId={browseAddedInventoryItemId}
-          filter={browseFilter}
-          inventory={inventory}
-          query={browseQuery}
-          onClose={() => setIsBrowseOpen(false)}
-          onFilterChange={setBrowseFilter}
-          onQueryChange={setBrowseQuery}
-          onSelect={addBrowseInventoryItem}
-        />
-      ) : null}
     </div>
   );
 }
@@ -1339,320 +1015,6 @@ function CustomerSection({
   );
 }
 
-function InventorySearchResults({
-  inventory,
-  onSelect,
-  query,
-}: {
-  inventory: InventorySearchRow[];
-  onSelect: (inventoryItemId: string) => void;
-  query: string;
-}) {
-  const results = filterInventory(inventory, query).slice(0, 7);
-
-  if (query.trim().length < 2) return null;
-
-  return (
-    <div className="mt-2 overflow-hidden rounded-md border border-stone-200 bg-white shadow-sm">
-      {results.length > 0 ? (
-        results.map((item) => (
-          <button
-            className="grid min-h-10 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-stone-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none"
-            key={item.id}
-            type="button"
-            onClick={() => onSelect(item.id)}
-          >
-            <span className="min-w-0">
-              <span className="block truncate font-semibold text-stone-950">
-                {item.title}
-              </span>
-              <span className="block truncate text-xs text-stone-600">
-                {formatInventoryMetadata(item)} &middot; {item.quantity_available ?? 0} available
-              </span>
-            </span>
-            <span className="text-sm font-bold text-stone-950">
-              {formatCurrency(item.effective_unit_price)}
-            </span>
-          </button>
-        ))
-      ) : (
-        <p className="px-3 py-2 text-sm text-stone-600">No inventory matches.</p>
-      )}
-    </div>
-  );
-}
-
-function BrowseInventoryDialog({
-  addedInventoryItemId,
-  filter,
-  inventory,
-  onClose,
-  onFilterChange,
-  onQueryChange,
-  onSelect,
-  query,
-}: {
-  addedInventoryItemId: string | null;
-  filter: BrowseInventoryFilter;
-  inventory: InventorySearchRow[];
-  onClose: () => void;
-  onFilterChange: (filter: BrowseInventoryFilter) => void;
-  onQueryChange: (query: string) => void;
-  onSelect: (inventoryItemId: string) => void;
-  query: string;
-}) {
-  const rows = getBrowseInventoryRows(inventory, filter, query).slice(0, 60);
-  const filters: { label: string; value: BrowseInventoryFilter }[] = [
-    { label: "All", value: "all" },
-    { label: "Live poultry", value: "poultry" },
-    { label: "Hatching eggs", value: "hatching_eggs" },
-    { label: "Poultry products", value: "processed_poultry" },
-    { label: "Equipment", value: "equipment" },
-  ];
-
-  return (
-    <div
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/25 px-3 py-4"
-      role="dialog"
-      onMouseDown={onClose}
-    >
-      <div
-        className="flex max-h-[70vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-stone-200 bg-[#fffdf7] shadow-xl"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
-          <h3 className="text-base font-bold text-stone-950">Browse Inventory</h3>
-          <button
-            aria-label="Close Browse Inventory"
-            className="flex size-8 items-center justify-center rounded-md text-sm font-bold text-stone-500 hover:bg-stone-100 hover:text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/25"
-            type="button"
-            onClick={onClose}
-          >
-            x
-          </button>
-        </div>
-
-        <div className="grid gap-2 border-b border-stone-200 px-4 py-3">
-          <input
-            className="seller-form-field seller-compact-field"
-            placeholder="Search inventory"
-            type="text"
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-          />
-          <div className="flex flex-wrap gap-1">
-            {filters.map((filterOption) => {
-              const selected = filter === filterOption.value;
-
-              return (
-                <button
-                  className={`min-h-7 rounded-md px-2.5 text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-emerald-700/25 ${
-                    selected
-                      ? "bg-emerald-800 text-white"
-                      : "bg-white text-stone-700 ring-1 ring-stone-200 hover:bg-emerald-50 hover:text-emerald-800"
-                  }`}
-                  key={filterOption.value}
-                  type="button"
-                  onClick={() => onFilterChange(filterOption.value)}
-                >
-                  {filterOption.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="min-h-0 overflow-y-auto bg-white">
-          {rows.length > 0 ? (
-            rows.map((item) => {
-              const wasAdded = addedInventoryItemId === item.id;
-
-              return (
-                <div
-                  className="grid grid-cols-[minmax(0,1fr)_5rem_5.25rem_4rem] items-center gap-2 border-b border-stone-100 px-4 py-2 text-sm last:border-b-0"
-                  key={item.id}
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-bold text-stone-950">
-                      {item.title}
-                    </p>
-                    <p className="truncate text-xs text-stone-600">
-                      {formatBrowseInventoryMetadata(item)}
-                    </p>
-                  </div>
-                  <p className="text-right text-xs font-semibold text-stone-600">
-                    {item.quantity_available ?? 0} available
-                  </p>
-                  <p className="text-right text-sm font-bold text-stone-950">
-                    {formatCurrency(item.effective_unit_price)}
-                  </p>
-                  <button
-                    className={`justify-self-end rounded-md px-2 py-1 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700/25 ${
-                      wasAdded
-                        ? "bg-emerald-100 text-emerald-800"
-                        : "text-emerald-800 hover:bg-emerald-50"
-                    }`}
-                    type="button"
-                    onClick={() => onSelect(item.id)}
-                  >
-                    {wasAdded ? "Added" : "Add"}
-                  </button>
-                </div>
-              );
-            })
-          ) : (
-            <p className="px-4 py-4 text-sm text-stone-600">
-              No available inventory to browse.
-            </p>
-          )}
-        </div>
-
-        <div className="flex justify-end border-t border-stone-200 bg-[#fffdf7] px-4 py-3">
-          <button className="seller-small-button" type="button" onClick={onClose}>
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function OrderItemRow({
-  inventory,
-  line,
-  onRemove,
-  updateLine,
-}: {
-  inventory: InventorySearchRow[];
-  line: OrderLine;
-  onRemove: () => void;
-  updateLine: (updates: Partial<OrderLine>) => void;
-}) {
-  const selectedItem = inventory.find(
-    (row) => row.id === line.inventoryItemId,
-  );
-  const quantity = Number(line.quantity || 0);
-  const unitPrice = Number(line.unitPrice || 0);
-  const exceedsAvailable =
-    line.type === "inventory" &&
-    selectedItem != null &&
-    isPositiveWholeNumber(line.quantity) &&
-    quantity > selectedItem.quantity_available;
-
-  return (
-    <div className="grid grid-cols-[minmax(0,1fr)_72px_96px_90px_28px] items-start gap-2 px-1 py-2">
-      <div className="min-w-0">
-        {line.type === "custom" ? (
-          <div className="grid min-w-0 gap-1.5">
-            <div className="flex min-w-0 items-center">
-              <input
-                className="min-h-10 min-w-0 flex-1 rounded-md border border-stone-300 px-2 text-sm font-semibold text-stone-950 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
-                placeholder="Item name"
-                value={line.customItemName}
-                onChange={(event) =>
-                  updateLine({ customItemName: event.target.value })
-                }
-              />
-            </div>
-            <input
-              className="min-h-9 w-full min-w-0 rounded-md border border-stone-300 px-2 text-sm text-stone-700 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
-              placeholder="Short description"
-              value={line.customItemDescription}
-              onChange={(event) =>
-                updateLine({ customItemDescription: event.target.value })
-              }
-            />
-          </div>
-        ) : (
-          <>
-            <p className="truncate text-sm font-bold text-stone-950">
-              {selectedItem?.title ?? "Inventory item"}
-            </p>
-            <p className="mt-1 truncate text-xs text-stone-600">
-              {selectedItem ? formatInventoryMetadata(selectedItem) : line.search}
-            </p>
-            {exceedsAvailable ? (
-              <p className="mt-1 text-xs font-semibold text-amber-800">
-                {selectedItem?.allowInventoryOverride
-                  ? "Quantity exceeds available inventory."
-                  : "Quantity exceeds available inventory and cannot be saved."}
-              </p>
-            ) : null}
-          </>
-        )}
-      </div>
-
-      <QuantityInput
-        value={line.quantity}
-        onChange={(quantityValue) => updateLine({ quantity: quantityValue })}
-      />
-      <input
-        aria-label="Unit price"
-        className="seller-form-field seller-compact-field"
-        min="0"
-        step="0.01"
-        type="number"
-        value={line.unitPrice}
-        onChange={(event) => updateLine({ unitPrice: event.target.value })}
-      />
-      <p className="pt-2 text-right text-sm font-bold text-stone-950">
-        {formatCurrency(quantity * unitPrice)}
-      </p>
-      <button
-        aria-label="Remove item"
-        className="ml-auto flex size-7 items-center justify-center rounded-md opacity-70 transition hover:bg-red-50 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-500/25"
-        type="button"
-        onClick={onRemove}
-      >
-        <Image alt="" height={16} src="/glyphs/trashcan.png" width={16} />
-      </button>
-    </div>
-  );
-}
-
-function QuantityInput({
-  onChange,
-  value,
-}: {
-  onChange: (value: string) => void;
-  value: string;
-}) {
-  return (
-    <input
-      aria-label="Quantity"
-      className="seller-form-field seller-compact-field text-center"
-      min="1"
-      step="1"
-      type="number"
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-    />
-  );
-}
-
-function updateDeliveryAddress(
-  setDeliveryAddress: Dispatch<SetStateAction<DeliveryAddress>>,
-  updates: Partial<DeliveryAddress>,
-  markEdited: () => void,
-) {
-  markEdited();
-  setDeliveryAddress((current) => ({ ...current, ...updates }));
-}
-
-function formatSavedDeliveryAddress(
-  customer: CustomerDetailRow | null,
-): DeliveryAddress {
-  return {
-    line1: customer?.delivery_address_line1 ?? "",
-    line2: customer?.delivery_address_line2 ?? "",
-    city: customer?.delivery_city ?? "",
-    state: customer?.delivery_state ?? "",
-    postalCode: customer?.delivery_postal_code ?? "",
-    country: customer?.delivery_country ?? "US",
-  };
-}
-
 function TextField({
   label,
   min,
@@ -1710,7 +1072,7 @@ function ValidationMessage({ errors }: { errors: string[] }) {
   );
 }
 
-function validateOrder({
+function validateOrderForCreate({
   canUseDelivery,
   customerMode,
   deliveryAddress,
@@ -1744,7 +1106,6 @@ function validateOrder({
   usesConfiguredPickupOptions: boolean;
 }) {
   const errors: string[] = [];
-  const selectedLines = lines.filter(isActiveLine);
 
   if (customerMode === "existing" && !selectedCustomer) {
     errors.push("Select a customer.");
@@ -1755,121 +1116,21 @@ function validateOrder({
     if (!isEmail(newCustomer.email)) errors.push("Add a valid customer email.");
   }
 
-  if (selectedLines.length === 0) errors.push("Add at least one inventory item.");
-
-  if (fulfillmentMethod === "pickup" && usesConfiguredPickupOptions) {
-    if (!pickupOptionId) errors.push("Choose a pickup option.");
-  }
-
-  if (fulfillmentMethod === "delivery") {
-    if (!canUseDelivery) {
-      errors.push("Delivery is not enabled for this store.");
-    }
-    if (!deliveryOptionId) errors.push("Choose a delivery option.");
-    if (!deliveryAddress.line1.trim()) {
-      errors.push("Add the delivery street address.");
-    }
-    if (!deliveryAddress.city.trim()) errors.push("Add the delivery city.");
-    if (!deliveryAddress.state.trim()) errors.push("Add the delivery state.");
-    if (!deliveryAddress.postalCode.trim()) {
-      errors.push("Add the delivery ZIP code.");
-    }
-  }
-
-  selectedLines.forEach((line, index) => {
-    const item = inventory.find((row) => row.id === line.inventoryItemId);
-    const label = `Item ${index + 1}`;
-
-    if (line.type === "inventory" && !item) {
-      errors.push(`${label}: inventory was not found.`);
-    }
-    if (line.type === "custom" && !line.customItemName.trim()) {
-      errors.push(`${label}: add a custom item name.`);
-    }
-    if (!isPositiveWholeNumber(line.quantity)) {
-      errors.push(`${label}: quantity must be 1 or more.`);
-    }
-    if (!isValidMoney(line.unitPrice)) {
-      errors.push(`${label}: price must be a valid amount.`);
-    }
-    if (
-      line.type === "inventory" &&
-      item &&
-      !item.allowInventoryOverride &&
-      isPositiveWholeNumber(line.quantity) &&
-      Number(line.quantity) > item.quantity_available
-    ) {
-      errors.push(`${label}: quantity exceeds available inventory.`);
-    }
-  });
-
-  if (discountValue.trim()) {
-    if (!isValidMoney(discountValue)) {
-      errors.push("Discount must be a valid amount.");
-    } else if (discountType === "percent" && Number(discountValue) > 100) {
-      errors.push("Percent discount cannot be more than 100%.");
-    }
-  }
-
-  return errors;
-}
-
-function distributeDiscount(
-  lines: OrderLine[],
-  inventory: InventorySearchRow[],
-  discountAmount: number,
-) {
-  const selectedLines = lines.filter(isActiveLine);
-  const subtotal = selectedLines.reduce(
-    (total, line) => total + Number(line.quantity || 0) * Number(line.unitPrice || 0),
-    0,
-  );
-
-  if (subtotal <= 0 || discountAmount <= 0) {
-    return selectedLines.map((line) => ({
-      ...line,
-      discountedUnitPrice: Number(line.unitPrice || 0),
-    }));
-  }
-
-  let remainingDiscount = Math.min(discountAmount, subtotal);
-
-  return selectedLines.map((line, index) => {
-    const quantity = Number(line.quantity);
-    const lineTotal = quantity * Number(line.unitPrice);
-    const lineDiscount =
-      index === selectedLines.length - 1
-        ? remainingDiscount
-        : roundCurrency((lineTotal / subtotal) * discountAmount);
-    remainingDiscount = roundCurrency(remainingDiscount - lineDiscount);
-
-    const item = inventory.find((row) => row.id === line.inventoryItemId);
-
-    return {
-      ...line,
-      search:
-        line.type === "inventory" && item
-          ? formatInventorySearchLabel(item)
-          : line.search,
-      discountedUnitPrice: roundCurrency(
-        Math.max((lineTotal - lineDiscount) / quantity, 0),
-      ),
-    };
-  });
-}
-
-function calculateDiscountAmount(
-  subtotal: number,
-  discountType: DiscountType,
-  discountValue: string,
-) {
-  if (!isValidMoney(discountValue)) return 0;
-
-  const value = Number(discountValue);
-  const discount =
-    discountType === "percent" ? subtotal * (Math.min(value, 100) / 100) : value;
-
-  return roundCurrency(Math.min(discount, subtotal));
+  return [
+    ...errors,
+    ...validateSharedOrderForm({
+      canUseDelivery,
+      deliveryAddress,
+      deliveryOptionId,
+      discountType,
+      discountValue,
+      fulfillmentMethod,
+      inventory,
+      lines,
+      pickupOptionId,
+      usesConfiguredPickupOptions,
+    }),
+  ];
 }
 
 function filterCustomers(customers: CustomerRow[], query: string) {
@@ -1887,207 +1148,6 @@ function filterCustomers(customers: CustomerRow[], query: string) {
       .filter(Boolean)
       .some((value) => value?.toLowerCase().includes(normalized)),
   );
-}
-
-function normalizeSellableInventoryRows({
-  equipmentRows,
-  listingRows,
-  processedPoultryRows,
-}: {
-  equipmentRows: EquipmentInventoryRow[];
-  listingRows: ListingInventoryRow[];
-  processedPoultryRows: ProcessedPoultryInventoryRow[];
-}): InventorySearchRow[] {
-  return [
-    ...listingRows.map(normalizeListingInventoryRow),
-    ...processedPoultryRows.map(normalizeProcessedPoultryInventoryRow),
-    ...equipmentRows.map(normalizeEquipmentInventoryRow),
-  ].sort((firstItem, secondItem) => {
-    const categorySort =
-      getInventoryCategorySort(firstItem.category) -
-      getInventoryCategorySort(secondItem.category);
-
-    return categorySort || firstItem.title.localeCompare(secondItem.title);
-  });
-}
-
-function normalizeListingInventoryRow(row: ListingInventoryRow): InventorySearchRow {
-  const category =
-    row.batch_type === "hatching_eggs" || row.inventory_type === "hatching_eggs"
-      ? "hatching_eggs"
-      : "poultry";
-  const inventoryType =
-    row.custom_inventory_label || formatInventoryTypeLabel(row.inventory_type);
-  const age = formatAgeAtAvailabilityFromDates(row.origin_date, row.available_date);
-
-  return {
-    allowInventoryOverride: true,
-    category,
-    detailLabel: [inventoryType, age].filter(Boolean).join(" - "),
-    effective_unit_price: row.effective_unit_price ?? 0,
-    id: row.inventory_item_id,
-    itemType: "listing_inventory",
-    operational_availability_status: row.operational_availability_status,
-    quantity_available: row.quantity_available ?? 0,
-    title: row.breed_display_name,
-  };
-}
-
-function normalizeEquipmentInventoryRow(
-  row: EquipmentInventoryRow,
-): InventorySearchRow {
-  return {
-    allowInventoryOverride: false,
-    category: "equipment",
-    detailLabel: [row.category, row.condition].filter(Boolean).join(" - "),
-    effective_unit_price: row.price ?? 0,
-    id: row.equipment_inventory_item_id,
-    itemType: "equipment_inventory",
-    operational_availability_status: row.operational_availability_status,
-    quantity_available: row.quantity_available ?? 0,
-    title: row.item_name,
-  };
-}
-
-function normalizeProcessedPoultryInventoryRow(
-  row: ProcessedPoultryInventoryRow,
-): InventorySearchRow {
-  return {
-    allowInventoryOverride: false,
-    category: "processed_poultry",
-    detailLabel: [row.poultry_type, row.product_type, row.package_size]
-      .filter(Boolean)
-      .join(" - "),
-    effective_unit_price: row.price ?? 0,
-    id: row.processed_poultry_inventory_item_id,
-    itemType: "processed_poultry_inventory",
-    operational_availability_status: row.operational_availability_status,
-    quantity_available: row.quantity_available ?? 0,
-    title: row.product_name,
-  };
-}
-
-function filterInventory(inventory: InventorySearchRow[], query: string) {
-  const normalized = query.trim().toLowerCase();
-
-  return inventory.filter((item) => {
-    if ((item.quantity_available ?? 0) <= 0) return false;
-    if (!normalized) return false;
-
-    return [
-      item.title,
-      item.detailLabel,
-      formatInventoryCategoryLabel(item.category),
-      item.operational_availability_status,
-    ].some((value) => value.toLowerCase().includes(normalized));
-  });
-}
-
-function getBrowseInventoryRows(
-  inventory: InventorySearchRow[],
-  filter: BrowseInventoryFilter,
-  query: string,
-) {
-  const normalized = query.trim().toLowerCase();
-
-  return inventory
-    .filter((item) => {
-      if ((item.quantity_available ?? 0) <= 0) return false;
-      if (filter !== "all" && getBrowseInventoryCategory(item) !== filter) {
-        return false;
-      }
-      if (!normalized) return true;
-
-      return [
-        item.title,
-        item.detailLabel,
-        formatInventoryCategoryLabel(item.category),
-        item.operational_availability_status,
-      ].some((value) => value.toLowerCase().includes(normalized));
-    })
-    .sort((firstItem, secondItem) =>
-      firstItem.title.localeCompare(secondItem.title),
-    );
-}
-
-function getBrowseInventoryCategory(
-  item: InventorySearchRow,
-): Exclude<BrowseInventoryFilter, "all"> {
-  return item.category;
-}
-
-function getInventoryCategorySort(category: BrowseInventoryFilter) {
-  if (category === "poultry") return 1;
-  if (category === "hatching_eggs") return 2;
-  if (category === "processed_poultry") return 3;
-  if (category === "equipment") return 4;
-
-  return 0;
-}
-
-function formatInventoryCategoryLabel(category: BrowseInventoryFilter) {
-  if (category === "poultry") return "Live poultry";
-  if (category === "hatching_eggs") return "Hatching eggs";
-  if (category === "processed_poultry") return "Poultry product";
-  if (category === "equipment") return "Equipment";
-
-  return "Inventory";
-}
-
-function isActiveLine(line: OrderLine) {
-  if (line.type === "custom") {
-    return Boolean(line.customItemName.trim() || line.unitPrice.trim());
-  }
-
-  return Boolean(line.inventoryItemId);
-}
-
-function quantityExceedsAvailable(
-  line: OrderLine,
-  inventory: InventorySearchRow[],
-) {
-  if (line.type !== "inventory") return false;
-  if (!isPositiveWholeNumber(line.quantity)) return false;
-
-  const item = inventory.find((row) => row.id === line.inventoryItemId);
-
-  if (!item) return false;
-  if (!item.allowInventoryOverride) return false;
-
-  return Number(line.quantity) > (item.quantity_available ?? 0);
-}
-
-function formatInventorySearchLabel(item: InventorySearchRow) {
-  return `${item.title} ${item.detailLabel} - ${item.quantity_available} available - ${formatCurrency(
-    item.effective_unit_price,
-  )}`;
-}
-
-function formatCustomItemPayloadName(line: OrderLine) {
-  const name = line.customItemName.trim();
-  const description = line.customItemDescription.trim();
-
-  return description ? `${name} - ${description}` : name;
-}
-
-function getManualOrderPayloadItemType(line: OrderLine) {
-  if (line.inventoryItemType === "equipment_inventory") {
-    return "equipment_inventory";
-  }
-
-  if (line.inventoryItemType === "processed_poultry_inventory") {
-    return "processed_poultry_inventory";
-  }
-
-  return "inventory";
-}
-
-function formatInventoryMetadata(item: InventorySearchRow) {
-  return `${item.detailLabel} - ${formatInventoryCategoryLabel(item.category)}`;
-}
-
-function formatBrowseInventoryMetadata(item: InventorySearchRow) {
-  return `${item.detailLabel} - ${formatInventoryCategoryLabel(item.category)}`;
 }
 
 function formatCustomerName(customer: {
@@ -2123,10 +1183,6 @@ function formatInlineCustomerSummary(customer: {
   ]
     .filter(Boolean)
     .join(" - ");
-}
-
-function formatDeliveryOptionLabel(option: DeliveryOption) {
-  return `${option.name} - ${formatCurrency(option.price_amount ?? 0)}`;
 }
 
 function formatNewCustomerName(customer: {
@@ -2166,22 +1222,6 @@ function getCreatedCustomerEmail(
   return customerMode === "existing"
     ? selectedCustomer?.email ?? ""
     : newCustomer.email.trim();
-}
-
-function formatMoneyInput(value: number) {
-  return value.toFixed(2);
-}
-
-function roundCurrency(value: number) {
-  return Math.round(value * 100) / 100;
-}
-
-function isValidMoney(value: string) {
-  return /^\d+(\.\d{1,2})?$/.test(value.trim());
-}
-
-function isPositiveWholeNumber(value: string) {
-  return /^[1-9]\d*$/.test(value.trim());
 }
 
 function isEmail(value: string) {
