@@ -16,12 +16,21 @@ import type {
   OrderLine,
 } from "../_lib/order-form-types";
 
+type InventoryAdjustmentControl = {
+  checked: boolean;
+  label: string;
+  lineId: string;
+  lineName: string;
+  removed: boolean;
+};
+
 export function OrderItemsEditor({
   allowInventoryOversell = false,
   browseAddedInventoryItemId,
   browseFilter,
   browseQuery,
   inventory,
+  inventoryAdjustmentControls = [],
   inventoryQuery,
   isBrowseOpen,
   lines,
@@ -32,6 +41,7 @@ export function OrderItemsEditor({
   onBrowseOpenChange,
   onBrowseQueryChange,
   onInventoryQueryChange,
+  onInventoryAdjustmentChange,
   onRemoveLine,
   onUpdateLine,
 }: {
@@ -40,6 +50,7 @@ export function OrderItemsEditor({
   browseFilter: BrowseInventoryFilter;
   browseQuery: string;
   inventory: InventorySearchRow[];
+  inventoryAdjustmentControls?: InventoryAdjustmentControl[];
   inventoryQuery: string;
   isBrowseOpen: boolean;
   lines: OrderLine[];
@@ -50,6 +61,7 @@ export function OrderItemsEditor({
   onBrowseOpenChange: (isOpen: boolean | ((current: boolean) => boolean)) => void;
   onBrowseQueryChange: (query: string) => void;
   onInventoryQueryChange: (query: string) => void;
+  onInventoryAdjustmentChange?: (lineId: string, checked: boolean) => void;
   onRemoveLine: (lineId: string) => void;
   onUpdateLine: (lineId: string, updates: Partial<OrderLine>) => void;
 }) {
@@ -116,12 +128,25 @@ export function OrderItemsEditor({
                   <OrderItemRow
                     allowInventoryOversell={allowInventoryOversell}
                     inventory={inventory}
+                    inventoryAdjustment={inventoryAdjustmentControls.find(
+                      (control) => !control.removed && control.lineId === line.id,
+                    )}
                     key={line.id}
                     line={line}
+                    onInventoryAdjustmentChange={onInventoryAdjustmentChange}
                     onRemove={() => onRemoveLine(line.id)}
                     updateLine={(updates) => onUpdateLine(line.id, updates)}
                   />
                 ))}
+                {inventoryAdjustmentControls
+                  .filter((control) => control.removed)
+                  .map((control) => (
+                    <RemovedInventoryAdjustmentRow
+                      control={control}
+                      key={control.lineId}
+                      onChange={onInventoryAdjustmentChange}
+                    />
+                  ))}
               </div>
             ) : (
               <p className="px-1 py-5 text-sm text-stone-600">
@@ -330,13 +355,17 @@ function BrowseInventoryDialog({
 function OrderItemRow({
   allowInventoryOversell,
   inventory,
+  inventoryAdjustment,
   line,
+  onInventoryAdjustmentChange,
   onRemove,
   updateLine,
 }: {
   allowInventoryOversell: boolean;
   inventory: InventorySearchRow[];
+  inventoryAdjustment: InventoryAdjustmentControl | undefined;
   line: OrderLine;
+  onInventoryAdjustmentChange?: (lineId: string, checked: boolean) => void;
   onRemove: () => void;
   updateLine: (updates: Partial<OrderLine>) => void;
 }) {
@@ -358,73 +387,127 @@ function OrderItemRow({
     quantity > selectedItem.quantity_available;
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_72px_96px_90px_28px] items-start gap-2 px-1 py-2">
-      <div className="min-w-0">
-        {line.type === "custom" ? (
-          <div className="grid min-w-0 gap-1.5">
-            <div className="flex min-w-0 items-center">
+    <div className="px-1 py-2">
+      <div className="grid grid-cols-[minmax(0,1fr)_72px_96px_90px_28px] items-start gap-2">
+        <div className="min-w-0">
+          {line.type === "custom" ? (
+            <div className="grid min-w-0 gap-1.5">
+              <div className="flex min-w-0 items-center">
+                <input
+                  className="min-h-10 min-w-0 flex-1 rounded-md border border-stone-300 px-2 text-sm font-semibold text-stone-950 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                  placeholder="Item name"
+                  value={line.customItemName}
+                  onChange={(event) =>
+                    updateLine({ customItemName: event.target.value })
+                  }
+                />
+              </div>
               <input
-                className="min-h-10 min-w-0 flex-1 rounded-md border border-stone-300 px-2 text-sm font-semibold text-stone-950 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
-                placeholder="Item name"
-                value={line.customItemName}
+                className="min-h-9 w-full min-w-0 rounded-md border border-stone-300 px-2 text-sm text-stone-700 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                placeholder="Short description"
+                value={line.customItemDescription}
                 onChange={(event) =>
-                  updateLine({ customItemName: event.target.value })
+                  updateLine({ customItemDescription: event.target.value })
                 }
               />
             </div>
-            <input
-              className="min-h-9 w-full min-w-0 rounded-md border border-stone-300 px-2 text-sm text-stone-700 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
-              placeholder="Short description"
-              value={line.customItemDescription}
-              onChange={(event) =>
-                updateLine({ customItemDescription: event.target.value })
-              }
-            />
-          </div>
-        ) : (
-          <>
-            <p className="truncate text-sm font-bold text-stone-950">
-              {itemName}
-            </p>
-            <p className="mt-1 truncate text-xs text-stone-600">
-              {itemDetail}
-            </p>
-            {exceedsAvailable ? (
-              <p className="mt-1 text-xs font-semibold text-amber-800">
-                {selectedItem?.allowInventoryOverride
-                  ? "Quantity exceeds available inventory."
-                  : "Quantity exceeds available inventory and cannot be saved."}
+          ) : (
+            <>
+              <p className="truncate text-sm font-bold text-stone-950">
+                {itemName}
               </p>
-            ) : null}
-          </>
-        )}
+              <p className="mt-1 truncate text-xs text-stone-600">
+                {itemDetail}
+              </p>
+              {exceedsAvailable ? (
+                <p className="mt-1 text-xs font-semibold text-amber-800">
+                  {selectedItem?.allowInventoryOverride
+                    ? "Quantity exceeds available inventory."
+                    : "Quantity exceeds available inventory and cannot be saved."}
+                </p>
+              ) : null}
+            </>
+          )}
+        </div>
+
+        <QuantityInput
+          value={line.quantity}
+          onChange={(quantityValue) => updateLine({ quantity: quantityValue })}
+        />
+        <input
+          aria-label="Unit price"
+          className="seller-form-field seller-compact-field"
+          min="0"
+          step="0.01"
+          type="number"
+          value={line.unitPrice}
+          onChange={(event) => updateLine({ unitPrice: event.target.value })}
+        />
+        <p className="pt-2 text-right text-sm font-bold text-stone-950">
+          {formatCurrency(quantity * unitPrice)}
+        </p>
+        <button
+          aria-label="Remove item"
+          className="ml-auto flex size-7 items-center justify-center rounded-md opacity-70 transition hover:bg-red-50 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-500/25"
+          type="button"
+          onClick={onRemove}
+        >
+          <Image alt="" height={16} src="/glyphs/trashcan.png" width={16} />
+        </button>
       </div>
 
-      <QuantityInput
-        value={line.quantity}
-        onChange={(quantityValue) => updateLine({ quantity: quantityValue })}
-      />
-      <input
-        aria-label="Unit price"
-        className="seller-form-field seller-compact-field"
-        min="0"
-        step="0.01"
-        type="number"
-        value={line.unitPrice}
-        onChange={(event) => updateLine({ unitPrice: event.target.value })}
-      />
-      <p className="pt-2 text-right text-sm font-bold text-stone-950">
-        {formatCurrency(quantity * unitPrice)}
-      </p>
-      <button
-        aria-label="Remove item"
-        className="ml-auto flex size-7 items-center justify-center rounded-md opacity-70 transition hover:bg-red-50 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-500/25"
-        type="button"
-        onClick={onRemove}
-      >
-        <Image alt="" height={16} src="/glyphs/trashcan.png" width={16} />
-      </button>
+      {inventoryAdjustment ? (
+        <InventoryAdjustmentCheckbox
+          checked={inventoryAdjustment.checked}
+          label={inventoryAdjustment.label}
+          lineId={inventoryAdjustment.lineId}
+          onChange={onInventoryAdjustmentChange}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function RemovedInventoryAdjustmentRow({
+  control,
+  onChange,
+}: {
+  control: InventoryAdjustmentControl;
+  onChange?: (lineId: string, checked: boolean) => void;
+}) {
+  return (
+    <div className="px-1 py-2">
+      <p className="text-sm font-bold text-stone-950">Removed: {control.lineName}</p>
+      <InventoryAdjustmentCheckbox
+        checked={control.checked}
+        label={control.label}
+        lineId={control.lineId}
+        onChange={onChange}
+      />
+    </div>
+  );
+}
+
+function InventoryAdjustmentCheckbox({
+  checked,
+  label,
+  lineId,
+  onChange,
+}: {
+  checked: boolean;
+  label: string;
+  lineId: string;
+  onChange?: (lineId: string, checked: boolean) => void;
+}) {
+  return (
+    <label className="mt-2 flex items-center gap-2 rounded-md border border-stone-200 bg-white px-2 py-1.5 text-xs font-semibold text-stone-700">
+      <input
+        checked={checked}
+        type="checkbox"
+        onChange={(event) => onChange?.(lineId, event.target.checked)}
+      />
+      <span>{label}</span>
+    </label>
   );
 }
 

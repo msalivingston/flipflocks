@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../../../_components/seller-context";
 import {
@@ -21,7 +22,14 @@ import {
   formatMoneyInput,
 } from "../../_lib/order-form-calculations";
 import {
+  buildEditOrderPayload,
+  buildInventoryAdjustmentControls,
+  getInventoryChoiceKey,
+  validateEditOrderForm,
+} from "../../_lib/order-edit-save";
+import {
   emptyDeliveryAddress,
+  formatSavedDeliveryAddress,
   updateDeliveryAddress,
 } from "../../_lib/order-form-fulfillment";
 import {
@@ -60,6 +68,15 @@ type CustomerRow = {
   last_name: string | null;
   phone: string | null;
   business_name: string | null;
+};
+
+type CustomerDetailRow = CustomerRow & {
+  delivery_address_line1: string | null;
+  delivery_address_line2: string | null;
+  delivery_city: string | null;
+  delivery_state: string | null;
+  delivery_postal_code: string | null;
+  delivery_country: string | null;
 };
 
 type EditableOrderRow = {
@@ -106,6 +123,7 @@ type EditOrderState = {
 const savedDeliveryOptionId = "__saved_delivery_option__";
 
 export function EditOrder({ orderId }: { orderId: string }) {
+  const router = useRouter();
   const { seller } = useSellerContext();
   const [data, setData] = useState<EditOrderState>({
     customers: [],
@@ -139,7 +157,17 @@ export function EditOrder({ orderId }: { orderId: string }) {
   const [deliveryOptionId, setDeliveryOptionId] = useState("");
   const [deliveryAddress, setDeliveryAddress] =
     useState<DeliveryAddress>(emptyDeliveryAddress);
+  const [deliveryAddressCustomerId, setDeliveryAddressCustomerId] = useState<
+    string | null
+  >(null);
   const [buyerNotes, setBuyerNotes] = useState("");
+  const [originalLines, setOriginalLines] = useState<OrderLine[]>([]);
+  const [inventoryAdjustmentChoices, setInventoryAdjustmentChoices] = useState<
+    Record<string, boolean>
+  >({});
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -297,6 +325,8 @@ export function EditOrder({ orderId }: { orderId: string }) {
       });
       setSelectedCustomerId(order?.customer_id ?? "");
       setLines(mappedItems.lines);
+      setOriginalLines(mappedItems.lines);
+      setInventoryAdjustmentChoices({});
       setFulfillmentMethod(currentFulfillmentMethod);
       setPickupMode(pickupMethod);
       setPickupNote(order?.pickup_note ?? "");
@@ -308,6 +338,9 @@ export function EditOrder({ orderId }: { orderId: string }) {
           : "",
       );
       setDeliveryAddress(formatOrderDeliveryAddress(order));
+      setDeliveryAddressCustomerId(
+        currentFulfillmentMethod === "delivery" ? order?.customer_id ?? null : null,
+      );
       setBuyerNotes(order?.buyer_notes ?? "");
       setIsLoading(false);
     }
@@ -318,6 +351,50 @@ export function EditOrder({ orderId }: { orderId: string }) {
       isMounted = false;
     };
   }, [orderId, seller]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function syncDeliveryAddressFromCustomer() {
+      if (fulfillmentMethod !== "delivery") return;
+
+      if (!seller || !selectedCustomerId) {
+        setDeliveryAddress(emptyDeliveryAddress());
+        setDeliveryAddressCustomerId(null);
+        return;
+      }
+
+      if (deliveryAddressCustomerId === selectedCustomerId) {
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("seller_customer_detail")
+        .select(
+          "customer_id, email, first_name, last_name, phone, business_name, delivery_address_line1, delivery_address_line2, delivery_city, delivery_state, delivery_postal_code, delivery_country",
+        )
+        .eq("store_id", seller.store_id)
+        .eq("customer_id", selectedCustomerId)
+        .maybeSingle()
+        .returns<CustomerDetailRow>();
+
+      if (!isMounted || error) return;
+
+      setDeliveryAddress(formatSavedDeliveryAddress(data));
+      setDeliveryAddressCustomerId(selectedCustomerId);
+    }
+
+    void syncDeliveryAddressFromCustomer();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    deliveryAddressCustomerId,
+    fulfillmentMethod,
+    selectedCustomerId,
+    seller,
+  ]);
 
   useEffect(() => {
     if (!isBrowseOpen) return;
@@ -352,6 +429,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
     : [];
   const usesConfiguredPickupOptions =
     fulfillmentMethod === "pickup" && pickupMode === "manual_options";
+  const canUseDelivery = data.deliveryOptions.length > 0;
   const selectedDeliveryOption = data.deliveryOptions.find(
     (option) => option.id === deliveryOptionId,
   );
@@ -376,11 +454,21 @@ export function EditOrder({ orderId }: { orderId: string }) {
   const pageTitle = order
     ? `Edit Order #${formatOrderNumber(order.order_number)}`
     : "Edit Order";
+  const inventoryAdjustmentControls = useMemo(
+    () =>
+      buildInventoryAdjustmentControls({
+        choices: inventoryAdjustmentChoices,
+        originalLines,
+        revisedLines: lines,
+      }),
+    [inventoryAdjustmentChoices, lines, originalLines],
+  );
 
   function updateLine(lineId: string, updates: Partial<OrderLine>) {
     setLines((current) =>
       current.map((line) => (line.id === lineId ? { ...line, ...updates } : line)),
     );
+    resetSaveMessages();
   }
 
   function addInventoryItem(inventoryItemId: string) {
@@ -420,6 +508,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
       ];
     });
     setInventoryQuery("");
+    resetSaveMessages();
   }
 
   function addBrowseInventoryItem(inventoryItemId: string) {
@@ -434,14 +523,17 @@ export function EditOrder({ orderId }: { orderId: string }) {
 
   function addCustomItem() {
     setLines((current) => [...current, customLine()]);
+    resetSaveMessages();
   }
 
   function removeLine(lineId: string) {
     setLines((current) => current.filter((line) => line.id !== lineId));
+    resetSaveMessages();
   }
 
   function chooseFulfillmentMethod(method: FulfillmentMethod) {
     setFulfillmentMethod(method);
+    resetSaveMessages();
 
     if (method === "pickup") {
       setDeliveryOptionId("");
@@ -449,6 +541,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
       return;
     }
 
+    setDeliveryAddressCustomerId(null);
     setPickupNote("");
     setPickupOptionId("");
   }
@@ -467,6 +560,99 @@ export function EditOrder({ orderId }: { orderId: string }) {
     setSelectedCustomerId(customerId);
     setCustomerQuery("");
     setIsChangingCustomer(false);
+    if (fulfillmentMethod === "delivery") {
+      setDeliveryAddressCustomerId(null);
+    }
+    resetSaveMessages();
+  }
+
+  async function saveOrder() {
+    if (!seller || !order || isSaving) return;
+
+    const errors = validateEditOrderForm({
+      canUseDelivery,
+      deliveryAddress,
+      deliveryOptionId,
+      discountType,
+      discountValue,
+      fulfillmentMethod,
+      inventory: data.inventory,
+      lines,
+      pickupOptionId,
+      usesConfiguredPickupOptions,
+    });
+
+    setValidationErrors(errors);
+    setSaveError(null);
+
+    if (errors.length > 0) return;
+
+    setIsSaving(true);
+
+    const customerSnapshot = selectedCustomer
+      ? {
+          customerId: selectedCustomer.customer_id,
+          email: selectedCustomer.email,
+          firstName: selectedCustomer.first_name,
+          lastName: selectedCustomer.last_name,
+          phone: selectedCustomer.phone,
+          businessName: selectedCustomer.business_name,
+        }
+      : {
+          customerId: selectedCustomerId || null,
+          email: order.buyer_email_snapshot,
+          firstName: order.buyer_first_name_snapshot,
+          lastName: order.buyer_last_name_snapshot,
+          phone: order.buyer_phone_snapshot,
+          businessName: null,
+        };
+
+    const payload = buildEditOrderPayload({
+      buyerNotes,
+      customer: customerSnapshot,
+      deliveryAddress,
+      deliveryFee,
+      deliveryOption: selectedDeliveryOption,
+      deliveryOptionId,
+      discountAmount,
+      fulfillmentMethod,
+      inventory: data.inventory,
+      inventoryAdjustmentChoices,
+      lines,
+      orderId,
+      originalLines,
+      pickupNote,
+      pickupOptionId,
+      savedDeliveryOptionId,
+      taxAmount,
+    });
+
+    const result = await supabase.rpc("seller_edit_order", payload);
+
+    if (result.error) {
+      setSaveError(result.error.message);
+      setIsSaving(false);
+      return;
+    }
+
+    router.push(`/dashboard/orders/${orderId}`);
+    router.refresh();
+  }
+
+  function resetSaveMessages() {
+    setValidationErrors([]);
+    setSaveError(null);
+  }
+
+  function changeInventoryAdjustment(lineId: string, checked: boolean) {
+    const line = [...lines, ...originalLines].find((candidate) => candidate.id === lineId);
+    const key = line ? getInventoryChoiceKey(line) : lineId;
+
+    setInventoryAdjustmentChoices((current) => ({
+      ...current,
+      [key]: checked,
+    }));
+    resetSaveMessages();
   }
 
   if (isLoading) {
@@ -639,6 +825,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
               browseFilter={browseFilter}
               browseQuery={browseQuery}
               inventory={data.inventory}
+              inventoryAdjustmentControls={inventoryAdjustmentControls}
               inventoryQuery={inventoryQuery}
               isBrowseOpen={isBrowseOpen}
               lines={lines}
@@ -649,6 +836,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
               onBrowseOpenChange={setIsBrowseOpen}
               onBrowseQueryChange={setBrowseQuery}
               onInventoryQueryChange={setInventoryQuery}
+              onInventoryAdjustmentChange={changeInventoryAdjustment}
               onRemoveLine={removeLine}
               onUpdateLine={updateLine}
             />
@@ -666,7 +854,11 @@ export function EditOrder({ orderId }: { orderId: string }) {
               usesConfiguredPickupOptions={usesConfiguredPickupOptions}
               onBuyerNotesChange={setBuyerNotes}
               onDeliveryAddressChange={(updates) =>
-                updateDeliveryAddress(setDeliveryAddress, updates, () => undefined)
+                updateDeliveryAddress(
+                  setDeliveryAddress,
+                  updates,
+                  () => undefined,
+                )
               }
               onDeliveryOptionChange={setDeliveryOptionId}
               onFulfillmentMethodChange={chooseFulfillmentMethod}
@@ -751,16 +943,31 @@ export function EditOrder({ orderId }: { orderId: string }) {
                 Saved total: {formatCurrency(order.total_amount ?? 0)}
               </div>
 
+              {validationErrors.length > 0 ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                  <p className="font-bold">Review these details</p>
+                  <ul className="mt-1 grid gap-1">
+                    {validationErrors.map((error) => (
+                      <li key={error}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {saveError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                  {saveError}
+                </div>
+              ) : null}
+
               <button
-                className="inline-flex min-h-10 cursor-not-allowed items-center justify-center rounded-md bg-stone-300 px-5 text-sm font-semibold text-stone-600"
-                disabled
+                className="seller-primary-button"
+                disabled={isSaving}
                 type="button"
+                onClick={() => void saveOrder()}
               >
-                Save changes
+                {isSaving ? "Saving..." : "Save changes"}
               </button>
-              <p className="text-xs leading-5 text-stone-500">
-                Saving will be enabled in the next phase.
-              </p>
               <Link className="seller-secondary-button" href={`/dashboard/orders/${orderId}`}>
                 Cancel
               </Link>

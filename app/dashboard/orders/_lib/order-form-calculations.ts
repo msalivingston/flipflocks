@@ -74,6 +74,8 @@ export function isActiveLine(line: OrderLine) {
 }
 
 export function validateSharedOrderForm({
+  allowInventoryOversell = false,
+  allowMissingSavedInventory = false,
   canUseDelivery,
   deliveryAddress,
   deliveryOptionId,
@@ -85,6 +87,8 @@ export function validateSharedOrderForm({
   pickupOptionId,
   usesConfiguredPickupOptions,
 }: {
+  allowInventoryOversell?: boolean;
+  allowMissingSavedInventory?: boolean;
   canUseDelivery: boolean;
   deliveryAddress: DeliveryAddress;
   deliveryOptionId: string;
@@ -124,7 +128,11 @@ export function validateSharedOrderForm({
     const item = inventory.find((row) => row.id === line.inventoryItemId);
     const label = `Item ${index + 1}`;
 
-    if (line.type === "inventory" && !item) {
+    if (
+      line.type === "inventory" &&
+      !item &&
+      !(allowMissingSavedInventory && line.orderItemId && line.inventoryItemId)
+    ) {
       errors.push(`${label}: inventory was not found.`);
     }
     if (line.type === "custom" && !line.customItemName.trim()) {
@@ -137,6 +145,7 @@ export function validateSharedOrderForm({
       errors.push(`${label}: price must be a valid amount.`);
     }
     if (
+      !allowInventoryOversell &&
       line.type === "inventory" &&
       item &&
       !item.allowInventoryOverride &&
