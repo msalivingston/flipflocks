@@ -91,7 +91,7 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
   const showDashboardSketch = pathname === "/dashboard" || pathname === "/dashboard/";
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#fbfaf6] text-stone-950 lg:grid lg:grid-cols-[224px_minmax(0,1fr)]">
+    <div className="min-h-screen overflow-x-clip bg-[#fbfaf6] text-stone-950 lg:grid lg:grid-cols-[224px_minmax(0,1fr)]">
       <aside className="hidden border-r border-stone-200/80 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
         <div className="px-3.5 pb-2 pt-3">
           <Link className="block w-fit" href="/">
@@ -194,7 +194,7 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="min-w-0 flex-1 overflow-x-hidden pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+        <main className="min-w-0 flex-1 overflow-x-clip pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
         </main>
 

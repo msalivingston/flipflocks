@@ -46,6 +46,9 @@ type OrderRow = {
   pickup_note: string | null;
   pickup_option_id?: string | null;
   pickup_option_label_snapshot?: string | null;
+  fulfillment_method?: string | null;
+  delivery_option_name_snapshot?: string | null;
+  delivery_fee_amount?: number | string | null;
   subtotal_amount: number | string;
   tax_fee_label_snapshot: string | null;
   tax_fee_amount: number | string;
@@ -59,10 +62,14 @@ type StoreRow = {
   store_slug: string;
   public_email: string | null;
   public_phone: string | null;
+  show_public_email?: boolean | null;
+  show_public_phone?: boolean | null;
   communication_email?: string | null;
   order_notification_email?: string | null;
+  pickup_policy?: string | null;
   pickup_instructions: string | null;
   pickup_location_text?: string | null;
+  website_url?: string | null;
   currency?: string | null;
 };
 
@@ -85,6 +92,9 @@ type OrderItemRow = {
   species_name_snapshot: string | null;
   breed_display_name_snapshot: string | null;
   custom_inventory_label_snapshot: string | null;
+  hatch_date_snapshot?: string | null;
+  available_date_snapshot?: string | null;
+  age_at_sale_days_snapshot?: number | null;
   product_type_snapshot?: string | null;
   item_name_snapshot?: string | null;
   item_category_snapshot?: string | null;
@@ -108,6 +118,8 @@ type EmailContext = {
   logo: {
     url: string;
     altText: string;
+    width?: number;
+    height?: number;
   } | null;
 };
 
@@ -220,7 +232,7 @@ async function fetchEmailContext(
   const { data: order, error: orderError } = await supabase
     .from("orders")
     .select(
-      "id, store_id, customer_id, order_number, order_source, order_status, payment_method, payment_status, buyer_email_snapshot, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, buyer_notes, pickup_note, pickup_option_id, pickup_option_label_snapshot, subtotal_amount, tax_fee_label_snapshot, tax_fee_amount, total_amount, created_at",
+      "id, store_id, customer_id, order_number, order_source, order_status, payment_method, payment_status, buyer_email_snapshot, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, buyer_notes, pickup_note, pickup_option_id, pickup_option_label_snapshot, fulfillment_method, delivery_option_name_snapshot, delivery_fee_amount, subtotal_amount, tax_fee_label_snapshot, tax_fee_amount, total_amount, created_at",
     )
     .eq("id", notification.order_id)
     .eq("store_id", notification.store_id)
@@ -235,7 +247,7 @@ async function fetchEmailContext(
       supabase
         .from("stores")
         .select(
-          "id, store_name, store_slug, public_email, public_phone, communication_email, order_notification_email, pickup_instructions, pickup_location_text, currency",
+          "id, store_name, store_slug, public_email, public_phone, show_public_email, show_public_phone, communication_email, order_notification_email, pickup_policy, pickup_instructions, pickup_location_text, website_url, currency",
         )
         .eq("id", order.store_id)
         .maybeSingle<StoreRow>(),
@@ -250,7 +262,7 @@ async function fetchEmailContext(
       supabase
         .from("order_items")
         .select(
-          "order_item_source, species_name_snapshot, breed_display_name_snapshot, custom_inventory_label_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, custom_item_name_snapshot, unit_price_snapshot, quantity, line_subtotal, created_at",
+          "order_item_source, species_name_snapshot, breed_display_name_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, custom_item_name_snapshot, unit_price_snapshot, quantity, line_subtotal, created_at",
         )
         .eq("order_id", order.id)
         .eq("store_id", order.store_id)
@@ -317,12 +329,12 @@ async function fetchStoreLogo(
 
   const record = data as Record<string, unknown>;
   const asset = normalizeNestedAsset(record.media_assets);
-  const url = asset ? mediaAssetUrl(supabaseUrl, asset) : null;
+  const logo = asset ? mediaAssetUrl(supabaseUrl, asset) : null;
 
-  if (!url) return null;
+  if (!logo) return null;
 
   return {
-    url,
+    ...logo,
     altText: firstText(
       textOrNull(record.alt_text_override),
       textOrNull(asset?.alt_text),
@@ -342,11 +354,12 @@ function normalizeNestedAsset(value: unknown): Record<string, unknown> | null {
 function mediaAssetUrl(
   supabaseUrl: string,
   asset: Record<string, unknown>,
-): string | null {
+): EmailContext["logo"] | null {
   const sourceImageUrl = textOrNull(asset.source_image_url);
 
   if (sourceImageUrl) {
-    return httpsUrlOrNull(sourceImageUrl);
+    const url = httpsUrlOrNull(sourceImageUrl);
+    return url ? { url, altText: "" } : null;
   }
 
   const bucket = textOrNull(asset.bucket_name);
@@ -354,9 +367,12 @@ function mediaAssetUrl(
 
   if (!bucket || !storagePath) return null;
 
-  return httpsUrlOrNull(`${supabaseUrl.replace(/\/$/, "")}/storage/v1/object/public/${
+  const encodedPath = storagePath.split("/").map(encodeURIComponent).join("/");
+  const url = httpsUrlOrNull(`${supabaseUrl.replace(/\/$/, "")}/storage/v1/object/public/${
     encodeURIComponent(bucket)
-  }/${storagePath.split("/").map(encodeURIComponent).join("/")}`);
+  }/${encodedPath}`);
+
+  return url ? { url, altText: "", width: 130 } : null;
 }
 
 function renderEmail(
@@ -381,15 +397,10 @@ function renderBuyerOrderConfirmation(
   context: EmailContext,
   fromEmail: string,
 ): RenderedEmail {
-  const { order, store, items, pickupOption, logo } = context;
+  const { order, store, items, logo } = context;
   const buyerName = formatPersonName(
     order.buyer_first_name_snapshot,
     order.buyer_last_name_snapshot,
-  );
-  const sellerContact = firstText(
-    store.communication_email,
-    store.public_email,
-    store.order_notification_email,
   );
   const replyTo = firstValidEmail(
     store.communication_email,
@@ -397,77 +408,97 @@ function renderBuyerOrderConfirmation(
     store.order_notification_email,
     fromEmail,
   );
-  const subject = `Order ${formatOrderNumber(order.order_number)} confirmation from ${store.store_name}`;
-
-  const introRows = [
-    fact("Store", store.store_name),
-    fact("Order number", formatOrderNumber(order.order_number)),
-    fact("Order date", formatDateTime(order.created_at)),
-    fact("Payment", paymentText(order.payment_status)),
+  const subject = `We’ve got your order — ${formatOrderNumber(order.order_number)}`;
+  const isDeliveryOrder = order.fulfillment_method === "delivery";
+  const address = formatAddress([
+    order.buyer_address_line1_snapshot,
+    order.buyer_address_line2_snapshot,
+    joinCompact([order.buyer_city_snapshot, order.buyer_state_snapshot, order.buyer_postal_code_snapshot], ", "),
+    order.buyer_country_snapshot,
+  ]);
+  const buyerRows = [
+    fact("Name", buyerName),
+    fact("Phone", order.buyer_phone_snapshot),
+    fact("Email", order.buyer_email_snapshot),
+    fact("Address", address),
+  ];
+  const paymentRows = [
+    fact("Payment method", paymentMethodText(order.payment_method)),
+    fact("Payment status", printPaymentStatusText(order.payment_status)),
+  ];
+  const totalRows = [
+    hasAmount(order.tax_fee_amount) || hasAmount(order.delivery_fee_amount)
+      ? fact("Subtotal", formatCurrency(order.subtotal_amount, store.currency))
+      : null,
+    isDeliveryOrder && hasAmount(order.delivery_fee_amount)
+      ? fact("Delivery fee", formatCurrency(order.delivery_fee_amount ?? 0, store.currency))
+      : null,
+    hasAmount(order.tax_fee_amount)
+      ? fact(order.tax_fee_label_snapshot || "Tax/fee", formatCurrency(order.tax_fee_amount, store.currency))
+      : null,
     fact("Total", formatCurrency(order.total_amount, store.currency)),
   ];
-  const contactRows = [
-    fact("Name", buyerName),
-    fact("Email", order.buyer_email_snapshot),
-    fact("Phone", order.buyer_phone_snapshot),
-    fact("Address", formatAddress([
-      order.buyer_address_line1_snapshot,
-      order.buyer_address_line2_snapshot,
-      joinCompact([order.buyer_city_snapshot, order.buyer_state_snapshot, order.buyer_postal_code_snapshot], ", "),
-      order.buyer_country_snapshot,
-    ])),
-  ];
-  const pickupRows = [
-    fact("Pickup option", order.pickup_option_label_snapshot),
-    fact("Pickup details", pickupOption?.description),
-    fact("Pickup note", order.pickup_note),
-    fact("Store pickup information", store.pickup_instructions),
-    fact("Pickup location", store.pickup_location_text),
-  ];
-  const sellerRows = [
-    fact("Seller email", sellerContact),
-    fact("Seller phone", store.public_phone),
-  ];
+  const fulfillmentRows = isDeliveryOrder
+    ? [
+      fact("Method", "Delivery"),
+      fact("Delivery option", order.delivery_option_name_snapshot),
+      fact("Delivery fee", formatCurrency(order.delivery_fee_amount ?? 0, store.currency)),
+      fact("Delivery address", address),
+    ]
+    : [
+      fact("Method", "Pickup"),
+      fact("Pickup option", order.pickup_option_label_snapshot || order.pickup_note),
+      fact("Farm address", store.pickup_location_text),
+    ];
+  const farmContactLines = [
+    store.store_name,
+    store.show_public_email ? store.public_email : null,
+    store.show_public_phone ? store.public_phone : null,
+  ].map((value) => value?.trim()).filter(Boolean);
 
-  const html = emailShell({
-    title: `Order ${formatOrderNumber(order.order_number)}`,
-    preheader: `Your pay-at-pickup order with ${store.store_name} has been received.`,
+  const html = buyerPrintOrderEmailShell({
+    preheader: `Your order with ${store.store_name} is confirmed.`,
     logo,
     body: [
-      paragraph(
-        `Thanks, ${buyerName || "there"}. Your pay-at-pickup order has been received by ${store.store_name}. The seller will coordinate pickup as needed.`,
-      ),
-      factTable(introRows),
-      section("Items", itemTable(items, store.currency)),
-      section("Buyer contact", factTable(contactRows)),
-      optionalSection("Pickup", factTable(pickupRows)),
-      optionalSection("Notes", paragraph(order.buyer_notes ?? "")),
-      optionalSection("Seller contact", factTable(sellerRows)),
+      buyerPrintHeader(order, logo),
+      buyerPrintMessage(`Thank you for your order from ${store.store_name}.`),
+      buyerPrintOrderTitle(order),
+      buyerPrintTwoColumn(buyerRows, paymentRows),
+      buyerPrintItemsTable(items, store.currency),
+      buyerPrintTotalsTable(totalRows),
+      buyerPrintFulfillmentSection(fulfillmentRows),
+      buyerPrintOptionalSection("Pickup policy", buyerPrintParagraph(store.pickup_policy ?? "")),
+      buyerPrintOptionalSection("Farm contact information", buyerPrintLineList(farmContactLines)),
+      buyerPrintClosing("If you have questions about your order, please contact the farm directly."),
     ].join(""),
-    branded: false,
   });
 
   const text = [
     `${store.store_name} order confirmation`,
     "",
-    `Order: ${formatOrderNumber(order.order_number)}`,
-    `Order date: ${formatDateTime(order.created_at)}`,
-    `Payment: ${paymentText(order.payment_status)}`,
-    `Total: ${formatCurrency(order.total_amount, store.currency)}`,
+    `Thank you for your order from ${store.store_name}.`,
     "",
-    "This is a pay-at-pickup order. The seller will coordinate pickup as needed.",
+    `Order ${formatOrderNumber(order.order_number)}`,
+    `Order date: ${formatDateTime(order.created_at)}`,
+    "",
+    "Payment:",
+    ...textFacts(paymentRows),
+    "",
+    "Buyer:",
+    ...textFacts(buyerRows),
     "",
     "Items:",
     ...items.map((item) =>
       `- ${itemName(item)} x ${item.quantity}: ${formatCurrency(item.line_subtotal, store.currency)}`
     ),
     "",
-    "Buyer contact:",
-    ...textFacts(contactRows),
+    "Totals:",
+    ...textFacts(totalRows),
     "",
-    ...textSection("Pickup", pickupRows),
-    ...textSection("Notes", order.buyer_notes ? [order.buyer_notes] : []),
-    ...textSection("Seller contact", sellerRows),
+    ...textSection("Pickup / Delivery", fulfillmentRows),
+    ...textSection("Pickup policy", store.pickup_policy ? [store.pickup_policy] : []),
+    ...textSection("Farm contact information", farmContactLines),
+    "If you have questions about your order, please contact the farm directly.",
   ].join("\n");
 
   return {
@@ -486,7 +517,7 @@ function renderSellerNewOrder(
   fromEmail: string,
   siteOrigin: string,
 ): RenderedEmail {
-  const { order, store, items } = context;
+  const { order, store, items, logo } = context;
   const buyerName = formatPersonName(
     order.buyer_first_name_snapshot,
     order.buyer_last_name_snapshot,
@@ -504,6 +535,13 @@ function renderSellerNewOrder(
 
   const orderUrl = `${siteOrigin.replace(/\/$/, "")}/dashboard/orders/${order.id}`;
   const subject = `New FlockFront order ${formatOrderNumber(order.order_number)}`;
+  const isDeliveryOrder = order.fulfillment_method === "delivery";
+  const address = formatAddress([
+    order.buyer_address_line1_snapshot,
+    order.buyer_address_line2_snapshot,
+    joinCompact([order.buyer_city_snapshot, order.buyer_state_snapshot, order.buyer_postal_code_snapshot], ", "),
+    order.buyer_country_snapshot,
+  ]);
   const summaryRows = [
     fact("Order number", formatOrderNumber(order.order_number)),
     fact("Order date", formatDateTime(order.created_at)),
@@ -514,23 +552,65 @@ function renderSellerNewOrder(
     fact("Total", formatCurrency(order.total_amount, store.currency)),
     fact("Pickup preference", order.pickup_option_label_snapshot || order.pickup_note),
   ];
+  const customerRows = [
+    fact("Name", buyerName),
+    fact("Email", order.buyer_email_snapshot),
+    fact("Phone", order.buyer_phone_snapshot),
+    fact(isDeliveryOrder ? "Delivery address" : "Address", address),
+  ];
+  const paymentRows = [
+    fact("Payment method", paymentMethodText(order.payment_method)),
+    fact("Payment status", printPaymentStatusText(order.payment_status)),
+  ];
+  const totalRows = [
+    fact("Subtotal", formatCurrency(order.subtotal_amount, store.currency)),
+    hasAmount(order.tax_fee_amount)
+      ? fact(order.tax_fee_label_snapshot || "Tax/fee", formatCurrency(order.tax_fee_amount, store.currency))
+      : null,
+    isDeliveryOrder && hasAmount(order.delivery_fee_amount)
+      ? fact("Delivery fee", formatCurrency(order.delivery_fee_amount ?? 0, store.currency))
+      : null,
+    fact("Total", formatCurrency(order.total_amount, store.currency)),
+  ];
+  const fulfillmentRows = isDeliveryOrder
+    ? [
+      fact("Method", "Delivery"),
+      fact("Delivery option", order.delivery_option_name_snapshot),
+      fact("Delivery fee", formatCurrency(order.delivery_fee_amount ?? 0, store.currency)),
+      fact("Delivery address", address),
+    ]
+    : [
+      fact("Method", "Pickup"),
+      fact("Pickup option", order.pickup_option_label_snapshot),
+      fact("Pickup note", order.pickup_note),
+    ];
+  const farmContactRows = [
+    fact("Email", store.show_public_email ? store.public_email : null),
+    fact("Phone", store.show_public_phone ? store.public_phone : null),
+    fact("Website", store.website_url),
+  ];
 
-  const html = emailShell({
-    title: "New order",
+  const html = sellerPrintOrderEmailShell({
     preheader: `${buyerName || "A buyer"} placed order ${formatOrderNumber(order.order_number)}.`,
-    logo: null,
+    logo,
     body: [
-      paragraph(`${buyerName || "A buyer"} placed a new pay-at-pickup order for ${store.store_name}.`),
-      factTable(summaryRows),
-      section("Items", itemTable(items, store.currency)),
-      optionalSection("Buyer notes", paragraph(order.buyer_notes ?? "")),
-      `<p style="margin:24px 0 0;"><a href="${escapeAttribute(orderUrl)}" style="display:inline-block;background:#12372a;color:#ffffff;text-decoration:none;padding:12px 16px;border-radius:6px;font-weight:700;">View order</a></p>`,
+      sellerPrintOrderHeader(order),
+      sellerPrintMessage(`Thank you for your order from ${store.store_name}. A new order has been placed through the store.`),
+      sellerPrintTwoColumn(customerRows, paymentRows),
+      sellerPrintItemsTable(items, store.currency),
+      sellerPrintTotalsTable(totalRows),
+      sellerPrintSection(isDeliveryOrder ? "Delivery" : "Pickup", sellerPrintFactRows(fulfillmentRows)),
+      sellerPrintOptionalSection("Buyer notes", sellerPrintParagraph(order.buyer_notes ?? "")),
+      sellerPrintOptionalSection("Pickup Policy", sellerPrintParagraph(store.pickup_policy ?? "")),
+      sellerPrintOptionalSection("Farm Contact Information", sellerPrintFactRows(farmContactRows)),
+      `<p style="margin:22px 0 0;font-size:12px;line-height:1.35;"><a href="${escapeAttribute(orderUrl)}" style="color:#000000;text-decoration:underline;font-weight:700;">View order</a></p>`,
     ].join(""),
-    branded: true,
   });
 
   const text = [
     "FlockFront new order",
+    "",
+    `Thank you for your order from ${store.store_name}. A new order has been placed through the store.`,
     "",
     `${buyerName || "A buyer"} placed a new pay-at-pickup order for ${store.store_name}.`,
     "",
@@ -541,7 +621,13 @@ function renderSellerNewOrder(
       `- ${itemName(item)} x ${item.quantity}: ${formatCurrency(item.line_subtotal, store.currency)}`
     ),
     "",
+    "Totals:",
+    ...textFacts(totalRows),
+    "",
+    ...textSection(isDeliveryOrder ? "Delivery" : "Pickup", fulfillmentRows),
     ...textSection("Buyer notes", order.buyer_notes ? [order.buyer_notes] : []),
+    ...textSection("Pickup Policy", store.pickup_policy ? [store.pickup_policy] : []),
+    ...textSection("Farm Contact Information", farmContactRows),
     `View order: ${orderUrl}`,
   ].join("\n");
 
@@ -658,44 +744,28 @@ async function markNotificationFailed(
   });
 }
 
-function emailShell({
+function buyerPrintOrderEmailShell({
   body,
-  branded,
-  logo,
   preheader,
-  title,
 }: {
   body: string;
-  branded: boolean;
-  logo: EmailContext["logo"];
   preheader: string;
-  title: string;
 }) {
-  const brandLine = branded
-    ? `<p style="margin:0 0 20px;color:#3d4a43;font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">FlockFront</p>`
-    : "";
-  const logoHtml = logo
-    ? `<img src="${escapeAttribute(logo.url)}" alt="${escapeAttribute(logo.altText)}" style="display:block;max-width:160px;max-height:72px;margin:0 0 24px;">`
-    : "";
-
   return `<!doctype html>
 <html>
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${escapeHtml(title)}</title>
+    <title>Order confirmation</title>
   </head>
   <body style="margin:0;padding:0;background:#ffffff;color:#000000;font-family:Arial,Helvetica,sans-serif;">
-    <span style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden;">${escapeHtml(preheader)}</span>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#ffffff;color:#000000;">
+    <div style="display:none!important;mso-hide:all;visibility:hidden;opacity:0;color:transparent;height:0;width:0;max-height:0;max-width:0;overflow:hidden;font-size:1px;line-height:1px;">${escapeHtml(preheader)}</div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#ffffff;color:#000000;border-collapse:collapse;">
       <tr>
-        <td align="center" style="padding:28px 16px;">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;color:#000000;">
+        <td align="center" style="padding:12px 10px;">
+          <table role="presentation" width="780" cellspacing="0" cellpadding="0" style="width:780px;max-width:780px;background:#ffffff;color:#000000;border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;">
             <tr>
-              <td style="padding:0;">
-                ${brandLine}
-                ${logoHtml}
-                <h1 style="margin:0 0 18px;color:#000000;font-size:24px;line-height:1.25;font-weight:700;">${escapeHtml(title)}</h1>
+              <td style="padding:0;color:#000000;font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;line-height:1.22;">
                 ${body}
               </td>
             </tr>
@@ -707,56 +777,318 @@ function emailShell({
 </html>`;
 }
 
-function section(title: string, body: string): string {
-  return `<h2 style="margin:26px 0 10px;color:#000000;font-size:16px;line-height:1.3;">${escapeHtml(title)}</h2>${body}`;
+function buyerPrintHeader(order: OrderRow, logo: EmailContext["logo"]): string {
+  let logoHtml = "";
+
+  if (isEmailSafeLogo(logo)) {
+    const width = logo.width ?? 170;
+    const height = logo.height ?? null;
+    const heightAttribute = height ? ` height="${height}"` : "";
+    const heightStyle = height ? `height:${height}px;` : "height:auto;";
+    logoHtml =
+      `<img src="${escapeAttribute(logo.url)}" alt="${escapeAttribute(logo.altText)}" width="${width}"${heightAttribute} style="display:block;width:${width}px;${heightStyle}max-width:${width}px;margin:0;border:0;outline:none;text-decoration:none;">`;
+  }
+
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 2px;">
+    <tr>
+      <td style="padding:0;color:#000000;vertical-align:top;font-size:0;line-height:0;">${logoHtml}</td>
+      <td align="right" style="padding:0;color:#000000;font-size:12pt;line-height:1.2;vertical-align:top;white-space:nowrap;">${escapeHtml(formatPrintDateTime(order.created_at))}</td>
+    </tr>
+  </table>`;
 }
 
-function optionalSection(title: string, body: string): string {
-  return body.trim() ? section(title, body) : "";
+function buyerPrintMessage(value: string): string {
+  return `<p style="margin:0 0 10px;color:#000000;font-size:10.5pt;line-height:1.22;">${escapeHtml(value.trim())}</p>`;
 }
 
-function paragraph(value: string): string {
+function buyerPrintOrderTitle(order: OrderRow): string {
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 0;border-bottom:1.5pt solid #000000;">
+    <tr>
+      <td style="padding:0 0 0.12in;color:#000000;vertical-align:bottom;">
+        <p style="margin:0;color:#000000;font-size:22pt;line-height:1;font-weight:700;">Order ${escapeHtml(formatOrderNumber(order.order_number))}</p>
+      </td>
+    </tr>
+  </table>`;
+}
+
+function buyerPrintTwoColumn(
+  buyerRows: Array<{ label: string; value: string } | null>,
+  paymentRows: Array<{ label: string; value: string } | null>,
+): string {
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0;border-bottom:1.2pt solid #000000;">
+    <tr>
+      <td width="58%" style="padding:0.17in 0.28in 0.2in 0;color:#000000;vertical-align:top;">
+        ${buyerPrintBuyerRows(buyerRows)}
+      </td>
+      <td width="42%" style="padding:0.17in 0 0.2in 0;color:#000000;vertical-align:top;">
+        ${buyerPrintFieldRows(paymentRows)}
+      </td>
+    </tr>
+  </table>`;
+}
+
+function buyerPrintBuyerRows(rows: Array<{ label: string; value: string } | null>): string {
+  const filtered = rows.filter(Boolean) as Array<{ label: string; value: string }>;
+
+  if (filtered.length === 0) return "";
+
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${
+    filtered.map((row, index) => `<tr>
+      <td style="padding:${index === 3 ? "0.08in" : "0"} 0 0;color:#000000;font-size:10.5pt;line-height:1.22;font-weight:${index === 0 ? "700" : "400"};vertical-align:top;">${escapeHtml(row.value)}</td>
+    </tr>`).join("")
+  }</table>`;
+}
+
+function buyerPrintFieldRows(rows: Array<{ label: string; value: string } | null>): string {
+  const filtered = rows.filter(Boolean) as Array<{ label: string; value: string }>;
+
+  if (filtered.length === 0) return "";
+
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${
+    filtered.map((row) => `<tr>
+      <td style="width:1.15in;padding:0 0.12in 0.055in 0;color:#000000;font-size:10.5pt;line-height:1.22;font-weight:700;vertical-align:top;">${escapeHtml(row.label)}:</td>
+      <td style="padding:0 0 0.055in;color:#000000;font-size:10.5pt;line-height:1.22;vertical-align:top;">${escapeHtml(row.value)}</td>
+    </tr>`).join("")
+  }</table>`;
+}
+
+function buyerPrintItemsTable(items: OrderItemRow[], currency?: string | null): string {
+  if (items.length === 0) return buyerPrintParagraph("No item details were available.");
+
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;table-layout:fixed;margin:0.12in 0 0;">
+    <tr>
+      <th align="left" style="width:auto;border-bottom:1pt solid #000000;padding:0.06in 0.06in 0.075in;color:#000000;font-size:10.5pt;line-height:1.22;font-weight:700;">Item</th>
+      <th align="right" style="width:0.52in;border-bottom:1pt solid #000000;padding:0.06in 0.06in 0.075in;color:#000000;font-size:10.5pt;line-height:1.22;font-weight:700;">Qty</th>
+      <th align="right" style="width:0.95in;border-bottom:1pt solid #000000;padding:0.06in 0.06in 0.075in;color:#000000;font-size:10.5pt;line-height:1.22;font-weight:700;">Unit price</th>
+      <th align="right" style="width:1.05in;border-bottom:1pt solid #000000;padding:0.06in 0 0.075in 0.06in;color:#000000;font-size:10.5pt;line-height:1.22;font-weight:700;">Line total</th>
+    </tr>
+    ${items.map((item) => `<tr>
+      <td style="border-bottom:0.6pt solid #999999;padding:0.085in 0.06in;color:#000000;font-size:10.5pt;line-height:1.22;vertical-align:middle;">
+        <p style="margin:0;color:#000000;font-size:10.5pt;line-height:1.22;font-weight:700;">${escapeHtml(buyerPrintItemTitle(item))}</p>
+        ${buyerPrintItemDetails(item)}
+      </td>
+      <td align="right" style="border-bottom:0.6pt solid #999999;padding:0.085in 0.06in;color:#000000;font-size:10.5pt;line-height:1.22;vertical-align:middle;">${item.quantity}</td>
+      <td align="right" style="border-bottom:0.6pt solid #999999;padding:0.085in 0.06in;color:#000000;font-size:10.5pt;line-height:1.22;vertical-align:middle;">${escapeHtml(formatCurrency(item.unit_price_snapshot, currency))}</td>
+      <td align="right" style="border-bottom:0.6pt solid #999999;padding:0.085in 0 0.085in 0.06in;color:#000000;font-size:10.5pt;line-height:1.22;vertical-align:middle;">${escapeHtml(formatCurrency(item.line_subtotal, currency))}</td>
+    </tr>`).join("")}
+  </table>`;
+}
+
+function buyerPrintTotalsTable(rows: Array<{ label: string; value: string } | null>): string {
+  const filtered = rows.filter(Boolean) as Array<{ label: string; value: string }>;
+
+  if (filtered.length === 0) return "";
+
+  return `<table role="presentation" width="216" align="right" cellspacing="0" cellpadding="0" style="width:2.25in;border-collapse:collapse;margin:0.09in 0 0 auto;padding-bottom:0.08in;">
+    ${filtered.map((row, index) => {
+      const isTotal = index === filtered.length - 1;
+      return `<tr>
+        <td style="padding:${isTotal ? "0.055in" : "0.025in"} 0 ${isTotal ? "0" : "0.025in"};border-top:${isTotal ? "1pt solid #000000" : "0"};color:#000000;font-size:${isTotal ? "12pt" : "10.5pt"};line-height:1.22;font-weight:${isTotal ? "700" : "400"};">${escapeHtml(row.label)}</td>
+        <td align="right" style="width:0.95in;padding:${isTotal ? "0.055in" : "0.025in"} 0 ${isTotal ? "0" : "0.025in"};border-top:${isTotal ? "1pt solid #000000" : "0"};color:#000000;font-size:${isTotal ? "12pt" : "10.5pt"};line-height:1.22;font-weight:${isTotal ? "700" : "400"};">${escapeHtml(row.value)}</td>
+      </tr>`;
+    }).join("")}
+  </table>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="clear:both;border-collapse:collapse;"><tr><td style="height:0;line-height:0;font-size:0;">&nbsp;</td></tr></table>`;
+}
+
+function buyerPrintFulfillmentSection(rows: Array<{ label: string; value: string } | null>): string {
+  return buyerPrintSection("Pickup / Delivery", buyerPrintFieldRows(rows));
+}
+
+function buyerPrintSection(title: string, body: string): string {
+  return body.trim()
+    ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0;border-top:1.2pt solid #000000;">
+      <tr>
+        <td style="padding:0.12in 0 0;color:#000000;">
+          <h2 style="margin:0 0 0.1in;color:#000000;font-size:12.5pt;line-height:1.1;font-weight:700;">${escapeHtml(title)}</h2>
+          ${body}
+        </td>
+      </tr>
+    </table>`
+    : "";
+}
+
+function buyerPrintOptionalSection(title: string, body: string): string {
+  return body.trim() ? buyerPrintSection(title, body) : "";
+}
+
+function buyerPrintParagraph(value: string): string {
   const trimmed = value.trim();
-  if (!trimmed) return "";
+  return trimmed
+    ? `<p style="margin:0;color:#000000;font-size:10.5pt;line-height:1.22;">${escapeHtml(trimmed)}</p>`
+    : "";
+}
 
-  return `<p style="margin:0 0 16px;color:#000000;font-size:15px;line-height:1.6;">${escapeHtml(trimmed)}</p>`;
+function buyerPrintLineList(lines: string[]): string {
+  return lines.length > 0
+    ? `<p style="margin:0;color:#000000;font-size:10.5pt;line-height:1.22;">${escapeHtml(lines.join("\n"))}</p>`
+    : "";
+}
+
+function buyerPrintClosing(value: string): string {
+  return `<p style="margin:0.16in 0 0;color:#000000;font-size:10.5pt;line-height:1.22;">${escapeHtml(value)}</p>`;
+}
+
+function sellerPrintOrderEmailShell({
+  body,
+  logo,
+  preheader,
+}: {
+  body: string;
+  logo: EmailContext["logo"];
+  preheader: string;
+}) {
+  const logoHtml = logo
+    ? `<img src="${escapeAttribute(logo.url)}" alt="${escapeAttribute(logo.altText)}" style="display:block;width:auto;max-width:120px;max-height:54px;margin:0 0 14px;">`
+    : "";
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>New order</title>
+  </head>
+  <body style="margin:0;padding:0;background:#ffffff;color:#000000;font-family:Arial,Helvetica,sans-serif;">
+    <div style="display:none!important;mso-hide:all;visibility:hidden;opacity:0;color:transparent;height:0;width:0;max-height:0;max-width:0;overflow:hidden;font-size:1px;line-height:1px;">${escapeHtml(preheader)}</div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#ffffff;color:#000000;">
+      <tr>
+        <td align="center" style="padding:24px 14px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;color:#000000;border-collapse:collapse;">
+            <tr>
+              <td style="padding:0;color:#000000;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.35;">
+                ${logoHtml}
+                ${body}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+function sellerPrintMessage(value: string): string {
+  return `<p style="margin:0 0 12px;color:#000000;font-size:12px;line-height:1.4;">${escapeHtml(value.trim())}</p>`;
+}
+
+function sellerPrintOrderHeader(order: OrderRow): string {
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 12px;border-bottom:2px solid #000000;">
+    <tr>
+      <td style="padding:0 0 8px;color:#000000;vertical-align:bottom;">
+        <p style="margin:0;color:#000000;font-size:24px;line-height:1.05;font-weight:700;">Order ${escapeHtml(formatOrderNumber(order.order_number))}</p>
+      </td>
+      <td align="right" style="padding:0 0 8px;color:#000000;font-size:12px;vertical-align:bottom;white-space:nowrap;">${escapeHtml(formatDateTime(order.created_at))}</td>
+    </tr>
+  </table>`;
+}
+
+function sellerPrintTwoColumn(
+  customerRows: Array<{ label: string; value: string } | null>,
+  paymentRows: Array<{ label: string; value: string } | null>,
+): string {
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 14px;">
+    <tr>
+      <td width="54%" style="padding:0 18px 0 0;vertical-align:top;">
+        ${sellerPrintFactRows(customerRows, { hideLabels: true })}
+      </td>
+      <td width="46%" style="padding:0;vertical-align:top;">
+        ${sellerPrintFactRows(paymentRows)}
+      </td>
+    </tr>
+  </table>`;
+}
+
+function sellerPrintFactRows(
+  rows: Array<{ label: string; value: string } | null>,
+  options: { hideLabels?: boolean } = {},
+): string {
+  const filtered = rows.filter(Boolean) as Array<{ label: string; value: string }>;
+
+  if (filtered.length === 0) return "";
+
+  if (options.hideLabels) {
+    return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${
+      filtered.map((row, index) => `<tr>
+        <td style="padding:${index === 0 ? "0" : "2px"} 0;color:#000000;font-size:12px;line-height:1.35;font-weight:${index === 0 ? "700" : "400"};vertical-align:top;">${escapeHtml(row.value)}</td>
+      </tr>`).join("")
+    }</table>`;
+  }
+
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${
+    filtered.map((row) => `<tr>
+      <td style="width:86px;padding:0 10px 7px 0;color:#000000;font-size:12px;line-height:1.25;font-weight:700;vertical-align:top;">${escapeHtml(row.label)}:</td>
+      <td style="padding:0 0 7px;color:#000000;font-size:12px;line-height:1.25;vertical-align:top;">${escapeHtml(row.value)}</td>
+    </tr>`).join("")
+  }</table>`;
+}
+
+function sellerPrintItemsTable(items: OrderItemRow[], currency?: string | null): string {
+  if (items.length === 0) return sellerPrintSection("Items", sellerPrintParagraph("No item details were available."));
+
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 10px;border-top:1px solid #000000;">
+    <tr>
+      <th align="left" style="border-bottom:1px solid #000000;padding:8px 4px 7px;color:#000000;font-size:12px;line-height:1.15;">Item</th>
+      <th align="right" style="width:46px;border-bottom:1px solid #000000;padding:8px 4px 7px;color:#000000;font-size:12px;line-height:1.15;">Qty</th>
+      <th align="right" style="width:78px;border-bottom:1px solid #000000;padding:8px 4px 7px;color:#000000;font-size:12px;line-height:1.15;">Unit price</th>
+      <th align="right" style="width:82px;border-bottom:1px solid #000000;padding:8px 0 7px 4px;color:#000000;font-size:12px;line-height:1.15;">Line total</th>
+    </tr>
+    ${items.map((item) => `<tr>
+      <td style="border-bottom:1px solid #b8b8b8;padding:8px 4px;color:#000000;font-size:12px;line-height:1.25;vertical-align:top;">
+        <p style="margin:0;font-weight:700;">${escapeHtml(itemName(item))}</p>
+        ${sellerPrintItemDetails(item)}
+      </td>
+      <td align="right" style="border-bottom:1px solid #b8b8b8;padding:8px 4px;color:#000000;font-size:12px;line-height:1.25;vertical-align:top;">${item.quantity}</td>
+      <td align="right" style="border-bottom:1px solid #b8b8b8;padding:8px 4px;color:#000000;font-size:12px;line-height:1.25;vertical-align:top;">${escapeHtml(formatCurrency(item.unit_price_snapshot, currency))}</td>
+      <td align="right" style="border-bottom:1px solid #b8b8b8;padding:8px 0 8px 4px;color:#000000;font-size:12px;line-height:1.25;vertical-align:top;">${escapeHtml(formatCurrency(item.line_subtotal, currency))}</td>
+    </tr>`).join("")}
+  </table>`;
+}
+
+function sellerPrintTotalsTable(rows: Array<{ label: string; value: string } | null>): string {
+  const filtered = rows.filter(Boolean) as Array<{ label: string; value: string }>;
+
+  if (filtered.length === 0) return "";
+
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 14px;">
+    ${filtered.map((row, index) => {
+      const isTotal = index === filtered.length - 1;
+      return `<tr>
+        <td style="width:68%;padding:${isTotal ? "7px" : "3px"} 8px ${isTotal ? "0" : "3px"} 0;color:#000000;font-size:${isTotal ? "13px" : "12px"};line-height:1.2;font-weight:${isTotal ? "700" : "400"};border-top:${isTotal ? "1px solid #000000" : "0"};">${escapeHtml(row.label)}</td>
+        <td align="right" style="padding:${isTotal ? "7px" : "3px"} 0 ${isTotal ? "0" : "3px"} 8px;color:#000000;font-size:${isTotal ? "13px" : "12px"};line-height:1.2;font-weight:${isTotal ? "700" : "400"};border-top:${isTotal ? "1px solid #000000" : "0"};">${escapeHtml(row.value)}</td>
+      </tr>`;
+    }).join("")}
+  </table>`;
+}
+
+function sellerPrintSection(title: string, body: string): string {
+  return body.trim()
+    ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 14px;border-top:1px solid #000000;">
+      <tr>
+        <td style="padding:9px 0 0;color:#000000;">
+          <h2 style="margin:0 0 8px;color:#000000;font-size:14px;line-height:1.15;font-weight:700;">${escapeHtml(title)}</h2>
+          ${body}
+        </td>
+      </tr>
+    </table>`
+    : "";
+}
+
+function sellerPrintOptionalSection(title: string, body: string): string {
+  return body.trim() ? sellerPrintSection(title, body) : "";
+}
+
+function sellerPrintParagraph(value: string): string {
+  const trimmed = value.trim();
+  return trimmed
+    ? `<p style="margin:0;color:#000000;font-size:12px;line-height:1.4;">${escapeHtml(trimmed)}</p>`
+    : "";
 }
 
 function fact(label: string, value: string | null | undefined) {
   const trimmed = value?.trim();
   return trimmed ? { label, value: trimmed } : null;
-}
-
-function factTable(rows: Array<{ label: string; value: string } | null>): string {
-  const filtered = rows.filter(Boolean) as Array<{ label: string; value: string }>;
-
-  if (filtered.length === 0) return "";
-
-  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:6px 0 16px;">${
-    filtered.map((row) => `<tr>
-      <td style="width:42%;border-top:1px solid #dddddd;padding:9px 8px 9px 0;color:#555555;font-size:14px;vertical-align:top;">${escapeHtml(row.label)}</td>
-      <td style="border-top:1px solid #dddddd;padding:9px 0;color:#000000;font-size:14px;vertical-align:top;">${escapeHtml(row.value)}</td>
-    </tr>`).join("")
-  }</table>`;
-}
-
-function itemTable(items: OrderItemRow[], currency?: string | null): string {
-  if (items.length === 0) return paragraph("No item details were available.");
-
-  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:6px 0 16px;">
-    <tr>
-      <th align="left" style="border-bottom:2px solid #000000;padding:8px 8px 8px 0;color:#000000;font-size:13px;">Item</th>
-      <th align="right" style="border-bottom:2px solid #000000;padding:8px;color:#000000;font-size:13px;">Qty</th>
-      <th align="right" style="border-bottom:2px solid #000000;padding:8px;color:#000000;font-size:13px;">Price</th>
-      <th align="right" style="border-bottom:2px solid #000000;padding:8px 0 8px 8px;color:#000000;font-size:13px;">Line</th>
-    </tr>
-    ${items.map((item) => `<tr>
-      <td style="border-bottom:1px solid #dddddd;padding:10px 8px 10px 0;color:#000000;font-size:14px;">${escapeHtml(itemName(item))}</td>
-      <td align="right" style="border-bottom:1px solid #dddddd;padding:10px 8px;color:#000000;font-size:14px;">${item.quantity}</td>
-      <td align="right" style="border-bottom:1px solid #dddddd;padding:10px 8px;color:#000000;font-size:14px;">${escapeHtml(formatCurrency(item.unit_price_snapshot, currency))}</td>
-      <td align="right" style="border-bottom:1px solid #dddddd;padding:10px 0 10px 8px;color:#000000;font-size:14px;">${escapeHtml(formatCurrency(item.line_subtotal, currency))}</td>
-    </tr>`).join("")}
-  </table>`;
 }
 
 function textFacts(rows: Array<{ label: string; value: string } | null>) {
@@ -788,12 +1120,96 @@ function itemName(item: OrderItemRow): string {
   ) ?? "Order item";
 }
 
+function buyerPrintItemTitle(item: OrderItemRow) {
+  if (
+    item.order_item_source === "equipment_inventory" ||
+    item.order_item_source === "processed_poultry_inventory"
+  ) {
+    return item.item_name_snapshot || item.breed_display_name_snapshot || "Order item";
+  }
+
+  return item.custom_item_name_snapshot || item.breed_display_name_snapshot ||
+    "Order item";
+}
+
+function buyerPrintItemDetails(item: OrderItemRow): string {
+  const isCustomItem = item.order_item_source === "custom";
+  const isEquipmentItem = item.order_item_source === "equipment_inventory";
+  const isProcessedPoultryItem =
+    item.order_item_source === "processed_poultry_inventory";
+  const label = formatInventoryLabel({
+    custom_inventory_label: item.custom_inventory_label_snapshot,
+    inventory_type: item.inventory_type_snapshot,
+  });
+  const details = isCustomItem
+    ? ["Custom item"]
+    : isEquipmentItem || isProcessedPoultryItem
+    ? [item.item_category_snapshot, item.custom_inventory_label_snapshot]
+    : [
+      item.species_name_snapshot,
+      formatSellerItemDetail(label),
+      item.age_at_sale_days_snapshot != null
+        ? formatPrintAge(item.age_at_sale_days_snapshot)
+        : null,
+      item.hatch_date_snapshot ? `Hatched ${formatShortDate(item.hatch_date_snapshot)}` : null,
+    ];
+  const filtered = details.map((value) => value?.trim()).filter(Boolean);
+
+  return filtered.length > 0
+    ? `<p style="margin:0.025in 0 0;color:#000000;font-size:9.5pt;line-height:1.18;">${escapeHtml(filtered.join(" • "))}</p>`
+    : "";
+}
+
+function sellerPrintItemDetails(item: OrderItemRow): string {
+  const details = [
+    item.species_name_snapshot,
+    item.product_type_snapshot,
+    item.item_category_snapshot,
+    item.age_at_sale_days_snapshot != null
+      ? formatPrintAge(item.age_at_sale_days_snapshot)
+      : null,
+    item.hatch_date_snapshot ? `Hatched ${formatShortDate(item.hatch_date_snapshot)}` : null,
+    item.available_date_snapshot
+      ? `Available ${formatShortDate(item.available_date_snapshot)}`
+      : null,
+  ].map((value) => value?.trim()).filter(Boolean);
+
+  return details.length > 0
+    ? `<p style="margin:2px 0 0;color:#000000;font-size:10px;line-height:1.25;">${escapeHtml(details.join(" • "))}</p>`
+    : "";
+}
+
 function formatPersonName(firstName?: string | null, lastName?: string | null) {
   return joinCompact([firstName, lastName], " ");
 }
 
 function formatOrderNumber(orderNumber: string) {
   return orderNumber.startsWith("#") ? orderNumber : `#${orderNumber}`;
+}
+
+function formatInventoryLabel({
+  custom_inventory_label,
+  inventory_type,
+}: {
+  custom_inventory_label: string | null;
+  inventory_type: string | null;
+}) {
+  return custom_inventory_label || formatPlainLabel(inventory_type);
+}
+
+function formatSellerItemDetail(value: string | null) {
+  const normalized = value?.trim();
+
+  if (!normalized) return null;
+
+  const lower = normalized.toLowerCase();
+
+  if (lower === "female") return "Female";
+  if (lower === "male") return "Male";
+  if (lower === "straight run") return "Straight run";
+  if (lower === "unknown") return "Unknown";
+
+  return normalized;
 }
 
 function paymentText(status: string) {
@@ -805,8 +1221,30 @@ function paymentText(status: string) {
   return humanize(status);
 }
 
+function printPaymentStatusText(status: string) {
+  if (status === "pay_at_pickup") return "Unpaid";
+  if (status === "paid") return "Paid";
+  if (status === "refunded") return "Refunded";
+  if (status === "canceled") return "Canceled";
+  return humanize(status);
+}
+
+function paymentMethodText(method: string) {
+  if (method === "pay_at_pickup") return "Pay at pickup";
+  return humanize(method);
+}
+
+function hasAmount(value: number | string | null | undefined) {
+  const amount = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(amount) && amount > 0;
+}
+
 function humanize(value: string) {
   return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatPlainLabel(value: string | null | undefined) {
+  return value ? value.replace(/_/g, " ") : "Not set";
 }
 
 function formatCurrency(value: number | string, currency?: string | null) {
@@ -833,6 +1271,44 @@ function formatDateTime(value: string) {
   }).format(date);
 }
 
+function formatPrintDateTime(value: string | null) {
+  if (!value) return "Not set";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/Denver",
+  }).format(date);
+}
+
+function formatShortDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "America/Denver",
+  }).format(date);
+}
+
+function formatPrintAge(days: number) {
+  if (!Number.isFinite(days) || days < 0) return null;
+  if (days < 7) return `${days} ${days === 1 ? "day" : "days"}`;
+
+  const weeks = Math.floor(days / 7);
+  return `${weeks} ${weeks === 1 ? "week" : "weeks"}`;
+}
+
 function formatAddress(parts: Array<string | null | undefined>) {
   return parts.map((part) => part?.trim()).filter(Boolean).join("\n");
 }
@@ -848,6 +1324,12 @@ function firstText(...values: Array<string | null | undefined>) {
   }
 
   return null;
+}
+
+function isEmailSafeLogo(
+  logo: EmailContext["logo"],
+): logo is NonNullable<EmailContext["logo"]> {
+  return Boolean(logo?.url && httpsUrlOrNull(logo.url));
 }
 
 function textOrNull(value: unknown): string | null {
