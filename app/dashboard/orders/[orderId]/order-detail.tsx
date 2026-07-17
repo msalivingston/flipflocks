@@ -134,6 +134,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
+  const [isResendingConfirmation, setIsResendingConfirmation] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionWarning, setActionWarning] = useState<string | null>(null);
@@ -141,6 +142,8 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [cancelReason, setCancelReason] = useState("");
   const [restoreInventoryOnCancel, setRestoreInventoryOnCancel] = useState(true);
   const [emailCancellationToBuyer, setEmailCancellationToBuyer] = useState(false);
+  const [pendingResendConfirmationActionId, setPendingResendConfirmationActionId] =
+    useState<string | null>(null);
   const [showCancelPanel, setShowCancelPanel] = useState(false);
   const [showFulfillmentDialog, setShowFulfillmentDialog] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -244,6 +247,9 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const deliveryOptionName = order?.delivery_option_name_snapshot?.trim() ?? "";
   const deliveryFeeAmount = order?.delivery_fee_amount ?? 0;
   const buyerHasEmail = Boolean(order?.buyer_email_snapshot?.trim());
+  const canResendOrderConfirmation = Boolean(
+    order && buyerHasEmail && canResendConfirmation(order),
+  );
 
   if (isLoading) {
     return (
@@ -432,6 +438,76 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setIsCanceling(false);
   }
 
+  async function resendOrderConfirmation() {
+    if (!order || isResendingConfirmation) return;
+
+    const buyerEmail = order.buyer_email_snapshot?.trim();
+
+    if (!buyerEmail) {
+      setActionError("This order does not have a customer email address.");
+      return;
+    }
+
+    if (!canResendConfirmation(order)) {
+      setActionError("This order is not eligible for confirmation resend.");
+      return;
+    }
+
+    if (!window.confirm(`Resend order confirmation to ${buyerEmail}?`)) {
+      return;
+    }
+
+    setIsResendingConfirmation(true);
+    setActionError(null);
+    setActionMessage(null);
+    setActionWarning(null);
+
+    const emailActionId =
+      pendingResendConfirmationActionId ?? crypto.randomUUID();
+
+    const { data: resendData, error: resendError } = await supabase.rpc(
+      "seller_resend_order_confirmation",
+      {
+        p_email_action_id: emailActionId,
+        p_order_id: order.order_id,
+      },
+    );
+
+    if (resendError) {
+      setPendingResendConfirmationActionId(emailActionId);
+      setActionError(
+        "The order was not changed, but the confirmation email could not be queued. Please try again.",
+      );
+      setIsResendingConfirmation(false);
+      return;
+    }
+
+    const resendResult = Array.isArray(resendData) ? resendData[0] : null;
+    const notificationQueued = Boolean(resendResult?.notification_queued);
+
+    if (!notificationQueued) {
+      setPendingResendConfirmationActionId(emailActionId);
+      setActionError("This order does not have a customer email address.");
+      setIsResendingConfirmation(false);
+      return;
+    }
+
+    const kickSucceeded = await kickPostmarkEmailWorker();
+
+    if (!kickSucceeded) {
+      setPendingResendConfirmationActionId(null);
+      setActionWarning(
+        "Order confirmation was queued, but email processing could not be started automatically.",
+      );
+      setIsResendingConfirmation(false);
+      return;
+    }
+
+    setPendingResendConfirmationActionId(null);
+    setActionMessage("Order confirmation resent.");
+    setIsResendingConfirmation(false);
+  }
+
   function printOrder() {
     window.print();
   }
@@ -485,7 +561,8 @@ export function OrderDetail({ orderId }: { orderId: string }) {
               canCancel={canCancelOrder(order)}
               canMarkComplete={canMarkComplete(order, remainingPickupQuantity)}
               canMarkReady={canMarkReady(order)}
-              isBusy={isSaving || isCanceling}
+              canResendConfirmation={canResendOrderConfirmation}
+              isBusy={isSaving || isCanceling || isResendingConfirmation}
               onCancel={openCancelPanel}
               onMarkComplete={() => {
                 setShowCancelPanel(false);
@@ -493,6 +570,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
               }}
               onMarkReady={() => void markReadyForPickup()}
               onPrint={printOrder}
+              onResendConfirmation={() => void resendOrderConfirmation()}
             />
           </div>
         </div>
@@ -1313,6 +1391,31 @@ function canEditOrder(order: SellerOrderDetailRow) {
   );
 }
 
+function canResendConfirmation(order: SellerOrderDetailRow) {
+  return !order.canceled_at && order.order_status !== "canceled";
+}
+
+async function kickPostmarkEmailWorker() {
+  try {
+    const { data, error } = await supabase.functions.invoke<{ success?: boolean }>(
+      "manual-order-email-kick",
+    );
+
+    if (error) {
+      console.warn("Order confirmation resend email kick failed", error.message);
+      return false;
+    }
+
+    return data?.success === true;
+  } catch (error) {
+    console.warn(
+      "Order confirmation resend email kick failed",
+      error instanceof Error ? error.message : String(error),
+    );
+    return false;
+  }
+}
+
 function getOrderLifecycleTone(order: SellerOrderDetailRow) {
   const lifecycle = getOrderLifecycleState(order);
 
@@ -1399,20 +1502,24 @@ function QuickActionsMenu({
   canCancel,
   canMarkComplete,
   canMarkReady,
+  canResendConfirmation,
   isBusy,
   onCancel,
   onMarkComplete,
   onMarkReady,
   onPrint,
+  onResendConfirmation,
 }: {
   canCancel: boolean;
   canMarkComplete: boolean;
   canMarkReady: boolean;
+  canResendConfirmation: boolean;
   isBusy: boolean;
   onCancel: () => void;
   onMarkComplete: () => void;
   onMarkReady: () => void;
   onPrint: () => void;
+  onResendConfirmation: () => void;
 }) {
   return (
     <details className="relative">
@@ -1448,6 +1555,14 @@ function QuickActionsMenu({
           label="Print order"
           onClick={onPrint}
         />
+        {canResendConfirmation ? (
+          <QuickActionButton
+            disabled={isBusy}
+            glyph="/glyphs/envelope.png"
+            label="Resend order confirmation"
+            onClick={onResendConfirmation}
+          />
+        ) : null}
         <QuickActionButton
           disabled={!canCancel || isBusy}
           glyph="/glyphs/trashcan.png"
