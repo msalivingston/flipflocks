@@ -8,7 +8,13 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-type NotificationType = "buyer_order_confirmation" | "seller_new_order";
+type NotificationType =
+  | "buyer_order_confirmation"
+  | "seller_new_order"
+  | "buyer_order_updated"
+  | "seller_order_updated_copy"
+  | "buyer_order_canceled"
+  | "seller_order_canceled_copy";
 
 type ClaimedNotification = {
   notification_id: string;
@@ -53,6 +59,8 @@ type OrderRow = {
   tax_fee_label_snapshot: string | null;
   tax_fee_amount: number | string;
   total_amount: number | string;
+  canceled_at?: string | null;
+  canceled_reason?: string | null;
   created_at: string;
 };
 
@@ -62,13 +70,18 @@ type StoreRow = {
   store_slug: string;
   public_email: string | null;
   public_phone: string | null;
-  show_public_email?: boolean | null;
   show_public_phone?: boolean | null;
   communication_email?: string | null;
   order_notification_email?: string | null;
   pickup_policy?: string | null;
   pickup_instructions: string | null;
   pickup_location_text?: string | null;
+  pickup_address_line1?: string | null;
+  pickup_address_line2?: string | null;
+  pickup_city?: string | null;
+  pickup_state?: string | null;
+  pickup_postal_code?: string | null;
+  pickup_country?: string | null;
   website_url?: string | null;
   currency?: string | null;
 };
@@ -91,6 +104,7 @@ type OrderItemRow = {
   order_item_source: string | null;
   species_name_snapshot: string | null;
   breed_display_name_snapshot: string | null;
+  inventory_type_snapshot: string | null;
   custom_inventory_label_snapshot: string | null;
   hatch_date_snapshot?: string | null;
   available_date_snapshot?: string | null;
@@ -232,7 +246,7 @@ async function fetchEmailContext(
   const { data: order, error: orderError } = await supabase
     .from("orders")
     .select(
-      "id, store_id, customer_id, order_number, order_source, order_status, payment_method, payment_status, buyer_email_snapshot, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, buyer_notes, pickup_note, pickup_option_id, pickup_option_label_snapshot, fulfillment_method, delivery_option_name_snapshot, delivery_fee_amount, subtotal_amount, tax_fee_label_snapshot, tax_fee_amount, total_amount, created_at",
+      "id, store_id, customer_id, order_number, order_source, order_status, payment_method, payment_status, buyer_email_snapshot, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, buyer_notes, pickup_note, pickup_option_id, pickup_option_label_snapshot, fulfillment_method, delivery_option_name_snapshot, delivery_fee_amount, subtotal_amount, tax_fee_label_snapshot, tax_fee_amount, total_amount, canceled_at, canceled_reason, created_at",
     )
     .eq("id", notification.order_id)
     .eq("store_id", notification.store_id)
@@ -247,7 +261,7 @@ async function fetchEmailContext(
       supabase
         .from("stores")
         .select(
-          "id, store_name, store_slug, public_email, public_phone, show_public_email, show_public_phone, communication_email, order_notification_email, pickup_policy, pickup_instructions, pickup_location_text, website_url, currency",
+          "id, store_name, store_slug, public_email, public_phone, show_public_phone, communication_email, order_notification_email, pickup_policy, pickup_instructions, pickup_location_text, pickup_address_line1, pickup_address_line2, pickup_city, pickup_state, pickup_postal_code, pickup_country, website_url, currency",
         )
         .eq("id", order.store_id)
         .maybeSingle<StoreRow>(),
@@ -262,7 +276,7 @@ async function fetchEmailContext(
       supabase
         .from("order_items")
         .select(
-          "order_item_source, species_name_snapshot, breed_display_name_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, custom_item_name_snapshot, unit_price_snapshot, quantity, line_subtotal, created_at",
+          "order_item_source, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, custom_item_name_snapshot, unit_price_snapshot, quantity, line_subtotal, created_at",
         )
         .eq("order_id", order.id)
         .eq("store_id", order.store_id)
@@ -381,36 +395,144 @@ function renderEmail(
   fromEmail: string,
   siteOrigin: string,
 ): RenderedEmail {
-  if (notification.notification_type === "buyer_order_confirmation") {
-    return renderBuyerOrderConfirmation(notification, context, fromEmail);
+  if (!isV1OrderEmailType(notification.notification_type)) {
+    throw new Error(`Unsupported notification type: ${notification.notification_type}`);
   }
 
-  if (notification.notification_type === "seller_new_order") {
-    return renderSellerNewOrder(notification, context, fromEmail, siteOrigin);
-  }
+  const options = orderEmailOptions(notification.notification_type, context);
+  const sellerContactEmail = sellerOrderContactEmail(context.store);
+  const buyerEmail = validEmailOrNull(context.order.buyer_email_snapshot);
+  const replyTo = options.recipientType === "buyer" ? sellerContactEmail : buyerEmail;
+  const orderUrl = options.includeDashboardLink
+    ? `${siteOrigin.replace(/\/$/, "")}/dashboard/orders/${context.order.id}`
+    : null;
+  const document = renderOrderDocumentEmail(context, {
+    ...options,
+    dashboardUrl: orderUrl,
+  });
 
-  throw new Error(`Unsupported notification type: ${notification.notification_type}`);
+  return {
+    to: notification.recipient_email,
+    fromName: sanitizeHeaderValue(context.store.store_name) || "FlockFront",
+    replyTo: replyTo ?? undefined,
+    subject: sanitizeHeaderValue(options.subject),
+    html: document.html,
+    text: document.text,
+  };
 }
 
-function renderBuyerOrderConfirmation(
-  notification: ClaimedNotification,
+type OrderEmailRecipientType = "buyer" | "seller";
+
+type OrderEmailOptions = {
+  eventType: NotificationType;
+  recipientType: OrderEmailRecipientType;
+  subject: string;
+  introduction: string;
+  preheader: string;
+  statusLabel?: string;
+  includeDashboardLink?: boolean;
+  dashboardUrl?: string | null;
+};
+
+function isV1OrderEmailType(value: string): value is NotificationType {
+  return value === "buyer_order_confirmation" ||
+    value === "seller_new_order" ||
+    value === "buyer_order_updated" ||
+    value === "seller_order_updated_copy" ||
+    value === "buyer_order_canceled" ||
+    value === "seller_order_canceled_copy";
+}
+
+function orderEmailOptions(
+  notificationType: string,
   context: EmailContext,
-  fromEmail: string,
-): RenderedEmail {
+): OrderEmailOptions {
+  const { order, store } = context;
+  const buyerName = formatPersonName(
+    order.buyer_first_name_snapshot,
+    order.buyer_last_name_snapshot,
+  ) || "Customer";
+  const orderNumber = formatOrderNumber(order.order_number);
+
+  if (notificationType === "buyer_order_confirmation") {
+    return {
+      eventType: notificationType,
+      recipientType: "buyer",
+      subject: `Your order with ${store.store_name} is confirmed \u2014 ${orderNumber}`,
+      introduction: `Thank you for your order from ${store.store_name}.`,
+      preheader: `Your order with ${store.store_name} is confirmed.`,
+    };
+  }
+
+  if (notificationType === "seller_new_order") {
+    return {
+      eventType: notificationType,
+      recipientType: "seller",
+      subject: `New order ${orderNumber} from ${buyerName}`,
+      introduction: "A new order has been placed through your store.",
+      preheader: `${buyerName} placed order ${orderNumber}.`,
+      includeDashboardLink: true,
+    };
+  }
+
+  if (notificationType === "buyer_order_updated") {
+    return {
+      eventType: notificationType,
+      recipientType: "buyer",
+      subject: `Your order with ${store.store_name} has been updated \u2014 ${orderNumber}`,
+      introduction: `${store.store_name} has updated your order.`,
+      preheader: `Your order with ${store.store_name} has been updated.`,
+    };
+  }
+
+  if (notificationType === "seller_order_updated_copy") {
+    return {
+      eventType: notificationType,
+      recipientType: "seller",
+      subject: `Customer copy: Updated order ${orderNumber} for ${buyerName}`,
+      introduction: `A copy of the updated order sent to ${buyerName}.`,
+      preheader: `Customer copy of updated order ${orderNumber}.`,
+      includeDashboardLink: true,
+    };
+  }
+
+  if (notificationType === "buyer_order_canceled") {
+    return {
+      eventType: notificationType,
+      recipientType: "buyer",
+      subject: `Your order with ${store.store_name} has been canceled \u2014 ${orderNumber}`,
+      introduction: `${store.store_name} has canceled this order.`,
+      preheader: `Your order with ${store.store_name} has been canceled.`,
+      statusLabel: "Canceled",
+    };
+  }
+
+  if (notificationType === "seller_order_canceled_copy") {
+    return {
+      eventType: notificationType,
+      recipientType: "seller",
+      subject: `Customer copy: Canceled order ${orderNumber} for ${buyerName}`,
+      introduction: `A copy of the cancellation notice sent to ${buyerName}.`,
+      preheader: `Customer copy of canceled order ${orderNumber}.`,
+      statusLabel: "Canceled",
+      includeDashboardLink: true,
+    };
+  }
+
+  throw new Error(`Unsupported notification type: ${notificationType}`);
+}
+
+function renderOrderDocumentEmail(
+  context: EmailContext,
+  options: OrderEmailOptions,
+): { html: string; text: string } {
   const { order, store, items, logo } = context;
   const buyerName = formatPersonName(
     order.buyer_first_name_snapshot,
     order.buyer_last_name_snapshot,
   );
-  const replyTo = firstValidEmail(
-    store.communication_email,
-    store.public_email,
-    store.order_notification_email,
-    fromEmail,
-  );
-  const subject = `We’ve got your order — ${formatOrderNumber(order.order_number)}`;
   const isDeliveryOrder = order.fulfillment_method === "delivery";
-  const address = formatAddress([
+  const buyerAddress = formatAddress([
     order.buyer_address_line1_snapshot,
     order.buyer_address_line2_snapshot,
     joinCompact([order.buyer_city_snapshot, order.buyer_state_snapshot, order.buyer_postal_code_snapshot], ", "),
@@ -420,7 +542,7 @@ function renderBuyerOrderConfirmation(
     fact("Name", buyerName),
     fact("Phone", order.buyer_phone_snapshot),
     fact("Email", order.buyer_email_snapshot),
-    fact("Address", address),
+    fact("Address", buyerAddress),
   ];
   const paymentRows = [
     fact("Payment method", paymentMethodText(order.payment_method)),
@@ -443,43 +565,63 @@ function renderBuyerOrderConfirmation(
       fact("Method", "Delivery"),
       fact("Delivery option", order.delivery_option_name_snapshot),
       fact("Delivery fee", formatCurrency(order.delivery_fee_amount ?? 0, store.currency)),
-      fact("Delivery address", address),
+      fact("Delivery address", buyerAddress),
     ]
     : [
       fact("Method", "Pickup"),
       fact("Pickup option", order.pickup_option_label_snapshot || order.pickup_note),
-      fact("Farm address", store.pickup_location_text),
+      fact("Pickup directions", store.pickup_location_text),
+      fact("Pickup instructions", store.pickup_instructions),
     ];
+  const cancellationRows = isCanceledEmail(options.eventType)
+    ? [
+      fact("Status", "Canceled"),
+      fact("Cancellation date", order.canceled_at ? formatPrintDateTime(order.canceled_at) : null),
+      fact("Reason", order.canceled_reason),
+    ]
+    : [];
+  const sellerContactEmail = sellerOrderContactEmail(store);
+  const pickupAddress = formatPickupAddress(store);
   const farmContactLines = [
     store.store_name,
-    store.show_public_email ? store.public_email : null,
+    sellerContactEmail,
+    pickupAddress,
     store.show_public_phone ? store.public_phone : null,
   ].map((value) => value?.trim()).filter(Boolean);
+  const dashboardLink = options.includeDashboardLink && options.dashboardUrl
+    ? `<p style="margin:0.14in 0 0;color:#000000;font-size:10.5pt;line-height:1.22;"><a href="${escapeAttribute(options.dashboardUrl)}" style="color:#000000;text-decoration:underline;font-weight:700;">View order</a></p>`
+    : "";
+  const closing = options.recipientType === "buyer"
+    ? "If you have questions about your order, please contact the farm directly."
+    : "Reply to this email to contact the customer directly.";
 
   const html = buyerPrintOrderEmailShell({
-    preheader: `Your order with ${store.store_name} is confirmed.`,
-    logo,
+    preheader: options.preheader,
     body: [
-      buyerPrintHeader(order, logo),
-      buyerPrintMessage(`Thank you for your order from ${store.store_name}.`),
-      buyerPrintOrderTitle(order),
+      buyerPrintHeader(order, store, logo),
+      buyerPrintMessage(options.introduction),
+      buyerPrintOrderTitle(order, options.statusLabel),
+      buyerPrintOptionalSection("Cancellation", buyerPrintFieldRows(cancellationRows)),
       buyerPrintTwoColumn(buyerRows, paymentRows),
       buyerPrintItemsTable(items, store.currency),
       buyerPrintTotalsTable(totalRows),
       buyerPrintFulfillmentSection(fulfillmentRows),
+      buyerPrintOptionalSection("Notes", buyerPrintParagraph(order.buyer_notes ?? "")),
       buyerPrintOptionalSection("Pickup policy", buyerPrintParagraph(store.pickup_policy ?? "")),
       buyerPrintOptionalSection("Farm contact information", buyerPrintLineList(farmContactLines)),
-      buyerPrintClosing("If you have questions about your order, please contact the farm directly."),
+      dashboardLink,
+      buyerPrintClosing(closing),
     ].join(""),
   });
 
   const text = [
-    `${store.store_name} order confirmation`,
+    options.preheader,
     "",
-    `Thank you for your order from ${store.store_name}.`,
+    options.introduction,
     "",
     `Order ${formatOrderNumber(order.order_number)}`,
     `Order date: ${formatDateTime(order.created_at)}`,
+    ...textSection("Cancellation", cancellationRows),
     "",
     "Payment:",
     ...textFacts(paymentRows),
@@ -496,148 +638,27 @@ function renderBuyerOrderConfirmation(
     ...textFacts(totalRows),
     "",
     ...textSection("Pickup / Delivery", fulfillmentRows),
+    ...textSection("Notes", order.buyer_notes ? [order.buyer_notes] : []),
     ...textSection("Pickup policy", store.pickup_policy ? [store.pickup_policy] : []),
     ...textSection("Farm contact information", farmContactLines),
-    "If you have questions about your order, please contact the farm directly.",
+    ...(options.dashboardUrl ? [`View order: ${options.dashboardUrl}`, ""] : []),
+    closing,
   ].join("\n");
 
-  return {
-    to: notification.recipient_email,
-    fromName: sanitizeHeaderValue(store.store_name) || "FlockFront",
-    replyTo,
-    subject: sanitizeHeaderValue(subject),
-    html,
-    text,
-  };
+  return { html, text };
 }
 
-function renderSellerNewOrder(
-  notification: ClaimedNotification,
-  context: EmailContext,
-  fromEmail: string,
-  siteOrigin: string,
-): RenderedEmail {
-  const { order, store, items, logo } = context;
-  const buyerName = formatPersonName(
-    order.buyer_first_name_snapshot,
-    order.buyer_last_name_snapshot,
-  );
-  const recipient = firstValidEmail(
+function isCanceledEmail(notificationType: NotificationType): boolean {
+  return notificationType === "buyer_order_canceled" ||
+    notificationType === "seller_order_canceled_copy";
+}
+
+function sellerOrderContactEmail(store: StoreRow): string | null {
+  return firstValidEmail(
     store.order_notification_email,
     store.communication_email,
     store.public_email,
-    notification.recipient_email,
   );
-
-  if (!recipient) {
-    throw new Error("Seller notification has no recipient email.");
-  }
-
-  const orderUrl = `${siteOrigin.replace(/\/$/, "")}/dashboard/orders/${order.id}`;
-  const subject = `New FlockFront order ${formatOrderNumber(order.order_number)}`;
-  const isDeliveryOrder = order.fulfillment_method === "delivery";
-  const address = formatAddress([
-    order.buyer_address_line1_snapshot,
-    order.buyer_address_line2_snapshot,
-    joinCompact([order.buyer_city_snapshot, order.buyer_state_snapshot, order.buyer_postal_code_snapshot], ", "),
-    order.buyer_country_snapshot,
-  ]);
-  const summaryRows = [
-    fact("Order number", formatOrderNumber(order.order_number)),
-    fact("Order date", formatDateTime(order.created_at)),
-    fact("Buyer", buyerName),
-    fact("Buyer email", order.buyer_email_snapshot),
-    fact("Phone", order.buyer_phone_snapshot),
-    fact("Payment", paymentText(order.payment_status)),
-    fact("Total", formatCurrency(order.total_amount, store.currency)),
-    fact("Pickup preference", order.pickup_option_label_snapshot || order.pickup_note),
-  ];
-  const customerRows = [
-    fact("Name", buyerName),
-    fact("Email", order.buyer_email_snapshot),
-    fact("Phone", order.buyer_phone_snapshot),
-    fact(isDeliveryOrder ? "Delivery address" : "Address", address),
-  ];
-  const paymentRows = [
-    fact("Payment method", paymentMethodText(order.payment_method)),
-    fact("Payment status", printPaymentStatusText(order.payment_status)),
-  ];
-  const totalRows = [
-    fact("Subtotal", formatCurrency(order.subtotal_amount, store.currency)),
-    hasAmount(order.tax_fee_amount)
-      ? fact(order.tax_fee_label_snapshot || "Tax/fee", formatCurrency(order.tax_fee_amount, store.currency))
-      : null,
-    isDeliveryOrder && hasAmount(order.delivery_fee_amount)
-      ? fact("Delivery fee", formatCurrency(order.delivery_fee_amount ?? 0, store.currency))
-      : null,
-    fact("Total", formatCurrency(order.total_amount, store.currency)),
-  ];
-  const fulfillmentRows = isDeliveryOrder
-    ? [
-      fact("Method", "Delivery"),
-      fact("Delivery option", order.delivery_option_name_snapshot),
-      fact("Delivery fee", formatCurrency(order.delivery_fee_amount ?? 0, store.currency)),
-      fact("Delivery address", address),
-    ]
-    : [
-      fact("Method", "Pickup"),
-      fact("Pickup option", order.pickup_option_label_snapshot),
-      fact("Pickup note", order.pickup_note),
-    ];
-  const farmContactRows = [
-    fact("Email", store.show_public_email ? store.public_email : null),
-    fact("Phone", store.show_public_phone ? store.public_phone : null),
-    fact("Website", store.website_url),
-  ];
-
-  const html = sellerPrintOrderEmailShell({
-    preheader: `${buyerName || "A buyer"} placed order ${formatOrderNumber(order.order_number)}.`,
-    logo,
-    body: [
-      sellerPrintOrderHeader(order),
-      sellerPrintMessage(`Thank you for your order from ${store.store_name}. A new order has been placed through the store.`),
-      sellerPrintTwoColumn(customerRows, paymentRows),
-      sellerPrintItemsTable(items, store.currency),
-      sellerPrintTotalsTable(totalRows),
-      sellerPrintSection(isDeliveryOrder ? "Delivery" : "Pickup", sellerPrintFactRows(fulfillmentRows)),
-      sellerPrintOptionalSection("Buyer notes", sellerPrintParagraph(order.buyer_notes ?? "")),
-      sellerPrintOptionalSection("Pickup Policy", sellerPrintParagraph(store.pickup_policy ?? "")),
-      sellerPrintOptionalSection("Farm Contact Information", sellerPrintFactRows(farmContactRows)),
-      `<p style="margin:22px 0 0;font-size:12px;line-height:1.35;"><a href="${escapeAttribute(orderUrl)}" style="color:#000000;text-decoration:underline;font-weight:700;">View order</a></p>`,
-    ].join(""),
-  });
-
-  const text = [
-    "FlockFront new order",
-    "",
-    `Thank you for your order from ${store.store_name}. A new order has been placed through the store.`,
-    "",
-    `${buyerName || "A buyer"} placed a new pay-at-pickup order for ${store.store_name}.`,
-    "",
-    ...textFacts(summaryRows),
-    "",
-    "Items:",
-    ...items.map((item) =>
-      `- ${itemName(item)} x ${item.quantity}: ${formatCurrency(item.line_subtotal, store.currency)}`
-    ),
-    "",
-    "Totals:",
-    ...textFacts(totalRows),
-    "",
-    ...textSection(isDeliveryOrder ? "Delivery" : "Pickup", fulfillmentRows),
-    ...textSection("Buyer notes", order.buyer_notes ? [order.buyer_notes] : []),
-    ...textSection("Pickup Policy", store.pickup_policy ? [store.pickup_policy] : []),
-    ...textSection("Farm Contact Information", farmContactRows),
-    `View order: ${orderUrl}`,
-  ].join("\n");
-
-  return {
-    to: recipient,
-    fromName: "FlockFront",
-    subject: sanitizeHeaderValue(subject),
-    html,
-    text,
-  };
 }
 
 async function sendPostmarkEmail({
@@ -763,7 +784,7 @@ function buyerPrintOrderEmailShell({
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#ffffff;color:#000000;border-collapse:collapse;">
       <tr>
         <td align="center" style="padding:12px 10px;">
-          <table role="presentation" width="780" cellspacing="0" cellpadding="0" style="width:780px;max-width:780px;background:#ffffff;color:#000000;border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;">
+          <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="width:640px;max-width:640px;background:#ffffff;color:#000000;border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;">
             <tr>
               <td style="padding:0;color:#000000;font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;line-height:1.22;">
                 ${body}
@@ -777,21 +798,32 @@ function buyerPrintOrderEmailShell({
 </html>`;
 }
 
-function buyerPrintHeader(order: OrderRow, logo: EmailContext["logo"]): string {
+function buyerPrintHeader(
+  order: OrderRow,
+  storeOrLogo: StoreRow | EmailContext["logo"],
+  maybeLogo?: EmailContext["logo"],
+): string {
+  const store = maybeLogo === undefined ? null : storeOrLogo as StoreRow;
+  const logo = maybeLogo === undefined
+    ? storeOrLogo as EmailContext["logo"]
+    : maybeLogo;
   let logoHtml = "";
 
   if (isEmailSafeLogo(logo)) {
-    const width = logo.width ?? 170;
+    const width = logo.width ?? 130;
     const height = logo.height ?? null;
     const heightAttribute = height ? ` height="${height}"` : "";
     const heightStyle = height ? `height:${height}px;` : "height:auto;";
     logoHtml =
       `<img src="${escapeAttribute(logo.url)}" alt="${escapeAttribute(logo.altText)}" width="${width}"${heightAttribute} style="display:block;width:${width}px;${heightStyle}max-width:${width}px;margin:0;border:0;outline:none;text-decoration:none;">`;
+  } else if (store?.store_name) {
+    logoHtml =
+      `<p style="margin:0;color:#000000;font-size:10.5pt;line-height:1.1;font-weight:700;">${escapeHtml(store.store_name)}</p>`;
   }
 
   return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 2px;">
     <tr>
-      <td style="padding:0;color:#000000;vertical-align:top;font-size:0;line-height:0;">${logoHtml}</td>
+      <td style="padding:0;color:#000000;vertical-align:top;">${logoHtml}</td>
       <td align="right" style="padding:0;color:#000000;font-size:12pt;line-height:1.2;vertical-align:top;white-space:nowrap;">${escapeHtml(formatPrintDateTime(order.created_at))}</td>
     </tr>
   </table>`;
@@ -801,12 +833,13 @@ function buyerPrintMessage(value: string): string {
   return `<p style="margin:0 0 10px;color:#000000;font-size:10.5pt;line-height:1.22;">${escapeHtml(value.trim())}</p>`;
 }
 
-function buyerPrintOrderTitle(order: OrderRow): string {
+function buyerPrintOrderTitle(order: OrderRow, statusLabel?: string): string {
   return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 0;border-bottom:1.5pt solid #000000;">
     <tr>
       <td style="padding:0 0 0.12in;color:#000000;vertical-align:bottom;">
         <p style="margin:0;color:#000000;font-size:22pt;line-height:1;font-weight:700;">Order ${escapeHtml(formatOrderNumber(order.order_number))}</p>
       </td>
+      ${statusLabel ? `<td align="right" style="padding:0 0 0.12in;color:#000000;font-size:10.5pt;line-height:1.1;font-weight:700;vertical-align:bottom;text-transform:uppercase;">${escapeHtml(statusLabel)}</td>` : ""}
     </tr>
   </table>`;
 }
@@ -929,163 +962,6 @@ function buyerPrintClosing(value: string): string {
   return `<p style="margin:0.16in 0 0;color:#000000;font-size:10.5pt;line-height:1.22;">${escapeHtml(value)}</p>`;
 }
 
-function sellerPrintOrderEmailShell({
-  body,
-  logo,
-  preheader,
-}: {
-  body: string;
-  logo: EmailContext["logo"];
-  preheader: string;
-}) {
-  const logoHtml = logo
-    ? `<img src="${escapeAttribute(logo.url)}" alt="${escapeAttribute(logo.altText)}" style="display:block;width:auto;max-width:120px;max-height:54px;margin:0 0 14px;">`
-    : "";
-
-  return `<!doctype html>
-<html>
-  <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>New order</title>
-  </head>
-  <body style="margin:0;padding:0;background:#ffffff;color:#000000;font-family:Arial,Helvetica,sans-serif;">
-    <div style="display:none!important;mso-hide:all;visibility:hidden;opacity:0;color:transparent;height:0;width:0;max-height:0;max-width:0;overflow:hidden;font-size:1px;line-height:1px;">${escapeHtml(preheader)}</div>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#ffffff;color:#000000;">
-      <tr>
-        <td align="center" style="padding:24px 14px;">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;color:#000000;border-collapse:collapse;">
-            <tr>
-              <td style="padding:0;color:#000000;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.35;">
-                ${logoHtml}
-                ${body}
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
-}
-
-function sellerPrintMessage(value: string): string {
-  return `<p style="margin:0 0 12px;color:#000000;font-size:12px;line-height:1.4;">${escapeHtml(value.trim())}</p>`;
-}
-
-function sellerPrintOrderHeader(order: OrderRow): string {
-  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 12px;border-bottom:2px solid #000000;">
-    <tr>
-      <td style="padding:0 0 8px;color:#000000;vertical-align:bottom;">
-        <p style="margin:0;color:#000000;font-size:24px;line-height:1.05;font-weight:700;">Order ${escapeHtml(formatOrderNumber(order.order_number))}</p>
-      </td>
-      <td align="right" style="padding:0 0 8px;color:#000000;font-size:12px;vertical-align:bottom;white-space:nowrap;">${escapeHtml(formatDateTime(order.created_at))}</td>
-    </tr>
-  </table>`;
-}
-
-function sellerPrintTwoColumn(
-  customerRows: Array<{ label: string; value: string } | null>,
-  paymentRows: Array<{ label: string; value: string } | null>,
-): string {
-  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 14px;">
-    <tr>
-      <td width="54%" style="padding:0 18px 0 0;vertical-align:top;">
-        ${sellerPrintFactRows(customerRows, { hideLabels: true })}
-      </td>
-      <td width="46%" style="padding:0;vertical-align:top;">
-        ${sellerPrintFactRows(paymentRows)}
-      </td>
-    </tr>
-  </table>`;
-}
-
-function sellerPrintFactRows(
-  rows: Array<{ label: string; value: string } | null>,
-  options: { hideLabels?: boolean } = {},
-): string {
-  const filtered = rows.filter(Boolean) as Array<{ label: string; value: string }>;
-
-  if (filtered.length === 0) return "";
-
-  if (options.hideLabels) {
-    return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${
-      filtered.map((row, index) => `<tr>
-        <td style="padding:${index === 0 ? "0" : "2px"} 0;color:#000000;font-size:12px;line-height:1.35;font-weight:${index === 0 ? "700" : "400"};vertical-align:top;">${escapeHtml(row.value)}</td>
-      </tr>`).join("")
-    }</table>`;
-  }
-
-  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${
-    filtered.map((row) => `<tr>
-      <td style="width:86px;padding:0 10px 7px 0;color:#000000;font-size:12px;line-height:1.25;font-weight:700;vertical-align:top;">${escapeHtml(row.label)}:</td>
-      <td style="padding:0 0 7px;color:#000000;font-size:12px;line-height:1.25;vertical-align:top;">${escapeHtml(row.value)}</td>
-    </tr>`).join("")
-  }</table>`;
-}
-
-function sellerPrintItemsTable(items: OrderItemRow[], currency?: string | null): string {
-  if (items.length === 0) return sellerPrintSection("Items", sellerPrintParagraph("No item details were available."));
-
-  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 10px;border-top:1px solid #000000;">
-    <tr>
-      <th align="left" style="border-bottom:1px solid #000000;padding:8px 4px 7px;color:#000000;font-size:12px;line-height:1.15;">Item</th>
-      <th align="right" style="width:46px;border-bottom:1px solid #000000;padding:8px 4px 7px;color:#000000;font-size:12px;line-height:1.15;">Qty</th>
-      <th align="right" style="width:78px;border-bottom:1px solid #000000;padding:8px 4px 7px;color:#000000;font-size:12px;line-height:1.15;">Unit price</th>
-      <th align="right" style="width:82px;border-bottom:1px solid #000000;padding:8px 0 7px 4px;color:#000000;font-size:12px;line-height:1.15;">Line total</th>
-    </tr>
-    ${items.map((item) => `<tr>
-      <td style="border-bottom:1px solid #b8b8b8;padding:8px 4px;color:#000000;font-size:12px;line-height:1.25;vertical-align:top;">
-        <p style="margin:0;font-weight:700;">${escapeHtml(itemName(item))}</p>
-        ${sellerPrintItemDetails(item)}
-      </td>
-      <td align="right" style="border-bottom:1px solid #b8b8b8;padding:8px 4px;color:#000000;font-size:12px;line-height:1.25;vertical-align:top;">${item.quantity}</td>
-      <td align="right" style="border-bottom:1px solid #b8b8b8;padding:8px 4px;color:#000000;font-size:12px;line-height:1.25;vertical-align:top;">${escapeHtml(formatCurrency(item.unit_price_snapshot, currency))}</td>
-      <td align="right" style="border-bottom:1px solid #b8b8b8;padding:8px 0 8px 4px;color:#000000;font-size:12px;line-height:1.25;vertical-align:top;">${escapeHtml(formatCurrency(item.line_subtotal, currency))}</td>
-    </tr>`).join("")}
-  </table>`;
-}
-
-function sellerPrintTotalsTable(rows: Array<{ label: string; value: string } | null>): string {
-  const filtered = rows.filter(Boolean) as Array<{ label: string; value: string }>;
-
-  if (filtered.length === 0) return "";
-
-  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 14px;">
-    ${filtered.map((row, index) => {
-      const isTotal = index === filtered.length - 1;
-      return `<tr>
-        <td style="width:68%;padding:${isTotal ? "7px" : "3px"} 8px ${isTotal ? "0" : "3px"} 0;color:#000000;font-size:${isTotal ? "13px" : "12px"};line-height:1.2;font-weight:${isTotal ? "700" : "400"};border-top:${isTotal ? "1px solid #000000" : "0"};">${escapeHtml(row.label)}</td>
-        <td align="right" style="padding:${isTotal ? "7px" : "3px"} 0 ${isTotal ? "0" : "3px"} 8px;color:#000000;font-size:${isTotal ? "13px" : "12px"};line-height:1.2;font-weight:${isTotal ? "700" : "400"};border-top:${isTotal ? "1px solid #000000" : "0"};">${escapeHtml(row.value)}</td>
-      </tr>`;
-    }).join("")}
-  </table>`;
-}
-
-function sellerPrintSection(title: string, body: string): string {
-  return body.trim()
-    ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 14px;border-top:1px solid #000000;">
-      <tr>
-        <td style="padding:9px 0 0;color:#000000;">
-          <h2 style="margin:0 0 8px;color:#000000;font-size:14px;line-height:1.15;font-weight:700;">${escapeHtml(title)}</h2>
-          ${body}
-        </td>
-      </tr>
-    </table>`
-    : "";
-}
-
-function sellerPrintOptionalSection(title: string, body: string): string {
-  return body.trim() ? sellerPrintSection(title, body) : "";
-}
-
-function sellerPrintParagraph(value: string): string {
-  const trimmed = value.trim();
-  return trimmed
-    ? `<p style="margin:0;color:#000000;font-size:12px;line-height:1.4;">${escapeHtml(trimmed)}</p>`
-    : "";
-}
-
 function fact(label: string, value: string | null | undefined) {
   const trimmed = value?.trim();
   return trimmed ? { label, value: trimmed } : null;
@@ -1160,25 +1036,6 @@ function buyerPrintItemDetails(item: OrderItemRow): string {
     : "";
 }
 
-function sellerPrintItemDetails(item: OrderItemRow): string {
-  const details = [
-    item.species_name_snapshot,
-    item.product_type_snapshot,
-    item.item_category_snapshot,
-    item.age_at_sale_days_snapshot != null
-      ? formatPrintAge(item.age_at_sale_days_snapshot)
-      : null,
-    item.hatch_date_snapshot ? `Hatched ${formatShortDate(item.hatch_date_snapshot)}` : null,
-    item.available_date_snapshot
-      ? `Available ${formatShortDate(item.available_date_snapshot)}`
-      : null,
-  ].map((value) => value?.trim()).filter(Boolean);
-
-  return details.length > 0
-    ? `<p style="margin:2px 0 0;color:#000000;font-size:10px;line-height:1.25;">${escapeHtml(details.join(" • "))}</p>`
-    : "";
-}
-
 function formatPersonName(firstName?: string | null, lastName?: string | null) {
   return joinCompact([firstName, lastName], " ");
 }
@@ -1210,15 +1067,6 @@ function formatSellerItemDetail(value: string | null) {
   if (lower === "unknown") return "Unknown";
 
   return normalized;
-}
-
-function paymentText(status: string) {
-  if (status === "pay_at_pickup") return "Pay at pickup";
-  if (status === "paid") return "Paid";
-  if (status === "unpaid") return "Unpaid";
-  if (status === "canceled") return "Canceled";
-  if (status === "refunded") return "Refunded";
-  return humanize(status);
 }
 
 function printPaymentStatusText(status: string) {
@@ -1311,6 +1159,26 @@ function formatPrintAge(days: number) {
 
 function formatAddress(parts: Array<string | null | undefined>) {
   return parts.map((part) => part?.trim()).filter(Boolean).join("\n");
+}
+
+function formatPickupAddress(store: StoreRow): string | null {
+  const line1 = store.pickup_address_line1?.trim();
+  const city = store.pickup_city?.trim();
+  const state = store.pickup_state?.trim();
+  const postalCode = store.pickup_postal_code?.trim();
+
+  if (!line1 || !city || !state || !postalCode) return null;
+
+  const country = store.pickup_country?.trim().toUpperCase();
+  const cityLine = `${city}, ${state} ${postalCode}`;
+  const lines = [
+    line1,
+    store.pickup_address_line2,
+    cityLine,
+    country && country !== "US" ? country : null,
+  ];
+
+  return formatAddress(lines);
 }
 
 function joinCompact(values: Array<string | null | undefined>, separator: string) {
@@ -1493,8 +1361,7 @@ Deno.serve(async (request: Request) => {
     for (const notification of notifications) {
       try {
         if (
-          notification.notification_type !== "buyer_order_confirmation" &&
-          notification.notification_type !== "seller_new_order"
+          !isV1OrderEmailType(notification.notification_type)
         ) {
           throw new Error(
             `Unsupported Phase 1 notification type: ${notification.notification_type}`,

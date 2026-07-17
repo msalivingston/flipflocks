@@ -19,7 +19,9 @@ import {
   calculateFinalTotal,
   calculateOrderSubtotal,
   customLine,
+  distributeDiscount,
   formatMoneyInput,
+  isActiveLine,
 } from "../../_lib/order-form-calculations";
 import {
   buildEditOrderPayload,
@@ -167,7 +169,18 @@ export function EditOrder({ orderId }: { orderId: string }) {
   >({});
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [saveWarning, setSaveWarning] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [savedCustomerFacingFingerprint, setSavedCustomerFacingFingerprint] =
+    useState("");
+  const [emailUpdatedOrderOverride, setEmailUpdatedOrderOverride] = useState<
+    boolean | null
+  >(null);
+  const [pendingUpdateEmailAction, setPendingUpdateEmailAction] = useState<{
+    actionId: string;
+    fingerprint: string;
+  } | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -342,6 +355,35 @@ export function EditOrder({ orderId }: { orderId: string }) {
         currentFulfillmentMethod === "delivery" ? order?.customer_id ?? null : null,
       );
       setBuyerNotes(order?.buyer_notes ?? "");
+      setSavedCustomerFacingFingerprint(
+        order
+          ? buildCustomerFacingFingerprint({
+              buyerNotes: order.buyer_notes ?? "",
+              deliveryAddress: formatOrderDeliveryAddress(order),
+              deliveryFee: order.delivery_fee_amount ?? 0,
+              deliveryOptionId:
+                currentFulfillmentMethod === "delivery" &&
+                order.delivery_option_name_snapshot
+                  ? savedDeliveryOptionId
+                  : "",
+              deliveryOptionName: order.delivery_option_name_snapshot ?? "",
+              discountAmount: 0,
+              fulfillmentMethod: currentFulfillmentMethod,
+              lines: mappedItems.lines,
+              pickupNote: order.pickup_note ?? "",
+              pickupOptionId: order.pickup_option_id ?? "",
+              taxAmount: order.tax_fee_amount ?? 0,
+              total: order.total_amount ?? 0,
+              inventory: normalizeSellableInventoryRows({
+                equipmentRows: equipmentResult.data ?? [],
+                listingRows: listingResult.data ?? [],
+                processedPoultryRows: processedPoultryResult.data ?? [],
+              }),
+            })
+          : "",
+      );
+      setEmailUpdatedOrderOverride(null);
+      setPendingUpdateEmailAction(null);
       setIsLoading(false);
     }
 
@@ -463,6 +505,30 @@ export function EditOrder({ orderId }: { orderId: string }) {
       }),
     [inventoryAdjustmentChoices, lines, originalLines],
   );
+  const currentCustomerFacingFingerprint = buildCustomerFacingFingerprint({
+    buyerNotes,
+    deliveryAddress,
+    deliveryFee,
+    deliveryOptionId,
+    deliveryOptionName: selectedDeliveryOption?.name ?? "",
+    discountAmount,
+    fulfillmentMethod,
+    lines,
+    pickupNote,
+    pickupOptionId,
+    taxAmount,
+    total,
+    inventory: data.inventory,
+  });
+  const hasMeaningfulCustomerFacingChange = Boolean(
+    savedCustomerFacingFingerprint &&
+      currentCustomerFacingFingerprint !== savedCustomerFacingFingerprint,
+  );
+  const buyerHasEmail = Boolean(displayedCustomer.email?.trim());
+  const canEmailUpdatedOrder = buyerHasEmail && hasMeaningfulCustomerFacingChange;
+  const emailUpdatedOrder = canEmailUpdatedOrder
+    ? emailUpdatedOrderOverride ?? true
+    : false;
 
   function updateLine(lineId: string, updates: Partial<OrderLine>) {
     setLines((current) =>
@@ -635,13 +701,69 @@ export function EditOrder({ orderId }: { orderId: string }) {
       return;
     }
 
-    router.push(`/dashboard/orders/${orderId}`);
+    let emailQueued = false;
+    let emailWarning: string | null = null;
+    const shouldQueueUpdatedOrderEmail = emailUpdatedOrder && canEmailUpdatedOrder;
+    const emailActionId = shouldQueueUpdatedOrderEmail
+      ? pendingUpdateEmailAction?.fingerprint === currentCustomerFacingFingerprint
+        ? pendingUpdateEmailAction.actionId
+        : crypto.randomUUID()
+      : null;
+
+    if (shouldQueueUpdatedOrderEmail && emailActionId) {
+      const emailResult = await supabase.rpc("seller_enqueue_updated_order_email", {
+        p_email_action_id: emailActionId,
+        p_order_id: orderId,
+      });
+
+      if (emailResult.error) {
+        emailWarning =
+          "Order updated, but the customer email could not be queued. The saved order was not rolled back. Save again to retry the email.";
+      } else {
+        const rows = Array.isArray(emailResult.data) ? emailResult.data : [];
+        const queued = rows[0] as
+          | {
+              buyer_notification_queued?: boolean | null;
+              seller_copy_queued?: boolean | null;
+            }
+          | undefined;
+
+        emailQueued = Boolean(
+          queued?.buyer_notification_queued && queued?.seller_copy_queued,
+        );
+
+        if (!emailQueued) {
+          emailWarning =
+            "Order updated, but the customer email was not queued. Check that the customer has an email address. Save again to retry the email.";
+        }
+      }
+    }
+
+    const nextFingerprint = currentCustomerFacingFingerprint;
+    setOriginalLines(lines);
+    setInventoryAdjustmentChoices({});
+    if (shouldQueueUpdatedOrderEmail && !emailQueued && emailActionId) {
+      setPendingUpdateEmailAction({
+        actionId: emailActionId,
+        fingerprint: nextFingerprint,
+      });
+      setEmailUpdatedOrderOverride(true);
+    } else {
+      setSavedCustomerFacingFingerprint(nextFingerprint);
+      setPendingUpdateEmailAction(null);
+      setEmailUpdatedOrderOverride(null);
+    }
+    setSaveMessage(emailQueued ? "Order updated and customer emailed." : "Order updated.");
+    setSaveWarning(emailWarning);
+    setIsSaving(false);
     router.refresh();
   }
 
   function resetSaveMessages() {
     setValidationErrors([]);
     setSaveError(null);
+    setSaveMessage(null);
+    setSaveWarning(null);
   }
 
   function changeInventoryAdjustment(lineId: string, checked: boolean) {
@@ -960,6 +1082,48 @@ export function EditOrder({ orderId }: { orderId: string }) {
                 </div>
               ) : null}
 
+              {saveWarning ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  {saveWarning}
+                </div>
+              ) : null}
+
+              {saveMessage ? (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                  {saveMessage}
+                </div>
+              ) : null}
+
+              {buyerHasEmail ? (
+                <label
+                  className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${
+                    canEmailUpdatedOrder
+                      ? "border-stone-200 bg-white text-stone-800"
+                      : "border-stone-200 bg-stone-50 text-stone-500"
+                  }`}
+                >
+                  <input
+                    checked={emailUpdatedOrder}
+                    className="mt-1 size-4 accent-emerald-700"
+                    disabled={!canEmailUpdatedOrder || isSaving}
+                    onChange={(event) => {
+                      setEmailUpdatedOrderOverride(event.target.checked);
+                    }}
+                    type="checkbox"
+                  />
+                  <span>
+                    <span className="font-semibold">
+                      Email updated order to customer
+                    </span>
+                    {!canEmailUpdatedOrder ? (
+                      <span className="block text-xs leading-5">
+                        Make a customer-facing change to enable this.
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
+              ) : null}
+
               <button
                 className="seller-primary-button"
                 disabled={isSaving}
@@ -1038,6 +1202,111 @@ function formatOrderDeliveryAddress(order: EditableOrderRow | null): DeliveryAdd
     postalCode: order.buyer_postal_code_snapshot ?? "",
     country: order.buyer_country_snapshot ?? "US",
   };
+}
+
+function buildCustomerFacingFingerprint({
+  buyerNotes,
+  deliveryAddress,
+  deliveryFee,
+  deliveryOptionId,
+  deliveryOptionName,
+  discountAmount,
+  fulfillmentMethod,
+  inventory,
+  lines,
+  pickupNote,
+  pickupOptionId,
+  taxAmount,
+  total,
+}: {
+  buyerNotes: string;
+  deliveryAddress: DeliveryAddress;
+  deliveryFee: number;
+  deliveryOptionId: string;
+  deliveryOptionName: string;
+  discountAmount: number;
+  fulfillmentMethod: FulfillmentMethod;
+  inventory: InventorySearchRow[];
+  lines: OrderLine[];
+  pickupNote: string;
+  pickupOptionId: string;
+  taxAmount: number;
+  total: number;
+}) {
+  const discountedLines = distributeDiscount(lines, inventory, discountAmount);
+  const itemFingerprint = discountedLines
+    .filter(isActiveLine)
+    .map((line) => ({
+      customItemDescription:
+        line.type === "custom" ? normalizeText(line.customItemDescription) : "",
+      customItemName: line.type === "custom" ? normalizeText(line.customItemName) : "",
+      inventoryItemId: line.type === "inventory" ? normalizeText(line.inventoryItemId) : "",
+      inventoryItemType:
+        line.type === "inventory" ? normalizeText(line.inventoryItemType) : "",
+      orderItemId: normalizeText(line.orderItemId),
+      quantity: normalizeInteger(line.quantity),
+      savedItemName: normalizeText(line.savedItemName),
+      type: line.type,
+      unitPriceCents: cents(line.discountedUnitPrice ?? line.unitPrice),
+    }))
+    .sort((left, right) =>
+      [
+        left.orderItemId,
+        left.inventoryItemType,
+        left.inventoryItemId,
+        left.customItemName,
+      ].join("|").localeCompare([
+        right.orderItemId,
+        right.inventoryItemType,
+        right.inventoryItemId,
+        right.customItemName,
+      ].join("|")),
+    );
+
+  return JSON.stringify({
+    buyerNotes: normalizeText(buyerNotes),
+    delivery:
+      fulfillmentMethod === "delivery"
+        ? {
+            address: {
+              city: normalizeText(deliveryAddress.city),
+              country: normalizeText(deliveryAddress.country || "US"),
+              line1: normalizeText(deliveryAddress.line1),
+              line2: normalizeText(deliveryAddress.line2),
+              postalCode: normalizeText(deliveryAddress.postalCode),
+              state: normalizeText(deliveryAddress.state),
+            },
+            deliveryFeeCents: cents(deliveryFee),
+            deliveryOptionId: normalizeText(deliveryOptionId),
+            deliveryOptionName: normalizeText(deliveryOptionName),
+          }
+        : null,
+    fulfillmentMethod,
+    items: itemFingerprint,
+    pickup:
+      fulfillmentMethod === "pickup"
+        ? {
+            pickupNote: pickupOptionId ? "" : normalizeText(pickupNote),
+            pickupOptionId: normalizeText(pickupOptionId),
+          }
+        : null,
+    taxCents: cents(taxAmount),
+    totalCents: cents(total),
+  });
+}
+
+function normalizeText(value: string | null | undefined) {
+  return value?.trim().replace(/\s+/g, " ").toLowerCase() ?? "";
+}
+
+function normalizeInteger(value: string | number | null | undefined) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : 0;
+}
+
+function cents(value: string | number | null | undefined) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
 }
 
 function formatCustomerSummary(customer: CustomerRow) {

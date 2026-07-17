@@ -85,6 +85,12 @@ type StoreAdminForm = {
   pickup_method: "notes" | "manual_options";
   pickup_location_text: string;
   pickup_instructions: string;
+  pickup_address_line1: string;
+  pickup_address_line2: string;
+  pickup_city: string;
+  pickup_state: string;
+  pickup_postal_code: string;
+  pickup_country: string;
   default_pickup_option_id: string;
   delivery_enabled: boolean;
   pickup_policy: string;
@@ -114,6 +120,12 @@ type StoreDefaults = {
   pickup_method: "notes" | "manual_options" | null;
   pickup_instructions: string | null;
   pickup_location_text: string | null;
+  pickup_address_line1: string | null;
+  pickup_address_line2: string | null;
+  pickup_city: string | null;
+  pickup_state: string | null;
+  pickup_postal_code: string | null;
+  pickup_country: string | null;
   default_pickup_option_id: string | null;
   default_pickup_option_label: string | null;
   delivery_enabled: boolean | null;
@@ -346,6 +358,12 @@ const blankForm: StoreAdminForm = {
   pickup_method: "notes",
   pickup_location_text: "",
   pickup_instructions: "",
+  pickup_address_line1: "",
+  pickup_address_line2: "",
+  pickup_city: "",
+  pickup_state: "",
+  pickup_postal_code: "",
+  pickup_country: "US",
   default_pickup_option_id: "",
   delivery_enabled: false,
   pickup_policy: "",
@@ -450,7 +468,7 @@ export function StoreAdmin() {
           supabase
             .from("seller_store_defaults")
             .select(
-              "store_id, pickup_method, pickup_instructions, pickup_location_text, default_pickup_option_id, default_pickup_option_label, delivery_enabled, communication_email, order_notification_email, currency",
+              "store_id, pickup_method, pickup_instructions, pickup_location_text, pickup_address_line1, pickup_address_line2, pickup_city, pickup_state, pickup_postal_code, pickup_country, default_pickup_option_id, default_pickup_option_label, delivery_enabled, communication_email, order_notification_email, currency",
             )
             .eq("store_id", seller.store_id)
             .maybeSingle()
@@ -1490,7 +1508,7 @@ export function StoreAdmin() {
   async function saveChanges() {
     if (!seller) return;
 
-    const validationMessage = validateForm(form, pickupOptions);
+    const validationMessage = validateForm(form, pickupOptions, activeTab);
     const nextDeliveryValidationMessage = validateDeliveryOptions(
       deliveryOptions,
     );
@@ -1664,6 +1682,12 @@ export function StoreAdmin() {
       pickup_method: form.pickup_method,
       pickup_location_text: form.pickup_location_text,
       pickup_instructions: form.pickup_instructions,
+      pickup_address_line1: form.pickup_address_line1,
+      pickup_address_line2: form.pickup_address_line2,
+      pickup_city: form.pickup_city,
+      pickup_state: form.pickup_state,
+      pickup_postal_code: form.pickup_postal_code,
+      pickup_country: form.pickup_country,
       default_pickup_option_id: selectedDefaultId || null,
       communication_email: form.communication_email,
       order_notification_email: form.order_notification_email,
@@ -1749,6 +1773,12 @@ export function StoreAdmin() {
       communication_email: form.communication_email.trim().toLowerCase(),
       pickup_location_text: form.pickup_location_text.trim(),
       pickup_instructions: form.pickup_instructions.trim(),
+      pickup_address_line1: form.pickup_address_line1.trim(),
+      pickup_address_line2: form.pickup_address_line2.trim(),
+      pickup_city: form.pickup_city.trim(),
+      pickup_state: form.pickup_state.trim().toUpperCase(),
+      pickup_postal_code: form.pickup_postal_code.trim(),
+      pickup_country: form.pickup_country.trim().toUpperCase() || "US",
       default_pickup_option_id: selectedDefaultId || "",
       delivery_enabled: form.delivery_enabled,
       pickup_policy: form.pickup_policy.trim(),
@@ -2110,6 +2140,7 @@ export function StoreAdmin() {
               <DynamicPickupDeliveryTab
                 AccordionSection={StoreSetupAccordionSection}
                 StorefrontNote={StorefrontNote}
+                TextField={TextField}
                 deliveryOptions={deliveryOptions}
                 deliveryValidationMessage={deliveryValidationMessage}
                 form={form}
@@ -2121,6 +2152,10 @@ export function StoreAdmin() {
                   updateField("delivery_enabled", enabled)
                 }
                 onDeliveryOptionsChange={updateDeliveryOptions}
+                onPickupAddressFieldChange={updateField}
+                onPickupLocationTextChange={(value) =>
+                  updateField("pickup_location_text", value)
+                }
                 onPickupMethodChange={(method) =>
                   updateField("pickup_method", method)
                 }
@@ -4625,6 +4660,12 @@ function buildInitialForm(
     pickup_location_text: defaults?.pickup_location_text ?? "",
     pickup_instructions:
       defaults?.pickup_instructions ?? seller.pickup_instructions ?? "",
+    pickup_address_line1: defaults?.pickup_address_line1 ?? "",
+    pickup_address_line2: defaults?.pickup_address_line2 ?? "",
+    pickup_city: defaults?.pickup_city ?? "",
+    pickup_state: defaults?.pickup_state ?? "",
+    pickup_postal_code: defaults?.pickup_postal_code ?? "",
+    pickup_country: defaults?.pickup_country ?? "US",
     default_pickup_option_id: defaults?.default_pickup_option_id ?? "",
     delivery_enabled: Boolean(defaults?.delivery_enabled),
     pickup_policy: seller.pickup_policy ?? "",
@@ -4937,7 +4978,11 @@ function buildLaunchSummary(
   };
 }
 
-function validateForm(form: StoreAdminForm, pickupOptions: PickupOptionDraft[]) {
+function validateForm(
+  form: StoreAdminForm,
+  pickupOptions: PickupOptionDraft[],
+  activeTab: StoreSetupTab,
+) {
   if (!form.store_name.trim()) return "Store name is required.";
   if (!form.public_city.trim()) return "City is required.";
   if (!form.public_state.trim()) return "State is required.";
@@ -4966,6 +5011,16 @@ function validateForm(form: StoreAdminForm, pickupOptions: PickupOptionDraft[]) 
   if (!form.about_text.trim()) return "Farm story is required.";
   if (form.about_text.trim().length > farmStoryMaxLength) {
     return `Farm story must be ${farmStoryMaxLength} characters or fewer.`;
+  }
+  if (activeTab === "pickup") {
+    if (!form.pickup_address_line1.trim()) {
+      return "Pickup address needs a street address.";
+    }
+    if (!form.pickup_city.trim()) return "Pickup address needs a city.";
+    if (!form.pickup_state.trim()) return "Pickup address needs a state.";
+    if (!form.pickup_postal_code.trim()) {
+      return "Pickup address needs a ZIP code.";
+    }
   }
 
   for (const option of pickupOptions) {

@@ -45,11 +45,39 @@ type StorefrontNoteProps = {
   children: ReactNode;
 };
 
+type TextFieldProps = {
+  helper?: string;
+  label: string;
+  maxLength?: number;
+  onChange: (value: string) => void;
+  optional?: boolean;
+  placeholder?: string;
+  required?: boolean;
+  showCounter?: boolean;
+  type?: "text" | "number";
+  value: string;
+};
+
 type PickupDeliveryForm = {
   default_pickup_option_id: string;
   delivery_enabled: boolean;
+  pickup_address_line1: string;
+  pickup_address_line2: string;
+  pickup_city: string;
+  pickup_country: string;
+  pickup_location_text: string;
   pickup_method: "notes" | "manual_options";
+  pickup_postal_code: string;
+  pickup_state: string;
 };
+
+type PickupAddressField =
+  | "pickup_address_line1"
+  | "pickup_address_line2"
+  | "pickup_city"
+  | "pickup_state"
+  | "pickup_postal_code"
+  | "pickup_country";
 
 type PickupOptionDraft = {
   id: string;
@@ -65,6 +93,7 @@ type PickupDeliveryAccordionId = "pickup" | "delivery";
 export type PickupDeliveryTabProps = {
   AccordionSection: ComponentType<StoreSetupAccordionSectionProps>;
   StorefrontNote: ComponentType<StorefrontNoteProps>;
+  TextField: ComponentType<TextFieldProps>;
   deliveryOptions: DeliveryOptionDraft[];
   deliveryValidationMessage: string | null;
   form: PickupDeliveryForm;
@@ -81,6 +110,11 @@ export type PickupDeliveryTabProps = {
   onAddPickupOption: () => void;
   onDeliveryEnabledChange: (enabled: boolean) => void;
   onDeliveryOptionsChange: (options: DeliveryOptionDraft[]) => void;
+  onPickupAddressFieldChange: (
+    field: PickupAddressField,
+    value: string,
+  ) => void;
+  onPickupLocationTextChange: (value: string) => void;
   onPickupMethodChange: (method: PickupDeliveryForm["pickup_method"]) => void;
   onPickupOptionLabelChange: (optionId: string, label: string) => void;
   onRemovePickupOption: (optionId: string) => void;
@@ -91,6 +125,7 @@ export type PickupDeliveryTabProps = {
 export default function PickupDeliveryTab({
   AccordionSection,
   StorefrontNote,
+  TextField,
   deliveryOptions,
   deliveryValidationMessage,
   form,
@@ -100,6 +135,8 @@ export default function PickupDeliveryTab({
   onAddPickupOption,
   onDeliveryEnabledChange,
   onDeliveryOptionsChange,
+  onPickupAddressFieldChange,
+  onPickupLocationTextChange,
   onPickupMethodChange,
   onPickupOptionLabelChange,
   onRemovePickupOption,
@@ -146,6 +183,74 @@ export default function PickupDeliveryTab({
           <StorefrontNote>
             Choose how buyers will handle pickup for their orders.
           </StorefrontNote>
+          <section className="grid gap-3 rounded-lg border border-stone-200 bg-white px-3 py-3">
+            <div>
+              <h3 className="text-sm font-semibold text-stone-950">
+                Pickup address
+              </h3>
+              <p className="mt-0.5 text-xs leading-5 text-stone-600">
+                This address is included in order confirmations after a buyer
+                places an order. It is not automatically displayed on your
+                public storefront.
+              </p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <TextField
+                label="Street address"
+                onChange={(value) =>
+                  onPickupAddressFieldChange("pickup_address_line1", value)
+                }
+                required
+                value={form.pickup_address_line1}
+              />
+              <TextField
+                label="Address line 2"
+                onChange={(value) =>
+                  onPickupAddressFieldChange("pickup_address_line2", value)
+                }
+                optional
+                value={form.pickup_address_line2}
+              />
+              <TextField
+                label="City"
+                onChange={(value) =>
+                  onPickupAddressFieldChange("pickup_city", value)
+                }
+                required
+                value={form.pickup_city}
+              />
+              <TextField
+                label="State"
+                onChange={(value) =>
+                  onPickupAddressFieldChange("pickup_state", value)
+                }
+                required
+                value={form.pickup_state}
+              />
+              <TextField
+                label="ZIP code"
+                onChange={(value) =>
+                  onPickupAddressFieldChange("pickup_postal_code", value)
+                }
+                required
+                value={form.pickup_postal_code}
+              />
+              <TextField
+                label="Country"
+                onChange={(value) =>
+                  onPickupAddressFieldChange("pickup_country", value)
+                }
+                value={form.pickup_country}
+              />
+            </div>
+            <TextField
+              helper="Add directions, landmarks, appointment details, or other pickup instructions."
+              label="Pickup directions or general location"
+              onChange={onPickupLocationTextChange}
+              placeholder="Farm pickup by appointment near the north gate"
+              value={form.pickup_location_text}
+            />
+          </section>
           <PickupMethodRow
             copy="Buyers enter their preferred pickup time or date in checkout notes. Best for most sellers."
             glyph="/glyphs/chat.png"

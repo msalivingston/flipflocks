@@ -136,9 +136,11 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [isCanceling, setIsCanceling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionWarning, setActionWarning] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [restoreInventoryOnCancel, setRestoreInventoryOnCancel] = useState(true);
+  const [emailCancellationToBuyer, setEmailCancellationToBuyer] = useState(false);
   const [showCancelPanel, setShowCancelPanel] = useState(false);
   const [showFulfillmentDialog, setShowFulfillmentDialog] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -241,6 +243,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const isDeliveryOrder = order?.fulfillment_method === "delivery";
   const deliveryOptionName = order?.delivery_option_name_snapshot?.trim() ?? "";
   const deliveryFeeAmount = order?.delivery_fee_amount ?? 0;
+  const buyerHasEmail = Boolean(order?.buyer_email_snapshot?.trim());
 
   if (isLoading) {
     return (
@@ -295,6 +298,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setIsSaving(true);
     setActionError(null);
     setActionMessage(null);
+    setActionWarning(null);
 
     const { error: readyError } = await supabase.rpc(
       "seller_mark_order_ready_for_pickup",
@@ -334,6 +338,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setIsSaving(true);
     setActionError(null);
     setActionMessage(null);
+    setActionWarning(null);
 
     const { error: fulfillmentError } = await supabase.rpc(
       "seller_record_order_fulfillment",
@@ -387,11 +392,14 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setIsCanceling(true);
     setActionError(null);
     setActionMessage(null);
+    setActionWarning(null);
 
-    const { error: cancelError } = await supabase.rpc("cancel_order", {
+    const shouldEmailCancellation = buyerHasEmail && emailCancellationToBuyer;
+    const { data: cancelData, error: cancelError } = await supabase.rpc("cancel_order", {
       p_order_id: order.order_id,
       p_canceled_reason: trimmedReason,
       p_restore_inventory: true,
+      p_send_buyer_notification: shouldEmailCancellation,
     });
 
     if (cancelError) {
@@ -400,11 +408,25 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       return;
     }
 
-    setActionMessage(
-      "Order canceled. Inventory-backed items were returned to available inventory.",
+    const cancelResult = Array.isArray(cancelData) ? cancelData[0] : null;
+    const emailQueued = Boolean(
+      cancelResult?.buyer_notification_queued &&
+        cancelResult?.seller_copy_queued,
     );
+
+    setActionMessage(
+      shouldEmailCancellation && emailQueued
+        ? "Order canceled and customer emailed."
+        : "Order canceled.",
+    );
+    if (shouldEmailCancellation && !emailQueued) {
+      setActionWarning(
+        "Order canceled, but the cancellation email could not be queued.",
+      );
+    }
     setCancelReason("");
     setRestoreInventoryOnCancel(true);
+    setEmailCancellationToBuyer(false);
     setShowCancelPanel(false);
     setRefreshKey((current) => current + 1);
     setIsCanceling(false);
@@ -417,7 +439,9 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   function openCancelPanel() {
     setActionError(null);
     setActionMessage(null);
+    setActionWarning(null);
     setRestoreInventoryOnCancel(true);
+    setEmailCancellationToBuyer(buyerHasEmail);
     setShowFulfillmentDialog(false);
     setShowCancelPanel(true);
   }
@@ -510,6 +534,11 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           {actionMessage}
         </p>
       ) : null}
+      {actionWarning ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+          {actionWarning}
+        </p>
+      ) : null}
       {actionError ? (
         <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
           {actionError}
@@ -519,14 +548,18 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       {showCancelPanel ? (
         <CancellationPanel
           cancelReason={cancelReason}
+          emailCancellationToBuyer={emailCancellationToBuyer}
+          hasBuyerEmail={buyerHasEmail}
           isCanceling={isCanceling}
           restoreInventoryOnCancel={restoreInventoryOnCancel}
           onCancel={cancelOrder}
           onClose={() => {
             setCancelReason("");
             setRestoreInventoryOnCancel(true);
+            setEmailCancellationToBuyer(false);
             setShowCancelPanel(false);
           }}
+          onEmailCancellationChange={setEmailCancellationToBuyer}
           onReasonChange={setCancelReason}
         />
       ) : null}
@@ -1542,17 +1575,23 @@ function FulfillmentDialog({
 
 function CancellationPanel({
   cancelReason,
+  emailCancellationToBuyer,
+  hasBuyerEmail,
   isCanceling,
   restoreInventoryOnCancel,
   onCancel,
   onClose,
+  onEmailCancellationChange,
   onReasonChange,
 }: {
   cancelReason: string;
+  emailCancellationToBuyer: boolean;
+  hasBuyerEmail: boolean;
   isCanceling: boolean;
   restoreInventoryOnCancel: boolean;
   onCancel: () => void;
   onClose: () => void;
+  onEmailCancellationChange: (value: boolean) => void;
   onReasonChange: (value: string) => void;
 }) {
   return (
@@ -1583,6 +1622,25 @@ function CancellationPanel({
           value={cancelReason}
         />
       </label>
+      {hasBuyerEmail ? (
+        <label className="mt-4 flex gap-3 rounded-md border border-red-200 bg-white p-3 text-sm text-stone-700">
+          <input
+            className="mt-1 size-6 rounded border-stone-300 text-red-700 focus:ring-red-500 sm:size-4"
+            checked={emailCancellationToBuyer}
+            disabled={isCanceling}
+            type="checkbox"
+            onChange={(event) => onEmailCancellationChange(event.target.checked)}
+          />
+          <span>
+            <span className="block font-semibold text-stone-950">
+              Email cancellation notice to customer
+            </span>
+            <span className="mt-1 block leading-6 text-stone-600">
+              Send the buyer a cancellation email after this order is canceled.
+            </span>
+          </span>
+        </label>
+      ) : null}
       <label className="mt-4 flex gap-3 rounded-md border border-red-200 bg-white p-3 text-sm text-stone-700">
         <input
           className="mt-1 size-6 rounded border-stone-300 text-red-700 focus:ring-red-500 sm:size-4"
