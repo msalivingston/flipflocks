@@ -331,6 +331,8 @@ body {
   display: none;
 }
 
+.order-print-batch,
+.order-print-document,
 .order-print-sheet {
   position: absolute;
   left: -10000px;
@@ -343,35 +345,73 @@ body {
 }
 
 @media print {
-  @page {
+  @page order-print {
     margin: 0.67in;
   }
 
-  html,
-  body {
+  body.order-print-active,
+  body.bulk-order-print-active {
     background: #ffffff !important;
-  }
-
-  body {
     color: #000000 !important;
     font-family: Arial, Helvetica, sans-serif !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  body * {
-    visibility: hidden;
+  body.order-print-active > :not(.order-print-document),
+  body.bulk-order-print-active > :not(.order-print-batch) {
+    display: none !important;
   }
 
-  .order-print-sheet,
-  .order-print-sheet * {
+  body.order-print-active .order-detail-screen-content,
+  body.bulk-order-print-active .orders-screen-content {
+    display: none !important;
+  }
+
+  body.order-print-active .order-print-document,
+  body.order-print-active .order-print-document *,
+  body.bulk-order-print-active .order-print-batch,
+  body.bulk-order-print-active .order-print-batch *,
+  body.bulk-order-print-active .order-print-document,
+  body.bulk-order-print-active .order-print-document *,
+  body.order-print-active .order-print-sheet,
+  body.order-print-active .order-print-sheet *,
+  body.bulk-order-print-active .order-print-sheet,
+  body.bulk-order-print-active .order-print-sheet * {
     visibility: visible;
   }
 
-  .order-print-sheet {
+  body.order-print-active .order-print-document,
+  body.bulk-order-print-active .order-print-document {
     display: block;
-    position: absolute;
-    inset: 0 auto auto 0;
+    position: static;
+    height: auto;
+    width: 100%;
+    overflow: visible;
+    page: order-print;
+    pointer-events: auto;
+    visibility: visible;
+  }
+
+  body.bulk-order-print-active .order-print-batch {
+    display: block;
+    position: static;
+    height: auto;
+    width: 100%;
+    overflow: visible;
+    pointer-events: auto;
+    visibility: visible;
+  }
+
+  body.bulk-order-print-active .order-print-batch .order-print-document:not(:first-child) {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  body.order-print-active .order-print-sheet,
+  body.bulk-order-print-active .order-print-sheet {
+    display: block;
+    position: static;
     height: auto;
     width: 100%;
     overflow: visible;
@@ -384,15 +424,20 @@ body {
     line-height: 1.22;
   }
 
-  .order-print-sheet p,
-  .order-print-sheet h1,
-  .order-print-sheet h2,
-  .order-print-sheet dl,
-  .order-print-sheet dd {
+  body.order-print-active .order-print-sheet p,
+  body.order-print-active .order-print-sheet h1,
+  body.order-print-active .order-print-sheet h2,
+  body.order-print-active .order-print-sheet dl,
+  body.order-print-active .order-print-sheet dd,
+  body.bulk-order-print-active .order-print-sheet p,
+  body.bulk-order-print-active .order-print-sheet h1,
+  body.bulk-order-print-active .order-print-sheet h2,
+  body.bulk-order-print-active .order-print-sheet dl,
+  body.bulk-order-print-active .order-print-sheet dd {
     margin: 0;
   }
 
-  .order-print-header {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-header {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -401,18 +446,18 @@ body {
     padding-bottom: 0.12in;
   }
 
-  .order-print-header h1 {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-header h1 {
     font-size: 22pt;
     line-height: 1;
     font-weight: 700;
   }
 
-  .order-print-header time {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-header time {
     font-size: 12pt;
     white-space: nowrap;
   }
 
-  .order-print-title-group {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-title-group {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -420,7 +465,7 @@ body {
     min-width: 0;
   }
 
-  .order-print-logo {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-logo {
     display: block;
     width: auto;
     max-width: 2.7in;
@@ -428,7 +473,7 @@ body {
     object-fit: contain;
   }
 
-  .order-print-customer-payment {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-customer-payment {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(2.55in, 0.72fr);
     gap: 0.28in;
@@ -436,122 +481,122 @@ body {
     border-bottom: 1.2pt solid #000000;
   }
 
-  .order-print-customer,
-  .order-print-payment {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-customer,
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-payment {
     display: grid;
     gap: 0.045in;
   }
 
-  .order-print-strong {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-strong {
     font-weight: 700;
   }
 
-  .order-print-address {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-address {
     margin-top: 0.08in !important;
     white-space: pre-line;
   }
 
-  .order-print-payment div,
-  .order-print-totals div,
-  .order-print-fulfillment dl div {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-payment div,
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-totals div,
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-fulfillment dl div {
     display: grid;
     grid-template-columns: 1.15in minmax(0, 1fr);
     gap: 0.12in;
   }
 
-  .order-print-payment dt,
-  .order-print-totals dt,
-  .order-print-fulfillment dt {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-payment dt,
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-totals dt,
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-fulfillment dt {
     font-weight: 700;
   }
 
-  .order-print-payment dd,
-  .order-print-totals dd,
-  .order-print-fulfillment dd {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-payment dd,
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-totals dd,
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-fulfillment dd {
     white-space: pre-line;
   }
 
-  .order-print-items {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-items {
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
     margin-top: 0.12in;
   }
 
-  .order-print-items th {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-items th {
     border-bottom: 1pt solid #000000;
     padding: 0.06in 0.06in 0.075in;
     font-weight: 700;
     text-align: left;
   }
 
-  .order-print-items th:nth-child(2),
-  .order-print-items th:nth-child(3),
-  .order-print-items th:nth-child(4),
-  .order-print-items td:nth-child(2),
-  .order-print-items td:nth-child(3),
-  .order-print-items td:nth-child(4) {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-items th:nth-child(2),
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-items th:nth-child(3),
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-items th:nth-child(4),
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-items td:nth-child(2),
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-items td:nth-child(3),
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-items td:nth-child(4) {
     text-align: right;
   }
 
-  .order-print-items th:nth-child(1) {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-items th:nth-child(1) {
     width: auto;
   }
 
-  .order-print-items th:nth-child(2) {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-items th:nth-child(2) {
     width: 0.52in;
   }
 
-  .order-print-items th:nth-child(3) {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-items th:nth-child(3) {
     width: 0.95in;
   }
 
-  .order-print-items th:nth-child(4) {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-items th:nth-child(4) {
     width: 1.05in;
   }
 
-  .order-print-items td {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-items td {
     border-bottom: 0.6pt solid #999999;
     padding: 0.085in 0.06in;
     vertical-align: middle;
   }
 
-  .order-print-items tr {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-items tr {
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  .order-print-item-name {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-item-name {
     font-weight: 700;
   }
 
-  .order-print-item-details {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-item-details {
     margin-top: 0.025in !important;
     font-size: 9.5pt;
     line-height: 1.18;
   }
 
-  .order-print-lower {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-lower {
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  .order-print-totals {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-totals {
     width: 2.25in;
     margin: 0.09in 0 0 auto !important;
     padding-bottom: 0.08in;
   }
 
-  .order-print-totals div {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-totals div {
     grid-template-columns: minmax(0, 1fr) 0.95in;
     padding: 0.025in 0;
   }
 
-  .order-print-totals dd {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-totals dd {
     text-align: right;
   }
 
-  .order-print-total {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-total {
     border-top: 1pt solid #000000;
     margin-top: 0.025in;
     padding-top: 0.055in !important;
@@ -559,25 +604,25 @@ body {
     font-weight: 700;
   }
 
-  .order-print-fulfillment {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-fulfillment {
     border-top: 1.2pt solid #000000;
     padding-top: 0.12in;
   }
 
-  .order-print-fulfillment h2 {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-fulfillment h2 {
     font-size: 12.5pt;
     line-height: 1.1;
     font-weight: 700;
   }
 
-  .order-print-fulfillment dl {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-fulfillment dl {
     display: grid;
     gap: 0.055in;
     margin-top: 0.1in;
     max-width: 5.65in;
   }
 
-  .order-print-fulfillment dl div {
+  body:is(.order-print-active, .bulk-order-print-active) .order-print-fulfillment dl div {
     grid-template-columns: 1.18in minmax(0, 1fr);
   }
 }

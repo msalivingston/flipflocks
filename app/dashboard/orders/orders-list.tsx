@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../_components/seller-context";
 import {
@@ -12,6 +13,12 @@ import {
   LoadingState,
   SellerCard,
 } from "../_components/seller-ui";
+import {
+  OrderPrintDocument,
+  type PrintableOrder,
+  type PrintableOrderItem,
+  type PrintableStoreLogo,
+} from "./_components/order-print-document";
 import {
   formatCurrency,
   formatDateTime,
@@ -96,6 +103,11 @@ type PickupSummaryOrder = {
   order: SellerOrderRow;
 };
 
+type BulkPrintOrder = {
+  items: PrintableOrderItem[];
+  order: PrintableOrder;
+};
+
 const orderFilters: { label: string; value: OrderFilter }[] = [
   { label: "Ready for pickup", value: "ready_for_pickup" },
   { label: "Completed", value: "completed" },
@@ -129,6 +141,13 @@ export function OrdersList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sort, setSort] = useState<OrderSort>("newest");
   const [isPickupSummaryOpen, setIsPickupSummaryOpen] = useState(false);
+  const [bulkPrintOrders, setBulkPrintOrders] = useState<BulkPrintOrder[]>([]);
+  const [bulkPrintStoreLogo, setBulkPrintStoreLogo] =
+    useState<PrintableStoreLogo>(null);
+  const [isBulkPrintLoading, setIsBulkPrintLoading] = useState(false);
+  const [bulkPrintError, setBulkPrintError] = useState<string | null>(null);
+  const [isPrintPortalReady, setIsPrintPortalReady] = useState(false);
+  const pendingBulkPrintRef = useRef(false);
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -137,6 +156,25 @@ export function OrdersList() {
     useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      setIsPrintPortalReady(true);
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingBulkPrintRef.current || bulkPrintOrders.length === 0) return;
+
+    pendingBulkPrintRef.current = false;
+    runOrderPrint("bulk-order-print-active", () => {
+      setBulkPrintOrders([]);
+      setBulkPrintStoreLogo(null);
+      setIsBulkPrintLoading(false);
+    });
+  }, [bulkPrintOrders]);
 
   useEffect(() => {
     let isMounted = true;
@@ -328,6 +366,101 @@ export function OrdersList() {
     setIsPickupSummaryOpen(true);
   }
 
+  async function printSelectedOrders() {
+    if (!seller || selectedOrderIds.size === 0 || isBulkPrintLoading) return;
+
+    const selectedOrdersInVisibleOrder = visibleOrders.filter((order) =>
+      selectedOrderIds.has(order.order_id),
+    );
+    const orderIds = selectedOrdersInVisibleOrder.map((order) => order.order_id);
+
+    if (orderIds.length === 0) return;
+
+    setIsBulkPrintLoading(true);
+    setBulkPrintError(null);
+
+    const [orderResult, itemResult, fulfillmentResult, logoResult] = await Promise.all([
+      supabase
+        .from("seller_order_management")
+        .select(
+          "order_id, order_number, order_source, order_status, payment_method, payment_status, created_at, ready_for_pickup_at, fulfilled_at, canceled_at, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, pickup_note, buyer_notes, subtotal_amount, tax_fee_label_snapshot, tax_fee_amount, total_amount, item_count, total_item_quantity, pickup_option_label_snapshot",
+        )
+        .eq("store_id", seller.store_id)
+        .in("order_id", orderIds)
+        .returns<PrintableOrder[]>(),
+      supabase
+        .from("seller_order_item_detail")
+        .select(
+          "order_id, order_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, line_subtotal",
+        )
+        .eq("store_id", seller.store_id)
+        .in("order_id", orderIds)
+        .order("created_at", { ascending: true })
+        .returns<Array<PrintableOrderItem & { order_id: string }>>(),
+      supabase
+        .from("orders")
+        .select(
+          "id, fulfillment_method, delivery_option_name_snapshot, delivery_fee_amount",
+        )
+        .eq("store_id", seller.store_id)
+        .in("id", orderIds)
+        .returns<
+          Array<{
+            delivery_fee_amount: number | null;
+            delivery_option_name_snapshot: string | null;
+            fulfillment_method: "pickup" | "delivery" | string | null;
+            id: string;
+          }>
+        >(),
+      loadStoreLogo(seller.store_id),
+    ]);
+
+    const firstError = orderResult.error ?? itemResult.error ?? fulfillmentResult.error;
+
+    if (firstError) {
+      setBulkPrintError("One or more selected orders could not be loaded for printing.");
+      setIsBulkPrintLoading(false);
+      return;
+    }
+
+    const fulfillmentById = new Map(
+      (fulfillmentResult.data ?? []).map((row) => [row.id, row]),
+    );
+    const ordersById = new Map(
+      (orderResult.data ?? []).map((order) => {
+        const fulfillment = fulfillmentById.get(order.order_id);
+
+        return [
+          order.order_id,
+          {
+            ...order,
+            delivery_fee_amount: fulfillment?.delivery_fee_amount ?? 0,
+            delivery_option_name_snapshot:
+              fulfillment?.delivery_option_name_snapshot ?? null,
+            fulfillment_method: fulfillment?.fulfillment_method ?? "pickup",
+          },
+        ];
+      }),
+    );
+    const itemsByOrderId = groupPrintableItemsByOrderId(itemResult.data ?? []);
+    const missingOrder = orderIds.find((orderId) => !ordersById.has(orderId));
+
+    if (missingOrder) {
+      setBulkPrintError("One or more selected orders could not be loaded for printing.");
+      setIsBulkPrintLoading(false);
+      return;
+    }
+
+    setBulkPrintStoreLogo(logoResult);
+    setBulkPrintOrders(
+      orderIds.map((orderId) => ({
+        order: ordersById.get(orderId)!,
+        items: itemsByOrderId[orderId] ?? [],
+      })),
+    );
+    pendingBulkPrintRef.current = true;
+  }
+
   if (isLoading) {
     return <LoadingState label="Loading orders" />;
   }
@@ -342,121 +475,149 @@ export function OrdersList() {
   }
 
   return (
-    <div className="grid gap-4">
-      <SellerCard className="rounded-2xl p-3 shadow-[0_16px_38px_rgba(46,39,25,0.05)] sm:p-4">
-        <div className="grid gap-3">
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_11rem]">
-            <label className="relative block">
-              <span className="sr-only">Search orders</span>
-              <Image
-                aria-hidden="true"
-                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 opacity-70"
-                src="/glyphs/looking-glass.png"
-                alt=""
-                width={18}
-                height={18}
-              />
-              <input
-                className="seller-form-field min-h-12 rounded-lg"
-                placeholder="Search orders by buyer, order #, phone, item, or pickup notes"
-                style={{ paddingLeft: "3.5rem" }}
-                type="search"
-                value={searchQuery}
-                onChange={(event) => updateSearchQuery(event.target.value)}
-              />
-            </label>
-            <label>
-              <span className="sr-only">Sort orders</span>
-              <select
-                className="seller-form-field min-h-12 rounded-lg font-medium"
-                value={sort}
-                onChange={(event) => setSort(event.target.value as OrderSort)}
-              >
-                {orderSortOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+    <>
+      <div className="orders-screen-content grid gap-4">
+        <SellerCard className="rounded-2xl p-3 shadow-[0_16px_38px_rgba(46,39,25,0.05)] sm:p-4">
+          <div className="grid gap-3">
+            <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_11rem]">
+              <label className="relative block">
+                <span className="sr-only">Search orders</span>
+                <Image
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 opacity-70"
+                  src="/glyphs/looking-glass.png"
+                  alt=""
+                  width={18}
+                  height={18}
+                />
+                <input
+                  className="seller-form-field min-h-12 rounded-lg"
+                  placeholder="Search orders by buyer, order #, phone, item, or pickup notes"
+                  style={{ paddingLeft: "3.5rem" }}
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => updateSearchQuery(event.target.value)}
+                />
+              </label>
+              <label>
+                <span className="sr-only">Sort orders</span>
+                <select
+                  className="seller-form-field min-h-12 rounded-lg font-medium"
+                  value={sort}
+                  onChange={(event) => setSort(event.target.value as OrderSort)}
+                >
+                  {orderSortOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
-          <OrderLifecycleFilters
-            counts={filterCounts}
-            value={filter}
-            onChange={updateFilter}
-          />
-
-          {showPickupOptionFilter ? (
-            <PickupOptionFilterControl
-              options={pickupOptions}
-              value={pickupOptionFilter}
-              onChange={updatePickupOptionFilter}
+            <OrderLifecycleFilters
+              counts={filterCounts}
+              value={filter}
+              onChange={updateFilter}
             />
-          ) : null}
-        </div>
-      </SellerCard>
 
-      {hasVisibleOrders ? (
-        <OrdersTableCard
-          allVisibleSelected={allVisibleSelected}
-          expandedBuyerOrderId={expandedBuyerOrderId}
-          expandedOrderId={expandedOrderId}
-          itemsByOrderId={orderItemsByOrderId}
-          orders={visibleOrders}
-          selectedOrderIds={selectedOrderIds}
-          selectedVisibleCount={selectedVisibleCount}
-          onClearSelection={clearSelection}
-          onOpenPickupSummary={openPickupSummary}
-          onToggleExpandedBuyer={toggleExpandedBuyer}
-          onToggleExpandedOrder={toggleExpandedOrder}
-          onToggleOrderSelection={toggleOrderSelection}
-          onToggleSelectAll={toggleSelectAllOnPage}
-        />
-      ) : (
-        <EmptyState
-          title={getEmptyTitle(filter, hasSearchOrPickupFilter)}
-          description={
-            hasSearchOrPickupFilter
-              ? "Try a different search or pickup option filter."
-              : "Try a different status to review older orders."
-          }
-        />
-      )}
-      {isPickupSummaryOpen ? (
-        <PickupSummaryModal
-          orders={selectedOrdersForSummary}
-          onClose={() => setIsPickupSummaryOpen(false)}
-        />
-      ) : null}
-    </div>
+            {showPickupOptionFilter ? (
+              <PickupOptionFilterControl
+                options={pickupOptions}
+                value={pickupOptionFilter}
+                onChange={updatePickupOptionFilter}
+              />
+            ) : null}
+          </div>
+        </SellerCard>
+
+        {hasVisibleOrders ? (
+          <OrdersTableCard
+            allVisibleSelected={allVisibleSelected}
+            bulkPrintError={bulkPrintError}
+            expandedBuyerOrderId={expandedBuyerOrderId}
+            expandedOrderId={expandedOrderId}
+            isBulkPrintLoading={isBulkPrintLoading}
+            itemsByOrderId={orderItemsByOrderId}
+            orders={visibleOrders}
+            selectedOrderIds={selectedOrderIds}
+            selectedVisibleCount={selectedVisibleCount}
+            onClearSelection={clearSelection}
+            onOpenPickupSummary={openPickupSummary}
+            onPrintSelectedOrders={() => void printSelectedOrders()}
+            onToggleExpandedBuyer={toggleExpandedBuyer}
+            onToggleExpandedOrder={toggleExpandedOrder}
+            onToggleOrderSelection={toggleOrderSelection}
+            onToggleSelectAll={toggleSelectAllOnPage}
+          />
+        ) : (
+          <EmptyState
+            title={getEmptyTitle(filter, hasSearchOrPickupFilter)}
+            description={
+              hasSearchOrPickupFilter
+                ? "Try a different search or pickup option filter."
+                : "Try a different status to review older orders."
+            }
+          />
+        )}
+        {isPickupSummaryOpen ? (
+          <PickupSummaryModal
+            orders={selectedOrdersForSummary}
+            onClose={() => setIsPickupSummaryOpen(false)}
+          />
+        ) : null}
+      </div>
+      {isPrintPortalReady &&
+      bulkPrintOrders.length > 0 &&
+      typeof document !== "undefined"
+        ? createPortal(
+            <div aria-hidden="true" className="order-print-batch">
+              {bulkPrintOrders.map(({ items, order }) => (
+                <OrderPrintDocument
+                  items={items}
+                  key={order.order_id}
+                  order={order}
+                  storeLogo={bulkPrintStoreLogo}
+                />
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
 
 function OrdersTableCard({
   allVisibleSelected,
+  bulkPrintError,
   expandedBuyerOrderId,
   expandedOrderId,
+  isBulkPrintLoading,
   itemsByOrderId,
   orders,
   selectedOrderIds,
   selectedVisibleCount,
   onClearSelection,
   onOpenPickupSummary,
+  onPrintSelectedOrders,
   onToggleExpandedBuyer,
   onToggleExpandedOrder,
   onToggleOrderSelection,
   onToggleSelectAll,
 }: {
   allVisibleSelected: boolean;
+  bulkPrintError: string | null;
   expandedBuyerOrderId: string | null;
   expandedOrderId: string | null;
+  isBulkPrintLoading: boolean;
   itemsByOrderId: Record<string, SellerOrderItemRow[]>;
   orders: SellerOrderRow[];
   selectedOrderIds: Set<string>;
   selectedVisibleCount: number;
   onClearSelection: () => void;
   onOpenPickupSummary: () => void;
+  onPrintSelectedOrders: () => void;
   onToggleExpandedBuyer: (orderId: string) => void;
   onToggleExpandedOrder: (orderId: string) => void;
   onToggleOrderSelection: (orderId: string) => void;
@@ -489,12 +650,19 @@ function OrdersTableCard({
 
         {selectedVisibleCount > 0 ? (
           <BulkActions
+            isBulkPrintLoading={isBulkPrintLoading}
             selectedCount={selectedVisibleCount}
             onClearSelection={onClearSelection}
             onOpenPickupSummary={onOpenPickupSummary}
+            onPrintSelectedOrders={onPrintSelectedOrders}
           />
         ) : null}
       </div>
+      {bulkPrintError ? (
+        <p className="border-b border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
+          {bulkPrintError}
+        </p>
+      ) : null}
 
       <div
         aria-hidden="true"
@@ -529,13 +697,17 @@ function OrdersTableCard({
 }
 
 function BulkActions({
+  isBulkPrintLoading,
   selectedCount,
   onClearSelection,
   onOpenPickupSummary,
+  onPrintSelectedOrders,
 }: {
+  isBulkPrintLoading: boolean;
   selectedCount: number;
   onClearSelection: () => void;
   onOpenPickupSummary: () => void;
+  onPrintSelectedOrders: () => void;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2 sm:justify-end">
@@ -552,12 +724,12 @@ function BulkActions({
       </button>
       <button
         className="seller-small-button min-h-11 gap-2 rounded-md px-3 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10"
-        disabled
-        title="Print orders is not wired yet."
+        disabled={isBulkPrintLoading || selectedCount === 0}
         type="button"
+        onClick={onPrintSelectedOrders}
       >
         <Image src="/glyphs/printer.png" alt="" width={16} height={16} />
-        Print orders
+        {isBulkPrintLoading ? "Loading print..." : "Print orders"}
       </button>
       <button
         className="seller-small-button min-h-11 rounded-md px-3 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10"
@@ -1723,6 +1895,83 @@ function groupOrderItemsByOrderId(items: SellerOrderItemRow[]) {
     groups[item.order_id] = [...(groups[item.order_id] ?? []), item];
     return groups;
   }, {});
+}
+
+function groupPrintableItemsByOrderId(
+  items: Array<PrintableOrderItem & { order_id: string }>,
+) {
+  return items.reduce<Record<string, PrintableOrderItem[]>>((groups, item) => {
+    const { order_id: orderId, ...printableItem } = item;
+    groups[orderId] = [...(groups[orderId] ?? []), printableItem];
+    return groups;
+  }, {});
+}
+
+async function loadStoreLogo(storeId: string): Promise<PrintableStoreLogo> {
+  const { data, error } = await supabase
+    .from("seller_media_management")
+    .select("public_url, alt_text")
+    .eq("store_id", storeId)
+    .eq("entity_type", "store")
+    .eq("entity_id", storeId)
+    .eq("display_context", "logo")
+    .eq("visibility_status", "active")
+    .eq("asset_status", "active")
+    .eq("moderation_status", "approved")
+    .order("is_featured", { ascending: false })
+    .order("sort_order", { ascending: true })
+    .limit(1)
+    .returns<Array<NonNullable<PrintableStoreLogo>>>();
+
+  if (error) return null;
+
+  return data?.[0] ?? null;
+}
+
+function runOrderPrint(bodyClassName: string, onCleanup?: () => void) {
+  let didCleanUp = false;
+  const printMedia = window.matchMedia?.("print") ?? null;
+  let hasEnteredPrint = printMedia?.matches ?? false;
+
+  function cleanup() {
+    if (didCleanUp) return;
+    if (printMedia?.matches) return;
+
+    didCleanUp = true;
+    window.removeEventListener("beforeprint", markPrintStarted);
+    window.removeEventListener("afterprint", cleanup);
+    printMedia?.removeEventListener("change", handlePrintMediaChange);
+    document.body.classList.remove(bodyClassName);
+    onCleanup?.();
+  }
+
+  function markPrintStarted() {
+    hasEnteredPrint = true;
+  }
+
+  function handlePrintMediaChange(event: MediaQueryListEvent) {
+    if (event.matches) {
+      hasEnteredPrint = true;
+      return;
+    }
+
+    if (hasEnteredPrint) cleanup();
+  }
+
+  document.body.classList.add(bodyClassName);
+  window.addEventListener("beforeprint", markPrintStarted);
+  window.addEventListener("afterprint", cleanup, { once: true });
+  printMedia?.addEventListener("change", handlePrintMediaChange);
+
+  requestPrintFrame(() => {
+    window.print();
+  });
+}
+
+function requestPrintFrame(callback: () => void) {
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(callback);
+  });
 }
 
 function getFilterCounts(orders: SellerOrderRow[]) {

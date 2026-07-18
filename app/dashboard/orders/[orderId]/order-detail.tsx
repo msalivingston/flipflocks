@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../../_components/seller-context";
 import {
@@ -14,6 +15,10 @@ import {
   SellerPageHeader,
 } from "../../_components/seller-ui";
 import { formatAgeAtAvailability } from "../../_lib/listing-formatters";
+import {
+  formatBuyerAddress,
+  OrderPrintDocument,
+} from "../_components/order-print-document";
 import {
   formatCurrency,
   formatDateTime,
@@ -117,7 +122,6 @@ const orderDetailBackButtonClass =
   "inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-stone-300 bg-white px-3.5 text-base font-bold text-stone-950 shadow-sm transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:min-h-9 sm:text-sm";
 const requestedItemsGridClass =
   "grid gap-3 sm:grid-cols-[minmax(0,1fr)_3.25rem_5.75rem_6.5rem]";
-const supabasePublicUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 
 /**
  * Read-only seller order detail for the first public order intake workflow.
@@ -144,6 +148,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [emailCancellationToBuyer, setEmailCancellationToBuyer] = useState(false);
   const [pendingResendConfirmationActionId, setPendingResendConfirmationActionId] =
     useState<string | null>(null);
+  const [isPrintPortalReady, setIsPrintPortalReady] = useState(false);
   const [showCancelPanel, setShowCancelPanel] = useState(false);
   const [showFulfillmentDialog, setShowFulfillmentDialog] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -250,6 +255,14 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const canResendOrderConfirmation = Boolean(
     order && buyerHasEmail && canResendConfirmation(order),
   );
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      setIsPrintPortalReady(true);
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, []);
 
   if (isLoading) {
     return (
@@ -509,7 +522,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   }
 
   function printOrder() {
-    window.print();
+    runOrderPrint("order-print-active");
   }
 
   function openCancelPanel() {
@@ -524,7 +537,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
 
   return (
     <>
-    <div className="mx-auto flex w-full max-w-[1260px] flex-col gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-7">
+    <div className="order-detail-screen-content mx-auto flex w-full max-w-[1260px] flex-col gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-7">
       <header className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-sm font-bold uppercase text-emerald-800 sm:text-xs">
@@ -747,16 +760,16 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         </aside>
       </div>
     </div>
-    <OrderPrintSheet
-      address={formatBuyerAddress(order)}
-      customerName={customerName}
-      deliveryFeeAmount={deliveryFeeAmount}
-      deliveryOptionName={deliveryOptionName}
-      isDeliveryOrder={isDeliveryOrder}
-      items={data.items}
-      order={order}
-      storeLogo={data.storeLogo}
-    />
+      {isPrintPortalReady && typeof document !== "undefined"
+        ? createPortal(
+            <OrderPrintDocument
+              items={data.items}
+              order={order}
+              storeLogo={data.storeLogo}
+            />,
+            document.body,
+          )
+        : null}
     </>
   );
 }
@@ -886,173 +899,6 @@ function FulfillmentNotesSection({
         ))}
       </dl>
     </SellerCard>
-  );
-}
-
-function OrderPrintSheet({
-  address,
-  customerName,
-  deliveryFeeAmount,
-  deliveryOptionName,
-  isDeliveryOrder,
-  items,
-  order,
-  storeLogo,
-}: {
-  address: string | null;
-  customerName: string;
-  deliveryFeeAmount: number;
-  deliveryOptionName: string;
-  isDeliveryOrder: boolean;
-  items: SellerOrderItemRow[];
-  order: SellerOrderDetailRow;
-  storeLogo: SellerMediaRow | null;
-}) {
-  const hasTaxFee = Boolean(order.tax_fee_amount);
-  const hasDeliveryFee = isDeliveryOrder && deliveryFeeAmount > 0;
-  const shouldShowBreakdown = hasTaxFee || hasDeliveryFee;
-  const pickupOption = order.pickup_option_label_snapshot?.trim() ?? "";
-  const pickupNote = order.pickup_note?.trim() ?? "";
-  const customerNote = order.buyer_notes?.trim() ?? "";
-
-  return (
-    <section aria-label="Printable order sheet" className="order-print-sheet">
-      <header className="order-print-header">
-        <div className="order-print-title-group">
-          {storeLogo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              className="order-print-logo"
-              src={toPrintImageUrl(storeLogo.public_url)}
-              alt={storeLogo.alt_text ?? "Seller logo"}
-              loading="eager"
-            />
-          ) : null}
-          <h1>Order {formatPrintOrderNumber(order.order_number)}</h1>
-        </div>
-        <time>{formatPrintDateTime(order.created_at)}</time>
-      </header>
-
-      <section className="order-print-customer-payment">
-        <div className="order-print-customer">
-          <p className="order-print-strong">{customerName}</p>
-          {order.buyer_phone_snapshot ? <p>{order.buyer_phone_snapshot}</p> : null}
-          {order.buyer_email_snapshot ? <p>{order.buyer_email_snapshot}</p> : null}
-          {address ? <p className="order-print-address">{address}</p> : null}
-        </div>
-        <dl className="order-print-payment">
-          <div>
-            <dt>Payment method:</dt>
-            <dd>{formatPaymentMethod(order.payment_method)}</dd>
-          </div>
-          <div>
-            <dt>Payment status:</dt>
-            <dd>{formatPrintPaymentStatus(order.payment_status)}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <table className="order-print-items">
-        <thead>
-          <tr>
-            <th scope="col">Item</th>
-            <th scope="col">Qty</th>
-            <th scope="col">Unit price</th>
-            <th scope="col">Line total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.order_item_id}>
-              <td>
-                <p className="order-print-item-name">{getPrintableItemTitle(item)}</p>
-                <p className="order-print-item-details">
-                  {getPrintableItemDetails(item).join(" • ")}
-                </p>
-              </td>
-              <td>{item.quantity}</td>
-              <td>{formatCurrency(item.unit_price_snapshot)}</td>
-              <td>{formatCurrency(item.line_subtotal)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <section className="order-print-lower">
-        <dl className="order-print-totals">
-          {shouldShowBreakdown ? (
-            <>
-              <div>
-                <dt>Subtotal</dt>
-                <dd>{formatCurrency(order.subtotal_amount)}</dd>
-              </div>
-              {hasTaxFee ? (
-                <div>
-                  <dt>{order.tax_fee_label_snapshot ?? "Tax/fee"}</dt>
-                  <dd>{formatCurrency(order.tax_fee_amount)}</dd>
-                </div>
-              ) : null}
-              {hasDeliveryFee ? (
-                <div>
-                  <dt>Delivery fee</dt>
-                  <dd>{formatCurrency(deliveryFeeAmount)}</dd>
-                </div>
-              ) : null}
-            </>
-          ) : null}
-          <div className="order-print-total">
-            <dt>Total</dt>
-            <dd>{formatCurrency(order.total_amount)}</dd>
-          </div>
-        </dl>
-
-        <section className="order-print-fulfillment">
-          <h2>Pickup / Delivery</h2>
-          <dl>
-            <div>
-              <dt>Method:</dt>
-              <dd>{isDeliveryOrder ? "Delivery" : "Pickup"}</dd>
-            </div>
-            {isDeliveryOrder ? (
-              <>
-                {deliveryOptionName ? (
-                  <div>
-                    <dt>Delivery option:</dt>
-                    <dd>{deliveryOptionName}</dd>
-                  </div>
-                ) : null}
-                <div>
-                  <dt>Delivery fee:</dt>
-                  <dd>{formatCurrency(deliveryFeeAmount)}</dd>
-                </div>
-                {address ? (
-                  <div>
-                    <dt>Delivery address:</dt>
-                    <dd>{address}</dd>
-                  </div>
-                ) : null}
-              </>
-            ) : pickupOption ? (
-              <div>
-                <dt>Pickup option:</dt>
-                <dd>{pickupOption}</dd>
-              </div>
-            ) : pickupNote ? (
-              <div>
-                <dt>Pickup note:</dt>
-                <dd>{pickupNote}</dd>
-              </div>
-            ) : null}
-            {customerNote ? (
-              <div>
-                <dt>Customer note:</dt>
-                <dd>{customerNote}</dd>
-              </div>
-            ) : null}
-          </dl>
-        </section>
-      </section>
-    </section>
   );
 }
 
@@ -1201,42 +1047,50 @@ function formatCustomerName(order: SellerOrderDetailRow) {
   );
 }
 
-function getPrintableItemTitle(item: SellerOrderItemRow) {
-  if (
-    item.order_item_source === "equipment_inventory" ||
-    item.order_item_source === "processed_poultry_inventory"
-  ) {
-    return item.item_name_snapshot || item.breed_display_name_snapshot;
+function runOrderPrint(bodyClassName: string, onCleanup?: () => void) {
+  let didCleanUp = false;
+  const printMedia = window.matchMedia?.("print") ?? null;
+  let hasEnteredPrint = printMedia?.matches ?? false;
+
+  function cleanup() {
+    if (didCleanUp) return;
+    if (printMedia?.matches) return;
+
+    didCleanUp = true;
+    window.removeEventListener("beforeprint", markPrintStarted);
+    window.removeEventListener("afterprint", cleanup);
+    printMedia?.removeEventListener("change", handlePrintMediaChange);
+    document.body.classList.remove(bodyClassName);
+    onCleanup?.();
   }
 
-  return item.custom_item_name_snapshot || item.breed_display_name_snapshot;
+  function markPrintStarted() {
+    hasEnteredPrint = true;
+  }
+
+  function handlePrintMediaChange(event: MediaQueryListEvent) {
+    if (event.matches) {
+      hasEnteredPrint = true;
+      return;
+    }
+
+    if (hasEnteredPrint) cleanup();
+  }
+
+  document.body.classList.add(bodyClassName);
+  window.addEventListener("beforeprint", markPrintStarted);
+  window.addEventListener("afterprint", cleanup, { once: true });
+  printMedia?.addEventListener("change", handlePrintMediaChange);
+
+  requestPrintFrame(() => {
+    window.print();
+  });
 }
 
-function getPrintableItemDetails(item: SellerOrderItemRow) {
-  const isCustomItem = item.order_item_source === "custom";
-  const isEquipmentItem = item.order_item_source === "equipment_inventory";
-  const isProcessedPoultryItem =
-    item.order_item_source === "processed_poultry_inventory";
-  const label = formatInventoryLabel({
-    custom_inventory_label: item.custom_inventory_label_snapshot,
-    inventory_type: item.inventory_type_snapshot,
+function requestPrintFrame(callback: () => void) {
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(callback);
   });
-
-  if (isCustomItem) return ["Custom item"];
-
-  if (isEquipmentItem || isProcessedPoultryItem) {
-    return [item.item_category_snapshot, item.custom_inventory_label_snapshot]
-      .filter((detail): detail is string => Boolean(detail));
-  }
-
-  return [
-    item.species_name_snapshot,
-    formatSellerItemDetail(label),
-    formatPrintAge(item.age_at_sale_days_snapshot),
-    item.hatch_date_snapshot
-      ? `Hatched ${formatShortDate(item.hatch_date_snapshot)}`
-      : null,
-  ].filter((detail): detail is string => Boolean(detail));
 }
 
 function getFulfillmentNoteRows({
@@ -1278,57 +1132,6 @@ function getFulfillmentNoteRows({
   }
 
   return rows;
-}
-
-function formatPrintAge(days: number | null | undefined) {
-  if (days == null || days < 0) return null;
-  if (days < 7) return `${days} day${days === 1 ? "" : "s"}`;
-
-  const weeks = Math.floor(days / 7);
-
-  return `${weeks} week${weeks === 1 ? "" : "s"}`;
-}
-
-function formatPrintOrderNumber(value: string) {
-  return value.trim().startsWith("#") ? value : `#${value}`;
-}
-
-function formatPrintDateTime(value: string | null) {
-  if (!value) return "Not set";
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function formatPrintPaymentStatus(value: string | null) {
-  if (value === "pay_at_pickup") return "Unpaid";
-  if (value === "paid") return "Paid";
-  if (value === "refunded") return "Refunded";
-
-  return value ? value.replaceAll("_", " ") : "Not set";
-}
-
-function formatBuyerAddress(order: SellerOrderDetailRow) {
-  const cityLine = [
-    order.buyer_city_snapshot,
-    order.buyer_state_snapshot,
-    order.buyer_postal_code_snapshot,
-  ]
-    .filter(Boolean)
-    .join(", ");
-  const lines = [
-    order.buyer_address_line1_snapshot,
-    order.buyer_address_line2_snapshot,
-    cityLine,
-    order.buyer_country_snapshot,
-  ].filter(Boolean);
-
-  return lines.length > 0 ? lines.join("\n") : null;
 }
 
 function formatSellerItemDetail(value: string | null) {
@@ -1963,15 +1766,6 @@ function toDisplayImageUrl(value: string | null | undefined) {
   if (value.startsWith("/")) return value;
 
   return `/storage/v1/object/public/${value}`;
-}
-
-function toPrintImageUrl(value: string | null | undefined) {
-  if (!value) return "";
-  if (value.startsWith("http://") || value.startsWith("https://")) return value;
-  if (value.startsWith("/storage/")) return `${supabasePublicUrl}${value}`;
-  if (value.startsWith("/")) return value;
-
-  return `${supabasePublicUrl}/storage/v1/object/public/${value}`;
 }
 
 function getCustomerInitials(name: string) {
