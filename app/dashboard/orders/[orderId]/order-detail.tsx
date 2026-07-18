@@ -148,8 +148,8 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [fulfillmentError, setFulfillmentError] = useState<string | null>(null);
   const [unfulfillmentError, setUnfulfillmentError] = useState<string | null>(null);
+  const [cancellationError, setCancellationError] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
-  const [restoreInventoryOnCancel, setRestoreInventoryOnCancel] = useState(true);
   const [emailCancellationToBuyer, setEmailCancellationToBuyer] = useState(false);
   const [pendingResendConfirmationActionId, setPendingResendConfirmationActionId] =
     useState<string | null>(null);
@@ -341,6 +341,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setActionWarning(null);
     setFulfillmentError(null);
     setUnfulfillmentError(null);
+    setCancellationError(null);
 
     const { error: fulfillmentRpcError } = await supabase.rpc(
       "seller_record_order_fulfillment",
@@ -400,6 +401,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setActionWarning(null);
     setFulfillmentError(null);
     setUnfulfillmentError(null);
+    setCancellationError(null);
 
     const { error: unfulfillmentRpcError } = await supabase.rpc(
       "seller_mark_order_unfulfilled",
@@ -436,6 +438,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setActionWarning(null);
     setFulfillmentError(null);
     setUnfulfillmentError(null);
+    setCancellationError(null);
     setIsActionsMenuOpen(false);
 
     const { error: paymentError } = await supabase.rpc("mark_order_paid", {
@@ -467,6 +470,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setActionWarning(null);
     setFulfillmentError(null);
     setUnfulfillmentError(null);
+    setCancellationError(null);
     setIsActionsMenuOpen(false);
 
     const { error: paymentError } = await supabase.rpc("mark_order_pay_at_pickup", {
@@ -490,30 +494,26 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   }
 
   async function cancelOrder() {
-    if (!order) return;
+    if (!order || isCanceling) return;
 
     const trimmedReason = cancelReason.trim();
-
-    if (!trimmedReason) {
-      setActionError("Please add a short reason before canceling this order.");
-      return;
-    }
 
     setIsCanceling(true);
     setActionError(null);
     setActionMessage(null);
     setActionWarning(null);
+    setCancellationError(null);
 
     const shouldEmailCancellation = buyerHasEmail && emailCancellationToBuyer;
     const { data: cancelData, error: cancelError } = await supabase.rpc("cancel_order", {
       p_order_id: order.order_id,
-      p_canceled_reason: trimmedReason,
+      p_canceled_reason: trimmedReason || null,
       p_restore_inventory: true,
       p_send_buyer_notification: shouldEmailCancellation,
     });
 
     if (cancelError) {
-      setActionError(toSellerOrderCancellationError(cancelError.message));
+      setCancellationError(toSellerOrderCancellationError(cancelError.message));
       setIsCanceling(false);
       return;
     }
@@ -523,9 +523,12 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       cancelResult?.buyer_notification_queued &&
         cancelResult?.seller_copy_queued,
     );
+    const emailProcessingStarted = emailQueued
+      ? await kickPostmarkEmailWorker()
+      : false;
 
     setActionMessage(
-      shouldEmailCancellation && emailQueued
+      shouldEmailCancellation && emailQueued && emailProcessingStarted
         ? "Order canceled and customer emailed."
         : "Order canceled.",
     );
@@ -533,11 +536,15 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       setActionWarning(
         "Order canceled, but the cancellation email could not be queued.",
       );
+    } else if (emailQueued && !emailProcessingStarted) {
+      setActionWarning(
+        "Order canceled, but email processing could not be started automatically. The cancellation email may be delayed.",
+      );
     }
     setCancelReason("");
-    setRestoreInventoryOnCancel(true);
     setEmailCancellationToBuyer(false);
     setShowCancelPanel(false);
+    setIsActionsMenuOpen(false);
     setRefreshKey((current) => current + 1);
     setIsCanceling(false);
   }
@@ -622,6 +629,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setActionWarning(null);
     setFulfillmentError(null);
     setUnfulfillmentError(null);
+    setCancellationError(null);
 
     if (!buyerEmail) {
       setActionError("This order does not have a customer email address.");
@@ -650,9 +658,9 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setActionWarning(null);
     setFulfillmentError(null);
     setUnfulfillmentError(null);
+    setCancellationError(null);
     setIsActionsMenuOpen(false);
-    setRestoreInventoryOnCancel(true);
-    setEmailCancellationToBuyer(buyerHasEmail);
+    setEmailCancellationToBuyer(true);
     setShowFulfillmentDialog(false);
     setShowUnfulfillmentDialog(false);
     setShowResendConfirmationDialog(false);
@@ -718,6 +726,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                 setActionWarning(null);
                 setFulfillmentError(null);
                 setUnfulfillmentError(null);
+                setCancellationError(null);
                 setShowCancelPanel(false);
                 setShowUnfulfillmentDialog(false);
                 setShowResendConfirmationDialog(false);
@@ -731,6 +740,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                 setActionWarning(null);
                 setFulfillmentError(null);
                 setUnfulfillmentError(null);
+                setCancellationError(null);
                 setShowCancelPanel(false);
                 setShowFulfillmentDialog(false);
                 setShowResendConfirmationDialog(false);
@@ -794,17 +804,18 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       ) : null}
 
       {showCancelPanel ? (
-        <CancellationPanel
+        <CancellationDialog
           cancelReason={cancelReason}
           emailCancellationToBuyer={emailCancellationToBuyer}
+          error={cancellationError}
           hasBuyerEmail={buyerHasEmail}
           isCanceling={isCanceling}
-          restoreInventoryOnCancel={restoreInventoryOnCancel}
           onCancel={cancelOrder}
           onClose={() => {
+            if (isCanceling) return;
             setCancelReason("");
-            setRestoreInventoryOnCancel(true);
             setEmailCancellationToBuyer(false);
+            setCancellationError(null);
             setShowCancelPanel(false);
           }}
           onEmailCancellationChange={setEmailCancellationToBuyer}
@@ -1528,7 +1539,7 @@ function toSellerOrderPaymentActionError(
 
 function toSellerOrderCancellationError(message: string | undefined) {
   if (message === "Cancellation reason is required.") {
-    return "Please add a short reason before canceling this order.";
+    return "This order could not be canceled without a reason. Please try again or add a reason.";
   }
 
   if (message === "Order is not available.") {
@@ -1889,12 +1900,12 @@ function ResendConfirmationDialog({
   );
 }
 
-function CancellationPanel({
+function CancellationDialog({
   cancelReason,
   emailCancellationToBuyer,
+  error,
   hasBuyerEmail,
   isCanceling,
-  restoreInventoryOnCancel,
   onCancel,
   onClose,
   onEmailCancellationChange,
@@ -1902,88 +1913,87 @@ function CancellationPanel({
 }: {
   cancelReason: string;
   emailCancellationToBuyer: boolean;
+  error: string | null;
   hasBuyerEmail: boolean;
   isCanceling: boolean;
-  restoreInventoryOnCancel: boolean;
   onCancel: () => void;
   onClose: () => void;
   onEmailCancellationChange: (value: boolean) => void;
   onReasonChange: (value: string) => void;
 }) {
   return (
-    <section className="rounded-xl border border-red-200 bg-red-50 p-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-base font-bold text-red-950">Cancel order</h2>
-          <p className="mt-1 text-sm leading-6 text-red-800">
-            Add a reason before canceling. Inventory restore uses the existing
-            safe cancellation workflow.
-          </p>
-        </div>
-        <button
-          className="seller-small-button rounded-md border-red-200 text-red-800 hover:bg-red-100"
-          disabled={isCanceling}
-          type="button"
-          onClick={onClose}
+    <div
+      aria-labelledby="cancel-order-dialog-title"
+      aria-modal="true"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-stone-950/30 px-4 py-6"
+      role="dialog"
+    >
+      <section className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-5 shadow-[0_22px_60px_rgba(46,39,25,0.2)]">
+        <h2
+          className="text-lg font-bold text-stone-950"
+          id="cancel-order-dialog-title"
         >
-          Keep order
-        </button>
-      </div>
-      <label className="mt-4 grid gap-2 text-sm font-semibold text-red-950">
-        Reason for cancellation
-        <textarea
-          className="min-h-24 rounded-md border border-red-200 bg-white px-3 py-2 text-base font-normal text-stone-950 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200"
-          maxLength={500}
-          onChange={(event) => onReasonChange(event.target.value)}
-          value={cancelReason}
-        />
-      </label>
-      {hasBuyerEmail ? (
-        <label className="mt-4 flex gap-3 rounded-md border border-red-200 bg-white p-3 text-sm text-stone-700">
-          <input
-            className="mt-1 size-6 rounded border-stone-300 text-red-700 focus:ring-red-500 sm:size-4"
-            checked={emailCancellationToBuyer}
+          Cancel order?
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-stone-700">
+          This will cancel the order and restore eligible inventory.
+        </p>
+        {error ? (
+          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+            {error}
+          </p>
+        ) : null}
+        <label className="mt-4 grid gap-1.5 text-sm font-semibold text-stone-950">
+          Reason for cancellation
+          <span className="text-xs font-semibold text-stone-500">Optional</span>
+          <textarea
+            className="min-h-20 rounded-md border border-stone-300 bg-white px-3 py-2 text-base font-normal text-stone-950 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200 sm:text-sm"
             disabled={isCanceling}
-            type="checkbox"
-            onChange={(event) => onEmailCancellationChange(event.target.checked)}
+            maxLength={500}
+            onChange={(event) => onReasonChange(event.target.value)}
+            value={cancelReason}
           />
-          <span>
-            <span className="block font-semibold text-stone-950">
-              Email cancellation notice to customer
-            </span>
-            <span className="mt-1 block leading-6 text-stone-600">
-              Send the buyer a cancellation email after this order is canceled.
-            </span>
-          </span>
         </label>
-      ) : null}
-      <label className="mt-4 flex gap-3 rounded-md border border-red-200 bg-white p-3 text-sm text-stone-700">
-        <input
-          className="mt-1 size-6 rounded border-stone-300 text-red-700 focus:ring-red-500 sm:size-4"
-          checked={restoreInventoryOnCancel}
-          disabled
-          readOnly
-          type="checkbox"
-        />
-        <span>
-          <span className="block font-semibold text-stone-950">
-            Restore inventory
-          </span>
-          <span className="mt-1 block leading-6 text-stone-600">
-            Inventory-backed items will be returned to available inventory when
-            this order is canceled.
-          </span>
-        </span>
-      </label>
-      <button
-        className="mt-4 min-h-12 rounded-md bg-red-700 px-4 text-base font-bold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-stone-300 sm:min-h-10 sm:text-sm sm:font-semibold"
-        disabled={isCanceling}
-        type="button"
-        onClick={onCancel}
-      >
-        {isCanceling ? "Canceling..." : "Confirm cancellation"}
-      </button>
-    </section>
+        {hasBuyerEmail ? (
+          <label className="mt-4 flex gap-3 rounded-md border border-stone-200 bg-[#fffdf8] p-3 text-sm text-stone-700">
+            <input
+              className="mt-1 size-6 rounded border-stone-300 text-red-700 focus:ring-red-500 sm:size-4"
+              checked={emailCancellationToBuyer}
+              disabled={isCanceling}
+              type="checkbox"
+              onChange={(event) => onEmailCancellationChange(event.target.checked)}
+            />
+            <span>
+              <span className="block font-semibold text-stone-950">
+                Email cancellation notice to customer
+              </span>
+              <span className="mt-1 block leading-6 text-stone-600">
+                Send the buyer a cancellation email after this order is
+                canceled.
+              </span>
+            </span>
+          </label>
+        ) : null}
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <button
+            className="inline-flex min-h-10 items-center justify-center rounded-md bg-red-700 px-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700/30 disabled:cursor-not-allowed disabled:bg-stone-300"
+            disabled={isCanceling}
+            type="button"
+            onClick={onCancel}
+          >
+            {isCanceling ? "Canceling..." : "Cancel order"}
+          </button>
+          <button
+            className={`${orderDetailBackButtonClass} min-h-10`}
+            disabled={isCanceling}
+            type="button"
+            onClick={onClose}
+          >
+            Keep order
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 
