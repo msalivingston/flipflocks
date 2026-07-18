@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef } from "react";
 import {
   getPlanCapabilities,
   type PlanCapabilities,
@@ -26,10 +26,14 @@ export function BirdOfferingsCard({
   breedOptions,
   breedOptionsMessage,
   duplicateOfferingIds,
+  groupsReviewMode,
   offerings,
+  onDoneAddingGroups,
   prepareBreedPhotoProfile,
   removeOffering,
+  scrollToOfferingId,
   storeId,
+  stepLocked,
   toggleOfferingExpanded,
   updateBreedDescription,
   updateOffering,
@@ -43,10 +47,14 @@ export function BirdOfferingsCard({
   breedOptions: BreedOption[];
   breedOptionsMessage: string | null;
   duplicateOfferingIds: Set<string>;
+  groupsReviewMode: boolean;
   offerings: BirdOffering[];
+  onDoneAddingGroups: () => void;
   prepareBreedPhotoProfile: (offeringId: string) => void;
   removeOffering: (offeringId: string) => void;
+  scrollToOfferingId: string | null;
   storeId: string;
+  stepLocked?: boolean;
   toggleOfferingExpanded: (offeringId: string) => void;
   updateBreedDescription: (offeringId: string, description: string) => void;
   updateOffering: (
@@ -61,16 +69,22 @@ export function BirdOfferingsCard({
   const birdsForSaleGroupCount = getBirdsForSaleGroupCount(offerings);
   const plan = getPlanCapabilities(planKey);
   const isEditMode = mode === "edit";
+  const isLocked = Boolean(stepLocked);
 
   return (
     <SectionCard
       badge={`${birdsForSaleGroupCount} group${
         birdsForSaleGroupCount === 1 ? "" : "s"
       }`}
+      className={isLocked ? "opacity-60" : ""}
       step="2"
       title="Birds for Sale"
     >
-      <p className="text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
+      <p
+        className={`text-base leading-7 sm:text-sm sm:leading-6 ${
+          isLocked ? "text-stone-400" : "text-stone-600"
+        }`}
+      >
         Add one group for each breed, sex/type, quantity, and price.
       </p>
       {breedOptionsMessage ? (
@@ -84,50 +98,66 @@ export function BirdOfferingsCard({
           a different sex/type or remove the duplicate before saving later.
         </p>
       ) : null}
-      <div className="mt-3 space-y-3 sm:mt-4">
-        {offerings.map((offering, index) =>
-          offering.expanded ? (
-            <ExpandedOfferingCard
-              key={offering.id}
-              breedMediaItemsByProfileId={breedMediaItemsByProfileId}
-              breedOptions={breedOptions}
-              canRemove={!isEditMode && offerings.length > 1}
-              hasDuplicateCombination={duplicateOfferingIds.has(offering.id)}
-              isEditMode={isEditMode}
-              index={index}
-              offering={offering}
-              prepareBreedPhotoProfile={prepareBreedPhotoProfile}
-              removeOffering={removeOffering}
-              storeId={storeId}
-              toggleOfferingExpanded={toggleOfferingExpanded}
-              updateBreedDescription={updateBreedDescription}
-              updateOffering={updateOffering}
-              updateOfferingBreed={updateOfferingBreed}
-              onBreedPhotosChanged={onBreedPhotosChanged}
-              plan={plan}
-            />
-          ) : (
-            <CollapsedOfferingRow
-              key={offering.id}
-              canRemove={!isEditMode && offerings.length > 1}
-              hasDuplicateCombination={duplicateOfferingIds.has(offering.id)}
-              isEditMode={isEditMode}
-              index={index}
-              offering={offering}
-              removeOffering={removeOffering}
-              toggleOfferingExpanded={toggleOfferingExpanded}
-            />
-          ),
-        )}
-      </div>
+      {!isLocked ? (
+        <div className="mt-3 space-y-3 sm:mt-4">
+          {offerings.map((offering, index) =>
+            offering.expanded ? (
+              <ExpandedOfferingCard
+                key={offering.id}
+                breedMediaItemsByProfileId={breedMediaItemsByProfileId}
+                breedOptions={breedOptions}
+                canRemove={!isEditMode && offerings.length > 1}
+                hasDuplicateCombination={duplicateOfferingIds.has(offering.id)}
+                isEditMode={isEditMode}
+                index={index}
+                offering={offering}
+                prepareBreedPhotoProfile={prepareBreedPhotoProfile}
+                removeOffering={removeOffering}
+                scrollToOfferingId={scrollToOfferingId}
+                storeId={storeId}
+                toggleOfferingExpanded={toggleOfferingExpanded}
+                updateBreedDescription={updateBreedDescription}
+                updateOffering={updateOffering}
+                updateOfferingBreed={updateOfferingBreed}
+                onBreedPhotosChanged={onBreedPhotosChanged}
+                plan={plan}
+              />
+            ) : (
+              <CollapsedOfferingRow
+                key={offering.id}
+                canRemove={!isEditMode && offerings.length > 1}
+                hasDuplicateCombination={duplicateOfferingIds.has(offering.id)}
+                isEditMode={isEditMode}
+                index={index}
+                offering={offering}
+                removeOffering={removeOffering}
+                toggleOfferingExpanded={toggleOfferingExpanded}
+              />
+            ),
+          )}
+        </div>
+      ) : null}
 
-      <button
-        className="mt-3 inline-flex min-h-12 w-full items-center justify-center rounded-md border border-emerald-800/30 bg-white px-4 text-base font-bold text-emerald-900 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
-        onClick={addOffering}
-        type="button"
-      >
-        + Add another group
-      </button>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <button
+          className="inline-flex min-h-12 w-full items-center justify-center rounded-md border border-emerald-800/30 bg-white px-4 text-base font-bold text-emerald-900 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
+          disabled={isLocked}
+          onClick={addOffering}
+          type="button"
+        >
+          + Add another group
+        </button>
+        {!groupsReviewMode ? (
+          <button
+            className="inline-flex min-h-12 w-full items-center justify-center rounded-md border border-stone-300 bg-white px-4 text-base font-bold text-stone-700 transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
+            disabled={isLocked}
+            onClick={onDoneAddingGroups}
+            type="button"
+          >
+            Done adding groups
+          </button>
+        ) : null}
+      </div>
     </SectionCard>
   );
 }
@@ -142,6 +172,7 @@ function ExpandedOfferingCard({
   offering,
   prepareBreedPhotoProfile,
   removeOffering,
+  scrollToOfferingId,
   storeId,
   toggleOfferingExpanded,
   updateBreedDescription,
@@ -159,6 +190,7 @@ function ExpandedOfferingCard({
   offering: BirdOffering;
   prepareBreedPhotoProfile: (offeringId: string) => void;
   removeOffering: (offeringId: string) => void;
+  scrollToOfferingId: string | null;
   storeId: string;
   toggleOfferingExpanded: (offeringId: string) => void;
   updateBreedDescription: (offeringId: string, description: string) => void;
@@ -173,14 +205,35 @@ function ExpandedOfferingCard({
   const selectedBreedOption = findSelectedBreedOption(breedOptions, offering);
   const title = getBirdsForSaleTitle(offering, index);
   const summary = getBirdsForSaleSummary(offering);
-  const [isMobilePhotoOpen, setIsMobilePhotoOpen] = useState(false);
-  const [isMobileDescriptionOpen, setIsMobileDescriptionOpen] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
   const breedMediaItems = offering.sellerBreedProfileId
     ? breedMediaItemsByProfileId[offering.sellerBreedProfileId] ?? []
     : [];
+  const contentStatus = getBreedContentStatus({
+    breedMediaItems,
+    breedOption: selectedBreedOption,
+    description: offering.description,
+  });
+  const isBreedContentExpanded = Boolean(offering.breedContentExpanded);
+
+  useEffect(() => {
+    if (scrollToOfferingId !== offering.id) return;
+
+    cardRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [offering.id, scrollToOfferingId]);
+
+  function toggleBreedContent() {
+    updateOffering(offering.id, {
+      breedContentExpanded: !isBreedContentExpanded,
+      breedContentUserToggled: true,
+    });
+  }
 
   return (
-    <div className="rounded-xl border border-transparent bg-stone-50/70 shadow-none sm:rounded-lg sm:border-stone-200 sm:bg-white sm:shadow-sm">
+    <div
+      className="rounded-xl border border-transparent bg-stone-50/70 shadow-none sm:rounded-lg sm:border-stone-200 sm:bg-white sm:shadow-sm"
+      ref={cardRef}
+    >
       <div className="flex items-start justify-between gap-3 border-b border-stone-100 px-0 py-3 sm:border-stone-200 sm:px-4">
         <button
           className="flex min-h-12 min-w-0 flex-1 items-start gap-3 text-left"
@@ -275,70 +328,62 @@ function ExpandedOfferingCard({
       ) : null}
 
       <div className="border-t border-stone-100 px-0 py-3 sm:border-stone-200 sm:px-4 sm:py-4">
-        <div className="lg:hidden">
-          <CompactMobilePanel
-            actionLabel="Edit photo"
-            expanded={isMobilePhotoOpen}
-            subtext={getMobileBreedPhotoSubtext({
-              breedMediaItems,
-              breedOption: selectedBreedOption,
-            })}
-            title="Breed photo"
-            onToggle={() => setIsMobilePhotoOpen((current) => !current)}
-          />
-        </div>
-        <div className={isMobilePhotoOpen ? "mt-3 lg:mt-0" : "hidden lg:block"}>
-        <BreedPhotoPanel
-          breedMediaItems={breedMediaItems}
-          breedOption={selectedBreedOption}
-          offering={offering}
-          prepareBreedPhotoProfile={prepareBreedPhotoProfile}
-          storeId={storeId}
-          onBreedPhotosChanged={onBreedPhotosChanged}
-        />
-        </div>
-      </div>
-
-      <div className="border-t border-stone-100 px-0 py-3 sm:border-stone-200 sm:px-4 sm:py-4">
-        <div className="lg:hidden">
-          <CompactMobilePanel
-            actionLabel="Edit description"
-            expanded={isMobileDescriptionOpen}
-            subtext={
-              offering.description.trim().length > 0
-                ? "Shown anywhere this breed appears in your store"
-                : "No breed description yet"
-            }
-            title="Breed description"
-            onToggle={() =>
-              setIsMobileDescriptionOpen((current) => !current)
-            }
-          />
-        </div>
-        <div
-          className={isMobileDescriptionOpen ? "mt-3 lg:mt-0" : "hidden lg:block"}
+        <button
+          className="flex min-h-12 w-full items-center justify-between gap-3 rounded-lg border border-stone-200 bg-white px-3 py-3 text-left shadow-sm transition hover:border-emerald-800/30 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-0"
+          type="button"
+          onClick={toggleBreedContent}
         >
-          <h3 className="text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">
-            Breed description
-          </h3>
-          <p className="mt-1 max-w-3xl text-sm font-medium leading-6 text-stone-500">
-            This description is used anywhere this breed appears in your store.
-            Changing it updates your personal breed library.
-          </p>
-          <p className="mt-3 text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
-            Description buyers see
-          </p>
-          <textarea
-            className={`${inputClass} mt-2 min-h-32 resize-y py-3 leading-6 sm:min-h-36`}
-            value={offering.description}
-            onChange={(event) =>
-              updateBreedDescription(offering.id, event.target.value)
-            }
-          />
-          <p className="mt-2 text-sm font-medium text-stone-500">
-            {offering.description.length} / 500
-          </p>
-        </div>
+          <span className="min-w-0">
+            <span className="block text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">
+              Breed photo & description
+            </span>
+            <span
+              className={`mt-0.5 block text-sm font-medium leading-5 ${
+                contentStatus.needsAttention ? "text-red-600" : "text-stone-500"
+              }`}
+            >
+              {contentStatus.text}
+            </span>
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-2 text-sm font-bold text-emerald-900">
+            {isBreedContentExpanded ? "Hide" : "Edit"}
+            <DisclosureChevron expanded={isBreedContentExpanded} />
+          </span>
+        </button>
+        {isBreedContentExpanded ? (
+          <div className="mt-3 grid gap-4">
+            <BreedPhotoPanel
+              breedMediaItems={breedMediaItems}
+              breedOption={selectedBreedOption}
+              offering={offering}
+              prepareBreedPhotoProfile={prepareBreedPhotoProfile}
+              storeId={storeId}
+              onBreedPhotosChanged={onBreedPhotosChanged}
+            />
+            <div>
+              <h3 className="text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">
+                Breed description
+              </h3>
+              <p className="mt-1 max-w-3xl text-sm font-medium leading-6 text-stone-500">
+                This description is used anywhere this breed appears in your store.
+                Changing it updates your personal breed library.
+              </p>
+              <p className="mt-3 text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
+                Description buyers see
+              </p>
+              <textarea
+                className={`${inputClass} mt-2 min-h-32 resize-y py-3 leading-6 sm:min-h-36`}
+                value={offering.description}
+                onChange={(event) =>
+                  updateBreedDescription(offering.id, event.target.value)
+                }
+              />
+              <p className="mt-2 text-sm font-medium text-stone-500">
+                {offering.description.length} / 500
+              </p>
+            </div>
+          </div>
+        ) : null}
         <div className="mt-3 flex justify-end sm:hidden">
           <RemoveOfferingControl
             canRemove={canRemove}
@@ -450,40 +495,6 @@ function RemoveOfferingControl({
     >
       Remove group
     </button>
-  );
-}
-
-function CompactMobilePanel({
-  actionLabel,
-  expanded,
-  subtext,
-  title,
-  onToggle,
-}: {
-  actionLabel: string;
-  expanded: boolean;
-  subtext: string;
-  title: string;
-  onToggle: () => void;
-}) {
-  return (
-    <div className="rounded-lg border border-transparent bg-white/80 px-3 py-3 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-base font-bold text-stone-950">{title}</p>
-          <p className="mt-0.5 text-sm font-medium leading-5 text-stone-500">
-            {subtext}
-          </p>
-        </div>
-        <button
-          className="min-h-12 shrink-0 rounded-md border border-emerald-800/30 bg-white px-3 py-2 text-base font-bold text-emerald-900 shadow-sm sm:min-h-0 sm:text-xs sm:font-semibold"
-          type="button"
-          onClick={onToggle}
-        >
-          {expanded ? "Hide" : actionLabel}
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -684,23 +695,6 @@ function BreedPhotoPanel({
   );
 }
 
-function getMobileBreedPhotoSubtext({
-  breedMediaItems,
-  breedOption,
-}: {
-  breedMediaItems: ListingPhotoItem[];
-  breedOption: BreedOption | null;
-}) {
-  const featuredMedia = pickFeaturedMedia(breedMediaItems);
-  const sellerPhotoUrl = toDisplayImageUrl(featuredMedia?.public_url);
-  const catalogPhotoUrl = toDisplayImageUrl(breedOption?.catalogImageUrl);
-
-  if (sellerPhotoUrl) return "Using your personal breed library photo";
-  if (catalogPhotoUrl) return "Using default breed photo";
-
-  return "No breed photo yet";
-}
-
 function DisclosureChevron({ expanded = false }: { expanded?: boolean }) {
   return (
     <span
@@ -746,21 +740,81 @@ function getBirdsForSaleTitle(offering: BirdOffering, index: number) {
 }
 
 function getBirdsForSaleSummary(offering: BirdOffering) {
-  const details = [];
-  const quantity = offering.quantity.trim();
-  const price = offering.price.trim();
+  const breed = offering.breed.trim();
+  const soldAs = offering.soldAs.trim();
+  const quantity = getNumberInputValue(offering.quantity);
+  const price = getNumberInputValue(offering.price);
 
-  if (quantity) {
-    details.push(`${getNumberInputValue(quantity)} available`);
+  if (!breed || !soldAs || quantity <= 0 || price <= 0) {
+    return "Finish group details";
   }
 
-  if (price) {
-    details.push(`$${getNumberInputValue(price)} each`);
+  return [
+    breed,
+    soldAs,
+    `${quantity} available`,
+    `${formatCurrency(price)} each`,
+  ].join(" · ");
+}
+
+function getBreedContentStatus({
+  breedMediaItems,
+  breedOption,
+  description,
+}: {
+  breedMediaItems: ListingPhotoItem[];
+  breedOption: BreedOption | null;
+  description: string;
+}) {
+  const photoCount = getUsableBreedMediaItems(breedMediaItems).length;
+  const hasSellerPhoto = Boolean(toDisplayImageUrl(breedOption?.sellerPhotoUrl));
+  const hasCatalogPhoto = Boolean(toDisplayImageUrl(breedOption?.catalogImageUrl));
+  const trimmedDescription = description.trim();
+  const libraryDescription =
+    breedOption?.sellerDescription?.trim() ||
+    breedOption?.catalogDescription?.trim() ||
+    "";
+  const photoStatus =
+    photoCount > 0
+      ? `${photoCount} photo${photoCount === 1 ? "" : "s"}`
+      : hasSellerPhoto || hasCatalogPhoto
+        ? "Using library content"
+        : "Photo Needed";
+  const descriptionStatus = !trimmedDescription
+    ? "Description Needed"
+    : libraryDescription && trimmedDescription === libraryDescription
+      ? "Using library content"
+      : "Custom description";
+  const needsAttention =
+    (photoCount === 0 && !hasSellerPhoto && !hasCatalogPhoto) ||
+    !trimmedDescription;
+
+  if (photoStatus === "Using library content" && descriptionStatus === photoStatus) {
+    return { needsAttention, text: photoStatus };
   }
 
-  return details.length > 0
-    ? details.join(" · ")
-    : "Choose breed, sex/type, quantity, and price.";
+  return {
+    needsAttention,
+    text: `${photoStatus} · ${descriptionStatus}`,
+  };
+}
+
+function getUsableBreedMediaItems(breedMediaItems: ListingPhotoItem[]) {
+  return breedMediaItems.filter(
+    (item) =>
+      item.visibility_status === "active" &&
+      item.asset_status === "active" &&
+      item.moderation_status === "approved" &&
+      Boolean(toDisplayImageUrl(item.public_url)),
+  );
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    maximumFractionDigits: 2,
+    style: "currency",
+  }).format(value);
 }
 
 function getSoldAsTitleText(soldAs: string) {

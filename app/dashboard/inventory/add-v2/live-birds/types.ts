@@ -10,6 +10,16 @@ export type BirdOffering = {
   price: string;
   description: string;
   expanded: boolean;
+  breedContentExpanded?: boolean;
+  breedContentUserToggled?: boolean;
+};
+
+export type PublishValidationIssue = {
+  id: string;
+  message: string;
+  target:
+    | { type: "hatch"; field: "species" | "hatchDate" | "availableDate" }
+    | { type: "offering"; offeringId: string };
 };
 
 export type ReadinessChecks = {

@@ -47,7 +47,7 @@ export function getSaveDraftPreflight({
 function getSpeciesIssues(species: SpeciesOption) {
   if (species.id) return [];
 
-  return ["Choose a species with a real backend ID before draft save wiring."];
+  return ["Select a species."];
 }
 
 function getDateIssues({
@@ -62,11 +62,11 @@ function getDateIssues({
   const parsedAvailableDate = parseDateValue(availableDate);
 
   if (!parsedHatchDate) {
-    issues.push("Choose a hatch date before draft save wiring.");
+    issues.push("Enter the hatch date.");
   }
 
   if (!parsedAvailableDate) {
-    issues.push("Choose an available date before draft save wiring.");
+    issues.push("Enter the date the birds will be available.");
   }
 
   if (
@@ -84,7 +84,7 @@ function getOfferingIssues(offerings: BirdOffering[]) {
   const issues: string[] = [];
 
   if (offerings.length === 0) {
-    return ["Add at least one Birds for Sale group before saving."];
+    return ["Add at least one bird group."];
   }
 
   offerings.forEach((offering, index) => {
@@ -93,23 +93,21 @@ function getOfferingIssues(offerings: BirdOffering[]) {
     const price = Number(offering.price);
 
     if (!offering.sellerBreedProfileId) {
-      issues.push(`${label} needs a real seller breed profile ID.`);
+      issues.push(`Select a breed for ${label}.`);
     }
 
     if (!offering.soldAs.trim()) {
-      issues.push(`${label} needs a sold-as type.`);
-    }
-
-    if (mapSoldAsToInventoryType(offering.soldAs) === "unknown") {
-      issues.push(`${label} needs a supported sold-as type.`);
+      issues.push(`Select how the birds in ${label} will be sold.`);
+    } else if (mapSoldAsToInventoryType(offering.soldAs) === "unknown") {
+      issues.push(`Select how the birds in ${label} will be sold.`);
     }
 
     if (Number.isFinite(quantity) && quantity < 0) {
-      issues.push(`${label} quantity cannot be negative.`);
+      issues.push(`Enter a quantity for ${label}.`);
     }
 
     if (Number.isFinite(price) && price < 0) {
-      issues.push(`${label} price cannot be negative.`);
+      issues.push(`Enter a price for ${label}.`);
     }
   });
 
@@ -140,7 +138,7 @@ function getDuplicateCombinationIssues(offerings: BirdOffering[]) {
     .filter((offeringLabels) => offeringLabels.length > 1)
     .map(
       (offeringLabels) =>
-        `${offeringLabels.join(" and ")} use the same breed and sold-as type.`,
+        `${offeringLabels.join(" and ")} use the same breed and sale type.`,
     );
 }
 

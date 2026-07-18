@@ -42,17 +42,20 @@ export function HatchInformationCard({
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <SpeciesField
           disabled={speciesReadOnly}
+          fieldId="species"
           options={speciesOptions}
           value={species}
           onChange={setSpecies}
         />
         <DateField
+          fieldId="hatchDate"
           glyph="/glyphs/calendar.png"
           label="Hatch date"
           value={hatchDate}
           onChange={setHatchDate}
         />
         <DateField
+          fieldId="availableDate"
           glyph="/glyphs/calendar.png"
           label="Available date"
           value={availableDate}
@@ -92,11 +95,13 @@ export function HatchInformationCard({
 
 function SpeciesField({
   disabled = false,
+  fieldId,
   onChange,
   options,
   value,
 }: {
   disabled?: boolean;
+  fieldId: string;
   onChange: (value: SpeciesOption) => void;
   options: SpeciesOption[];
   value: SpeciesOption;
@@ -116,6 +121,7 @@ function SpeciesField({
         />
         <select
           className={`${inputClass} appearance-none pl-10 pr-9 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500`}
+          data-live-birds-field={fieldId}
           disabled={disabled}
           value={getSpeciesOptionValue(value)}
           onChange={(event) => {
@@ -161,12 +167,14 @@ function getSpeciesOptionValue(option: SpeciesOption) {
 }
 
 function DateField({
+  fieldId,
   glyph,
   helpText,
   label,
   onChange,
   value,
 }: {
+  fieldId: string;
   glyph: string;
   helpText?: string;
   label: string;
@@ -188,6 +196,7 @@ function DateField({
         />
         <input
           className={`${inputClass} pl-10`}
+          data-live-birds-field={fieldId}
           type="date"
           value={value}
           onChange={(event) => onChange(event.target.value)}

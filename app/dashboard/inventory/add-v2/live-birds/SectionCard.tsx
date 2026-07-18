@@ -3,16 +3,20 @@ import type { ReactNode } from "react";
 export function SectionCard({
   badge,
   children,
+  className = "",
   step,
   title,
 }: {
   badge?: string;
   children: ReactNode;
+  className?: string;
   step: string;
   title: string;
 }) {
   return (
-    <section className="rounded-xl border border-transparent bg-white p-4 shadow-none sm:rounded-lg sm:border-stone-200 sm:p-5 sm:shadow-sm">
+    <section
+      className={`rounded-xl border border-transparent bg-white p-4 shadow-none sm:rounded-lg sm:border-stone-200 sm:p-5 sm:shadow-sm ${className}`}
+    >
       <div className="flex flex-wrap items-center gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900 sm:size-8 sm:text-sm">
           {step}

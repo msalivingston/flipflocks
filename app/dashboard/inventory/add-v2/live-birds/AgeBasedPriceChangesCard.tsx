@@ -11,12 +11,14 @@ export function AgeBasedPriceChangesCard({
   introText,
   offerings,
   priceAdjustment,
+  stepLocked = false,
   updatePriceAdjustment,
   locked = false,
 }: {
   introText?: string;
   offerings: BirdOffering[];
   priceAdjustment: PriceAdjustmentState;
+  stepLocked?: boolean;
   updatePriceAdjustment: (updates: Partial<PriceAdjustmentState>) => void;
   locked?: boolean;
 }) {
@@ -25,7 +27,12 @@ export function AgeBasedPriceChangesCard({
     priceAdjustment.direction === "increase" ? "Maximum price" : "Minimum price";
 
   return (
-    <SectionCard badge="Optional" step="3" title="Age-based price changes">
+    <SectionCard
+      badge="Optional"
+      className={stepLocked ? "opacity-60" : ""}
+      step="3"
+      title="Age-based price changes"
+    >
       <div className="space-y-3 sm:space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -47,7 +54,7 @@ export function AgeBasedPriceChangesCard({
             aria-pressed={priceAdjustment.enabled}
             className="inline-flex min-h-12 items-center gap-2 rounded-md px-1 py-1 text-base font-bold text-stone-700 transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0 sm:text-sm sm:font-semibold"
             type="button"
-            disabled={locked}
+            disabled={locked || stepLocked}
             onClick={() =>
               updatePriceAdjustment({ enabled: !priceAdjustment.enabled })
             }
@@ -61,7 +68,7 @@ export function AgeBasedPriceChangesCard({
           <PlanUpgradePrompt compact feature="age_based_pricing" />
         ) : null}
 
-        {priceAdjustment.enabled && !locked ? (
+        {priceAdjustment.enabled && !locked && !stepLocked ? (
           <div className="space-y-3 rounded-lg border border-transparent bg-stone-50/70 p-0 sm:space-y-4 sm:border-stone-200 sm:p-4">
             <div className="grid gap-3 lg:grid-cols-[minmax(260px,1.35fr)_1fr_1fr_1fr]">
               <PriceDirectionToggle
