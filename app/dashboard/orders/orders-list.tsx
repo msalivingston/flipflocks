@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
@@ -42,6 +42,7 @@ type OrderFilter =
   | "canceled"
   | "all";
 
+type OrderArchiveView = "active" | "archived";
 type OrderSort = "newest" | "oldest" | "buyer_name" | "order_total";
 type PickupOptionFilter = "__all__" | string;
 
@@ -61,10 +62,13 @@ type SellerOrderRow = {
   order_status: string;
   payment_method: string | null;
   payment_status: string | null;
+  payment_provider: string | null;
   created_at: string;
   ready_for_pickup_at: string | null;
   fulfilled_at: string | null;
   canceled_at: string | null;
+  archived_at: string | null;
+  archived_by: string | null;
   buyer_first_name_snapshot: string | null;
   buyer_last_name_snapshot: string | null;
   buyer_email_snapshot: string | null;
@@ -98,6 +102,11 @@ type SellerOrderItemRow = {
   line_subtotal: number | null;
 };
 
+type OrderFilterCountRow = {
+  order_status: string | null;
+  ready_for_pickup_at: string | null;
+};
+
 type PickupSummaryOrder = {
   items: SellerOrderItemRow[];
   order: SellerOrderRow;
@@ -108,11 +117,55 @@ type BulkPrintOrder = {
   order: PrintableOrder;
 };
 
+type BulkActionDialog =
+  | {
+      eligibleCount: number;
+      kind: "fulfill";
+      payableCount: number;
+      selectedCount: number;
+      skippedCount: number;
+    }
+  | {
+      eligibleCount: number;
+      kind: "mark_paid";
+      selectedCount: number;
+      skippedCount: number;
+    }
+  | {
+      bothCount: number;
+      eligibleCount: number;
+      kind: "archive";
+      selectedCount: number;
+      skippedCount: number;
+      unpaidCount: number;
+      unfulfilledCount: number;
+    }
+  | {
+      eligibleCount: number;
+      kind: "unarchive";
+      selectedCount: number;
+      skippedCount: number;
+    };
+
+type BulkFulfillmentRpcResult = {
+  fulfilled_count: number;
+  payment_skipped_count: number;
+  payment_updated_count: number;
+  requested_count: number;
+  skipped_count: number;
+};
+
+type BulkSimpleRpcResult = {
+  requested_count: number;
+  skipped_count: number;
+  updated_count: number;
+};
+
 const orderFilters: { label: string; value: OrderFilter }[] = [
+  { label: "Current", value: "all" },
   { label: "Ready for pickup", value: "ready_for_pickup" },
   { label: "Completed", value: "completed" },
   { label: "Canceled", value: "canceled" },
-  { label: "All", value: "all" },
 ];
 
 const orderSortOptions: { label: string; value: OrderSort }[] = [
@@ -132,7 +185,22 @@ export function OrdersList() {
   const [orderItemsByOrderId, setOrderItemsByOrderId] = useState<
     Record<string, SellerOrderItemRow[]>
   >({});
-  const [filter, setFilter] = useState<OrderFilter>("ready_for_pickup");
+  const [orderArchiveCounts, setOrderArchiveCounts] = useState<
+    Record<OrderArchiveView, number>
+  >({
+    active: 0,
+    archived: 0,
+  });
+  const [activeFilterCounts, setActiveFilterCounts] = useState<
+    Record<OrderFilter, number>
+  >({
+    all: 0,
+    canceled: 0,
+    completed: 0,
+    ready_for_pickup: 0,
+  });
+  const [filter, setFilter] = useState<OrderFilter>("all");
+  const [archiveView, setArchiveView] = useState<OrderArchiveView>("active");
   const [pickupOptionFilter, setPickupOptionFilter] =
     useState<PickupOptionFilter>("__all__");
   const [pickupMethod, setPickupMethod] =
@@ -146,6 +214,14 @@ export function OrdersList() {
     useState<PrintableStoreLogo>(null);
   const [isBulkPrintLoading, setIsBulkPrintLoading] = useState(false);
   const [bulkPrintError, setBulkPrintError] = useState<string | null>(null);
+  const [bulkActionDialog, setBulkActionDialog] =
+    useState<BulkActionDialog | null>(null);
+  const [bulkActionError, setBulkActionError] = useState<string | null>(null);
+  const [bulkActionMessage, setBulkActionMessage] = useState<string | null>(null);
+  const [bulkFulfillMarkPaid, setBulkFulfillMarkPaid] = useState(false);
+  const [bulkArchiveAcknowledged, setBulkArchiveAcknowledged] = useState(false);
+  const [isBulkActionSaving, setIsBulkActionSaving] = useState(false);
+  const [isBulkActionsMenuOpen, setIsBulkActionsMenuOpen] = useState(false);
   const [isPrintPortalReady, setIsPrintPortalReady] = useState(false);
   const pendingBulkPrintRef = useRef(false);
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(
@@ -156,6 +232,7 @@ export function OrdersList() {
     useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -185,14 +262,19 @@ export function OrdersList() {
       setIsLoading(true);
       setError(null);
 
+      const baseOrderQuery = supabase
+        .from("seller_order_management")
+        .select(
+          "order_id, order_number, order_source, order_status, payment_method, payment_status, payment_provider, created_at, ready_for_pickup_at, fulfilled_at, canceled_at, archived_at, archived_by, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, pickup_note, buyer_notes, total_amount, item_count, total_item_quantity, pickup_option_id, pickup_option_label_snapshot",
+        )
+        .eq("store_id", seller.store_id);
+      const orderQuery =
+        archiveView === "archived"
+          ? baseOrderQuery.not("archived_at", "is", null)
+          : baseOrderQuery.is("archived_at", null);
       const [orderResult, defaultsResult, pickupOptionsResult] =
         await Promise.all([
-          supabase
-            .from("seller_order_management")
-            .select(
-              "order_id, order_number, order_source, order_status, payment_method, payment_status, created_at, ready_for_pickup_at, fulfilled_at, canceled_at, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, pickup_note, buyer_notes, total_amount, item_count, total_item_quantity, pickup_option_id, pickup_option_label_snapshot",
-            )
-            .eq("store_id", seller.store_id)
+          orderQuery
             .order("created_at", { ascending: false })
             .limit(100)
             .returns<SellerOrderRow[]>(),
@@ -263,30 +345,72 @@ export function OrdersList() {
     return () => {
       isMounted = false;
     };
-  }, [seller]);
+  }, [archiveView, refreshKey, seller]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadArchiveCounts() {
+      if (!seller) return;
+
+      const [activeCountResult, archivedCountResult, activeLifecycleResult] =
+        await Promise.all([
+          supabase
+            .from("seller_order_management")
+            .select("order_id", { count: "exact", head: true })
+            .eq("store_id", seller.store_id)
+            .is("archived_at", null),
+          supabase
+            .from("seller_order_management")
+            .select("order_id", { count: "exact", head: true })
+            .eq("store_id", seller.store_id)
+            .not("archived_at", "is", null),
+          supabase
+            .from("seller_order_management")
+            .select("order_status, ready_for_pickup_at")
+            .eq("store_id", seller.store_id)
+            .is("archived_at", null)
+            .returns<OrderFilterCountRow[]>(),
+        ]);
+
+      if (!isMounted) return;
+
+      setOrderArchiveCounts({
+        active: activeCountResult.count ?? 0,
+        archived: archivedCountResult.count ?? 0,
+      });
+      setActiveFilterCounts(getFilterCounts(activeLifecycleResult.data ?? []));
+    }
+
+    void loadArchiveCounts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [refreshKey, seller]);
 
   const showPickupOptionFilter =
     pickupMethod === "manual_options";
-  const baseFilteredOrders = useMemo(
+  const selectedViewOrders = useMemo(
+    () => orders.filter((order) => isOrderInArchiveView(order, archiveView)),
+    [archiveView, orders],
+  );
+  const searchedOrders = useMemo(
     () =>
-      orders.filter(
+      selectedViewOrders.filter(
         (order) =>
           matchesSearch(order, searchQuery, orderItemsByOrderId[order.order_id]) &&
           matchesPickupOptionFilter(order, pickupOptionFilter),
       ),
-    [orderItemsByOrderId, orders, pickupOptionFilter, searchQuery],
+    [orderItemsByOrderId, pickupOptionFilter, searchQuery, selectedViewOrders],
   );
   const visibleOrders = useMemo(
     () =>
       sortOrders(
-        baseFilteredOrders.filter((order) => matchesFilter(order, filter)),
+        searchedOrders.filter((order) => matchesFilter(order, filter)),
         sort,
       ),
-    [baseFilteredOrders, filter, sort],
-  );
-  const filterCounts = useMemo(
-    () => getFilterCounts(baseFilteredOrders),
-    [baseFilteredOrders],
+    [filter, searchedOrders, sort],
   );
   const visibleOrderIds = useMemo(
     () => visibleOrders.map((order) => order.order_id),
@@ -295,6 +419,10 @@ export function OrdersList() {
   const selectedVisibleCount = visibleOrderIds.filter((orderId) =>
     selectedOrderIds.has(orderId),
   ).length;
+  const selectedVisibleOrders = useMemo(
+    () => visibleOrders.filter((order) => selectedOrderIds.has(order.order_id)),
+    [selectedOrderIds, visibleOrders],
+  );
   const selectedOrdersForSummary = useMemo(
     () =>
       orders
@@ -316,7 +444,14 @@ export function OrdersList() {
   }
 
   function updateFilter(nextFilter: OrderFilter) {
+    setArchiveView("active");
     setFilter(nextFilter);
+    clearSelection();
+  }
+
+  function updateArchiveView(nextView: OrderArchiveView) {
+    setArchiveView(nextView);
+    setFilter("all");
     clearSelection();
   }
 
@@ -461,6 +596,200 @@ export function OrdersList() {
     pendingBulkPrintRef.current = true;
   }
 
+  function openBulkFulfillmentDialog() {
+    const eligibleOrders = selectedVisibleOrders.filter(isBulkFulfillmentEligible);
+
+    setBulkActionDialog({
+      eligibleCount: eligibleOrders.length,
+      kind: "fulfill",
+      payableCount: eligibleOrders.filter(isBulkPaymentEligible).length,
+      selectedCount: selectedVisibleOrders.length,
+      skippedCount: selectedVisibleOrders.length - eligibleOrders.length,
+    });
+    setBulkActionError(null);
+    setBulkActionMessage(null);
+    setBulkFulfillMarkPaid(false);
+    setIsBulkActionsMenuOpen(false);
+  }
+
+  function openBulkMarkPaidDialog() {
+    const eligibleOrders = selectedVisibleOrders.filter(isBulkPaymentEligible);
+
+    setBulkActionDialog({
+      eligibleCount: eligibleOrders.length,
+      kind: "mark_paid",
+      selectedCount: selectedVisibleOrders.length,
+      skippedCount: selectedVisibleOrders.length - eligibleOrders.length,
+    });
+    setBulkActionError(null);
+    setBulkActionMessage(null);
+    setIsBulkActionsMenuOpen(false);
+  }
+
+  function openBulkArchiveDialog() {
+    const summary = getBulkArchiveSummary(selectedVisibleOrders);
+
+    setBulkActionError(null);
+    setBulkActionMessage(null);
+    setBulkArchiveAcknowledged(false);
+    setIsBulkActionsMenuOpen(false);
+
+    if (!summary.needsAcknowledgement) {
+      void archiveSelectedOrders();
+      return;
+    }
+
+    setBulkActionDialog({
+      bothCount: summary.bothCount,
+      eligibleCount: summary.eligibleCount,
+      kind: "archive",
+      selectedCount: selectedVisibleOrders.length,
+      skippedCount: selectedVisibleOrders.length - summary.eligibleCount,
+      unpaidCount: summary.unpaidCount,
+      unfulfilledCount: summary.unfulfilledCount,
+    });
+  }
+
+  function openBulkUnarchiveDialog() {
+    const eligibleOrders = selectedVisibleOrders.filter(isBulkUnarchiveEligible);
+
+    setBulkActionDialog({
+      eligibleCount: eligibleOrders.length,
+      kind: "unarchive",
+      selectedCount: selectedVisibleOrders.length,
+      skippedCount: selectedVisibleOrders.length - eligibleOrders.length,
+    });
+    setBulkActionError(null);
+    setBulkActionMessage(null);
+    setIsBulkActionsMenuOpen(false);
+  }
+
+  async function markSelectedOrdersFulfilled() {
+    if (
+      isBulkActionSaving ||
+      bulkActionDialog?.kind !== "fulfill" ||
+      bulkActionDialog.eligibleCount === 0
+    ) {
+      return;
+    }
+
+    setIsBulkActionSaving(true);
+    setBulkActionError(null);
+    setBulkActionMessage(null);
+
+    const { data, error } = await supabase.rpc(
+      "seller_bulk_mark_orders_fulfilled",
+      {
+        p_mark_paid: bulkFulfillMarkPaid,
+        p_note: bulkFulfillMarkPaid
+          ? "Bulk fulfilled and marked eligible orders paid by seller."
+          : "Bulk fulfilled by seller.",
+        p_order_ids: getSelectedVisibleOrderIds(selectedVisibleOrders),
+      },
+    );
+
+    if (error) {
+      setBulkActionError(toBulkOrderActionError(error.message));
+      setIsBulkActionSaving(false);
+      return;
+    }
+
+    const result = getFirstRpcRow<BulkFulfillmentRpcResult>(data);
+    setBulkActionMessage(formatBulkFulfillmentResult(result));
+    finishBulkAction();
+  }
+
+  async function markSelectedOrdersPaid() {
+    if (
+      isBulkActionSaving ||
+      bulkActionDialog?.kind !== "mark_paid" ||
+      bulkActionDialog.eligibleCount === 0
+    ) {
+      return;
+    }
+
+    setIsBulkActionSaving(true);
+    setBulkActionError(null);
+    setBulkActionMessage(null);
+
+    const { data, error } = await supabase.rpc("seller_bulk_mark_orders_paid", {
+      p_note: "Bulk marked paid by seller.",
+      p_order_ids: getSelectedVisibleOrderIds(selectedVisibleOrders),
+    });
+
+    if (error) {
+      setBulkActionError(toBulkOrderActionError(error.message));
+      setIsBulkActionSaving(false);
+      return;
+    }
+
+    const result = getFirstRpcRow<BulkSimpleRpcResult>(data);
+    setBulkActionMessage(formatBulkSimpleResult(result, "marked paid"));
+    finishBulkAction();
+  }
+
+  async function archiveSelectedOrders() {
+    if (isBulkActionSaving || selectedVisibleOrders.length === 0) return;
+
+    setIsBulkActionSaving(true);
+    setBulkActionError(null);
+    setBulkActionMessage(null);
+
+    const { data, error } = await supabase.rpc("seller_bulk_archive_orders", {
+      p_note: "Bulk archived by seller.",
+      p_order_ids: getSelectedVisibleOrderIds(selectedVisibleOrders),
+    });
+
+    if (error) {
+      setBulkActionError(toBulkOrderActionError(error.message));
+      setIsBulkActionSaving(false);
+      return;
+    }
+
+    const result = getFirstRpcRow<BulkSimpleRpcResult>(data);
+    setBulkActionMessage(formatBulkSimpleResult(result, "archived"));
+    finishBulkAction();
+  }
+
+  async function unarchiveSelectedOrders() {
+    if (
+      isBulkActionSaving ||
+      bulkActionDialog?.kind !== "unarchive" ||
+      bulkActionDialog.eligibleCount === 0
+    ) {
+      return;
+    }
+
+    setIsBulkActionSaving(true);
+    setBulkActionError(null);
+    setBulkActionMessage(null);
+
+    const { data, error } = await supabase.rpc("seller_bulk_unarchive_orders", {
+      p_note: "Bulk unarchived by seller.",
+      p_order_ids: getSelectedVisibleOrderIds(selectedVisibleOrders),
+    });
+
+    if (error) {
+      setBulkActionError(toBulkOrderActionError(error.message));
+      setIsBulkActionSaving(false);
+      return;
+    }
+
+    const result = getFirstRpcRow<BulkSimpleRpcResult>(data);
+    setBulkActionMessage(formatBulkSimpleResult(result, "unarchived"));
+    finishBulkAction();
+  }
+
+  function finishBulkAction() {
+    setBulkActionDialog(null);
+    setBulkFulfillMarkPaid(false);
+    setBulkArchiveAcknowledged(false);
+    setIsBulkActionSaving(false);
+    setIsBulkActionsMenuOpen(false);
+    clearSelection();
+    setRefreshKey((current) => current + 1);
+  }
+
   if (isLoading) {
     return <LoadingState label="Loading orders" />;
   }
@@ -492,7 +821,9 @@ export function OrdersList() {
                 />
                 <input
                   className="seller-form-field min-h-12 rounded-lg"
-                  placeholder="Search orders by buyer, order #, phone, item, or pickup notes"
+                  placeholder={`Search ${
+                    archiveView === "archived" ? "Archived" : "Current"
+                  } orders by buyer, order #, phone, item, or pickup notes`}
                   style={{ paddingLeft: "3.5rem" }}
                   type="search"
                   value={searchQuery}
@@ -515,11 +846,21 @@ export function OrdersList() {
               </label>
             </div>
 
-            <OrderLifecycleFilters
-              counts={filterCounts}
-              value={filter}
-              onChange={updateFilter}
-            />
+            <div className="flex items-center gap-3 pb-1">
+              <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <OrderLifecycleFilters
+                  counts={activeFilterCounts}
+                  value={archiveView === "active" ? filter : null}
+                  onChange={updateFilter}
+                />
+              </div>
+
+              <OrderArchiveTabs
+                archivedCount={orderArchiveCounts.archived}
+                value={archiveView}
+                onChange={updateArchiveView}
+              />
+            </div>
 
             {showPickupOptionFilter ? (
               <PickupOptionFilterControl
@@ -534,15 +875,25 @@ export function OrdersList() {
         {hasVisibleOrders ? (
           <OrdersTableCard
             allVisibleSelected={allVisibleSelected}
+            archiveView={archiveView}
+            bulkActionError={bulkActionError}
+            bulkActionMessage={bulkActionMessage}
             bulkPrintError={bulkPrintError}
             expandedBuyerOrderId={expandedBuyerOrderId}
             expandedOrderId={expandedOrderId}
+            isBulkActionSaving={isBulkActionSaving}
+            isBulkActionsMenuOpen={isBulkActionsMenuOpen}
             isBulkPrintLoading={isBulkPrintLoading}
             itemsByOrderId={orderItemsByOrderId}
             orders={visibleOrders}
             selectedOrderIds={selectedOrderIds}
             selectedVisibleCount={selectedVisibleCount}
+            onBulkActionsOpenChange={setIsBulkActionsMenuOpen}
             onClearSelection={clearSelection}
+            onOpenBulkArchive={openBulkArchiveDialog}
+            onOpenBulkFulfillment={openBulkFulfillmentDialog}
+            onOpenBulkMarkPaid={openBulkMarkPaidDialog}
+            onOpenBulkUnarchive={openBulkUnarchiveDialog}
             onOpenPickupSummary={openPickupSummary}
             onPrintSelectedOrders={() => void printSelectedOrders()}
             onToggleExpandedBuyer={toggleExpandedBuyer}
@@ -552,10 +903,12 @@ export function OrdersList() {
           />
         ) : (
           <EmptyState
-            title={getEmptyTitle(filter, hasSearchOrPickupFilter)}
+            title={getEmptyTitle(filter, hasSearchOrPickupFilter, archiveView)}
             description={
               hasSearchOrPickupFilter
                 ? "Try a different search or pickup option filter."
+                : archiveView === "archived"
+                  ? "Orders you archive will appear here."
                 : "Try a different status to review older orders."
             }
           />
@@ -564,6 +917,64 @@ export function OrdersList() {
           <PickupSummaryModal
             orders={selectedOrdersForSummary}
             onClose={() => setIsPickupSummaryOpen(false)}
+          />
+        ) : null}
+        {bulkActionDialog?.kind === "fulfill" ? (
+          <BulkFulfillmentDialog
+            dialog={bulkActionDialog}
+            error={bulkActionError}
+            isSaving={isBulkActionSaving}
+            markPaid={bulkFulfillMarkPaid}
+            onClose={() => {
+              if (isBulkActionSaving) return;
+              setBulkActionDialog(null);
+              setBulkActionError(null);
+              setBulkFulfillMarkPaid(false);
+            }}
+            onMarkPaidChange={setBulkFulfillMarkPaid}
+            onSubmit={() => void markSelectedOrdersFulfilled()}
+          />
+        ) : null}
+        {bulkActionDialog?.kind === "mark_paid" ? (
+          <BulkMarkPaidDialog
+            dialog={bulkActionDialog}
+            error={bulkActionError}
+            isSaving={isBulkActionSaving}
+            onClose={() => {
+              if (isBulkActionSaving) return;
+              setBulkActionDialog(null);
+              setBulkActionError(null);
+            }}
+            onSubmit={() => void markSelectedOrdersPaid()}
+          />
+        ) : null}
+        {bulkActionDialog?.kind === "archive" ? (
+          <BulkArchiveDialog
+            acknowledgementChecked={bulkArchiveAcknowledged}
+            dialog={bulkActionDialog}
+            error={bulkActionError}
+            isSaving={isBulkActionSaving}
+            onAcknowledgementChange={setBulkArchiveAcknowledged}
+            onClose={() => {
+              if (isBulkActionSaving) return;
+              setBulkActionDialog(null);
+              setBulkActionError(null);
+              setBulkArchiveAcknowledged(false);
+            }}
+            onSubmit={() => void archiveSelectedOrders()}
+          />
+        ) : null}
+        {bulkActionDialog?.kind === "unarchive" ? (
+          <BulkUnarchiveDialog
+            dialog={bulkActionDialog}
+            error={bulkActionError}
+            isSaving={isBulkActionSaving}
+            onClose={() => {
+              if (isBulkActionSaving) return;
+              setBulkActionDialog(null);
+              setBulkActionError(null);
+            }}
+            onSubmit={() => void unarchiveSelectedOrders()}
           />
         ) : null}
       </div>
@@ -590,15 +1001,25 @@ export function OrdersList() {
 
 function OrdersTableCard({
   allVisibleSelected,
+  archiveView,
+  bulkActionError,
+  bulkActionMessage,
   bulkPrintError,
   expandedBuyerOrderId,
   expandedOrderId,
+  isBulkActionSaving,
+  isBulkActionsMenuOpen,
   isBulkPrintLoading,
   itemsByOrderId,
   orders,
   selectedOrderIds,
   selectedVisibleCount,
+  onBulkActionsOpenChange,
   onClearSelection,
+  onOpenBulkArchive,
+  onOpenBulkFulfillment,
+  onOpenBulkMarkPaid,
+  onOpenBulkUnarchive,
   onOpenPickupSummary,
   onPrintSelectedOrders,
   onToggleExpandedBuyer,
@@ -607,15 +1028,25 @@ function OrdersTableCard({
   onToggleSelectAll,
 }: {
   allVisibleSelected: boolean;
+  archiveView: OrderArchiveView;
+  bulkActionError: string | null;
+  bulkActionMessage: string | null;
   bulkPrintError: string | null;
   expandedBuyerOrderId: string | null;
   expandedOrderId: string | null;
+  isBulkActionSaving: boolean;
+  isBulkActionsMenuOpen: boolean;
   isBulkPrintLoading: boolean;
   itemsByOrderId: Record<string, SellerOrderItemRow[]>;
   orders: SellerOrderRow[];
   selectedOrderIds: Set<string>;
   selectedVisibleCount: number;
+  onBulkActionsOpenChange: (isOpen: boolean) => void;
   onClearSelection: () => void;
+  onOpenBulkArchive: () => void;
+  onOpenBulkFulfillment: () => void;
+  onOpenBulkMarkPaid: () => void;
+  onOpenBulkUnarchive: () => void;
   onOpenPickupSummary: () => void;
   onPrintSelectedOrders: () => void;
   onToggleExpandedBuyer: (orderId: string) => void;
@@ -650,14 +1081,32 @@ function OrdersTableCard({
 
         {selectedVisibleCount > 0 ? (
           <BulkActions
+            archiveView={archiveView}
+            isBulkActionSaving={isBulkActionSaving}
+            isBulkActionsMenuOpen={isBulkActionsMenuOpen}
             isBulkPrintLoading={isBulkPrintLoading}
             selectedCount={selectedVisibleCount}
+            onBulkActionsOpenChange={onBulkActionsOpenChange}
             onClearSelection={onClearSelection}
+            onOpenBulkArchive={onOpenBulkArchive}
+            onOpenBulkFulfillment={onOpenBulkFulfillment}
+            onOpenBulkMarkPaid={onOpenBulkMarkPaid}
+            onOpenBulkUnarchive={onOpenBulkUnarchive}
             onOpenPickupSummary={onOpenPickupSummary}
             onPrintSelectedOrders={onPrintSelectedOrders}
           />
         ) : null}
       </div>
+      {bulkActionMessage ? (
+        <p className="border-b border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+          {bulkActionMessage}
+        </p>
+      ) : null}
+      {bulkActionError ? (
+        <p className="border-b border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
+          {bulkActionError}
+        </p>
+      ) : null}
       {bulkPrintError ? (
         <p className="border-b border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
           {bulkPrintError}
@@ -697,15 +1146,31 @@ function OrdersTableCard({
 }
 
 function BulkActions({
+  archiveView,
+  isBulkActionSaving,
+  isBulkActionsMenuOpen,
   isBulkPrintLoading,
   selectedCount,
+  onBulkActionsOpenChange,
   onClearSelection,
+  onOpenBulkArchive,
+  onOpenBulkFulfillment,
+  onOpenBulkMarkPaid,
+  onOpenBulkUnarchive,
   onOpenPickupSummary,
   onPrintSelectedOrders,
 }: {
+  archiveView: OrderArchiveView;
+  isBulkActionSaving: boolean;
+  isBulkActionsMenuOpen: boolean;
   isBulkPrintLoading: boolean;
   selectedCount: number;
+  onBulkActionsOpenChange: (isOpen: boolean) => void;
   onClearSelection: () => void;
+  onOpenBulkArchive: () => void;
+  onOpenBulkFulfillment: () => void;
+  onOpenBulkMarkPaid: () => void;
+  onOpenBulkUnarchive: () => void;
   onOpenPickupSummary: () => void;
   onPrintSelectedOrders: () => void;
 }) {
@@ -731,20 +1196,387 @@ function BulkActions({
         <Image src="/glyphs/printer.png" alt="" width={16} height={16} />
         {isBulkPrintLoading ? "Loading print..." : "Print orders"}
       </button>
-      <button
-        className="seller-small-button min-h-11 rounded-md px-3 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10"
-        disabled
-        title="Bulk actions are not wired yet."
-        type="button"
+      <details
+        className="relative"
+        open={isBulkActionsMenuOpen}
+        onToggle={(event) => onBulkActionsOpenChange(event.currentTarget.open)}
       >
-        More actions
-      </button>
+        <summary
+          className={`seller-small-button min-h-11 cursor-pointer list-none rounded-md px-3 sm:min-h-10 ${
+            isBulkActionSaving ? "pointer-events-none opacity-60" : ""
+          }`}
+        >
+          More actions
+        </summary>
+        <div className="absolute right-0 z-20 mt-2 w-60 rounded-xl border border-stone-200 bg-white p-2 shadow-[0_18px_40px_rgba(46,39,25,0.14)]">
+          {archiveView === "active" ? (
+            <>
+              <QuickBulkActionButton
+                disabled={isBulkActionSaving}
+                glyph="/glyphs/checkmark.png"
+                label="Mark fulfilled"
+                onClick={onOpenBulkFulfillment}
+              />
+              <QuickBulkActionButton
+                disabled={isBulkActionSaving}
+                glyph="/glyphs/checkmark.png"
+                label="Mark paid"
+                onClick={onOpenBulkMarkPaid}
+              />
+              <QuickBulkActionButton
+                disabled={isBulkActionSaving}
+                glyph="/glyphs/shopping-bag.png"
+                label="Archive"
+                onClick={onOpenBulkArchive}
+              />
+            </>
+          ) : (
+            <QuickBulkActionButton
+              disabled={isBulkActionSaving}
+              glyph="/glyphs/shopping-bag.png"
+              label="Unarchive"
+              onClick={onOpenBulkUnarchive}
+            />
+          )}
+        </div>
+      </details>
       <button
         className="min-h-12 rounded-md px-3 text-base font-bold text-emerald-800 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:min-h-10 sm:text-sm sm:font-medium"
         type="button"
         onClick={onClearSelection}
       >
         Clear selection
+      </button>
+    </div>
+  );
+}
+
+function QuickBulkActionButton({
+  disabled = false,
+  glyph,
+  label,
+  onClick,
+}: {
+  disabled?: boolean;
+  glyph: string;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold text-stone-950 transition hover:bg-[#fbfaf6] focus:outline-none focus:ring-2 focus:ring-emerald-700/30 disabled:cursor-not-allowed disabled:opacity-50"
+      disabled={disabled}
+      type="button"
+      onClick={onClick}
+    >
+      <Image src={glyph} alt="" width={18} height={18} />
+      {label}
+    </button>
+  );
+}
+
+function BulkFulfillmentDialog({
+  dialog,
+  error,
+  isSaving,
+  markPaid,
+  onClose,
+  onMarkPaidChange,
+  onSubmit,
+}: {
+  dialog: Extract<BulkActionDialog, { kind: "fulfill" }>;
+  error: string | null;
+  isSaving: boolean;
+  markPaid: boolean;
+  onClose: () => void;
+  onMarkPaidChange: (value: boolean) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <BulkDialogFrame
+      error={error}
+      isSaving={isSaving}
+      title="Mark selected orders fulfilled?"
+      onClose={onClose}
+    >
+      <p className="text-sm leading-6 text-stone-700">
+        {dialog.eligibleCount} of {dialog.selectedCount} selected{" "}
+        {pluralize(dialog.selectedCount, "order")} will be marked fulfilled.
+        {dialog.skippedCount > 0
+          ? ` ${dialog.skippedCount} already fulfilled or canceled ${pluralize(
+              dialog.skippedCount,
+              "order",
+            )} will be skipped.`
+          : ""}
+      </p>
+      <label className="mt-4 flex gap-3 rounded-md border border-stone-200 bg-[#fffdf8] p-3 text-sm text-stone-700">
+        <input
+          className="mt-1 size-6 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700 sm:size-4"
+          checked={markPaid}
+          disabled={isSaving || dialog.payableCount === 0}
+          type="checkbox"
+          onChange={(event) => onMarkPaidChange(event.target.checked)}
+        />
+        <span>
+          <span className="block font-semibold text-stone-950">
+            Also mark eligible unpaid orders paid
+          </span>
+          <span className="mt-1 block leading-6 text-stone-600">
+            {dialog.payableCount > 0
+              ? `${dialog.payableCount} offline pay-at-pickup ${pluralize(
+                  dialog.payableCount,
+                  "order",
+                )} can also be marked paid.`
+              : "No selected orders are eligible for manual payment update."}
+          </span>
+        </span>
+      </label>
+      <BulkDialogActions
+        isSaving={isSaving}
+        primaryDisabled={dialog.eligibleCount === 0}
+        primaryLabel="Mark fulfilled"
+        savingLabel="Saving..."
+        secondaryLabel="Keep orders"
+        onClose={onClose}
+        onSubmit={onSubmit}
+      />
+    </BulkDialogFrame>
+  );
+}
+
+function BulkMarkPaidDialog({
+  dialog,
+  error,
+  isSaving,
+  onClose,
+  onSubmit,
+}: {
+  dialog: Extract<BulkActionDialog, { kind: "mark_paid" }>;
+  error: string | null;
+  isSaving: boolean;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <BulkDialogFrame
+      error={error}
+      isSaving={isSaving}
+      title="Mark selected orders paid?"
+      onClose={onClose}
+    >
+      <p className="text-sm leading-6 text-stone-700">
+        {dialog.eligibleCount} of {dialog.selectedCount} selected{" "}
+        {pluralize(dialog.selectedCount, "order")} will be marked paid.
+        {dialog.skippedCount > 0
+          ? ` ${dialog.skippedCount} already paid, refunded, canceled, Stripe-paid, or otherwise ineligible ${pluralize(
+              dialog.skippedCount,
+              "order",
+            )} will be skipped.`
+          : ""}
+      </p>
+      <BulkDialogActions
+        isSaving={isSaving}
+        primaryDisabled={dialog.eligibleCount === 0}
+        primaryLabel="Mark paid"
+        savingLabel="Saving..."
+        secondaryLabel="Keep orders"
+        onClose={onClose}
+        onSubmit={onSubmit}
+      />
+    </BulkDialogFrame>
+  );
+}
+
+function BulkArchiveDialog({
+  acknowledgementChecked,
+  dialog,
+  error,
+  isSaving,
+  onAcknowledgementChange,
+  onClose,
+  onSubmit,
+}: {
+  acknowledgementChecked: boolean;
+  dialog: Extract<BulkActionDialog, { kind: "archive" }>;
+  error: string | null;
+  isSaving: boolean;
+  onAcknowledgementChange: (value: boolean) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <BulkDialogFrame
+      error={error}
+      isSaving={isSaving}
+      title="Archive unfinished orders?"
+      onClose={onClose}
+    >
+      <p className="text-sm leading-6 text-stone-700">
+        Archiving will hide selected orders from your active order list, but it
+        will not change fulfillment, payment, cancellation, inventory, totals,
+        Stripe state, or emails.
+      </p>
+      <p className="mt-2 text-sm leading-6 text-stone-700">
+        {formatBulkArchiveWarning(dialog)}
+      </p>
+      {dialog.skippedCount > 0 ? (
+        <p className="mt-2 text-sm leading-6 text-stone-700">
+          {dialog.skippedCount} already archived{" "}
+          {pluralize(dialog.skippedCount, "order")} will be skipped.
+        </p>
+      ) : null}
+      <label className="mt-4 flex gap-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-stone-700">
+        <input
+          className="mt-1 size-6 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700 sm:size-4"
+          checked={acknowledgementChecked}
+          disabled={isSaving}
+          type="checkbox"
+          onChange={(event) => onAcknowledgementChange(event.target.checked)}
+        />
+        <span className="font-semibold text-stone-950">
+          I understand some selected orders are not complete.
+        </span>
+      </label>
+      <BulkDialogActions
+        isSaving={isSaving}
+        primaryDisabled={dialog.eligibleCount === 0 || !acknowledgementChecked}
+        primaryLabel="Archive orders"
+        savingLabel="Archiving..."
+        secondaryLabel="Keep orders"
+        onClose={onClose}
+        onSubmit={onSubmit}
+      />
+    </BulkDialogFrame>
+  );
+}
+
+function BulkUnarchiveDialog({
+  dialog,
+  error,
+  isSaving,
+  onClose,
+  onSubmit,
+}: {
+  dialog: Extract<BulkActionDialog, { kind: "unarchive" }>;
+  error: string | null;
+  isSaving: boolean;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <BulkDialogFrame
+      error={error}
+      isSaving={isSaving}
+      title="Unarchive selected orders?"
+      onClose={onClose}
+    >
+      <p className="text-sm leading-6 text-stone-700">
+        {dialog.eligibleCount} of {dialog.selectedCount} selected{" "}
+        {pluralize(dialog.selectedCount, "order")} will return to your active
+        order list.
+        {dialog.skippedCount > 0
+          ? ` ${dialog.skippedCount} ${pluralize(
+              dialog.skippedCount,
+              "order",
+            )} will be skipped.`
+          : ""}
+      </p>
+      <BulkDialogActions
+        isSaving={isSaving}
+        primaryDisabled={dialog.eligibleCount === 0}
+        primaryLabel="Unarchive orders"
+        savingLabel="Unarchiving..."
+        secondaryLabel="Keep archived"
+        onClose={onClose}
+        onSubmit={onSubmit}
+      />
+    </BulkDialogFrame>
+  );
+}
+
+function BulkDialogFrame({
+  children,
+  error,
+  isSaving,
+  onClose,
+  title,
+}: {
+  children: ReactNode;
+  error: string | null;
+  isSaving: boolean;
+  onClose: () => void;
+  title: string;
+}) {
+  return (
+    <div
+      aria-labelledby="bulk-order-action-dialog-title"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6"
+      role="dialog"
+    >
+      <section className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-5 shadow-[0_22px_60px_rgba(46,39,25,0.2)]">
+        <div className="flex items-start justify-between gap-4">
+          <h2
+            className="text-lg font-bold text-stone-950"
+            id="bulk-order-action-dialog-title"
+          >
+            {title}
+          </h2>
+          <button
+            aria-label="Close dialog"
+            className="flex size-8 shrink-0 items-center justify-center rounded-md text-2xl font-light leading-none text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700/30 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isSaving}
+            type="button"
+            onClick={onClose}
+          >
+            &times;
+          </button>
+        </div>
+        <div className="mt-2">{children}</div>
+        {error ? (
+          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+            {error}
+          </p>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function BulkDialogActions({
+  isSaving,
+  onClose,
+  onSubmit,
+  primaryDisabled,
+  primaryLabel,
+  savingLabel,
+  secondaryLabel,
+}: {
+  isSaving: boolean;
+  onClose: () => void;
+  onSubmit: () => void;
+  primaryDisabled: boolean;
+  primaryLabel: string;
+  savingLabel: string;
+  secondaryLabel: string;
+}) {
+  return (
+    <div className="mt-5 grid gap-2 sm:grid-cols-2">
+      <button
+        className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800/30 disabled:cursor-not-allowed disabled:bg-stone-300"
+        disabled={isSaving || primaryDisabled}
+        type="button"
+        onClick={onSubmit}
+      >
+        {isSaving ? savingLabel : primaryLabel}
+      </button>
+      <button
+        className="seller-secondary-button min-h-10 rounded-md px-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={isSaving}
+        type="button"
+        onClick={onClose}
+      >
+        {secondaryLabel}
       </button>
     </div>
   );
@@ -1409,6 +2241,7 @@ function OrderRow({
                 label={formatOrderLifecycle(order)}
                 lifecycle={lifecycle}
               />
+              {order.archived_at ? <OrderArchivedBadge /> : null}
             </div>
             <p className="mt-1 truncate text-base font-semibold text-stone-950 sm:text-sm sm:font-normal">
               {customerName}
@@ -1516,6 +2349,7 @@ function OrderRow({
             #{order.order_number}
           </Link>
           <span className="shrink-0 text-stone-500">-</span>
+          {order.archived_at ? <OrderArchivedBadge /> : null}
           <button
             aria-controls={desktopDetailsId}
             aria-expanded={isExpanded}
@@ -1671,10 +2505,10 @@ function OrderLifecycleFilters({
 }: {
   counts: Record<OrderFilter, number>;
   onChange: (value: OrderFilter) => void;
-  value: OrderFilter;
+  value: OrderFilter | null;
 }) {
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="flex shrink-0 gap-2">
       {orderFilters.map((filter) => {
         const isActive = value === filter.value;
 
@@ -1701,6 +2535,42 @@ function OrderLifecycleFilters({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function OrderArchiveTabs({
+  archivedCount,
+  onChange,
+  value,
+}: {
+  archivedCount: number;
+  onChange: (value: OrderArchiveView) => void;
+  value: OrderArchiveView;
+}) {
+  return (
+    <div className="flex shrink-0 gap-2">
+      <button
+        aria-pressed={value === "archived"}
+        className={`min-h-11 shrink-0 rounded-full border px-4 text-base font-bold transition focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:min-h-9 sm:px-3.5 sm:text-sm sm:font-medium ${
+          value === "archived"
+            ? "border-[#6f614d] bg-[#6f614d] text-white"
+            : "border-[#d7cfc1] bg-[#f7f3ea] text-stone-700 hover:border-[#9c8f7b] hover:text-stone-900"
+        }`}
+        type="button"
+        onClick={() => onChange("archived")}
+      >
+        Archived
+        <span
+          className={`ml-2 rounded-full px-2 py-0.5 text-sm sm:text-xs ${
+            value === "archived"
+              ? "bg-white/20 text-white"
+              : "bg-stone-100 text-stone-600"
+          }`}
+        >
+          {archivedCount}
+        </span>
+      </button>
     </div>
   );
 }
@@ -1833,6 +2703,14 @@ function OrderLifecycleBadge({
   );
 }
 
+function OrderArchivedBadge() {
+  return (
+    <span className="inline-flex min-h-7 items-center rounded-full bg-stone-200 px-2.5 py-1 text-sm font-medium text-stone-700 sm:min-h-0 sm:text-xs">
+      Archived
+    </span>
+  );
+}
+
 function matchesFilter(order: SellerOrderRow, filter: OrderFilter) {
   if (filter === "all") return true;
 
@@ -1843,6 +2721,13 @@ function matchesFilter(order: SellerOrderRow, filter: OrderFilter) {
   }
 
   return lifecycle === filter;
+}
+
+function isOrderInArchiveView(
+  order: SellerOrderRow,
+  archiveView: OrderArchiveView,
+) {
+  return archiveView === "archived" ? Boolean(order.archived_at) : !order.archived_at;
 }
 
 function matchesPickupOptionFilter(
@@ -1974,7 +2859,7 @@ function requestPrintFrame(callback: () => void) {
   });
 }
 
-function getFilterCounts(orders: SellerOrderRow[]) {
+function getFilterCounts(orders: OrderFilterCountRow[]) {
   const counts: Record<OrderFilter, number> = {
     all: orders.length,
     canceled: 0,
@@ -1993,6 +2878,175 @@ function getFilterCounts(orders: SellerOrderRow[]) {
   }
 
   return counts;
+}
+
+function isBulkFulfillmentEligible(order: SellerOrderRow) {
+  return (
+    !order.archived_at &&
+    !isOrderCanceled(order) &&
+    order.order_status !== "fulfilled"
+  );
+}
+
+function isBulkPaymentEligible(order: SellerOrderRow) {
+  return (
+    !order.archived_at &&
+    !isOrderCanceled(order) &&
+    order.payment_provider === "offline" &&
+    order.payment_method === "pay_at_pickup" &&
+    (order.order_status === "pending" ||
+      order.order_status === "open" ||
+      order.order_status === "fulfilled") &&
+    (order.payment_status === "pay_at_pickup" ||
+      order.payment_status === "unpaid")
+  );
+}
+
+function isBulkArchiveEligible(order: SellerOrderRow) {
+  return !order.archived_at;
+}
+
+function isBulkUnarchiveEligible(order: SellerOrderRow) {
+  return Boolean(order.archived_at);
+}
+
+function isOrderCanceled(order: SellerOrderRow) {
+  return order.order_status === "canceled" || Boolean(order.canceled_at);
+}
+
+function isOrderFulfilled(order: SellerOrderRow) {
+  return order.order_status === "fulfilled";
+}
+
+function isOrderPaid(order: SellerOrderRow) {
+  return order.payment_status === "paid";
+}
+
+function isOrderUnfulfilledForArchive(order: SellerOrderRow) {
+  return !isOrderCanceled(order) && !isOrderFulfilled(order);
+}
+
+function isOrderUnpaidForArchive(order: SellerOrderRow) {
+  return !isOrderCanceled(order) && !isOrderPaid(order);
+}
+
+function getBulkArchiveSummary(orders: SellerOrderRow[]) {
+  const eligibleOrders = orders.filter(isBulkArchiveEligible);
+  const unfulfilledCount = eligibleOrders.filter(isOrderUnfulfilledForArchive).length;
+  const unpaidCount = eligibleOrders.filter(isOrderUnpaidForArchive).length;
+  const bothCount = eligibleOrders.filter(
+    (order) => isOrderUnfulfilledForArchive(order) && isOrderUnpaidForArchive(order),
+  ).length;
+
+  return {
+    bothCount,
+    eligibleCount: eligibleOrders.length,
+    needsAcknowledgement: unfulfilledCount > 0 || unpaidCount > 0,
+    unpaidCount,
+    unfulfilledCount,
+  };
+}
+
+function getSelectedVisibleOrderIds(orders: SellerOrderRow[]) {
+  return orders.map((order) => order.order_id);
+}
+
+function getFirstRpcRow<T>(data: unknown): T | null {
+  if (Array.isArray(data)) return (data[0] as T | undefined) ?? null;
+
+  return (data as T | null) ?? null;
+}
+
+function toBulkOrderActionError(message: string | null | undefined) {
+  return message?.trim() || "Selected orders could not be updated.";
+}
+
+function formatBulkFulfillmentResult(result: BulkFulfillmentRpcResult | null) {
+  if (!result) return "Selected orders updated.";
+
+  const paymentMessage =
+    result.payment_updated_count > 0
+      ? ` ${result.payment_updated_count} ${pluralize(
+          result.payment_updated_count,
+          "order",
+        )} also marked paid.`
+      : "";
+  const skippedMessage =
+    result.skipped_count > 0
+      ? ` ${result.skipped_count} ${pluralize(
+          result.skipped_count,
+          "order",
+        )} skipped.`
+      : "";
+
+  return `${result.fulfilled_count} ${pluralize(
+    result.fulfilled_count,
+    "order",
+  )} marked fulfilled.${paymentMessage}${skippedMessage}`;
+}
+
+function formatBulkSimpleResult(
+  result: BulkSimpleRpcResult | null,
+  actionLabel: string,
+) {
+  if (!result) return "Selected orders updated.";
+
+  const skippedMessage =
+    result.skipped_count > 0
+      ? ` ${result.skipped_count} ${pluralize(
+          result.skipped_count,
+          "order",
+        )} skipped.`
+      : "";
+
+  return `${result.updated_count} ${pluralize(
+    result.updated_count,
+    "order",
+  )} ${actionLabel}.${skippedMessage}`;
+}
+
+function formatBulkArchiveWarning(
+  dialog: Extract<BulkActionDialog, { kind: "archive" }>,
+) {
+  const parts: string[] = [];
+
+  if (dialog.bothCount > 0) {
+    parts.push(
+      `${dialog.bothCount} ${pluralize(
+        dialog.bothCount,
+        "order",
+      )} still open and unpaid`,
+    );
+  }
+
+  const onlyUnfulfilledCount = dialog.unfulfilledCount - dialog.bothCount;
+  if (onlyUnfulfilledCount > 0) {
+    parts.push(
+      `${onlyUnfulfilledCount} ${pluralize(
+        onlyUnfulfilledCount,
+        "order",
+      )} still open`,
+    );
+  }
+
+  const onlyUnpaidCount = dialog.unpaidCount - dialog.bothCount;
+  if (onlyUnpaidCount > 0) {
+    parts.push(
+      `${onlyUnpaidCount} ${pluralize(
+        onlyUnpaidCount,
+        "order",
+      )} still unpaid`,
+    );
+  }
+
+  if (parts.length === 0) return "Selected orders are complete or canceled.";
+  if (parts.length === 1) return `${parts[0]}.`;
+
+  return `${parts.slice(0, -1).join(", ")}, and ${parts.at(-1)}.`;
+}
+
+function pluralize(count: number, singular: string) {
+  return count === 1 ? singular : `${singular}s`;
 }
 
 function sortOrders(orders: SellerOrderRow[], sort: OrderSort) {
@@ -2136,8 +3190,13 @@ function formatShortDate(value: string | null) {
   }).format(new Date(value));
 }
 
-function getEmptyTitle(filter: OrderFilter, hasSearchOrPickupFilter: boolean) {
+function getEmptyTitle(
+  filter: OrderFilter,
+  hasSearchOrPickupFilter: boolean,
+  archiveView: OrderArchiveView,
+) {
   if (hasSearchOrPickupFilter) return "No orders match that search.";
+  if (archiveView === "archived") return "No archived orders";
 
   if (filter === "ready_for_pickup") return "No orders are ready for pickup.";
   if (filter === "completed") return "No completed orders yet.";

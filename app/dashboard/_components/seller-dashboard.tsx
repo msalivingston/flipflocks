@@ -27,7 +27,7 @@ type DashboardState = {
 };
 
 const DASHBOARD_ORDER_SELECT =
-  "order_id, order_number, order_status, payment_status, created_at, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, total_amount, item_count, total_item_quantity, pickup_option_label_snapshot";
+  "order_id, order_number, order_status, payment_status, created_at, archived_at, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, total_amount, item_count, total_item_quantity, pickup_option_label_snapshot";
 const DASHBOARD_ORDER_LIMIT = 5;
 const DASHBOARD_OPEN_ORDER_STATUSES = ["pending", "open"];
 
@@ -81,6 +81,7 @@ export function SellerDashboard() {
           .from("seller_order_management")
           .select(DASHBOARD_ORDER_SELECT)
           .eq("store_id", seller.store_id)
+          .is("archived_at", null)
           .in("order_status", DASHBOARD_OPEN_ORDER_STATUSES)
           .order("created_at", { ascending: false })
           .limit(DASHBOARD_ORDER_LIMIT)
@@ -89,6 +90,7 @@ export function SellerDashboard() {
           .from("seller_order_management")
           .select(DASHBOARD_ORDER_SELECT)
           .eq("store_id", seller.store_id)
+          .is("archived_at", null)
           .eq("order_status", "fulfilled")
           .order("created_at", { ascending: false })
           .limit(DASHBOARD_ORDER_LIMIT)
@@ -97,6 +99,7 @@ export function SellerDashboard() {
           .from("seller_order_management")
           .select(DASHBOARD_ORDER_SELECT)
           .eq("store_id", seller.store_id)
+          .is("archived_at", null)
           .eq("order_status", "canceled")
           .order("created_at", { ascending: false })
           .limit(DASHBOARD_ORDER_LIMIT)

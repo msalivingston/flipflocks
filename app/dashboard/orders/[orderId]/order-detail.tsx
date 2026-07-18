@@ -42,6 +42,8 @@ type SellerOrderDetailRow = {
   ready_for_pickup_at: string | null;
   fulfilled_at: string | null;
   canceled_at: string | null;
+  archived_at: string | null;
+  archived_by: string | null;
   buyer_first_name_snapshot: string | null;
   buyer_last_name_snapshot: string | null;
   buyer_email_snapshot: string | null;
@@ -141,6 +143,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
   const [isResendingConfirmation, setIsResendingConfirmation] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -149,16 +152,20 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [fulfillmentError, setFulfillmentError] = useState<string | null>(null);
   const [unfulfillmentError, setUnfulfillmentError] = useState<string | null>(null);
   const [cancellationError, setCancellationError] = useState<string | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archiveAcknowledged, setArchiveAcknowledged] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [emailCancellationToBuyer, setEmailCancellationToBuyer] = useState(false);
   const [pendingResendConfirmationActionId, setPendingResendConfirmationActionId] =
     useState<string | null>(null);
   const [isPrintPortalReady, setIsPrintPortalReady] = useState(false);
   const [showCancelPanel, setShowCancelPanel] = useState(false);
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [showFulfillmentDialog, setShowFulfillmentDialog] = useState(false);
   const [showUnfulfillmentDialog, setShowUnfulfillmentDialog] = useState(false);
   const [showResendConfirmationDialog, setShowResendConfirmationDialog] =
     useState(false);
+  const [showUnarchiveDialog, setShowUnarchiveDialog] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -176,7 +183,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         supabase
           .from("seller_order_management")
           .select(
-            "order_id, order_number, order_source, order_status, payment_method, payment_status, payment_provider, provider_payment_status, paid_at, created_at, ready_for_pickup_at, fulfilled_at, canceled_at, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, pickup_note, buyer_notes, subtotal_amount, tax_fee_label_snapshot, tax_fee_amount, total_amount, item_count, total_item_quantity, pickup_option_label_snapshot",
+            "order_id, order_number, order_source, order_status, payment_method, payment_status, payment_provider, provider_payment_status, paid_at, created_at, ready_for_pickup_at, fulfilled_at, canceled_at, archived_at, archived_by, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, pickup_note, buyer_notes, subtotal_amount, tax_fee_label_snapshot, tax_fee_amount, total_amount, item_count, total_item_quantity, pickup_option_label_snapshot",
           )
           .eq("store_id", seller.store_id)
           .eq("order_id", orderId)
@@ -342,6 +349,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setFulfillmentError(null);
     setUnfulfillmentError(null);
     setCancellationError(null);
+    setArchiveError(null);
 
     const { error: fulfillmentRpcError } = await supabase.rpc(
       "seller_record_order_fulfillment",
@@ -402,6 +410,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setFulfillmentError(null);
     setUnfulfillmentError(null);
     setCancellationError(null);
+    setArchiveError(null);
 
     const { error: unfulfillmentRpcError } = await supabase.rpc(
       "seller_mark_order_unfulfilled",
@@ -439,6 +448,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setFulfillmentError(null);
     setUnfulfillmentError(null);
     setCancellationError(null);
+    setArchiveError(null);
     setIsActionsMenuOpen(false);
 
     const { error: paymentError } = await supabase.rpc("mark_order_paid", {
@@ -471,6 +481,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setFulfillmentError(null);
     setUnfulfillmentError(null);
     setCancellationError(null);
+    setArchiveError(null);
     setIsActionsMenuOpen(false);
 
     const { error: paymentError } = await supabase.rpc("mark_order_pay_at_pickup", {
@@ -503,6 +514,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setActionMessage(null);
     setActionWarning(null);
     setCancellationError(null);
+    setArchiveError(null);
 
     const shouldEmailCancellation = buyerHasEmail && emailCancellationToBuyer;
     const { data: cancelData, error: cancelError } = await supabase.rpc("cancel_order", {
@@ -547,6 +559,82 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setIsActionsMenuOpen(false);
     setRefreshKey((current) => current + 1);
     setIsCanceling(false);
+  }
+
+  async function archiveOrder() {
+    if (!order || isArchiving) return;
+
+    setIsArchiving(true);
+    setActionError(null);
+    setActionMessage(null);
+    setActionWarning(null);
+    setArchiveError(null);
+
+    const { error: archiveRpcError } = await supabase.rpc(
+      "seller_archive_order",
+      {
+        p_order_id: order.order_id,
+        p_note: null,
+      },
+    );
+
+    if (archiveRpcError) {
+      const nextError = toSellerOrderArchiveError(archiveRpcError.message);
+      setArchiveError(nextError);
+      setActionError(nextError);
+      setIsArchiving(false);
+      return;
+    }
+
+    setActionMessage("Order archived.");
+    setArchiveAcknowledged(false);
+    setShowArchiveDialog(false);
+    setShowCancelPanel(false);
+    setShowFulfillmentDialog(false);
+    setShowUnfulfillmentDialog(false);
+    setShowResendConfirmationDialog(false);
+    setShowUnarchiveDialog(false);
+    setIsActionsMenuOpen(false);
+    setRefreshKey((current) => current + 1);
+    setIsArchiving(false);
+  }
+
+  async function unarchiveOrder() {
+    if (!order || isArchiving) return;
+
+    setIsArchiving(true);
+    setActionError(null);
+    setActionMessage(null);
+    setActionWarning(null);
+    setArchiveError(null);
+
+    const { error: unarchiveRpcError } = await supabase.rpc(
+      "seller_unarchive_order",
+      {
+        p_order_id: order.order_id,
+        p_note: null,
+      },
+    );
+
+    if (unarchiveRpcError) {
+      const nextError = toSellerOrderArchiveError(unarchiveRpcError.message);
+      setArchiveError(nextError);
+      setActionError(nextError);
+      setIsArchiving(false);
+      return;
+    }
+
+    setActionMessage("Order unarchived.");
+    setArchiveAcknowledged(false);
+    setShowArchiveDialog(false);
+    setShowCancelPanel(false);
+    setShowFulfillmentDialog(false);
+    setShowUnfulfillmentDialog(false);
+    setShowResendConfirmationDialog(false);
+    setShowUnarchiveDialog(false);
+    setIsActionsMenuOpen(false);
+    setRefreshKey((current) => current + 1);
+    setIsArchiving(false);
   }
 
   async function resendOrderConfirmation() {
@@ -642,9 +730,11 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     }
 
     setShowCancelPanel(false);
+    setShowArchiveDialog(false);
     setShowFulfillmentDialog(false);
     setShowUnfulfillmentDialog(false);
     setShowResendConfirmationDialog(true);
+    setShowUnarchiveDialog(false);
     setIsActionsMenuOpen(false);
   }
 
@@ -659,12 +749,58 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setFulfillmentError(null);
     setUnfulfillmentError(null);
     setCancellationError(null);
+    setArchiveError(null);
     setIsActionsMenuOpen(false);
     setEmailCancellationToBuyer(true);
+    setShowArchiveDialog(false);
     setShowFulfillmentDialog(false);
     setShowUnfulfillmentDialog(false);
     setShowResendConfirmationDialog(false);
+    setShowUnarchiveDialog(false);
     setShowCancelPanel(true);
+  }
+
+  function openArchiveDialog() {
+    if (!order) return;
+
+    if (getArchiveWarningReasons(order).length === 0) {
+      void archiveOrder();
+      return;
+    }
+
+    setActionError(null);
+    setActionMessage(null);
+    setActionWarning(null);
+    setFulfillmentError(null);
+    setUnfulfillmentError(null);
+    setCancellationError(null);
+    setArchiveError(null);
+    setArchiveAcknowledged(false);
+    setShowCancelPanel(false);
+    setShowFulfillmentDialog(false);
+    setShowUnfulfillmentDialog(false);
+    setShowResendConfirmationDialog(false);
+    setShowUnarchiveDialog(false);
+    setShowArchiveDialog(true);
+    setIsActionsMenuOpen(false);
+  }
+
+  function openUnarchiveDialog() {
+    setActionError(null);
+    setActionMessage(null);
+    setActionWarning(null);
+    setFulfillmentError(null);
+    setUnfulfillmentError(null);
+    setCancellationError(null);
+    setArchiveError(null);
+    setArchiveAcknowledged(false);
+    setShowCancelPanel(false);
+    setShowArchiveDialog(false);
+    setShowFulfillmentDialog(false);
+    setShowUnfulfillmentDialog(false);
+    setShowResendConfirmationDialog(false);
+    setShowUnarchiveDialog(true);
+    setIsActionsMenuOpen(false);
   }
 
   return (
@@ -688,6 +824,11 @@ export function OrderDetail({ orderId }: { orderId: string }) {
             <StatusPill tone={getSavedPaymentStatusTone(order.payment_status)}>
               {formatSavedPaymentStatus(order.payment_status)}
             </StatusPill>
+            {order.archived_at ? (
+              <StatusPill tone="bg-stone-200 text-stone-700">
+                ARCHIVED
+              </StatusPill>
+            ) : null}
           </div>
         </div>
         <div className="flex flex-col gap-5 lg:items-end">
@@ -711,14 +852,17 @@ export function OrderDetail({ orderId }: { orderId: string }) {
               </Link>
             ) : null}
             <QuickActionsMenu
+              canArchive={canArchiveOrder(order)}
               canCancel={canCancelOrder(order)}
               canMarkComplete={canMarkComplete(order, remainingPickupQuantity)}
               canMarkPaid={canMarkPaymentPaid(order)}
               canMarkUnfulfilled={canMarkUnfulfilled(order)}
               canMarkUnpaid={canMarkPaymentUnpaid(order)}
               canResendConfirmation={canResendOrderConfirmation}
-              isBusy={isSaving || isCanceling || isResendingConfirmation}
+              canUnarchive={canUnarchiveOrder(order)}
+              isBusy={isSaving || isCanceling || isResendingConfirmation || isArchiving}
               isOpen={isActionsMenuOpen}
+              onArchive={openArchiveDialog}
               onCancel={openCancelPanel}
               onMarkComplete={() => {
                 setActionError(null);
@@ -727,9 +871,12 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                 setFulfillmentError(null);
                 setUnfulfillmentError(null);
                 setCancellationError(null);
+                setArchiveError(null);
                 setShowCancelPanel(false);
+                setShowArchiveDialog(false);
                 setShowUnfulfillmentDialog(false);
                 setShowResendConfirmationDialog(false);
+                setShowUnarchiveDialog(false);
                 setShowFulfillmentDialog(true);
                 setIsActionsMenuOpen(false);
               }}
@@ -741,16 +888,19 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                 setFulfillmentError(null);
                 setUnfulfillmentError(null);
                 setCancellationError(null);
+                setArchiveError(null);
                 setShowCancelPanel(false);
+                setShowArchiveDialog(false);
                 setShowFulfillmentDialog(false);
                 setShowResendConfirmationDialog(false);
+                setShowUnarchiveDialog(false);
                 setShowUnfulfillmentDialog(true);
                 setIsActionsMenuOpen(false);
               }}
               onMarkUnpaid={() => void markOrderUnpaid()}
               onOpenChange={setIsActionsMenuOpen}
-              onPrint={printOrder}
               onResendConfirmation={openResendConfirmationDialog}
+              onUnarchive={openUnarchiveDialog}
             />
           </div>
         </div>
@@ -838,6 +988,23 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         />
       ) : null}
 
+      {showArchiveDialog ? (
+        <ArchiveOrderDialog
+          acknowledgementChecked={archiveAcknowledged}
+          error={archiveError}
+          isArchiving={isArchiving}
+          reasons={getArchiveWarningReasons(order)}
+          onAcknowledgementChange={setArchiveAcknowledged}
+          onClose={() => {
+            if (isArchiving) return;
+            setArchiveAcknowledged(false);
+            setArchiveError(null);
+            setShowArchiveDialog(false);
+          }}
+          onConfirm={() => void archiveOrder()}
+        />
+      ) : null}
+
       {showUnfulfillmentDialog ? (
         <UnfulfillmentDialog
           error={unfulfillmentError}
@@ -860,6 +1027,19 @@ export function OrderDetail({ orderId }: { orderId: string }) {
             setShowResendConfirmationDialog(false);
           }}
           onConfirm={() => void resendOrderConfirmation()}
+        />
+      ) : null}
+
+      {showUnarchiveDialog ? (
+        <UnarchiveOrderDialog
+          error={archiveError}
+          isArchiving={isArchiving}
+          onClose={() => {
+            if (isArchiving) return;
+            setArchiveError(null);
+            setShowUnarchiveDialog(false);
+          }}
+          onConfirm={() => void unarchiveOrder()}
         />
       ) : null}
 
@@ -1399,8 +1579,45 @@ function canEditOrder(order: SellerOrderDetailRow) {
   );
 }
 
+function canArchiveOrder(order: SellerOrderDetailRow) {
+  return !order.archived_at;
+}
+
+function canUnarchiveOrder(order: SellerOrderDetailRow) {
+  return Boolean(order.archived_at);
+}
+
 function canResendConfirmation(order: SellerOrderDetailRow) {
   return !order.canceled_at && order.order_status !== "canceled";
+}
+
+function getArchiveWarningReasons(order: SellerOrderDetailRow) {
+  const reasons: string[] = [];
+
+  if (order.order_status === "canceled" || order.canceled_at) {
+    return reasons;
+  }
+
+  if (order.order_status !== "fulfilled") {
+    reasons.push("open");
+  }
+
+  if (order.payment_status === "unpaid") {
+    reasons.push("unpaid");
+  }
+
+  return reasons;
+}
+
+function formatArchiveWarningSentence(reasons: string[]) {
+  const isOpen = reasons.includes("open");
+  const isUnpaid = reasons.includes("unpaid");
+
+  if (isOpen && isUnpaid) return "This order is still open and unpaid.";
+  if (isOpen) return "This order is still open.";
+  if (isUnpaid) return "This order is still unpaid.";
+
+  return "";
 }
 
 async function kickPostmarkEmailWorker() {
@@ -1553,6 +1770,26 @@ function toSellerOrderCancellationError(message: string | undefined) {
   return "The order could not be canceled. Please try again.";
 }
 
+function toSellerOrderArchiveError(message: string | undefined) {
+  if (!message) {
+    return "The order archive status could not be updated. Please try again.";
+  }
+
+  if (message === "Order is not available." || message.includes("authorized")) {
+    return "This order is no longer available. Please refresh Orders.";
+  }
+
+  if (message.includes("already archived")) {
+    return "This order is already archived. Refresh the order and try again.";
+  }
+
+  if (message.includes("not archived")) {
+    return "This order is not archived. Refresh the order and try again.";
+  }
+
+  return `The order archive status could not be updated: ${message}`;
+}
+
 function formatShortDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -1578,39 +1815,45 @@ function StatusPill({
 }
 
 function QuickActionsMenu({
+  canArchive,
   canCancel,
   canMarkComplete,
   canMarkPaid,
   canMarkUnfulfilled,
   canMarkUnpaid,
   canResendConfirmation,
+  canUnarchive,
   isBusy,
   isOpen,
+  onArchive,
   onCancel,
   onMarkComplete,
   onMarkPaid,
   onMarkUnfulfilled,
   onMarkUnpaid,
   onOpenChange,
-  onPrint,
   onResendConfirmation,
+  onUnarchive,
 }: {
+  canArchive: boolean;
   canCancel: boolean;
   canMarkComplete: boolean;
   canMarkPaid: boolean;
   canMarkUnfulfilled: boolean;
   canMarkUnpaid: boolean;
   canResendConfirmation: boolean;
+  canUnarchive: boolean;
   isBusy: boolean;
   isOpen: boolean;
+  onArchive: () => void;
   onCancel: () => void;
   onMarkComplete: () => void;
   onMarkPaid: () => void;
   onMarkUnfulfilled: () => void;
   onMarkUnpaid: () => void;
   onOpenChange: (isOpen: boolean) => void;
-  onPrint: () => void;
   onResendConfirmation: () => void;
+  onUnarchive: () => void;
 }) {
   return (
     <details
@@ -1655,17 +1898,28 @@ function QuickActionsMenu({
             onClick={onMarkUnpaid}
           />
         ) : null}
-        <QuickActionButton
-          glyph="/glyphs/clipboard.png"
-          label="Print order"
-          onClick={onPrint}
-        />
         {canResendConfirmation ? (
           <QuickActionButton
             disabled={isBusy}
             glyph="/glyphs/envelope.png"
             label="Resend order confirmation"
             onClick={onResendConfirmation}
+          />
+        ) : null}
+        {canArchive ? (
+          <QuickActionButton
+            disabled={isBusy}
+            glyph="/glyphs/shopping-bag.png"
+            label="Archive order"
+            onClick={onArchive}
+          />
+        ) : null}
+        {canUnarchive ? (
+          <QuickActionButton
+            disabled={isBusy}
+            glyph="/glyphs/shopping-bag.png"
+            label="Unarchive order"
+            onClick={onUnarchive}
           />
         ) : null}
         <QuickActionButton
@@ -1678,12 +1932,6 @@ function QuickActionsMenu({
               : "This order cannot be canceled from this screen."
           }
           onClick={onCancel}
-        />
-        <QuickActionButton
-          disabled
-          glyph="/glyphs/shopping-bag.png"
-          label="Archive"
-          title="Order archiving is not wired yet."
         />
       </div>
     </details>
@@ -1893,6 +2141,157 @@ function ResendConfirmationDialog({
             onClick={onClose}
           >
             Cancel
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ArchiveOrderDialog({
+  acknowledgementChecked,
+  error,
+  isArchiving,
+  onAcknowledgementChange,
+  onClose,
+  onConfirm,
+  reasons,
+}: {
+  acknowledgementChecked: boolean;
+  error: string | null;
+  isArchiving: boolean;
+  onAcknowledgementChange: (checked: boolean) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+  reasons: string[];
+}) {
+  const needsAcknowledgement = reasons.length > 0;
+
+  return (
+    <div
+      aria-labelledby="archive-order-dialog-title"
+      aria-modal="true"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-stone-950/30 px-4 py-6"
+      role="dialog"
+    >
+      <section className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-5 shadow-[0_22px_60px_rgba(46,39,25,0.2)]">
+        <h2
+          className="text-lg font-bold text-stone-950"
+          id="archive-order-dialog-title"
+        >
+          {needsAcknowledgement ? "Archive unfinished order?" : "Archive order?"}
+        </h2>
+        {needsAcknowledgement ? (
+          <>
+            <p className="mt-2 text-sm leading-6 text-stone-700">
+              {formatArchiveWarningSentence(reasons)}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-stone-700">
+              Archiving will hide it from your active order list, but it will
+              not change its fulfillment or payment status.
+            </p>
+          </>
+        ) : (
+          <p className="mt-2 text-sm leading-6 text-stone-700">
+            This will remove the order from your active order list. You can view
+            and restore it later.
+          </p>
+        )}
+        {error ? (
+          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+            {error}
+          </p>
+        ) : null}
+        {needsAcknowledgement ? (
+          <label className="mt-4 flex gap-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-stone-700">
+            <input
+              className="mt-1 size-6 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700 sm:size-4"
+              checked={acknowledgementChecked}
+              disabled={isArchiving}
+              type="checkbox"
+              onChange={(event) =>
+                onAcknowledgementChange(event.target.checked)
+              }
+            />
+            <span className="font-semibold text-stone-950">
+              I understand this order is not complete.
+            </span>
+          </label>
+        ) : null}
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <button
+            className={`${orderDetailButtonClass} min-h-10 disabled:cursor-not-allowed disabled:opacity-60`}
+            disabled={
+              isArchiving || (needsAcknowledgement && !acknowledgementChecked)
+            }
+            type="button"
+            onClick={onConfirm}
+          >
+            {isArchiving ? "Archiving..." : "Archive order"}
+          </button>
+          <button
+            className={`${orderDetailBackButtonClass} min-h-10`}
+            disabled={isArchiving}
+            type="button"
+            onClick={onClose}
+          >
+            Keep order
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function UnarchiveOrderDialog({
+  error,
+  isArchiving,
+  onClose,
+  onConfirm,
+}: {
+  error: string | null;
+  isArchiving: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      aria-labelledby="unarchive-order-dialog-title"
+      aria-modal="true"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-stone-950/30 px-4 py-6"
+      role="dialog"
+    >
+      <section className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-5 shadow-[0_22px_60px_rgba(46,39,25,0.2)]">
+        <h2
+          className="text-lg font-bold text-stone-950"
+          id="unarchive-order-dialog-title"
+        >
+          Unarchive order?
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-stone-700">
+          This will return the order to your active order list.
+        </p>
+        {error ? (
+          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+            {error}
+          </p>
+        ) : null}
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <button
+            className={`${orderDetailButtonClass} min-h-10 disabled:cursor-not-allowed disabled:opacity-60`}
+            disabled={isArchiving}
+            type="button"
+            onClick={onConfirm}
+          >
+            {isArchiving ? "Unarchiving..." : "Unarchive order"}
+          </button>
+          <button
+            className={`${orderDetailBackButtonClass} min-h-10`}
+            disabled={isArchiving}
+            type="button"
+            onClick={onClose}
+          >
+            Keep archived
           </button>
         </div>
       </section>

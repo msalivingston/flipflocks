@@ -82,6 +82,7 @@ export type SellerOrderSummary = {
   order_status: string;
   payment_status: string | null;
   created_at: string;
+  archived_at: string | null;
   buyer_first_name_snapshot: string | null;
   buyer_last_name_snapshot: string | null;
   buyer_email_snapshot: string | null;
