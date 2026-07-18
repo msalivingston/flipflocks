@@ -35,6 +35,9 @@ type SellerOrderDetailRow = {
   order_status: string;
   payment_method: string | null;
   payment_status: string | null;
+  payment_provider: string | null;
+  provider_payment_status: string | null;
+  paid_at: string | null;
   created_at: string;
   ready_for_pickup_at: string | null;
   fulfilled_at: string | null;
@@ -143,6 +146,8 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionWarning, setActionWarning] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [fulfillmentError, setFulfillmentError] = useState<string | null>(null);
+  const [unfulfillmentError, setUnfulfillmentError] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [restoreInventoryOnCancel, setRestoreInventoryOnCancel] = useState(true);
   const [emailCancellationToBuyer, setEmailCancellationToBuyer] = useState(false);
@@ -151,6 +156,10 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [isPrintPortalReady, setIsPrintPortalReady] = useState(false);
   const [showCancelPanel, setShowCancelPanel] = useState(false);
   const [showFulfillmentDialog, setShowFulfillmentDialog] = useState(false);
+  const [showUnfulfillmentDialog, setShowUnfulfillmentDialog] = useState(false);
+  const [showResendConfirmationDialog, setShowResendConfirmationDialog] =
+    useState(false);
+  const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -167,7 +176,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         supabase
           .from("seller_order_management")
           .select(
-            "order_id, order_number, order_source, order_status, payment_method, payment_status, created_at, ready_for_pickup_at, fulfilled_at, canceled_at, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, pickup_note, buyer_notes, subtotal_amount, tax_fee_label_snapshot, tax_fee_amount, total_amount, item_count, total_item_quantity, pickup_option_label_snapshot",
+            "order_id, order_number, order_source, order_status, payment_method, payment_status, payment_provider, provider_payment_status, paid_at, created_at, ready_for_pickup_at, fulfilled_at, canceled_at, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, pickup_note, buyer_notes, subtotal_amount, tax_fee_label_snapshot, tax_fee_amount, total_amount, item_count, total_item_quantity, pickup_option_label_snapshot",
           )
           .eq("store_id", seller.store_id)
           .eq("order_id", orderId)
@@ -311,36 +320,8 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     );
   }
 
-  async function markReadyForPickup() {
-    if (!order) return;
-
-    setIsSaving(true);
-    setActionError(null);
-    setActionMessage(null);
-    setActionWarning(null);
-
-    const { error: readyError } = await supabase.rpc(
-      "seller_mark_order_ready_for_pickup",
-      {
-        p_order_id: order.order_id,
-        p_note: null,
-      },
-    );
-
-    if (readyError) {
-      setActionError(toSellerOrderActionError(readyError.message));
-      setIsSaving(false);
-      return;
-    }
-
-    setActionMessage("Order marked ready for pickup.");
-    setShowCancelPanel(false);
-    setRefreshKey((current) => current + 1);
-    setIsSaving(false);
-  }
-
   async function markOrderFulfilled({ markPaid }: { markPaid: boolean }) {
-    if (!order) return;
+    if (!order || isSaving) return;
 
     const fulfillmentItems = data.items
       .filter((item) => item.remaining_unfulfilled_quantity > 0)
@@ -350,7 +331,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       }));
 
     if (fulfillmentItems.length === 0) {
-      setActionError("There are no remaining items to mark fulfilled.");
+      setFulfillmentError("There are no remaining items to mark fulfilled.");
       return;
     }
 
@@ -358,8 +339,10 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setActionError(null);
     setActionMessage(null);
     setActionWarning(null);
+    setFulfillmentError(null);
+    setUnfulfillmentError(null);
 
-    const { error: fulfillmentError } = await supabase.rpc(
+    const { error: fulfillmentRpcError } = await supabase.rpc(
       "seller_record_order_fulfillment",
       {
         p_order_id: order.order_id,
@@ -368,8 +351,9 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       },
     );
 
-    if (fulfillmentError) {
-      setActionError(toSellerOrderActionError(fulfillmentError.message));
+    if (fulfillmentRpcError) {
+      console.warn("Order fulfillment failed", fulfillmentRpcError.message);
+      setFulfillmentError(toSellerOrderFulfillmentError(fulfillmentRpcError.message));
       setIsSaving(false);
       return;
     }
@@ -381,7 +365,14 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       });
 
       if (paymentError) {
-        setActionError(toSellerOrderPaymentError(paymentError.message));
+        console.warn("Order payment update after fulfillment failed", paymentError.message);
+        setActionWarning(
+          "Order was marked fulfilled, but payment status could not be updated.",
+        );
+        setShowCancelPanel(false);
+        setShowFulfillmentDialog(false);
+        setIsActionsMenuOpen(false);
+        setRefreshKey((current) => current + 1);
         setIsSaving(false);
         return;
       }
@@ -394,6 +385,106 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     );
     setShowCancelPanel(false);
     setShowFulfillmentDialog(false);
+    setShowUnfulfillmentDialog(false);
+    setIsActionsMenuOpen(false);
+    setRefreshKey((current) => current + 1);
+    setIsSaving(false);
+  }
+
+  async function markOrderUnfulfilled() {
+    if (!order || isSaving) return;
+
+    setIsSaving(true);
+    setActionError(null);
+    setActionMessage(null);
+    setActionWarning(null);
+    setFulfillmentError(null);
+    setUnfulfillmentError(null);
+
+    const { error: unfulfillmentRpcError } = await supabase.rpc(
+      "seller_mark_order_unfulfilled",
+      {
+        p_order_id: order.order_id,
+        p_note: null,
+      },
+    );
+
+    if (unfulfillmentRpcError) {
+      console.warn("Order unfulfillment failed", unfulfillmentRpcError.message);
+      setUnfulfillmentError(
+        toSellerOrderUnfulfillmentError(unfulfillmentRpcError.message),
+      );
+      setIsSaving(false);
+      return;
+    }
+
+    setActionMessage("Order marked unfulfilled.");
+    setShowCancelPanel(false);
+    setShowFulfillmentDialog(false);
+    setShowUnfulfillmentDialog(false);
+    setIsActionsMenuOpen(false);
+    setRefreshKey((current) => current + 1);
+    setIsSaving(false);
+  }
+
+  async function markOrderPaid() {
+    if (!order) return;
+
+    setIsSaving(true);
+    setActionError(null);
+    setActionMessage(null);
+    setActionWarning(null);
+    setFulfillmentError(null);
+    setUnfulfillmentError(null);
+    setIsActionsMenuOpen(false);
+
+    const { error: paymentError } = await supabase.rpc("mark_order_paid", {
+      p_order_id: order.order_id,
+      p_note: "Payment marked paid by seller.",
+    });
+
+    if (paymentError) {
+      setActionError(toSellerOrderPaymentActionError(paymentError.message, "paid"));
+      setIsSaving(false);
+      return;
+    }
+
+    setActionMessage("Order marked paid.");
+    setShowCancelPanel(false);
+    setShowFulfillmentDialog(false);
+    setShowUnfulfillmentDialog(false);
+    setIsActionsMenuOpen(false);
+    setRefreshKey((current) => current + 1);
+    setIsSaving(false);
+  }
+
+  async function markOrderUnpaid() {
+    if (!order) return;
+
+    setIsSaving(true);
+    setActionError(null);
+    setActionMessage(null);
+    setActionWarning(null);
+    setFulfillmentError(null);
+    setUnfulfillmentError(null);
+    setIsActionsMenuOpen(false);
+
+    const { error: paymentError } = await supabase.rpc("mark_order_pay_at_pickup", {
+      p_order_id: order.order_id,
+      p_note: "Payment marked unpaid by seller.",
+    });
+
+    if (paymentError) {
+      setActionError(toSellerOrderPaymentActionError(paymentError.message, "unpaid"));
+      setIsSaving(false);
+      return;
+    }
+
+    setActionMessage("Order marked unpaid.");
+    setShowCancelPanel(false);
+    setShowFulfillmentDialog(false);
+    setShowUnfulfillmentDialog(false);
+    setIsActionsMenuOpen(false);
     setRefreshKey((current) => current + 1);
     setIsSaving(false);
   }
@@ -466,10 +557,6 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       return;
     }
 
-    if (!window.confirm(`Resend order confirmation to ${buyerEmail}?`)) {
-      return;
-    }
-
     setIsResendingConfirmation(true);
     setActionError(null);
     setActionMessage(null);
@@ -492,6 +579,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         "The order was not changed, but the confirmation email could not be queued. Please try again.",
       );
       setIsResendingConfirmation(false);
+      setShowResendConfirmationDialog(false);
       return;
     }
 
@@ -502,6 +590,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       setPendingResendConfirmationActionId(emailActionId);
       setActionError("This order does not have a customer email address.");
       setIsResendingConfirmation(false);
+      setShowResendConfirmationDialog(false);
       return;
     }
 
@@ -513,12 +602,42 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         "Order confirmation was queued, but email processing could not be started automatically.",
       );
       setIsResendingConfirmation(false);
+      setShowResendConfirmationDialog(false);
       return;
     }
 
     setPendingResendConfirmationActionId(null);
     setActionMessage("Order confirmation resent.");
+    setShowResendConfirmationDialog(false);
     setIsResendingConfirmation(false);
+  }
+
+  function openResendConfirmationDialog() {
+    if (!order || isResendingConfirmation) return;
+
+    const buyerEmail = order.buyer_email_snapshot?.trim();
+
+    setActionError(null);
+    setActionMessage(null);
+    setActionWarning(null);
+    setFulfillmentError(null);
+    setUnfulfillmentError(null);
+
+    if (!buyerEmail) {
+      setActionError("This order does not have a customer email address.");
+      return;
+    }
+
+    if (!canResendConfirmation(order)) {
+      setActionError("This order is not eligible for confirmation resend.");
+      return;
+    }
+
+    setShowCancelPanel(false);
+    setShowFulfillmentDialog(false);
+    setShowUnfulfillmentDialog(false);
+    setShowResendConfirmationDialog(true);
+    setIsActionsMenuOpen(false);
   }
 
   function printOrder() {
@@ -529,9 +648,14 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setActionError(null);
     setActionMessage(null);
     setActionWarning(null);
+    setFulfillmentError(null);
+    setUnfulfillmentError(null);
+    setIsActionsMenuOpen(false);
     setRestoreInventoryOnCancel(true);
     setEmailCancellationToBuyer(buyerHasEmail);
     setShowFulfillmentDialog(false);
+    setShowUnfulfillmentDialog(false);
+    setShowResendConfirmationDialog(false);
     setShowCancelPanel(true);
   }
 
@@ -549,6 +673,14 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           <p className="mt-0.5 text-sm font-medium text-stone-600 sm:text-base">
             {formatDateTime(order.created_at)}
           </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <StatusPill tone={getSavedOrderStatusTone(order.order_status)}>
+              {formatSavedOrderStatus(order.order_status)}
+            </StatusPill>
+            <StatusPill tone={getSavedPaymentStatusTone(order.payment_status)}>
+              {formatSavedPaymentStatus(order.payment_status)}
+            </StatusPill>
+          </div>
         </div>
         <div className="flex flex-col gap-5 lg:items-end">
           <BackToOrdersLink />
@@ -573,17 +705,42 @@ export function OrderDetail({ orderId }: { orderId: string }) {
             <QuickActionsMenu
               canCancel={canCancelOrder(order)}
               canMarkComplete={canMarkComplete(order, remainingPickupQuantity)}
-              canMarkReady={canMarkReady(order)}
+              canMarkPaid={canMarkPaymentPaid(order)}
+              canMarkUnfulfilled={canMarkUnfulfilled(order)}
+              canMarkUnpaid={canMarkPaymentUnpaid(order)}
               canResendConfirmation={canResendOrderConfirmation}
               isBusy={isSaving || isCanceling || isResendingConfirmation}
+              isOpen={isActionsMenuOpen}
               onCancel={openCancelPanel}
               onMarkComplete={() => {
+                setActionError(null);
+                setActionMessage(null);
+                setActionWarning(null);
+                setFulfillmentError(null);
+                setUnfulfillmentError(null);
                 setShowCancelPanel(false);
+                setShowUnfulfillmentDialog(false);
+                setShowResendConfirmationDialog(false);
                 setShowFulfillmentDialog(true);
+                setIsActionsMenuOpen(false);
               }}
-              onMarkReady={() => void markReadyForPickup()}
+              onMarkPaid={() => void markOrderPaid()}
+              onMarkUnfulfilled={() => {
+                setActionError(null);
+                setActionMessage(null);
+                setActionWarning(null);
+                setFulfillmentError(null);
+                setUnfulfillmentError(null);
+                setShowCancelPanel(false);
+                setShowFulfillmentDialog(false);
+                setShowResendConfirmationDialog(false);
+                setShowUnfulfillmentDialog(true);
+                setIsActionsMenuOpen(false);
+              }}
+              onMarkUnpaid={() => void markOrderUnpaid()}
+              onOpenChange={setIsActionsMenuOpen}
               onPrint={printOrder}
-              onResendConfirmation={() => void resendOrderConfirmation()}
+              onResendConfirmation={openResendConfirmationDialog}
             />
           </div>
         </div>
@@ -658,10 +815,40 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       {showFulfillmentDialog ? (
         <FulfillmentDialog
           canMarkPaid={canMarkPaymentPaid(order)}
+          error={fulfillmentError}
           isSaving={isSaving}
-          onClose={() => setShowFulfillmentDialog(false)}
+          onClose={() => {
+            if (isSaving) return;
+            setFulfillmentError(null);
+            setShowFulfillmentDialog(false);
+          }}
           onFulfillOnly={() => void markOrderFulfilled({ markPaid: false })}
           onFulfillPaid={() => void markOrderFulfilled({ markPaid: true })}
+        />
+      ) : null}
+
+      {showUnfulfillmentDialog ? (
+        <UnfulfillmentDialog
+          error={unfulfillmentError}
+          isSaving={isSaving}
+          onClose={() => {
+            if (isSaving) return;
+            setUnfulfillmentError(null);
+            setShowUnfulfillmentDialog(false);
+          }}
+          onConfirm={() => void markOrderUnfulfilled()}
+        />
+      ) : null}
+
+      {showResendConfirmationDialog ? (
+        <ResendConfirmationDialog
+          buyerEmail={order.buyer_email_snapshot?.trim() ?? ""}
+          isSending={isResendingConfirmation}
+          onClose={() => {
+            if (isResendingConfirmation) return;
+            setShowResendConfirmationDialog(false);
+          }}
+          onConfirm={() => void resendOrderConfirmation()}
         />
       ) : null}
 
@@ -1153,13 +1340,6 @@ function formatPhoneHref(value: string) {
   return value.replace(/[^\d+]/g, "");
 }
 
-function canMarkReady(order: SellerOrderDetailRow) {
-  return (
-    ["pending", "open"].includes(order.order_status) &&
-    !order.ready_for_pickup_at
-  );
-}
-
 function canCancelOrder(order: SellerOrderDetailRow) {
   return (
     order.payment_method === "pay_at_pickup" &&
@@ -1179,8 +1359,22 @@ function canMarkComplete(
 
 function canMarkPaymentPaid(order: SellerOrderDetailRow) {
   return (
+    order.payment_provider === "offline" &&
     order.payment_method === "pay_at_pickup" &&
-    order.payment_status === "pay_at_pickup" &&
+    ["pay_at_pickup", "unpaid"].includes(order.payment_status ?? "") &&
+    ["pending", "open", "fulfilled"].includes(order.order_status)
+  );
+}
+
+function canMarkUnfulfilled(order: SellerOrderDetailRow) {
+  return order.order_status === "fulfilled" && !order.canceled_at;
+}
+
+function canMarkPaymentUnpaid(order: SellerOrderDetailRow) {
+  return (
+    order.payment_provider === "offline" &&
+    order.payment_method === "pay_at_pickup" &&
+    order.payment_status === "paid" &&
     ["pending", "open", "fulfilled"].includes(order.order_status)
   );
 }
@@ -1229,36 +1423,107 @@ function getOrderLifecycleTone(order: SellerOrderDetailRow) {
   return "bg-amber-100 text-amber-800";
 }
 
-function toSellerOrderActionError(message: string | undefined) {
-  if (message === "Order is not available.") {
+function formatSavedOrderStatus(status: string | null) {
+  if (status === "fulfilled") return "FULFILLED";
+  if (status === "canceled") return "CANCELED";
+
+  return "OPEN";
+}
+
+function getSavedOrderStatusTone(status: string | null) {
+  if (status === "fulfilled") return "bg-emerald-100 text-emerald-800";
+  if (status === "canceled") return "bg-red-100 text-red-800";
+
+  return "bg-amber-100 text-amber-800";
+}
+
+function formatSavedPaymentStatus(status: string | null) {
+  if (status === "paid") return "PAID";
+  if (status === "refunded") return "REFUNDED";
+
+  return "UNPAID";
+}
+
+function getSavedPaymentStatusTone(status: string | null) {
+  if (status === "paid") return "bg-emerald-100 text-emerald-800";
+  if (status === "refunded") return "bg-sky-100 text-sky-800";
+
+  return "bg-amber-100 text-amber-800";
+}
+
+function toSellerOrderFulfillmentError(message: string | undefined) {
+  if (!message) {
+    return "The order could not be marked fulfilled. Please try again.";
+  }
+
+  if (message === "Order is not available." || message.includes("authorized")) {
     return "This order is no longer available. Please refresh Orders.";
   }
 
-  if (message?.includes("ready for pickup")) {
-    return "This order cannot be marked ready right now.";
+  if (message.includes("Only pending or open orders can be fulfilled")) {
+    return "This order is no longer open for fulfillment. Refresh the order and try again.";
   }
 
-  if (message?.includes("fulfilled") || message?.includes("fulfillment")) {
-    return "This order cannot be marked fulfilled right now.";
+  if (message.includes("At least one fulfillment item")) {
+    return "There are no remaining items to mark fulfilled.";
   }
 
-  return "The order could not be updated. Please try again.";
+  if (message.includes("valid order item ID") || message.includes("Duplicate order items")) {
+    return "Fulfillment could not be recorded because the item list is no longer current. Refresh and try again.";
+  }
+
+  if (message.includes("not available for this order")) {
+    return "One or more order items are no longer available for fulfillment. Refresh and try again.";
+  }
+
+  if (message.includes("exceeds remaining unfulfilled quantity")) {
+    return "One or more line items have already been fulfilled or restored. Refresh and try again.";
+  }
+
+  return `The order could not be marked fulfilled: ${message}`;
 }
 
-function toSellerOrderPaymentError(message: string | undefined) {
-  if (message?.includes("pay-at-pickup")) {
-    return "Payment can only be marked paid for pay-at-pickup orders.";
+function toSellerOrderUnfulfillmentError(message: string | undefined) {
+  if (!message) {
+    return "The order could not be marked unfulfilled. Please try again.";
   }
 
-  if (message?.includes("marked paid")) {
-    return "This order cannot be marked paid right now.";
+  if (message === "Order is not available." || message.includes("authorized")) {
+    return "This order is no longer available. Please refresh Orders.";
+  }
+
+  if (message.includes("Canceled orders")) {
+    return "Canceled orders cannot be marked unfulfilled.";
+  }
+
+  if (message.includes("Only fulfilled orders")) {
+    return "Only fulfilled orders can be marked unfulfilled. Refresh the order and try again.";
+  }
+
+  return `The order could not be marked unfulfilled: ${message}`;
+}
+
+function toSellerOrderPaymentActionError(
+  message: string | undefined,
+  targetStatus: "paid" | "unpaid",
+) {
+  if (message?.includes("offline") || message?.includes("pay-at-pickup")) {
+    return targetStatus === "paid"
+      ? "Only unpaid offline pickup orders can be marked paid here."
+      : "Only manually paid offline orders can be marked unpaid here.";
+  }
+
+  if (message?.includes("Stripe") || message?.includes("provider")) {
+    return "Stripe-paid orders cannot be changed manually.";
   }
 
   if (message === "Order not found." || message?.includes("authorized")) {
     return "This order is no longer available. Please refresh Orders.";
   }
 
-  return "The order was fulfilled, but payment could not be marked paid. Please refresh and review payment status.";
+  return targetStatus === "paid"
+    ? "The order could not be marked paid. Please try again."
+    : "The order could not be marked unpaid. Please try again.";
 }
 
 function toSellerOrderCancellationError(message: string | undefined) {
@@ -1304,55 +1569,81 @@ function StatusPill({
 function QuickActionsMenu({
   canCancel,
   canMarkComplete,
-  canMarkReady,
+  canMarkPaid,
+  canMarkUnfulfilled,
+  canMarkUnpaid,
   canResendConfirmation,
   isBusy,
+  isOpen,
   onCancel,
   onMarkComplete,
-  onMarkReady,
+  onMarkPaid,
+  onMarkUnfulfilled,
+  onMarkUnpaid,
+  onOpenChange,
   onPrint,
   onResendConfirmation,
 }: {
   canCancel: boolean;
   canMarkComplete: boolean;
-  canMarkReady: boolean;
+  canMarkPaid: boolean;
+  canMarkUnfulfilled: boolean;
+  canMarkUnpaid: boolean;
   canResendConfirmation: boolean;
   isBusy: boolean;
+  isOpen: boolean;
   onCancel: () => void;
   onMarkComplete: () => void;
-  onMarkReady: () => void;
+  onMarkPaid: () => void;
+  onMarkUnfulfilled: () => void;
+  onMarkUnpaid: () => void;
+  onOpenChange: (isOpen: boolean) => void;
   onPrint: () => void;
   onResendConfirmation: () => void;
 }) {
   return (
-    <details className="relative">
+    <details
+      className="relative"
+      open={isOpen}
+      onToggle={(event) => onOpenChange(event.currentTarget.open)}
+    >
       <summary className={`${orderDetailButtonClass} cursor-pointer list-none`}>
         More actions
         <ChevronDown aria-hidden="true" className="size-4" />
       </summary>
       <div className="absolute right-0 z-20 mt-2 w-60 rounded-xl border border-stone-200 bg-white p-2 shadow-[0_18px_40px_rgba(46,39,25,0.14)]">
-        <QuickActionButton
-          disabled={!canMarkReady || isBusy}
-          glyph="/glyphs/checkmark.png"
-          label="Mark ready for pickup"
-          title={
-            canMarkReady
-              ? "Manual override for current workflow."
-              : "This order cannot be marked ready right now."
-          }
-          onClick={onMarkReady}
-        />
-        <QuickActionButton
-          disabled={!canMarkComplete || isBusy}
-          glyph="/glyphs/checkmark.png"
-          label="Mark order fulfilled"
-          title={
-            canMarkComplete
-              ? undefined
-              : "This order cannot be marked fulfilled right now."
-          }
-          onClick={onMarkComplete}
-        />
+        {canMarkComplete ? (
+          <QuickActionButton
+            disabled={isBusy}
+            glyph="/glyphs/checkmark.png"
+            label="Mark order fulfilled"
+            onClick={onMarkComplete}
+          />
+        ) : null}
+        {canMarkUnfulfilled ? (
+          <QuickActionButton
+            disabled={isBusy}
+            glyph="/glyphs/checkmark.png"
+            label="Mark order unfulfilled"
+            onClick={onMarkUnfulfilled}
+          />
+        ) : null}
+        {canMarkPaid ? (
+          <QuickActionButton
+            disabled={isBusy}
+            glyph="/glyphs/checkmark.png"
+            label="Mark paid"
+            onClick={onMarkPaid}
+          />
+        ) : null}
+        {canMarkUnpaid ? (
+          <QuickActionButton
+            disabled={isBusy}
+            glyph="/glyphs/checkmark.png"
+            label="Mark unpaid"
+            onClick={onMarkUnpaid}
+          />
+        ) : null}
         <QuickActionButton
           glyph="/glyphs/clipboard.png"
           label="Print order"
@@ -1376,12 +1667,6 @@ function QuickActionsMenu({
               : "This order cannot be canceled from this screen."
           }
           onClick={onCancel}
-        />
-        <QuickActionButton
-          disabled
-          glyph="/glyphs/clipboard.png"
-          label="Refund"
-          title="Refunds are not wired for pay-at-pickup orders yet."
         />
         <QuickActionButton
           disabled
@@ -1423,12 +1708,14 @@ function QuickActionButton({
 
 function FulfillmentDialog({
   canMarkPaid,
+  error,
   isSaving,
   onClose,
   onFulfillOnly,
   onFulfillPaid,
 }: {
   canMarkPaid: boolean;
+  error: string | null;
   isSaving: boolean;
   onClose: () => void;
   onFulfillOnly: () => void;
@@ -1451,35 +1738,146 @@ function FulfillmentDialog({
         <p className="mt-2 text-sm leading-6 text-stone-700">
           This means the buyer has received the birds and the order is complete.
         </p>
-        <p className="mt-4 text-sm font-bold text-stone-950">
-          Was this order paid at pickup?
+        {error ? (
+          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+            {error}
+          </p>
+        ) : null}
+        {canMarkPaid ? (
+          <p className="mt-4 text-sm font-bold text-stone-950">
+            Was this order paid at pickup?
+          </p>
+        ) : null}
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          {canMarkPaid ? (
+            <button
+              className={`${orderDetailButtonClass} min-h-10 disabled:cursor-not-allowed disabled:opacity-60`}
+              disabled={isSaving}
+              type="button"
+              onClick={onFulfillPaid}
+            >
+              {isSaving ? "Saving..." : "Mark fulfilled and paid"}
+            </button>
+          ) : null}
+          <button
+            className={`${canMarkPaid ? orderDetailBackButtonClass : orderDetailButtonClass} min-h-10`}
+            disabled={isSaving}
+            type="button"
+            onClick={onFulfillOnly}
+          >
+            {isSaving ? "Saving..." : canMarkPaid ? "Mark fulfilled only" : "Mark fulfilled"}
+          </button>
+          <button
+            className="min-h-10 rounded-md px-3.5 text-sm font-bold text-stone-700 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:col-span-2"
+            disabled={isSaving}
+            type="button"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function UnfulfillmentDialog({
+  error,
+  isSaving,
+  onClose,
+  onConfirm,
+}: {
+  error: string | null;
+  isSaving: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      aria-labelledby="unfulfillment-dialog-title"
+      aria-modal="true"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-stone-950/30 px-4 py-6"
+      role="dialog"
+    >
+      <section className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-5 shadow-[0_22px_60px_rgba(46,39,25,0.2)]">
+        <h2
+          className="text-lg font-bold text-stone-950"
+          id="unfulfillment-dialog-title"
+        >
+          Mark order unfulfilled?
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-stone-700">
+          This will reopen the order and reset its fulfillment status. Payment
+          status will not change.
         </p>
-        {!canMarkPaid ? (
-          <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            Payment can only be marked paid when this is an unpaid
-            pay-at-pickup order. You can still mark the order fulfilled.
+        {error ? (
+          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+            {error}
           </p>
         ) : null}
         <div className="mt-5 grid gap-2 sm:grid-cols-2">
           <button
             className={`${orderDetailButtonClass} min-h-10 disabled:cursor-not-allowed disabled:opacity-60`}
-            disabled={!canMarkPaid || isSaving}
+            disabled={isSaving}
             type="button"
-            onClick={onFulfillPaid}
+            onClick={onConfirm}
           >
-            {isSaving ? "Saving..." : "Mark fulfilled and paid"}
+            {isSaving ? "Saving..." : "Mark unfulfilled"}
           </button>
           <button
             className={`${orderDetailBackButtonClass} min-h-10`}
             disabled={isSaving}
             type="button"
-            onClick={onFulfillOnly}
+            onClick={onClose}
           >
-            {isSaving ? "Saving..." : "Mark fulfilled only"}
+            Cancel
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ResendConfirmationDialog({
+  buyerEmail,
+  isSending,
+  onClose,
+  onConfirm,
+}: {
+  buyerEmail: string;
+  isSending: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      aria-labelledby="resend-confirmation-dialog-title"
+      aria-modal="true"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-stone-950/30 px-4 py-6"
+      role="dialog"
+    >
+      <section className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-5 shadow-[0_22px_60px_rgba(46,39,25,0.2)]">
+        <h2
+          className="text-lg font-bold text-stone-950"
+          id="resend-confirmation-dialog-title"
+        >
+          Resend order confirmation?
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-stone-700">
+          Resend order confirmation to {buyerEmail}?
+        </p>
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <button
+            className={`${orderDetailButtonClass} min-h-10 disabled:cursor-not-allowed disabled:opacity-60`}
+            disabled={isSending}
+            type="button"
+            onClick={onConfirm}
+          >
+            {isSending ? "Sending..." : "Resend email"}
           </button>
           <button
-            className="min-h-10 rounded-md px-3.5 text-sm font-bold text-stone-700 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:col-span-2"
-            disabled={isSaving}
+            className={`${orderDetailBackButtonClass} min-h-10`}
+            disabled={isSending}
             type="button"
             onClick={onClose}
           >
