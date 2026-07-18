@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
+import { ArrowUpDown, ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../_components/seller-context";
@@ -10,6 +10,23 @@ import { EmptyState, ErrorState, LoadingState } from "../_components/seller-ui";
 import { formatCurrency } from "../orders/order-formatters";
 
 const CUSTOMERS_PER_PAGE = 6;
+
+type CustomerSortOption =
+  | "last-order-newest"
+  | "last-order-oldest"
+  | "name-az"
+  | "name-za"
+  | "most-orders"
+  | "highest-lifetime-value";
+
+const customerSortOptions: { label: string; value: CustomerSortOption }[] = [
+  { label: "Last order: Newest", value: "last-order-newest" },
+  { label: "Last order: Oldest", value: "last-order-oldest" },
+  { label: "Customer name: A–Z", value: "name-az" },
+  { label: "Customer name: Z–A", value: "name-za" },
+  { label: "Most orders", value: "most-orders" },
+  { label: "Highest lifetime value", value: "highest-lifetime-value" },
+];
 
 const avatarTones = [
   "bg-emerald-100 text-emerald-900",
@@ -52,8 +69,7 @@ export function CustomersList() {
   const { seller } = useSellerContext();
   const [customers, setCustomers] = useState<SellerCustomerSummaryRow[]>([]);
   const [query, setQuery] = useState("");
-  const [customerFilter, setCustomerFilter] = useState("all");
-  const [sort, setSort] = useState("last-order-newest");
+  const [sort, setSort] = useState<CustomerSortOption>("last-order-newest");
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,11 +132,9 @@ export function CustomersList() {
 
   const visibleCustomers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    const filteredCustomers =
-      customerFilter === "all" ? customers : customers;
 
     const matchedCustomers = normalizedQuery
-      ? filteredCustomers.filter((customer) =>
+      ? customers.filter((customer) =>
           [
             formatCustomerName(customer),
             customer.business_name,
@@ -130,21 +144,12 @@ export function CustomersList() {
             .filter(Boolean)
             .some((value) => value?.toLowerCase().includes(normalizedQuery)),
         )
-      : filteredCustomers;
+      : customers;
 
-    return [...matchedCustomers].sort((left, right) => {
-      if (sort !== "last-order-newest") return 0;
-
-      const leftTime = left.latest_order_created_at
-        ? new Date(left.latest_order_created_at).getTime()
-        : 0;
-      const rightTime = right.latest_order_created_at
-        ? new Date(right.latest_order_created_at).getTime()
-        : 0;
-
-      return rightTime - leftTime;
-    });
-  }, [customerFilter, customers, query, sort]);
+    return [...matchedCustomers].sort((left, right) =>
+      compareCustomers(left, right, sort),
+    );
+  }, [customers, query, sort]);
 
   const totalPages = Math.max(
     1,
@@ -172,19 +177,21 @@ export function CustomersList() {
 
   return (
     <div className="min-w-0 space-y-4">
-      <div className="flex min-w-0 flex-wrap gap-3 lg:items-center">
-        <label className="relative min-w-0 flex-[1_1_24rem]">
-          <span className="sr-only">Search customers</span>
-          <Image
-            aria-hidden="true"
-            className="absolute left-4 top-1/2 size-4 -translate-y-1/2 opacity-70"
-            src="/glyphs/looking-glass.png"
-            alt=""
-            width={18}
-            height={18}
-          />
+      <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(20rem,1fr)_minmax(15rem,18rem)_auto] lg:items-end">
+        <label className="grid min-w-0 gap-1.5 text-base font-bold text-stone-700 sm:text-sm">
+          <span className="inline-flex items-center gap-1.5">
+            <Image
+              aria-hidden="true"
+              className="size-3.5 opacity-75"
+              src="/glyphs/looking-glass.png"
+              alt=""
+              width={16}
+              height={16}
+            />
+            Search
+          </span>
           <input
-            className="min-h-12 w-full rounded-lg border border-stone-300 bg-white py-3 pl-11 pr-4 text-base font-medium text-stone-950 shadow-sm outline-none transition placeholder:text-stone-500 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 sm:text-sm"
+            className="min-h-12 w-full rounded-lg border border-stone-300 bg-white px-4 py-3 text-base font-medium text-stone-950 shadow-sm outline-none transition placeholder:text-stone-500 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm"
             placeholder="Search by name, email, phone, or farm name..."
             type="search"
             value={query}
@@ -195,56 +202,41 @@ export function CustomersList() {
           />
         </label>
 
-        <label className="relative min-w-0 flex-[1_1_11rem] sm:max-w-52">
-          <span className="sr-only">Customer filter</span>
-          <Image
-            aria-hidden="true"
-            className="absolute left-4 top-1/2 size-4 -translate-y-1/2 opacity-75"
-            src="/glyphs/customers.png"
-            alt=""
-            width={18}
-            height={18}
-          />
-          <select
-            className="min-h-12 w-full appearance-none rounded-lg border border-stone-300 bg-white py-3 pl-11 pr-9 text-base font-semibold text-stone-950 shadow-sm outline-none transition focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 sm:text-sm"
-            value={customerFilter}
-            onChange={(event) => {
-              setCustomerFilter(event.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="all">All customers</option>
-          </select>
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute right-4 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center text-stone-500"
-          >
-            <ChevronDown aria-hidden="true" className="size-4" strokeWidth={2} />
+        <label className="grid min-w-0 gap-1.5 text-base font-bold text-stone-700 sm:text-sm">
+          <span className="inline-flex items-center gap-1.5">
+            <ArrowUpDown
+              aria-hidden="true"
+              className="size-3.5 text-emerald-800"
+              strokeWidth={2.25}
+            />
+            Sort by
           </span>
-        </label>
-
-        <label className="relative min-w-0 flex-[1_1_14rem] sm:max-w-64">
-          <span className="sr-only">Sort customers</span>
-          <select
-            className="min-h-12 w-full appearance-none rounded-lg border border-stone-300 bg-white px-4 py-3 pr-9 text-base font-semibold text-stone-950 shadow-sm outline-none transition focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 sm:text-sm"
-            value={sort}
-            onChange={(event) => {
-              setSort(event.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="last-order-newest">Sort: Last order (newest)</option>
-          </select>
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute right-4 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center text-stone-500"
-          >
-            <ChevronDown aria-hidden="true" className="size-4" strokeWidth={2} />
+          <span className="relative">
+            <select
+              className="min-h-12 w-full appearance-none rounded-lg border border-stone-300 bg-white px-4 py-3 pr-9 text-base font-semibold text-stone-950 shadow-sm outline-none transition focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm"
+              value={sort}
+              onChange={(event) => {
+                setSort(event.target.value as CustomerSortOption);
+                setPage(1);
+              }}
+            >
+              {customerSortOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute right-4 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center text-stone-500"
+            >
+              <ChevronDown aria-hidden="true" className="size-4" strokeWidth={2} />
+            </span>
           </span>
         </label>
 
         <Link
-          className="ml-auto inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-800 px-4 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 sm:text-sm"
+          className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-800 px-4 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 sm:text-sm lg:self-end"
           href="/dashboard/orders/new"
         >
           <span aria-hidden="true" className="text-xl leading-none">
@@ -513,6 +505,70 @@ function getPaginationPages(currentPage: number, totalPages: number) {
   pages.push(totalPages);
 
   return pages;
+}
+
+function compareCustomers(
+  left: SellerCustomerSummaryRow,
+  right: SellerCustomerSummaryRow,
+  sort: CustomerSortOption,
+) {
+  const nameComparison = compareCustomerNames(left, right);
+
+  if (sort === "name-az") return nameComparison;
+  if (sort === "name-za") return -nameComparison;
+
+  if (sort === "most-orders") {
+    return (
+      (right.order_count ?? 0) - (left.order_count ?? 0) ||
+      nameComparison
+    );
+  }
+
+  if (sort === "highest-lifetime-value") {
+    return (
+      (right.lifetime_order_total ?? 0) - (left.lifetime_order_total ?? 0) ||
+      nameComparison
+    );
+  }
+
+  const dateComparison = compareLastOrderDates(left, right);
+
+  return sort === "last-order-oldest" ? dateComparison : -dateComparison;
+}
+
+function compareLastOrderDates(
+  left: SellerCustomerSummaryRow,
+  right: SellerCustomerSummaryRow,
+) {
+  const leftTime = getOrderTime(left.latest_order_created_at);
+  const rightTime = getOrderTime(right.latest_order_created_at);
+
+  if (leftTime == null && rightTime == null) {
+    return compareCustomerNames(left, right);
+  }
+
+  if (leftTime == null) return 1;
+  if (rightTime == null) return -1;
+
+  return leftTime - rightTime || compareCustomerNames(left, right);
+}
+
+function compareCustomerNames(
+  left: SellerCustomerSummaryRow,
+  right: SellerCustomerSummaryRow,
+) {
+  return formatCustomerName(left).localeCompare(formatCustomerName(right), undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function getOrderTime(value: string | null) {
+  if (!value) return null;
+
+  const time = new Date(value).getTime();
+
+  return Number.isNaN(time) ? null : time;
 }
 
 function formatCustomerName(customer: {
