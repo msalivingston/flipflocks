@@ -23,10 +23,7 @@ import {
   formatCurrency,
   formatDateTime,
   formatInventoryLabel,
-  formatOrderLifecycle,
-  formatPaymentMethod,
   getOrderLifecycleState,
-  type OrderLifecycleState,
 } from "./order-formatters";
 import { downloadPickupSummaryReports } from "./pickup-summary-report-downloads";
 import {
@@ -159,6 +156,12 @@ type BulkSimpleRpcResult = {
   requested_count: number;
   skipped_count: number;
   updated_count: number;
+};
+
+type CombinedOrderStatus = {
+  description: string;
+  label: string;
+  tone: "canceled" | "completed" | "open" | "refunded" | "warning";
 };
 
 const orderFilters: { label: string; value: OrderFilter }[] = [
@@ -1115,14 +1118,14 @@ function OrdersTableCard({
 
       <div
         aria-hidden="true"
-        className="hidden grid-cols-[2.25rem_minmax(9rem,10.5rem)_minmax(6.5rem,7.5rem)_minmax(0,1.6fr)_minmax(4.75rem,5.75rem)_minmax(7rem,8.25rem)_5.5rem] gap-3 bg-[#fbfaf6] px-4 py-3 text-xs font-medium uppercase tracking-[0.08em] text-stone-600 xl:grid"
+        className="hidden grid-cols-[2.25rem_minmax(9rem,10.5rem)_minmax(6.5rem,7.5rem)_minmax(0,1.6fr)_minmax(4.75rem,5.75rem)_minmax(9.5rem,11.5rem)_5.5rem] gap-3 bg-[#fbfaf6] px-4 py-3 text-xs font-medium uppercase tracking-[0.08em] text-stone-600 xl:grid"
       >
         <span />
         <span>Order</span>
         <span>Date</span>
         <span>Buyer</span>
         <span>Total</span>
-        <span>Payment</span>
+        <span>Status</span>
         <span className="text-right">Open</span>
       </div>
 
@@ -2207,13 +2210,12 @@ function OrderRow({
   onToggleSelection: () => void;
 }) {
   const customerName = formatCustomerName(order);
-  const lifecycle = getOrderLifecycleState(order);
   const pickupNote = order.pickup_note?.trim();
   const mobileDetailsId = `mobile-order-details-${order.order_id}`;
   const desktopBuyerDetailsId = `desktop-buyer-details-${order.order_id}`;
   const desktopDetailsId = `desktop-order-items-${order.order_id}`;
   const itemSummary = formatOrderItems(order);
-  const paymentSummary = formatPaymentSummary(order);
+  const combinedStatus = getCombinedOrderStatus(order);
 
   return (
     <article className="bg-white transition hover:bg-[#fffdf8]">
@@ -2237,10 +2239,7 @@ function OrderRow({
               >
                 #{order.order_number}
               </Link>
-              <OrderLifecycleBadge
-                label={formatOrderLifecycle(order)}
-                lifecycle={lifecycle}
-              />
+              <CombinedOrderStatusBadge status={combinedStatus} />
               {order.archived_at ? <OrderArchivedBadge /> : null}
             </div>
             <p className="mt-1 truncate text-base font-semibold text-stone-950 sm:text-sm sm:font-normal">
@@ -2307,9 +2306,11 @@ function OrderRow({
                   {pickupNote}
                 </p>
               ) : null}
-            <p>
-                <span className="font-medium text-stone-700">Payment:</span>{" "}
-                {paymentSummary}
+              <p>
+                <span className="font-medium text-stone-700">Status:</span>{" "}
+                <span title={combinedStatus.description}>
+                  {combinedStatus.label}
+                </span>
               </p>
             </div>
 
@@ -2329,7 +2330,7 @@ function OrderRow({
         ) : null}
       </div>
 
-      <div className="hidden gap-3 px-4 py-2.5 xl:grid xl:grid-cols-[2.25rem_minmax(9rem,10.5rem)_minmax(6.5rem,7.5rem)_minmax(0,1.6fr)_minmax(4.75rem,5.75rem)_minmax(7rem,8.25rem)_5.5rem] xl:items-center">
+      <div className="hidden gap-3 px-4 py-2.5 xl:grid xl:grid-cols-[2.25rem_minmax(9rem,10.5rem)_minmax(6.5rem,7.5rem)_minmax(0,1.6fr)_minmax(4.75rem,5.75rem)_minmax(9.5rem,11.5rem)_5.5rem] xl:items-center">
         <label className="flex min-h-6 items-center gap-3">
           <input
             aria-label={`Select order ${order.order_number}`}
@@ -2428,9 +2429,7 @@ function OrderRow({
           {formatCurrency(order.total_amount)}
         </p>
 
-        <p className="min-w-0 truncate text-sm text-stone-950">
-          {paymentSummary}
-        </p>
+        <CombinedOrderStatusBadge status={combinedStatus} />
 
         <Link
           className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-md border border-emerald-800 bg-emerald-800 px-3 text-sm font-semibold text-white transition hover:border-emerald-900 hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
@@ -2678,27 +2677,24 @@ function OrderContactButtons({
   );
 }
 
-function OrderLifecycleBadge({
-  label,
-  lifecycle,
-}: {
-  label: string;
-  lifecycle: OrderLifecycleState;
-}) {
+function CombinedOrderStatusBadge({ status }: { status: CombinedOrderStatus }) {
   const tone =
-    lifecycle === "completed"
+    status.tone === "completed"
       ? "bg-emerald-100 text-emerald-800"
-      : lifecycle === "ready_for_pickup"
-        ? "bg-sky-100 text-sky-800"
-        : lifecycle === "canceled"
-          ? "bg-red-100 text-red-800"
-          : "bg-amber-100 text-amber-800";
+      : status.tone === "canceled"
+        ? "bg-red-100 text-red-800"
+        : status.tone === "refunded"
+          ? "bg-sky-100 text-sky-800"
+          : status.tone === "warning"
+            ? "bg-amber-100 text-amber-800"
+            : "bg-stone-100 text-stone-700";
 
   return (
     <span
-      className={`inline-flex min-h-7 items-center rounded-full px-2.5 py-1 text-sm font-medium sm:min-h-0 sm:text-xs ${tone}`}
+      className={`inline-flex min-h-7 w-fit max-w-full items-center justify-self-start whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium ${tone}`}
+      title={status.description}
     >
-      {label}
+      <span className="truncate">{status.label}</span>
     </span>
   );
 }
@@ -2878,6 +2874,57 @@ function getFilterCounts(orders: OrderFilterCountRow[]) {
   }
 
   return counts;
+}
+
+function getCombinedOrderStatus(order: SellerOrderRow): CombinedOrderStatus {
+  if (isOrderCanceled(order)) {
+    return {
+      description: "Order is canceled, regardless of payment state.",
+      label: "Canceled",
+      tone: "canceled",
+    };
+  }
+
+  if (order.payment_status === "refunded") {
+    return {
+      description: "Payment status is refunded.",
+      label: "Refunded",
+      tone: "refunded",
+    };
+  }
+
+  const isFulfilled = isOrderFulfilled(order);
+  const isPaid = isOrderPaid(order);
+
+  if (isFulfilled && isPaid) {
+    return {
+      description: "Order is fulfilled and payment is paid.",
+      label: "Completed",
+      tone: "completed",
+    };
+  }
+
+  if (isFulfilled) {
+    return {
+      description: "Order is fulfilled and payment is unpaid.",
+      label: "Fulfilled / Unpaid",
+      tone: "warning",
+    };
+  }
+
+  if (isPaid) {
+    return {
+      description: "Payment is paid and order is not fulfilled.",
+      label: "Paid / Unfulfilled",
+      tone: "warning",
+    };
+  }
+
+  return {
+    description: "Order is not fulfilled and payment is unpaid.",
+    label: "Open",
+    tone: "open",
+  };
 }
 
 function isBulkFulfillmentEligible(order: SellerOrderRow) {
@@ -3168,16 +3215,6 @@ function formatAgeAtSale(days: number) {
 
   const weeks = Math.floor(days / 7);
   return `${weeks} week${weeks === 1 ? "" : "s"} old`;
-}
-
-function formatPaymentSummary(order: SellerOrderRow) {
-  if (order.payment_status === "paid") return "Paid";
-  if (order.payment_status === "refunded") return "Refunded";
-  if (order.payment_status === "unpaid") return "Unpaid";
-
-  return order.payment_method === "pay_at_pickup"
-    ? "Pay at pickup"
-    : formatPaymentMethod(order.payment_method);
 }
 
 function formatShortDate(value: string | null) {
