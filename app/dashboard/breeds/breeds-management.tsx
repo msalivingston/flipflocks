@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ChevronDown, ChevronUp, Funnel } from "lucide-react";
 import {
   type KeyboardEvent,
   useEffect,
@@ -89,25 +90,14 @@ export function BreedsManagement() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [addingBreedId, setAddingBreedId] = useState<string | null>(null);
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [catalogSpeciesFilter, setCatalogSpeciesFilter] = useState("all");
   const [isRemoving, setIsRemoving] = useState(false);
   const [usageLoadError, setUsageLoadError] = useState<string | null>(null);
   const [removeDialog, setRemoveDialog] = useState<RemoveDialogState | null>(
     null,
   );
   const [reloadKey, setReloadKey] = useState(0);
-
-  useEffect(() => {
-    function openAddModal() {
-      setIsModalOpen(true);
-    }
-
-    const trigger = document.querySelector("[data-breeds-add-trigger]");
-    trigger?.addEventListener("click", openAddModal);
-
-    return () => {
-      trigger?.removeEventListener("click", openAddModal);
-    };
-  }, []);
 
   useEffect(() => {
     if (!storeId) return;
@@ -235,9 +225,34 @@ export function BreedsManagement() {
     () => groupProfilesBySpecies(profiles, species),
     [profiles, species],
   );
-  const visibleProfiles = useMemo(
-    () => groups.flatMap((group) => group.profiles),
+  const catalogSpeciesOptions = useMemo(
+    () => groups.map((group) => group.species),
     [groups],
+  );
+  const filteredGroups = useMemo(() => {
+    const normalizedQuery = catalogQuery.trim().toLowerCase();
+
+    return groups
+      .map((group) => ({
+        ...group,
+        profiles: group.profiles.filter((profile) => {
+          if (
+            catalogSpeciesFilter !== "all" &&
+            profile.species_id !== catalogSpeciesFilter
+          ) {
+            return false;
+          }
+
+          if (!normalizedQuery) return true;
+
+          return profile.display_name.toLowerCase().includes(normalizedQuery);
+        }),
+      }))
+      .filter((group) => group.profiles.length > 0);
+  }, [catalogQuery, catalogSpeciesFilter, groups]);
+  const visibleProfiles = useMemo(
+    () => filteredGroups.flatMap((group) => group.profiles),
+    [filteredGroups],
   );
   const profileById = useMemo(
     () => new Map(profiles.map((profile) => [profile.id, profile])),
@@ -509,7 +524,13 @@ export function BreedsManagement() {
 
         {activeTab === "catalog" ? (
           <BreedCatalogPanel
-            groups={groups}
+            catalogQuery={catalogQuery}
+            catalogSpeciesFilter={catalogSpeciesFilter}
+            catalogSpeciesOptions={catalogSpeciesOptions}
+            groups={filteredGroups}
+            hasActiveCatalogFilters={
+              catalogQuery.trim() !== "" || catalogSpeciesFilter !== "all"
+            }
             libraryByBreedId={libraryByBreedId}
             mediaByProfileId={mediaByProfileId}
             profiles={profiles}
@@ -520,6 +541,12 @@ export function BreedsManagement() {
             onClearSelection={clearSelection}
             onOpenBulkRemove={openBulkRemoveDialog}
             onOpenSingleRemove={openSingleRemoveDialog}
+            onResetCatalogFilters={() => {
+              setCatalogQuery("");
+              setCatalogSpeciesFilter("all");
+            }}
+            onSetCatalogQuery={setCatalogQuery}
+            onSetCatalogSpeciesFilter={setCatalogSpeciesFilter}
             onToggleAllVisible={toggleAllVisibleProfiles}
             onToggleProfileSelection={toggleProfileSelection}
           />
@@ -571,7 +598,7 @@ function BreedLibraryHelper() {
   const isExpanded = useSyncExternalStore(
     subscribeBreedHelperPreference,
     readBreedHelperExpandedSnapshot,
-    () => true,
+    () => false,
   );
   const rows = [
     {
@@ -618,11 +645,12 @@ function BreedLibraryHelper() {
           <button
             aria-controls="breed-library-helper-details"
             aria-expanded={false}
-            className="seller-small-button shrink-0 rounded-md px-3"
+            className="seller-small-button inline-flex shrink-0 items-center gap-1.5 rounded-md px-3"
             onClick={toggleExpanded}
             type="button"
           >
-            Show more v
+            Show more
+            <ChevronDown aria-hidden="true" className="size-4" strokeWidth={2.25} />
           </button>
         </div>
       </SellerCard>
@@ -650,11 +678,12 @@ function BreedLibraryHelper() {
           <button
             aria-controls="breed-library-helper-details"
             aria-expanded={true}
-            className="seller-small-button mb-3 rounded-md px-3 lg:absolute lg:right-0 lg:top-0 lg:mb-0"
+            className="seller-small-button mb-3 inline-flex items-center gap-1.5 rounded-md px-3 lg:absolute lg:right-0 lg:top-0 lg:mb-0"
             onClick={toggleExpanded}
             type="button"
           >
-            Show less ^
+            Show less
+            <ChevronUp aria-hidden="true" className="size-4" strokeWidth={2.25} />
           </button>
           <div>
             <h2 className="text-base font-bold text-emerald-950">
@@ -774,13 +803,20 @@ function BreedTabs({
 }
 
 function BreedCatalogPanel({
+  catalogQuery,
+  catalogSpeciesFilter,
+  catalogSpeciesOptions,
   groups,
+  hasActiveCatalogFilters,
   libraryByBreedId,
   mediaByProfileId,
   onAddBreed,
   onClearSelection,
   onOpenBulkRemove,
   onOpenSingleRemove,
+  onResetCatalogFilters,
+  onSetCatalogQuery,
+  onSetCatalogSpeciesFilter,
   onToggleAllVisible,
   onToggleProfileSelection,
   profiles,
@@ -788,13 +824,20 @@ function BreedCatalogPanel({
   usageLoadError,
   usedProfileIds,
 }: {
+  catalogQuery: string;
+  catalogSpeciesFilter: string;
+  catalogSpeciesOptions: BreedSpecies[];
   groups: ReturnType<typeof groupProfilesBySpecies>;
+  hasActiveCatalogFilters: boolean;
   libraryByBreedId: Map<string, BreedLibraryItem>;
   mediaByProfileId: Map<string, ListingPhotoItem[]>;
   onAddBreed: () => void;
   onClearSelection: () => void;
   onOpenBulkRemove: () => void;
   onOpenSingleRemove: (profileId: string) => void;
+  onResetCatalogFilters: () => void;
+  onSetCatalogQuery: (value: string) => void;
+  onSetCatalogSpeciesFilter: (value: string) => void;
   onToggleAllVisible: () => void;
   onToggleProfileSelection: (profileId: string) => void;
   profiles: SellerBreedProfile[];
@@ -833,10 +876,13 @@ function BreedCatalogPanel({
             </div>
           </div>
           <button
-            className="seller-secondary-button w-full sm:w-auto"
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-emerald-800 px-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 sm:w-auto"
             onClick={onAddBreed}
             type="button"
           >
+            <span aria-hidden="true" className="text-lg leading-none">
+              +
+            </span>
             Add Breed
           </button>
         </div>
@@ -848,10 +894,13 @@ function BreedCatalogPanel({
               description="Choose breeds from the Breed Library or create a custom breed for your store."
               action={
                 <button
-                  className="seller-primary-button"
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-emerald-800 px-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
                   onClick={onAddBreed}
                   type="button"
                 >
+                  <span aria-hidden="true" className="text-lg leading-none">
+                    +
+                  </span>
                   Add Breed
                 </button>
               }
@@ -859,6 +908,53 @@ function BreedCatalogPanel({
           </div>
         ) : (
           <>
+            <div className="border-b border-stone-100 bg-stone-50/40 px-3 py-3 sm:px-4">
+              <div className="grid gap-3 sm:grid-cols-[minmax(220px,1fr)_220px_auto] sm:items-end">
+                <label className="grid gap-1.5 text-base font-bold text-stone-700 sm:text-sm">
+                  Search
+                  <input
+                    className="seller-form-field min-h-12 px-3 text-base sm:min-h-10 sm:text-sm"
+                    onChange={(event) => onSetCatalogQuery(event.target.value)}
+                    placeholder="Search breeds"
+                    type="search"
+                    value={catalogQuery}
+                  />
+                </label>
+                <label className="grid gap-1.5 text-base font-bold text-stone-700 sm:text-sm">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Funnel
+                      aria-hidden="true"
+                      className="size-3.5 text-emerald-800"
+                      strokeWidth={2.25}
+                    />
+                    Species
+                  </span>
+                  <select
+                    className="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base font-semibold text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm sm:font-medium"
+                    onChange={(event) =>
+                      onSetCatalogSpeciesFilter(event.target.value)
+                    }
+                    value={catalogSpeciesFilter}
+                  >
+                    <option value="all">All species</option>
+                    {catalogSpeciesOptions.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.common_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {hasActiveCatalogFilters ? (
+                  <button
+                    className="seller-small-button min-h-10 w-full rounded-md px-3 sm:w-auto"
+                    onClick={onResetCatalogFilters}
+                    type="button"
+                  >
+                    Reset filters
+                  </button>
+                ) : null}
+              </div>
+            </div>
             <div className="border-b border-stone-100 px-3 py-2 sm:px-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <label className="flex items-center gap-2 text-xs font-bold text-stone-700">
@@ -866,6 +962,7 @@ function BreedCatalogPanel({
                     aria-label="Select all visible breeds"
                     checked={isAllVisibleSelected}
                     className="size-4 rounded border-stone-300 text-emerald-800 focus:ring-emerald-800"
+                    disabled={!hasVisibleProfiles}
                     type="checkbox"
                     onChange={onToggleAllVisible}
                   />
@@ -904,27 +1001,50 @@ function BreedCatalogPanel({
                 </p>
               ) : null}
             </div>
-            <div className="divide-y divide-stone-100 px-3 sm:px-4">
-            {groups.flatMap((group) =>
-              group.profiles.map((profile) => (
-                <BreedCatalogRow
-                  key={profile.id}
-                  description={getProfileDescription(profile, libraryByBreedId)}
-                  imageUrls={getBreedProfileImageUrls(
-                    profile,
-                    libraryByBreedId,
-                    mediaByProfileId,
-                  )}
-                  isSelected={selectedProfileIds.has(profile.id)}
-                  isUsed={usedProfileIds.has(profile.id)}
-                  profile={profile}
-                  usageLoadError={usageLoadError}
-                  onOpenRemove={() => onOpenSingleRemove(profile.id)}
-                  onToggleSelection={() => onToggleProfileSelection(profile.id)}
+            {visibleProfiles.length === 0 ? (
+              <div className="p-4">
+                <EmptyState
+                  title="No catalog breeds match"
+                  description="Try a different search or species filter."
+                  action={
+                    <button
+                      className="seller-secondary-button rounded-md"
+                      onClick={onResetCatalogFilters}
+                      type="button"
+                    >
+                      Reset filters
+                    </button>
+                  }
                 />
-              )),
+              </div>
+            ) : (
+              <div className="divide-y divide-stone-100 px-3 sm:px-4">
+                {groups.flatMap((group) =>
+                  group.profiles.map((profile) => (
+                    <BreedCatalogRow
+                      key={profile.id}
+                      description={getProfileDescription(
+                        profile,
+                        libraryByBreedId,
+                      )}
+                      imageUrls={getBreedProfileImageUrls(
+                        profile,
+                        libraryByBreedId,
+                        mediaByProfileId,
+                      )}
+                      isSelected={selectedProfileIds.has(profile.id)}
+                      isUsed={usedProfileIds.has(profile.id)}
+                      profile={profile}
+                      usageLoadError={usageLoadError}
+                      onOpenRemove={() => onOpenSingleRemove(profile.id)}
+                      onToggleSelection={() =>
+                        onToggleProfileSelection(profile.id)
+                      }
+                    />
+                  )),
+                )}
+              </div>
             )}
-            </div>
           </>
         )}
       </SellerCard>
@@ -978,13 +1098,13 @@ function BreedCatalogRow({
         </p>
       </div>
       <Link
-        className="seller-small-button min-h-9 w-full rounded-md px-4 sm:w-auto"
+        className="inline-flex min-h-9 w-full items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 sm:w-auto"
         href={`/dashboard/breeds/${profile.id}`}
       >
         Edit
       </Link>
       <button
-        className="seller-small-button min-h-9 w-full rounded-md border-red-200 px-4 text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+        className="inline-flex min-h-9 w-full items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
         disabled={Boolean(usageLoadError)}
         title={
           isUsed
@@ -1756,7 +1876,7 @@ function readBreedHelperPreference() {
 }
 
 function readBreedHelperExpandedSnapshot() {
-  return readBreedHelperPreference() !== "false";
+  return readBreedHelperPreference() === "true";
 }
 
 function writeBreedHelperPreference(isExpanded: boolean) {

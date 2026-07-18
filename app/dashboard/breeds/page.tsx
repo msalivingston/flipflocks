@@ -7,23 +7,10 @@ export default function SellerBreedsPage() {
       <SellerPageHeader
         title="Breeds"
         description="Build the breed list for your storefront."
-        action={<BreedsHeaderAction />}
       />
       <div className="mx-auto w-full max-w-6xl px-5 py-5 sm:px-7">
         <BreedsManagement />
       </div>
     </>
-  );
-}
-
-function BreedsHeaderAction() {
-  return (
-    <button
-      className="seller-primary-button"
-      data-breeds-add-trigger
-      type="button"
-    >
-      Add Breed
-    </button>
   );
 }

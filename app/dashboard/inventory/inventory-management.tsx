@@ -2,16 +2,15 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { ArrowUpDown, Funnel } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../_components/seller-context";
 import {
   EmptyState,
   ErrorState,
-  FilterControl,
   LoadingState,
   SellerCard,
-  StatusBadge,
 } from "../_components/seller-ui";
 import {
   calculateAgeAtAvailabilityDays,
@@ -23,9 +22,6 @@ import {
 } from "../_lib/equipment-inventory";
 import {
   type ProcessedPoultryInventoryRow,
-  formatCurrency as formatProcessedPoultryCurrency,
-  formatProcessedPoultryDescriptor,
-  formatProcessedPoultryStatus,
 } from "../_lib/processed-poultry-inventory";
 
 type InventoryRow = {
@@ -52,27 +48,49 @@ type InventoryRow = {
 
 type ReservedRow = {
   inventory_item_id: string | null;
+  equipment_inventory_item_id: string | null;
+  processed_poultry_inventory_item_id: string | null;
   remaining_unfulfilled_quantity: number | null;
 };
 
+type InventoryProductTab =
+  | "live_poultry"
+  | "hatching_eggs"
+  | "processed_poultry"
+  | "equipment";
 type AgeFilter = "all" | "0_6" | "7_12" | "13_24" | "25_plus" | "unknown";
 type InventoryVisibility = "draft" | "live" | "hidden" | "archived" | "sold_out";
 type AvailabilityFilter =
   | "all"
   | "available_now"
-  | "future"
+  | "coming_soon"
   | "sold_out"
-  | "local_pickup"
-  | "not_listed"
-  | "unavailable";
+  | "hidden";
 type InventorySort =
   | "hatch_date"
+  | "breed"
+  | "product_name"
+  | "item_name"
   | "name"
   | "age"
   | "available"
   | "reserved"
   | "price"
-  | "availability";
+  | "availability"
+  | "recently_added";
+
+type InventoryTabFilters = {
+  species: string;
+  typeSex: string;
+  age: AgeFilter;
+  breed: string;
+  productCategory: string;
+  equipmentCategory: string;
+  condition: string;
+  availability: AvailabilityFilter;
+  search: string;
+  sortBy: InventorySort;
+};
 
 type DeletedInventoryEntry = {
   deleted_item_type: "listing_inventory" | "equipment_inventory";
@@ -82,9 +100,11 @@ type DeletedInventoryEntry = {
 type FlatInventoryItem =
   | {
       kind: "bird";
+      productTab: "live_poultry" | "hatching_eggs";
       id: string;
       species: string;
       speciesFilterValue: string;
+      breedFilterValue: string;
       breedOrItem: string;
       typeSex: string;
       hatchDate: string | null;
@@ -101,18 +121,45 @@ type FlatInventoryItem =
       row: InventoryRow;
     }
   | {
-      kind: "equipment";
+      kind: "processed_poultry";
+      productTab: "processed_poultry";
       id: string;
-      species: "Equipment";
-      speciesFilterValue: "equipment";
+      species: "Poultry Products";
+      speciesFilterValue: "processed_poultry";
+      breedFilterValue: string;
       breedOrItem: string;
-      typeSex: "—";
+      productCategory: string;
+      typeSex: string;
       hatchDate: null;
       availableDate: null;
       ageDays: null;
-      ageLabel: "—";
+      ageLabel: string;
       availableQuantity: number;
-      reservedQuantity: 0;
+      reservedQuantity: number;
+      price: number;
+      availabilityLabel: string;
+      availabilityValue: AvailabilityFilter;
+      manageHref: string;
+      searchText: string;
+      row: ProcessedPoultryInventoryRow;
+    }
+  | {
+      kind: "equipment";
+      productTab: "equipment";
+      id: string;
+      species: "Equipment";
+      speciesFilterValue: "equipment";
+      breedFilterValue: string;
+      breedOrItem: string;
+      equipmentCategory: string;
+      condition: string;
+      typeSex: string;
+      hatchDate: null;
+      availableDate: null;
+      ageDays: null;
+      ageLabel: string;
+      availableQuantity: number;
+      reservedQuantity: number;
       price: number;
       availabilityLabel: string;
       availabilityValue: AvailabilityFilter;
@@ -125,6 +172,8 @@ const unsavedWarning =
   "You have unsaved inventory changes. Save or discard before leaving.";
 const ageTooltipText =
   "Age shows the first available age until the available date arrives, then updates to the bird’s current age.";
+const reservedTooltipText =
+  "Reserved inventory has been sold but not picked up or fulfilled yet.";
 
 const ageFilterOptions: { label: string; value: AgeFilter }[] = [
   { label: "All ages", value: "all" },
@@ -135,15 +184,63 @@ const ageFilterOptions: { label: string; value: AgeFilter }[] = [
   { label: "Age not set", value: "unknown" },
 ];
 
-const sortOptions: { label: string; value: InventorySort }[] = [
-  { label: "Hatch date", value: "hatch_date" },
-  { label: "Breed / Item", value: "name" },
-  { label: "Age", value: "age" },
-  { label: "Available", value: "available" },
-  { label: "Reserved", value: "reserved" },
-  { label: "Price", value: "price" },
-  { label: "Availability", value: "availability" },
+const inventoryProductTabs: Array<{ id: InventoryProductTab; label: string }> = [
+  { id: "live_poultry", label: "Live Poultry" },
+  { id: "hatching_eggs", label: "Hatching Eggs" },
+  { id: "processed_poultry", label: "Poultry Products" },
+  { id: "equipment", label: "Equipment & Supplies" },
 ];
+
+const defaultTabFilters: Record<InventoryProductTab, InventoryTabFilters> = {
+  live_poultry: {
+    species: "all",
+    typeSex: "all",
+    age: "all",
+    breed: "all",
+    productCategory: "all",
+    equipmentCategory: "all",
+    condition: "all",
+    availability: "all",
+    search: "",
+    sortBy: "hatch_date",
+  },
+  hatching_eggs: {
+    species: "all",
+    typeSex: "all",
+    age: "all",
+    breed: "all",
+    productCategory: "all",
+    equipmentCategory: "all",
+    condition: "all",
+    availability: "all",
+    search: "",
+    sortBy: "breed",
+  },
+  processed_poultry: {
+    species: "all",
+    typeSex: "all",
+    age: "all",
+    breed: "all",
+    productCategory: "all",
+    equipmentCategory: "all",
+    condition: "all",
+    availability: "all",
+    search: "",
+    sortBy: "product_name",
+  },
+  equipment: {
+    species: "all",
+    typeSex: "all",
+    age: "all",
+    breed: "all",
+    productCategory: "all",
+    equipmentCategory: "all",
+    condition: "all",
+    availability: "all",
+    search: "",
+    sortBy: "item_name",
+  },
+};
 
 export function InventoryManagement() {
   const { seller } = useSellerContext();
@@ -155,16 +252,20 @@ export function InventoryManagement() {
   const [reservedByItemId, setReservedByItemId] = useState<
     Record<string, number>
   >({});
+  const [reservedByEquipmentId, setReservedByEquipmentId] = useState<
+    Record<string, number>
+  >({});
+  const [reservedByProcessedPoultryId, setReservedByProcessedPoultryId] =
+    useState<Record<string, number>>({});
   const [draftQuantities, setDraftQuantities] = useState<
     Record<string, string>
   >({});
-  const [speciesFilter, setSpeciesFilter] = useState("all");
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [ageFilter, setAgeFilter] = useState<AgeFilter>("all");
-  const [availabilityFilter, setAvailabilityFilter] =
-    useState<AvailabilityFilter>("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<InventorySort>("hatch_date");
+  const [activeTab, setActiveTab] =
+    useState<InventoryProductTab>("live_poultry");
+  const [filtersByTab, setFiltersByTab] =
+    useState<Record<InventoryProductTab, InventoryTabFilters>>(
+      defaultTabFilters,
+    );
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -204,7 +305,9 @@ export function InventoryManagement() {
           .returns<InventoryRow[]>(),
         supabase
           .from("seller_order_item_detail")
-          .select("inventory_item_id, remaining_unfulfilled_quantity")
+          .select(
+            "inventory_item_id, equipment_inventory_item_id, processed_poultry_inventory_item_id, remaining_unfulfilled_quantity",
+          )
           .eq("store_id", seller.store_id)
           .returns<ReservedRow[]>(),
         supabase
@@ -242,7 +345,21 @@ export function InventoryManagement() {
       setRows(inventoryResult.data ?? []);
       setEquipmentRows(equipmentResult.data ?? []);
       setProcessedPoultryRows(processedPoultryResult.data ?? []);
-      setReservedByItemId(buildReservedMap(reservedResult.data ?? []));
+      setReservedByItemId(
+        buildReservedMap(reservedResult.data ?? [], "inventory_item_id"),
+      );
+      setReservedByEquipmentId(
+        buildReservedMap(
+          reservedResult.data ?? [],
+          "equipment_inventory_item_id",
+        ),
+      );
+      setReservedByProcessedPoultryId(
+        buildReservedMap(
+          reservedResult.data ?? [],
+          "processed_poultry_inventory_item_id",
+        ),
+      );
       setDraftQuantities({});
       setIsLoading(false);
     }
@@ -254,124 +371,110 @@ export function InventoryManagement() {
     };
   }, [seller]);
 
-  const changedRows = useMemo(
-    () => rows.filter((row) => isRowChanged(row, draftQuantities)),
-    [draftQuantities, rows],
-  );
-  const hasUnsavedChanges = changedRows.length > 0;
-
-  useUnsavedInventoryWarning(hasUnsavedChanges);
-
   const inventoryItems = useMemo(
     () =>
       buildFlatInventoryItems({
         draftQuantities,
         equipmentRows,
+        processedPoultryRows,
+        reservedByEquipmentId,
         reservedByItemId,
+        reservedByProcessedPoultryId,
         rows,
       }),
-    [draftQuantities, equipmentRows, reservedByItemId, rows],
+    [
+      draftQuantities,
+      equipmentRows,
+      processedPoultryRows,
+      reservedByEquipmentId,
+      reservedByItemId,
+      reservedByProcessedPoultryId,
+      rows,
+    ],
   );
 
-  const speciesOptions = useMemo(() => {
-    const uniqueSpecies = new Map<string, string>();
-
-    for (const item of inventoryItems) {
-      uniqueSpecies.set(item.speciesFilterValue, item.species);
-    }
-
-    return [
-      { label: "All species", value: "all" },
-      ...Array.from(uniqueSpecies, ([value, label]) => ({ label, value })),
-    ];
-  }, [inventoryItems]);
-
-  const typeOptions = useMemo(() => {
-    const uniqueTypes = new Map<string, string>();
-
-    for (const row of rows) {
-      const value = getTypeFilterValue(row);
-      uniqueTypes.set(value, getInventoryTypeLabel(row));
-    }
-
-    return [
-      { label: "All types", value: "all" },
-      ...Array.from(uniqueTypes, ([value, label]) => ({ label, value })).sort(
-        (first, second) => first.label.localeCompare(second.label),
+  const changedBirdRows = useMemo(
+    () => rows.filter((row) => isBirdRowChanged(row, draftQuantities)),
+    [draftQuantities, rows],
+  );
+  const changedEquipmentRows = useMemo(
+    () =>
+      equipmentRows.filter((row) =>
+        isSimpleQuantityChanged(
+          row.equipment_inventory_item_id,
+          row.quantity_available,
+          draftQuantities,
+        ),
       ),
-    ];
-  }, [rows]);
-
-  const availabilityOptions = useMemo(() => {
-    const uniqueAvailability = new Map<AvailabilityFilter, string>();
-
-    for (const item of inventoryItems) {
-      if (item.availabilityValue === "all") continue;
-      uniqueAvailability.set(
-        item.availabilityValue,
-        getAvailabilityFilterLabel(item.availabilityValue),
-      );
-    }
-
-    return [
-      { label: "All availability", value: "all" },
-      ...Array.from(uniqueAvailability, ([value, label]) => ({
-        label,
-        value,
-      })).sort(
-        (first, second) => first.label.localeCompare(second.label),
+    [draftQuantities, equipmentRows],
+  );
+  const changedProcessedPoultryRows = useMemo(
+    () =>
+      processedPoultryRows.filter((row) =>
+        isSimpleQuantityChanged(
+          row.processed_poultry_inventory_item_id,
+          row.quantity_available,
+          draftQuantities,
+        ),
       ),
-    ];
-  }, [inventoryItems]);
+    [draftQuantities, processedPoultryRows],
+  );
+  const changedCount =
+    changedBirdRows.length +
+    changedEquipmentRows.length +
+    changedProcessedPoultryRows.length;
+  const hasUnsavedChanges = changedCount > 0;
 
-  const filteredItems = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
+  useUnsavedInventoryWarning(hasUnsavedChanges);
 
-    return inventoryItems
-      .filter((item) => {
-        if (
-          speciesFilter !== "all" &&
-          item.speciesFilterValue !== speciesFilter
-        ) {
-          return false;
+  const visibleTabs = useMemo(
+    () =>
+      inventoryProductTabs.filter((tab) => {
+        if (tab.id === "live_poultry") return true;
+        if (tab.id === "hatching_eggs") {
+          return Boolean(seller?.hatching_eggs_enabled);
+        }
+        if (tab.id === "processed_poultry") {
+          return Boolean(seller?.processed_poultry_enabled);
+        }
+        if (tab.id === "equipment") {
+          return Boolean(seller?.equipment_supplies_enabled);
         }
 
-        if (
-          typeFilter !== "all" &&
-          (item.kind !== "bird" || getTypeFilterValue(item.row) !== typeFilter)
-        ) {
-          return false;
-        }
+        return false;
+      }),
+    [seller],
+  );
 
-        if (item.kind === "bird" && !matchesAgeFilter(item.row, ageFilter)) {
-          return false;
-        }
+  const activeFilters = filtersByTab[activeTab];
+  const activeTabItems = useMemo(
+    () => inventoryItems.filter((item) => item.productTab === activeTab),
+    [activeTab, inventoryItems],
+  );
+  const filterOptions = useMemo(
+    () => buildFilterOptions(activeTab, activeTabItems),
+    [activeTab, activeTabItems],
+  );
+  const activeSortOptions = useMemo(
+    () => getSortOptionsForTab(activeTab),
+    [activeTab],
+  );
+  const hasActiveFilters = useMemo(
+    () =>
+      JSON.stringify(activeFilters) !==
+      JSON.stringify(defaultTabFilters[activeTab]),
+    [activeFilters, activeTab],
+  );
 
-        if (item.kind === "equipment" && ageFilter !== "all") {
-          return false;
-        }
-
-        if (
-          availabilityFilter !== "all" &&
-          item.availabilityValue !== availabilityFilter
-        ) {
-          return false;
-        }
-
-        if (!normalizedSearch) return true;
-
-        return item.searchText.includes(normalizedSearch);
-      })
-      .sort((first, second) => compareFlatInventoryItems(first, second, sortBy));
-  }, [
-    ageFilter,
-    availabilityFilter,
-    inventoryItems,
-    searchQuery,
-    sortBy,
-    speciesFilter,
-    typeFilter,
-  ]);
+  const filteredItems = useMemo(
+    () =>
+      filterAndSortInventoryItems(
+        activeTabItems,
+        activeFilters,
+        activeTab,
+      ),
+    [activeFilters, activeTab, activeTabItems],
+  );
 
   const selectedItems = useMemo(
     () => filteredItems.filter((item) => selectedItemIds.includes(item.id)),
@@ -380,37 +483,46 @@ export function InventoryManagement() {
   const selectedCount = selectedItems.length;
   const visibleSelectedItemIds = selectedItems.map((item) => item.id);
 
-  const visibleBirdItems = filteredItems.filter(
-    (item) => item.kind === "bird" && isLiveBirdInventoryRow(item.row),
-  );
-  const totalBirdsShown = visibleBirdItems.reduce(
-    (total, item) => total + item.availableQuantity,
-    0,
-  );
-  const totalForSale = visibleBirdItems.reduce(
-    (total, item) =>
-      total + Math.max(item.availableQuantity - item.reservedQuantity, 0),
-    0,
-  );
-  const totalReserved = visibleBirdItems.reduce(
-    (total, item) => total + item.reservedQuantity,
-    0,
+  const summary = useMemo(
+    () => buildInventorySummary(activeTab, activeTabItems),
+    [activeTab, activeTabItems],
   );
 
-  function updateDraftQuantity(row: InventoryRow, nextValue: string) {
+  function updateActiveFilter<TKey extends keyof InventoryTabFilters>(
+    key: TKey,
+    value: InventoryTabFilters[TKey],
+  ) {
+    setFiltersByTab((current) => ({
+      ...current,
+      [activeTab]: {
+        ...current[activeTab],
+        [key]: value,
+      },
+    }));
+  }
+
+  function resetActiveFilters() {
+    setFiltersByTab((current) => ({
+      ...current,
+      [activeTab]: defaultTabFilters[activeTab],
+    }));
+  }
+
+  function updateDraftQuantity(item: FlatInventoryItem, nextValue: string) {
     setDraftQuantities((current) => {
-      const originalValue = String(row.quantity_available ?? 0);
+      const draftId = getDraftQuantityId(item);
+      const originalValue = String(getOriginalQuantity(item));
 
       if (nextValue === originalValue) {
         const remaining = { ...current };
-        delete remaining[row.inventory_item_id];
+        delete remaining[draftId];
 
         return remaining;
       }
 
       return {
         ...current,
-        [row.inventory_item_id]: nextValue,
+        [draftId]: nextValue,
       };
     });
     setSaveError(null);
@@ -424,9 +536,18 @@ export function InventoryManagement() {
   }
 
   async function saveChanges() {
-    if (!seller || isSaving || changedRows.length === 0) return;
+    if (!seller || isSaving || changedCount === 0) return;
 
-    const validationMessage = validateChangedRows(changedRows, draftQuantities);
+    const validationMessage = validateChangedQuantities(
+      [
+        ...changedBirdRows.map((row) => row.inventory_item_id),
+        ...changedEquipmentRows.map((row) => row.equipment_inventory_item_id),
+        ...changedProcessedPoultryRows.map(
+          (row) => row.processed_poultry_inventory_item_id,
+        ),
+      ],
+      draftQuantities,
+    );
 
     if (validationMessage) {
       setSaveError(validationMessage);
@@ -438,7 +559,7 @@ export function InventoryManagement() {
     setSaveError(null);
     setSuccessMessage(null);
 
-    for (const row of changedRows) {
+    for (const row of changedBirdRows) {
       const result = await supabase.rpc("seller_adjust_inventory_quantity", {
         p_inventory_item_id: row.inventory_item_id,
         p_quantity_available: Number(draftQuantities[row.inventory_item_id]),
@@ -453,9 +574,81 @@ export function InventoryManagement() {
       }
     }
 
+    for (const row of changedEquipmentRows) {
+      const result = await supabase.rpc("seller_update_equipment_inventory_item", {
+        p_equipment_inventory_item_id: row.equipment_inventory_item_id,
+        p_item_name: row.item_name,
+        p_category: row.category,
+        p_quantity_available: Number(
+          draftQuantities[row.equipment_inventory_item_id],
+        ),
+        p_price: row.price,
+        p_condition: row.condition || null,
+        p_description: row.description || null,
+        p_seller_notes: row.seller_notes || null,
+      });
+
+      if (result.error) {
+        setSaveError(result.error.message);
+        setIsSaving(false);
+        return;
+      }
+    }
+
+    for (const row of changedProcessedPoultryRows) {
+      const result = await supabase.rpc(
+        "seller_update_processed_poultry_inventory_item",
+        {
+          p_processed_poultry_inventory_item_id:
+            row.processed_poultry_inventory_item_id,
+          p_product_name: row.product_name,
+          p_poultry_type: row.poultry_type,
+          p_product_type: row.product_type,
+          p_quantity_available: Number(
+            draftQuantities[row.processed_poultry_inventory_item_id],
+          ),
+          p_price: row.price,
+          p_package_size: row.package_size || null,
+          p_description: row.description || null,
+          p_seller_notes: row.seller_notes || null,
+        },
+      );
+
+      if (result.error) {
+        setSaveError(result.error.message);
+        setIsSaving(false);
+        return;
+      }
+    }
+
     setRows((current) =>
       current.map((row) => {
         const draftValue = draftQuantities[row.inventory_item_id];
+
+        if (draftValue == null) return row;
+
+        return {
+          ...row,
+          quantity_available: Number(draftValue),
+        };
+      }),
+    );
+    setEquipmentRows((current) =>
+      current.map((row) => {
+        const draftValue = draftQuantities[row.equipment_inventory_item_id];
+
+        if (draftValue == null) return row;
+
+        return {
+          ...row,
+          quantity_available: Number(draftValue),
+        };
+      }),
+    );
+    setProcessedPoultryRows((current) =>
+      current.map((row) => {
+        const draftValue =
+          draftQuantities[row.processed_poultry_inventory_item_id];
 
         if (draftValue == null) return row;
 
@@ -604,51 +797,41 @@ export function InventoryManagement() {
   }
 
   return (
-    <div className="space-y-3">
-      <SellerCard className="p-3">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="grid flex-1 gap-2 md:grid-cols-3">
-            <InventorySummaryCard
-              glyph="/glyphs/hen.png"
-              label="Total Birds Shown"
-              value={totalBirdsShown}
-            />
-            <InventorySummaryCard
-              glyph="/glyphs/egg-carton.png"
-              label="Total For Sale"
-              value={totalForSale}
-            />
-            <InventorySummaryCard
-              glyph="/glyphs/calendar.png"
-              label="Reserved"
-              value={totalReserved}
-            />
-          </div>
+    <div className={`space-y-3 ${hasUnsavedChanges ? "pb-28" : ""}`}>
+      <InventoryProductTabs
+        activeTab={activeTab}
+        tabs={visibleTabs}
+        onChange={(tab) => {
+          setActiveTab(tab);
+          setSelectedItemIds([]);
+          setSaveError(null);
+          setSuccessMessage(null);
+        }}
+      />
 
-          <div className="flex flex-col gap-2 sm:flex-row xl:justify-end">
-            <button
-              type="button"
-              className="seller-secondary-button"
-              disabled={!hasUnsavedChanges || isSaving}
-              onClick={discardChanges}
-            >
-              Discard Changes
-            </button>
-            <button
-              type="button"
-              className="seller-primary-button"
-              disabled={!hasUnsavedChanges || isSaving}
-              onClick={saveChanges}
-            >
-              {isSaving ? "Saving..." : "Save Changes"}
-            </button>
-          </div>
+      <SellerCard className="p-3">
+        <div className="grid gap-2 md:grid-cols-3">
+          <InventorySummaryCard
+            glyph={summary.availableGlyph}
+            label={summary.availableLabel}
+            value={summary.availableValue}
+          />
+          <InventorySummaryCard
+            glyph="/glyphs/calendar.png"
+            label={summary.reservedLabel}
+            value={summary.reservedValue}
+          />
+          <InventorySummaryCard
+            glyph="/glyphs/shopping-bag.png"
+            label="Unsold Inventory Value"
+            value={formatCurrency(summary.inventoryValue)}
+          />
         </div>
 
         {hasUnsavedChanges ? (
           <p className="mt-2 text-sm font-medium text-amber-700">
-            {changedRows.length} unsaved row
-            {changedRows.length === 1 ? "" : "s"}
+            {changedCount} unsaved row
+            {changedCount === 1 ? "" : "s"}
           </p>
         ) : null}
 
@@ -664,66 +847,135 @@ export function InventoryManagement() {
         ) : null}
       </SellerCard>
 
-      <SellerCard className="p-3">
-        <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
-          <FilterControl
-            label="Species"
-            value={speciesFilter}
-            options={speciesOptions}
-            onChange={setSpeciesFilter}
-          />
-          <FilterControl
-            label="Type/sex"
-            value={typeFilter}
-            options={typeOptions}
-            onChange={setTypeFilter}
-          />
-          <FilterControl
-            label="Age range"
-            value={ageFilter}
-            options={ageFilterOptions}
-            onChange={(value) => setAgeFilter(value as AgeFilter)}
-          />
-          <FilterControl
-            label="Availability"
-            value={availabilityFilter}
-            options={availabilityOptions}
-            onChange={(value) =>
-              setAvailabilityFilter(value as AvailabilityFilter)
-            }
-          />
-          <label className="grid gap-1.5 text-base font-bold text-stone-700 sm:text-sm">
+      <SellerCard className="p-3 [&_input]:w-full [&_label]:min-w-0 [&_select]:w-full">
+        <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:thin] [&>label]:w-56 [&>label]:shrink-0">
+          <label className="grid w-64 shrink-0 gap-1.5 text-base font-bold text-stone-700 sm:text-sm">
             Search
             <input
-              className="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base font-semibold text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm sm:font-medium"
-              placeholder="Breed or name"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
+              className="min-h-12 w-full rounded-md border border-stone-300 bg-white px-3 text-base font-semibold text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm sm:font-medium"
+              placeholder={getSearchPlaceholder(activeTab)}
+              value={activeFilters.search}
+              onChange={(event) =>
+                updateActiveFilter("search", event.target.value)
+              }
             />
           </label>
-          <FilterControl
+          {activeTab === "live_poultry" && filterOptions.species.length > 2 ? (
+            <InventorySelectControl
+              icon="filter"
+              label="Species"
+              value={activeFilters.species}
+              options={filterOptions.species}
+              onChange={(value) => updateActiveFilter("species", value)}
+            />
+          ) : null}
+          {activeTab === "live_poultry" && filterOptions.typeSex.length > 2 ? (
+            <InventorySelectControl
+              icon="filter"
+              label="Type/Sex"
+              value={activeFilters.typeSex}
+              options={filterOptions.typeSex}
+              onChange={(value) => updateActiveFilter("typeSex", value)}
+            />
+          ) : null}
+          {activeTab === "live_poultry" ? (
+            <InventorySelectControl
+              icon="filter"
+              label="Age Range"
+              value={activeFilters.age}
+              options={ageFilterOptions}
+              onChange={(value) => updateActiveFilter("age", value as AgeFilter)}
+            />
+          ) : null}
+          {activeTab === "hatching_eggs" && filterOptions.species.length > 2 ? (
+            <InventorySelectControl
+              icon="filter"
+              label="Species"
+              value={activeFilters.species}
+              options={filterOptions.species}
+              onChange={(value) => updateActiveFilter("species", value)}
+            />
+          ) : null}
+          {activeTab === "hatching_eggs" && filterOptions.breed.length > 2 ? (
+            <InventorySelectControl
+              icon="filter"
+              label="Breed"
+              value={activeFilters.breed}
+              options={filterOptions.breed}
+              onChange={(value) => updateActiveFilter("breed", value)}
+            />
+          ) : null}
+          {activeTab === "processed_poultry" &&
+          filterOptions.productCategory.length > 1 ? (
+            <InventorySelectControl
+              icon="filter"
+              label="Product Category"
+              value={activeFilters.productCategory}
+              options={filterOptions.productCategory}
+              onChange={(value) =>
+                updateActiveFilter("productCategory", value)
+              }
+            />
+          ) : null}
+          {activeTab === "equipment" &&
+          filterOptions.equipmentCategory.length > 1 ? (
+            <InventorySelectControl
+              icon="filter"
+              label="Category"
+              value={activeFilters.equipmentCategory}
+              options={filterOptions.equipmentCategory}
+              onChange={(value) =>
+                updateActiveFilter("equipmentCategory", value)
+              }
+            />
+          ) : null}
+          {activeTab === "equipment" && filterOptions.condition.length > 2 ? (
+            <InventorySelectControl
+              icon="filter"
+              label="Condition"
+              value={activeFilters.condition}
+              options={filterOptions.condition}
+              onChange={(value) => updateActiveFilter("condition", value)}
+            />
+          ) : null}
+          {filterOptions.availability.length > 2 ? (
+            <InventorySelectControl
+              icon="filter"
+              label="Availability"
+              value={activeFilters.availability}
+              options={filterOptions.availability}
+              onChange={(value) =>
+                updateActiveFilter("availability", value as AvailabilityFilter)
+              }
+            />
+          ) : null}
+          <InventorySelectControl
+            icon="sort"
             label="Sort by"
-            value={sortBy}
-            options={sortOptions}
-            onChange={(value) => setSortBy(value as InventorySort)}
+            value={activeFilters.sortBy}
+            options={activeSortOptions}
+            onChange={(value) =>
+              updateActiveFilter("sortBy", value as InventorySort)
+            }
           />
         </div>
+        {hasActiveFilters ? (
+          <button
+            type="button"
+            className="mt-3 text-sm font-semibold text-emerald-800 underline-offset-4 hover:text-emerald-950 hover:underline"
+            onClick={resetActiveFilters}
+          >
+            Reset filters
+          </button>
+        ) : null}
       </SellerCard>
 
       <SellerCard className="overflow-hidden">
-        {inventoryItems.length === 0 ? (
+        {activeTabItems.length === 0 ? (
           <div className="p-4">
             <EmptyState
-              title={
-                equipmentRows.length > 0
-                  ? "No bird inventory yet"
-                  : "No inventory yet"
-              }
-              description={
-                equipmentRows.length > 0
-                  ? "Add live birds or hatching eggs when you are ready to manage bird availability."
-                  : "Add birds, eggs, or equipment to start building your inventory."
-              }
+              title={getEmptyInventoryTitle(activeTab)}
+              description={getEmptyInventoryDescription(activeTab)}
               action={
                 <Link
                   className="inline-flex min-h-10 items-center justify-center rounded-full bg-emerald-800 px-4 text-sm font-bold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
@@ -751,14 +1003,11 @@ export function InventoryManagement() {
             onSelectVisible={setVisibleSelection}
             onToggleSelection={toggleItemSelection}
             selectedItemIds={visibleSelectedItemIds}
+            tab={activeTab}
             updateDraftQuantity={updateDraftQuantity}
           />
         )}
       </SellerCard>
-
-      {processedPoultryRows.length > 0 ? (
-        <ProcessedPoultryInventorySection rows={processedPoultryRows} />
-      ) : null}
 
       {isDeleteConfirmOpen ? (
         <DeleteInventoryConfirmModal
@@ -768,7 +1017,138 @@ export function InventoryManagement() {
           onConfirm={deleteSelectedInventory}
         />
       ) : null}
+
+      {hasUnsavedChanges ? (
+        <InventorySaveBar
+          changedCount={changedCount}
+          isSaving={isSaving}
+          onDiscard={discardChanges}
+          onSave={saveChanges}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function InventoryProductTabs({
+  activeTab,
+  onChange,
+  tabs,
+}: {
+  activeTab: InventoryProductTab;
+  onChange: (tab: InventoryProductTab) => void;
+  tabs: Array<{ id: InventoryProductTab; label: string }>;
+}) {
+  return (
+    <div
+      aria-label="Inventory product types"
+      className="flex gap-1 overflow-x-auto border-b border-stone-200 pl-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      role="tablist"
+    >
+      {tabs.map((tab) => {
+        const isActive = activeTab === tab.id;
+
+        return (
+          <button
+            aria-selected={isActive}
+            className={`relative mb-[-1px] min-h-11 shrink-0 rounded-t-lg border px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-700 ${
+              isActive
+                ? "border-stone-200 border-b-white bg-white text-stone-950 shadow-[0_-1px_0_rgba(0,0,0,0.02)]"
+                : "border-transparent bg-stone-100/70 text-stone-600 hover:bg-white hover:text-stone-950"
+            }`}
+            key={tab.id}
+            onClick={() => onChange(tab.id)}
+            role="tab"
+            type="button"
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function InventorySaveBar({
+  changedCount,
+  isSaving,
+  onDiscard,
+  onSave,
+}: {
+  changedCount: number;
+  isSaving: boolean;
+  onDiscard: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-amber-200 bg-white/95 px-4 py-3 shadow-[0_-10px_30px_rgba(0,0,0,0.12)] backdrop-blur">
+      <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-base font-bold text-stone-950 sm:text-sm">
+          Unsaved changes
+          <span className="ml-2 font-semibold text-stone-600">
+            {changedCount} row{changedCount === 1 ? "" : "s"}
+          </span>
+        </p>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+          <button
+            type="button"
+            className="seller-secondary-button"
+            disabled={isSaving}
+            onClick={onDiscard}
+          >
+            Discard Changes
+          </button>
+          <button
+            type="button"
+            className="seller-primary-button"
+            disabled={isSaving}
+            onClick={onSave}
+          >
+            {isSaving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InventorySelectControl({
+  icon,
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  icon: "filter" | "sort";
+  label: string;
+  value: string;
+  options: { label: string; value: string }[];
+  onChange: (value: string) => void;
+}) {
+  const Icon = icon === "filter" ? Funnel : ArrowUpDown;
+
+  return (
+    <label className="grid gap-1.5 text-base font-bold text-stone-700 sm:text-sm">
+      <span className="inline-flex items-center gap-1.5">
+        <Icon
+          aria-hidden="true"
+          className="size-3.5 text-emerald-800"
+          strokeWidth={2.25}
+        />
+        {label}
+      </span>
+      <select
+        className="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base font-semibold text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm sm:font-medium"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -779,7 +1159,7 @@ function InventorySummaryCard({
 }: {
   glyph: string;
   label: string;
-  value: number;
+  value: number | string;
 }) {
   return (
     <div className="flex min-h-16 items-center gap-2.5 rounded-md border border-stone-200 bg-white px-3 py-2.5 shadow-sm">
@@ -789,6 +1169,13 @@ function InventorySummaryCard({
       <div className="min-w-0">
         <p className="text-sm font-bold uppercase tracking-[0.05em] text-stone-500 sm:text-[0.68rem]">
           {label}
+          {label.startsWith("Reserved") ? (
+            <InfoTooltip
+              label="What reserved means"
+              text={reservedTooltipText}
+              tooltipId={`inventory-summary-${label.toLowerCase().replaceAll(" ", "-")}-tooltip`}
+            />
+          ) : null}
         </p>
         <p className="mt-0.5 text-2xl font-bold leading-none text-stone-950 sm:text-xl sm:font-semibold">
           {value}
@@ -862,6 +1249,7 @@ function FlatInventoryTable({
   onSelectVisible,
   onToggleSelection,
   selectedItemIds,
+  tab,
   updateDraftQuantity,
 }: {
   draftQuantities: Record<string, string>;
@@ -872,7 +1260,8 @@ function FlatInventoryTable({
   onSelectVisible: (shouldSelect: boolean) => void;
   onToggleSelection: (itemId: string) => void;
   selectedItemIds: string[];
-  updateDraftQuantity: (row: InventoryRow, nextValue: string) => void;
+  tab: InventoryProductTab;
+  updateDraftQuantity: (item: FlatInventoryItem, nextValue: string) => void;
 }) {
   const selectedCount = selectedItemIds.length;
   const allVisibleSelected =
@@ -889,10 +1278,10 @@ function FlatInventoryTable({
             <button
               type="button"
               className="min-h-12 rounded-md border border-red-700 bg-red-700 px-3 py-2 text-base font-bold text-white shadow-sm transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700/25 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0 sm:text-sm sm:font-semibold"
-              disabled={isDeleting}
+              disabled={isDeleting || tab === "processed_poultry"}
               onClick={onDeleteSelected}
             >
-              Delete selected
+              {tab === "processed_poultry" ? "Manage individually" : "Delete selected"}
             </button>
             <button
               type="button"
@@ -906,9 +1295,11 @@ function FlatInventoryTable({
         </div>
       ) : null}
       <div className="grid gap-3 p-3 lg:hidden">
-        <div className="flex justify-end">
+        {tab === "live_poultry" ? (
+          <div className="flex justify-end">
           <AgeHeaderWithTooltip tooltipId="inventory-age-tooltip-mobile" />
-        </div>
+          </div>
+        ) : null}
         {items.map((item) => (
           <FlatInventoryCard
             key={item.id}
@@ -929,10 +1320,10 @@ function FlatInventoryTable({
             <button
               type="button"
               className="min-h-12 rounded-md border border-red-700 bg-red-700 px-3 py-2 text-base font-bold text-white shadow-sm transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700/25 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-11 sm:text-sm sm:font-semibold"
-              disabled={isDeleting}
+              disabled={isDeleting || tab === "processed_poultry"}
               onClick={onDeleteSelected}
             >
-              Delete selected
+              {tab === "processed_poultry" ? "Manage" : "Delete selected"}
             </button>
             <button
               type="button"
@@ -948,29 +1339,11 @@ function FlatInventoryTable({
       <div className="hidden overflow-x-auto lg:block">
         <table className="w-full min-w-[940px] border-collapse text-left text-[0.8125rem]">
           <thead className="bg-stone-50 text-[0.68rem] font-semibold uppercase tracking-[0.05em] text-stone-500">
-            <tr>
-              <th className="w-10 px-3 py-2.5">
-                <input
-                  aria-label="Select all visible inventory rows"
-                  checked={allVisibleSelected}
-                  className="size-4 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
-                  type="checkbox"
-                  onChange={(event) => onSelectVisible(event.target.checked)}
-                />
-              </th>
-              <th className="px-3 py-2.5">Species</th>
-              <th className="px-3 py-2.5">Breed / Item</th>
-              <th className="px-3 py-2.5">Type/Sex</th>
-              <th className="px-3 py-2.5">Hatch date</th>
-              <th className="px-3 py-2.5">
-                <AgeHeaderWithTooltip tooltipId="inventory-age-tooltip-table" />
-              </th>
-              <th className="px-3 py-2.5 text-center">Available</th>
-              <th className="px-3 py-2.5 text-center">Reserved</th>
-              <th className="px-3 py-2.5">Price</th>
-              <th className="px-3 py-2.5">Availability</th>
-              <th className="px-3 py-2.5 text-right">Action</th>
-            </tr>
+            <FlatInventoryTableHeader
+              allVisibleSelected={allVisibleSelected}
+              onSelectVisible={onSelectVisible}
+              tab={tab}
+            />
           </thead>
           <tbody className="divide-y divide-stone-200 bg-white">
             {items.map((item) => (
@@ -980,6 +1353,7 @@ function FlatInventoryTable({
                 item={item}
                 isSelected={selectedItemIds.includes(item.id)}
                 onToggleSelection={onToggleSelection}
+                tab={tab}
                 updateDraftQuantity={updateDraftQuantity}
               />
             ))}
@@ -987,6 +1361,76 @@ function FlatInventoryTable({
         </table>
       </div>
     </>
+  );
+}
+
+function FlatInventoryTableHeader({
+  allVisibleSelected,
+  onSelectVisible,
+  tab,
+}: {
+  allVisibleSelected: boolean;
+  onSelectVisible: (shouldSelect: boolean) => void;
+  tab: InventoryProductTab;
+}) {
+  const nameLabel =
+    tab === "processed_poultry"
+      ? "Product"
+      : tab === "equipment"
+        ? "Item"
+        : "Breed";
+
+  return (
+    <tr>
+      <th className="w-10 px-3 py-2.5">
+        <input
+          aria-label="Select all visible inventory rows"
+          checked={allVisibleSelected}
+          className="size-4 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
+          type="checkbox"
+          onChange={(event) => onSelectVisible(event.target.checked)}
+        />
+      </th>
+      {(tab === "live_poultry" || tab === "hatching_eggs") ? (
+        <th className="px-3 py-2.5">Species</th>
+      ) : null}
+      <th className="px-3 py-2.5">{nameLabel}</th>
+      {tab === "live_poultry" ? (
+        <>
+          <th className="px-3 py-2.5">Type/Sex</th>
+          <th className="px-3 py-2.5">Hatch date</th>
+          <th className="px-3 py-2.5">
+            <AgeHeaderWithTooltip tooltipId="inventory-age-tooltip-table" />
+          </th>
+        </>
+      ) : null}
+      {tab === "hatching_eggs" ? (
+        <th className="px-3 py-2.5">Available date</th>
+      ) : null}
+      {tab === "processed_poultry" ? (
+        <th className="px-3 py-2.5">Product Category</th>
+      ) : null}
+      {tab === "equipment" ? (
+        <>
+          <th className="px-3 py-2.5">Category</th>
+          <th className="px-3 py-2.5">Condition</th>
+        </>
+      ) : null}
+      <th className="px-3 py-2.5 text-center">Available</th>
+      <th className="px-3 py-2.5 text-center">
+        <span className="inline-flex items-center justify-center gap-1.5">
+          Reserved
+          <InfoTooltip
+            label="What reserved means"
+            text={reservedTooltipText}
+            tooltipId="inventory-reserved-table-tooltip"
+          />
+        </span>
+      </th>
+      <th className="px-3 py-2.5">Price</th>
+      <th className="px-3 py-2.5">Availability</th>
+      <th className="px-3 py-2.5 text-right">Action</th>
+    </tr>
   );
 }
 
@@ -1013,20 +1457,52 @@ function AgeHeaderWithTooltip({ tooltipId }: { tooltipId: string }) {
   );
 }
 
+function InfoTooltip({
+  label,
+  text,
+  tooltipId,
+}: {
+  label: string;
+  text: string;
+  tooltipId: string;
+}) {
+  return (
+    <span className="group relative ml-1 inline-flex items-center align-middle normal-case tracking-normal">
+      <button
+        aria-describedby={tooltipId}
+        aria-label={label}
+        className="inline-flex size-4 items-center justify-center rounded-full border border-stone-300 bg-white text-[0.625rem] font-bold leading-none text-stone-600 transition hover:border-emerald-700 hover:text-emerald-800 focus:border-emerald-700 focus:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+        type="button"
+      >
+        i
+      </button>
+      <span
+        className="pointer-events-none absolute left-0 top-6 z-20 w-64 rounded-md border border-stone-200 bg-white px-3 py-2 text-left text-xs font-medium leading-5 text-stone-700 opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-within:opacity-100"
+        id={tooltipId}
+        role="tooltip"
+      >
+        {text}
+      </span>
+    </span>
+  );
+}
+
 function FlatInventoryTableRow({
   draftQuantities,
   isSelected,
   item,
   onToggleSelection,
+  tab,
   updateDraftQuantity,
 }: {
   draftQuantities: Record<string, string>;
   isSelected: boolean;
   item: FlatInventoryItem;
   onToggleSelection: (itemId: string) => void;
-  updateDraftQuantity: (row: InventoryRow, nextValue: string) => void;
+  tab: InventoryProductTab;
+  updateDraftQuantity: (item: FlatInventoryItem, nextValue: string) => void;
 }) {
-  const isChanged = item.kind === "bird" && isRowChanged(item.row, draftQuantities);
+  const isChanged = isInventoryItemChanged(item, draftQuantities);
 
   return (
     <tr
@@ -1047,9 +1523,11 @@ function FlatInventoryTableRow({
           onChange={() => onToggleSelection(item.id)}
         />
       </td>
-      <td className="px-3 py-3 align-top font-medium text-stone-700">
-        {item.species}
-      </td>
+      {(tab === "live_poultry" || tab === "hatching_eggs") ? (
+        <td className="px-3 py-3 align-top font-medium text-stone-700">
+          {item.species}
+        </td>
+      ) : null}
       <td className="px-3 py-3 align-top">
         <Link
           className="font-semibold text-stone-950 underline-offset-4 hover:underline"
@@ -1058,11 +1536,39 @@ function FlatInventoryTableRow({
           {item.breedOrItem}
         </Link>
       </td>
-      <td className="px-3 py-3 align-top text-stone-700">{item.typeSex}</td>
-      <td className="px-3 py-3 align-top text-stone-700">
-        {formatTableDate(item.hatchDate)}
-      </td>
-      <td className="px-3 py-3 align-top text-stone-700">{item.ageLabel}</td>
+      {tab === "live_poultry" ? (
+        <>
+          <td className="px-3 py-3 align-top text-stone-700">
+            {item.typeSex}
+          </td>
+          <td className="px-3 py-3 align-top text-stone-700">
+            {formatTableDate(item.hatchDate)}
+          </td>
+          <td className="px-3 py-3 align-top text-stone-700">
+            {item.ageLabel}
+          </td>
+        </>
+      ) : null}
+      {tab === "hatching_eggs" ? (
+        <td className="px-3 py-3 align-top text-stone-700">
+          {formatTableDate(item.availableDate)}
+        </td>
+      ) : null}
+      {item.kind === "processed_poultry" ? (
+        <td className="px-3 py-3 align-top text-stone-700">
+          {item.productCategory}
+        </td>
+      ) : null}
+      {item.kind === "equipment" ? (
+        <>
+          <td className="px-3 py-3 align-top text-stone-700">
+            {item.equipmentCategory}
+          </td>
+          <td className="px-3 py-3 align-top text-stone-700">
+            {item.condition || "--"}
+          </td>
+        </>
+      ) : null}
       <td className="px-3 py-3 text-center align-top">
         <AvailableQuantityControl
           draftQuantities={draftQuantities}
@@ -1081,10 +1587,10 @@ function FlatInventoryTableRow({
       </td>
       <td className="px-3 py-3 text-right align-top">
         <Link
-          className="text-xs font-semibold text-emerald-800 hover:text-emerald-950"
+          className="inline-flex min-h-8 items-center justify-center rounded-md bg-emerald-800 px-3 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
           href={item.manageHref}
         >
-          {item.kind === "bird" ? "Edit" : "Manage"}
+          Edit
         </Link>
       </td>
     </tr>
@@ -1102,9 +1608,9 @@ function FlatInventoryCard({
   isSelected: boolean;
   item: FlatInventoryItem;
   onToggleSelection: (itemId: string) => void;
-  updateDraftQuantity: (row: InventoryRow, nextValue: string) => void;
+  updateDraftQuantity: (item: FlatInventoryItem, nextValue: string) => void;
 }) {
-  const isChanged = item.kind === "bird" && isRowChanged(item.row, draftQuantities);
+  const isChanged = isInventoryItemChanged(item, draftQuantities);
 
   return (
     <article
@@ -1130,8 +1636,7 @@ function FlatInventoryCard({
               {item.breedOrItem}
             </h2>
             <p className="mt-0.5 text-sm leading-5 text-stone-600">
-              {item.species}
-              {item.typeSex !== "—" ? ` • ${item.typeSex}` : ""}
+              {getInventoryItemSubtitle(item)}
             </p>
           </div>
         </div>
@@ -1139,8 +1644,36 @@ function FlatInventoryCard({
       </div>
 
       <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
-        <InventoryCardField label="Hatch date" value={formatTableDate(item.hatchDate)} />
-        <InventoryCardField label="Age" value={item.ageLabel} />
+        {item.productTab === "live_poultry" ? (
+          <>
+            <InventoryCardField
+              label="Hatch date"
+              value={formatTableDate(item.hatchDate)}
+            />
+            <InventoryCardField label="Age" value={item.ageLabel} />
+          </>
+        ) : null}
+        {item.productTab === "hatching_eggs" ? (
+          <InventoryCardField
+            label="Available date"
+            value={formatTableDate(item.availableDate)}
+          />
+        ) : null}
+        {item.kind === "processed_poultry" ? (
+          <InventoryCardField
+            label="Product Category"
+            value={item.productCategory}
+          />
+        ) : null}
+        {item.kind === "equipment" ? (
+          <>
+            <InventoryCardField label="Category" value={item.equipmentCategory} />
+            <InventoryCardField
+              label="Condition"
+              value={item.condition || "--"}
+            />
+          </>
+        ) : null}
         <div className="rounded-md bg-stone-50 px-2.5 py-2">
           <dt className="text-sm font-bold uppercase tracking-[0.05em] text-stone-500 sm:text-xs sm:font-semibold">
             Available
@@ -1161,8 +1694,11 @@ function FlatInventoryCard({
         <InventoryCardField label="Availability" value={item.availabilityLabel} />
       </dl>
 
-      <Link className="seller-small-button mt-4 inline-flex" href={item.manageHref}>
-        {item.kind === "bird" ? "Edit" : "Manage"}
+      <Link
+        className="mt-4 inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
+        href={item.manageHref}
+      >
+        Edit
       </Link>
     </article>
   );
@@ -1192,22 +1728,14 @@ function AvailableQuantityControl({
 }: {
   draftQuantities: Record<string, string>;
   item: FlatInventoryItem;
-  updateDraftQuantity: (row: InventoryRow, nextValue: string) => void;
+  updateDraftQuantity: (item: FlatInventoryItem, nextValue: string) => void;
 }) {
-  if (item.kind === "equipment") {
-    return (
-      <span className="flex justify-center font-semibold text-stone-950">
-        {item.availableQuantity}
-      </span>
-    );
-  }
-
+  const draftId = getDraftQuantityId(item);
   const quantityValue =
-    draftQuantities[item.row.inventory_item_id] ??
-    String(item.row.quantity_available ?? 0);
-  const isChanged = isRowChanged(item.row, draftQuantities);
+    draftQuantities[draftId] ?? String(getOriginalQuantity(item));
+  const isChanged = isInventoryItemChanged(item, draftQuantities);
   const rowHasInvalidQuantity =
-    draftQuantities[item.row.inventory_item_id] != null &&
+    draftQuantities[draftId] != null &&
     !isValidQuantity(quantityValue);
 
   return (
@@ -1225,7 +1753,7 @@ function AvailableQuantityControl({
         step="1"
         type="number"
         value={quantityValue}
-        onChange={(event) => updateDraftQuantity(item.row, event.target.value)}
+        onChange={(event) => updateDraftQuantity(item, event.target.value)}
       />
       {isChanged ? (
         <p className="mt-1 text-sm font-semibold text-amber-700 sm:text-xs">
@@ -1246,176 +1774,11 @@ function AvailabilityPill({ label }: { label: string }) {
 
 function getAvailabilityFilterLabel(value: AvailabilityFilter) {
   if (value === "available_now") return "Available now";
-  if (value === "future") return "Future availability";
+  if (value === "coming_soon") return "Coming soon";
   if (value === "sold_out") return "Sold out";
-  if (value === "local_pickup") return "Local pickup";
-  if (value === "not_listed") return "Not listed";
-  if (value === "unavailable") return "Unavailable";
+  if (value === "hidden") return "Hidden";
 
   return "All availability";
-}
-
-function ProcessedPoultryInventorySection({
-  rows,
-}: {
-  rows: ProcessedPoultryInventoryRow[];
-}) {
-  return (
-    <SellerCard className="overflow-hidden">
-      <div className="border-b border-stone-200 px-4 py-4 sm:px-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-stone-950">
-              Processed Poultry
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-stone-600">
-              Simple local-pickup processed poultry inventory. This does not
-              affect the bird count above.
-            </p>
-          </div>
-          <Link
-            className="seller-secondary-button"
-            href="/dashboard/inventory/add-v2"
-          >
-            Add Processed Poultry
-          </Link>
-        </div>
-      </div>
-
-      {rows.length === 0 ? (
-        <div className="p-4">
-          <EmptyState
-            title="No processed poultry inventory yet"
-            description="Create processed poultry inventory when you have simple local-pickup products to sell."
-          />
-        </div>
-      ) : (
-        <>
-          <div className="grid gap-4 p-4 lg:hidden">
-            {rows.map((row) => (
-              <ProcessedPoultryInventoryCard
-                key={row.processed_poultry_inventory_item_id}
-                row={row}
-              />
-            ))}
-          </div>
-          <div className="hidden overflow-x-auto lg:block">
-            <table className="w-full min-w-[820px] border-collapse text-left text-sm">
-              <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-[0.06em] text-stone-500">
-                <tr>
-                  <th className="px-5 py-3">Product</th>
-                  <th className="px-5 py-3">Poultry</th>
-                  <th className="px-5 py-3">Type</th>
-                  <th className="px-5 py-3">Quantity</th>
-                  <th className="px-5 py-3">Price</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-200 bg-white">
-                {rows.map((row) => (
-                  <tr key={row.processed_poultry_inventory_item_id}>
-                    <td className="px-5 py-4 align-top">
-                      <Link
-                        className="font-semibold text-stone-950 underline-offset-4 hover:underline"
-                        href={getProcessedPoultryManageHref(row)}
-                      >
-                        {row.product_name}
-                      </Link>
-                      {row.description ? (
-                        <p className="mt-1 max-w-md truncate text-stone-600">
-                          {row.description}
-                        </p>
-                      ) : null}
-                    </td>
-                    <td className="px-5 py-4 align-top text-stone-700">
-                      {row.poultry_type}
-                    </td>
-                    <td className="px-5 py-4 align-top text-stone-700">
-                      {row.package_size
-                        ? `${row.product_type} - ${row.package_size}`
-                        : row.product_type}
-                    </td>
-                    <td className="px-5 py-4 align-top font-semibold text-stone-950">
-                      {row.quantity_available}
-                    </td>
-                    <td className="px-5 py-4 align-top text-stone-700">
-                      {formatProcessedPoultryCurrency(row.price)}
-                    </td>
-                    <td className="px-5 py-4 align-top">
-                      <StatusBadge status={deriveProcessedPoultryBadge(row)} />
-                    </td>
-                    <td className="px-5 py-4 text-right align-top">
-                      <Link
-                        className="seller-small-button"
-                        href={getProcessedPoultryManageHref(row)}
-                      >
-                        Manage
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </SellerCard>
-  );
-}
-
-function ProcessedPoultryInventoryCard({
-  row,
-}: {
-  row: ProcessedPoultryInventoryRow;
-}) {
-  return (
-    <div className="rounded-md border border-stone-200 bg-white p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-stone-950">{row.product_name}</h3>
-          <p className="mt-1 text-sm text-stone-600">
-            {formatProcessedPoultryDescriptor(row)}
-          </p>
-        </div>
-        <StatusBadge status={deriveProcessedPoultryBadge(row)} />
-      </div>
-      <dl className="mt-4 grid grid-cols-2 gap-2">
-        <div className="rounded-md bg-stone-50 px-3 py-2">
-          <dt className="text-sm font-bold uppercase tracking-[0.06em] text-stone-500 sm:text-xs sm:font-semibold">
-            Quantity
-          </dt>
-          <dd className="mt-1 text-lg font-semibold text-stone-950">
-            {row.quantity_available}
-          </dd>
-        </div>
-        <div className="rounded-md bg-stone-50 px-3 py-2">
-          <dt className="text-sm font-bold uppercase tracking-[0.06em] text-stone-500 sm:text-xs sm:font-semibold">
-            Price
-          </dt>
-          <dd className="mt-1 text-lg font-semibold text-stone-950">
-            {formatProcessedPoultryCurrency(row.price)}
-          </dd>
-        </div>
-      </dl>
-      <p className="mt-3 text-sm font-semibold text-stone-600">
-        {formatProcessedPoultryStatus(row)}
-      </p>
-      <Link
-        className="seller-small-button mt-4 inline-flex"
-        href={getProcessedPoultryManageHref(row)}
-      >
-        Manage
-      </Link>
-    </div>
-  );
-}
-
-function deriveProcessedPoultryBadge(row: ProcessedPoultryInventoryRow) {
-  if (row.visibility_status === "hidden") return "draft";
-  if (row.visibility_status === "active") return "live";
-
-  return row.visibility_status;
 }
 
 function getProcessedPoultryManageHref(row: ProcessedPoultryInventoryRow) {
@@ -1429,12 +1792,18 @@ function getProcessedPoultryManageHref(row: ProcessedPoultryInventoryRow) {
 function buildFlatInventoryItems({
   draftQuantities,
   equipmentRows,
+  processedPoultryRows,
+  reservedByEquipmentId,
   reservedByItemId,
+  reservedByProcessedPoultryId,
   rows,
 }: {
   draftQuantities: Record<string, string>;
   equipmentRows: EquipmentInventoryRow[];
+  processedPoultryRows: ProcessedPoultryInventoryRow[];
+  reservedByEquipmentId: Record<string, number>;
   reservedByItemId: Record<string, number>;
+  reservedByProcessedPoultryId: Record<string, number>;
   rows: InventoryRow[];
 }): FlatInventoryItem[] {
   return [
@@ -1444,9 +1813,13 @@ function buildFlatInventoryItems({
 
       return {
         kind: "bird",
+        productTab: isLiveBirdInventoryRow(row)
+          ? "live_poultry"
+          : "hatching_eggs",
         id: `bird:${row.inventory_item_id}`,
         species: row.species_name,
         speciesFilterValue: row.species_slug,
+        breedFilterValue: row.breed_display_name,
         breedOrItem: row.breed_display_name,
         typeSex,
         hatchDate: row.origin_date,
@@ -1473,22 +1846,79 @@ function buildFlatInventoryItems({
           .toLowerCase(),
       };
     }),
-    ...equipmentRows.map((row): FlatInventoryItem => {
-      const availability = getEquipmentAvailability(row);
+    ...processedPoultryRows.map((row): FlatInventoryItem => {
+      const displayedQuantity = getDisplayedSimpleQuantity(
+        row.processed_poultry_inventory_item_id,
+        row.quantity_available,
+        draftQuantities,
+      );
+      const availability = getSimpleInventoryAvailability(row, displayedQuantity);
 
       return {
-        kind: "equipment",
-        id: `equipment:${row.equipment_inventory_item_id}`,
-        species: "Equipment",
-        speciesFilterValue: "equipment",
-        breedOrItem: row.item_name,
-        typeSex: "—",
+        kind: "processed_poultry",
+        productTab: "processed_poultry",
+        id: `processed_poultry:${row.processed_poultry_inventory_item_id}`,
+        species: "Poultry Products",
+        speciesFilterValue: "processed_poultry",
+        breedFilterValue: row.product_name,
+        breedOrItem: row.product_name,
+        productCategory: row.product_type,
+        typeSex: row.package_size
+          ? `${row.poultry_type} - ${row.package_size}`
+          : row.poultry_type,
         hatchDate: null,
         availableDate: null,
         ageDays: null,
-        ageLabel: "—",
-        availableQuantity: row.quantity_available,
-        reservedQuantity: 0,
+        ageLabel: "--",
+        availableQuantity: displayedQuantity,
+        reservedQuantity:
+          reservedByProcessedPoultryId[
+            row.processed_poultry_inventory_item_id
+          ] ?? 0,
+        price: row.price,
+        availabilityLabel: availability.label,
+        availabilityValue: availability.value,
+        manageHref: getProcessedPoultryManageHref(row),
+        row,
+        searchText: [
+          row.product_name,
+          row.poultry_type,
+          row.product_type,
+          row.package_size,
+          row.description,
+          availability.label,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase(),
+      };
+    }),
+    ...equipmentRows.map((row): FlatInventoryItem => {
+      const displayedQuantity = getDisplayedSimpleQuantity(
+        row.equipment_inventory_item_id,
+        row.quantity_available,
+        draftQuantities,
+      );
+      const availability = getSimpleInventoryAvailability(row, displayedQuantity);
+
+      return {
+        kind: "equipment",
+        productTab: "equipment",
+        id: `equipment:${row.equipment_inventory_item_id}`,
+        species: "Equipment",
+        speciesFilterValue: "equipment",
+        breedFilterValue: row.item_name,
+        breedOrItem: row.item_name,
+        equipmentCategory: row.category,
+        condition: row.condition ?? "",
+        typeSex: "--",
+        hatchDate: null,
+        availableDate: null,
+        ageDays: null,
+        ageLabel: "--",
+        availableQuantity: displayedQuantity,
+        reservedQuantity:
+          reservedByEquipmentId[row.equipment_inventory_item_id] ?? 0,
         price: row.price,
         availabilityLabel: availability.label,
         availabilityValue: availability.value,
@@ -1516,7 +1946,7 @@ function getBirdAvailability(
   const visibility = getInventoryVisibility(row);
 
   if (visibility === "draft" || visibility === "hidden") {
-    return { label: "Not listed", value: "not_listed" };
+    return { label: "Hidden", value: "hidden" };
   }
 
   if (
@@ -1528,36 +1958,270 @@ function getBirdAvailability(
   }
 
   if (visibility !== "live") {
-    return { label: "Unavailable", value: "unavailable" };
+    return { label: "Hidden", value: "hidden" };
   }
 
   if (row.available_date && isFutureDate(row.available_date)) {
     return {
-      label: `Available ${formatShortDate(row.available_date)}`,
-      value: "future",
+      label: `Coming ${formatShortDate(row.available_date)}`,
+      value: "coming_soon",
     };
   }
 
   return { label: "Available now", value: "available_now" };
 }
 
-function getEquipmentAvailability(row: EquipmentInventoryRow): {
+function getSimpleInventoryAvailability(row: {
+  operational_availability_status: string;
+  quantity_available: number;
+  visibility_status: string;
+}, displayedQuantity = row.quantity_available): {
   label: string;
   value: AvailabilityFilter;
 } {
   if (row.visibility_status === "hidden") {
-    return { label: "Not listed", value: "not_listed" };
+    return { label: "Hidden", value: "hidden" };
   }
 
-  if (row.operational_availability_status === "sold_out") {
+  if (
+    row.operational_availability_status === "sold_out" ||
+    displayedQuantity <= 0
+  ) {
     return { label: "Sold out", value: "sold_out" };
   }
 
   if (row.visibility_status !== "active") {
-    return { label: "Unavailable", value: "unavailable" };
+    return { label: "Hidden", value: "hidden" };
   }
 
-  return { label: "Local pickup", value: "local_pickup" };
+  return { label: "Available now", value: "available_now" };
+}
+
+function buildFilterOptions(
+  activeTab: InventoryProductTab,
+  items: FlatInventoryItem[],
+) {
+  return {
+    species: buildOptions("All species", items, (item) => [
+      item.speciesFilterValue,
+      item.species,
+    ]),
+    typeSex: buildOptions("All types", items, (item) =>
+      item.kind === "bird" ? [getTypeFilterValue(item.row), item.typeSex] : null,
+    ),
+    breed: buildOptions("All breeds", items, (item) => [
+      item.breedFilterValue,
+      item.breedOrItem,
+    ]),
+    productCategory: buildOptions("All categories", items, (item) =>
+      item.kind === "processed_poultry"
+        ? [item.productCategory, item.productCategory]
+        : null,
+    ),
+    equipmentCategory: buildOptions("All categories", items, (item) =>
+      item.kind === "equipment"
+        ? [item.equipmentCategory, item.equipmentCategory]
+        : null,
+    ),
+    condition: buildOptions("All conditions", items, (item) =>
+      item.kind === "equipment" && item.condition
+        ? [item.condition, item.condition]
+        : null,
+    ),
+    availability: buildOptions("All availability", items, (item) =>
+      activeTab === "equipment" && item.availabilityValue === "coming_soon"
+        ? null
+        : [
+            item.availabilityValue,
+            getAvailabilityFilterLabel(item.availabilityValue),
+          ],
+    ),
+  };
+}
+
+function buildOptions(
+  defaultLabel: string,
+  items: FlatInventoryItem[],
+  getOption: (item: FlatInventoryItem) => [string, string] | null,
+) {
+  const uniqueOptions = new Map<string, string>();
+
+  for (const item of items) {
+    const option = getOption(item);
+
+    if (!option) continue;
+
+    const [value, label] = option;
+
+    if (!value || value === "all") continue;
+    uniqueOptions.set(value, label);
+  }
+
+  return [
+    { label: defaultLabel, value: "all" },
+    ...Array.from(uniqueOptions, ([value, label]) => ({ label, value })).sort(
+      (first, second) => first.label.localeCompare(second.label),
+    ),
+  ];
+}
+
+function filterAndSortInventoryItems(
+  items: FlatInventoryItem[],
+  filters: InventoryTabFilters,
+  activeTab: InventoryProductTab,
+) {
+  const normalizedSearch = filters.search.trim().toLowerCase();
+
+  return items
+    .filter((item) => {
+      if (filters.species !== "all" && item.speciesFilterValue !== filters.species) {
+        return false;
+      }
+
+      if (
+        filters.typeSex !== "all" &&
+        (item.kind !== "bird" || getTypeFilterValue(item.row) !== filters.typeSex)
+      ) {
+        return false;
+      }
+
+      if (
+        activeTab === "live_poultry" &&
+        item.kind === "bird" &&
+        !matchesAgeFilter(item.row, filters.age)
+      ) {
+        return false;
+      }
+
+      if (filters.breed !== "all" && item.breedFilterValue !== filters.breed) {
+        return false;
+      }
+
+      if (
+        filters.productCategory !== "all" &&
+        (item.kind !== "processed_poultry" ||
+          item.productCategory !== filters.productCategory)
+      ) {
+        return false;
+      }
+
+      if (
+        filters.equipmentCategory !== "all" &&
+        (item.kind !== "equipment" ||
+          item.equipmentCategory !== filters.equipmentCategory)
+      ) {
+        return false;
+      }
+
+      if (
+        filters.condition !== "all" &&
+        (item.kind !== "equipment" || item.condition !== filters.condition)
+      ) {
+        return false;
+      }
+
+      if (
+        filters.availability !== "all" &&
+        item.availabilityValue !== filters.availability
+      ) {
+        return false;
+      }
+
+      if (!normalizedSearch) return true;
+
+      return item.searchText.includes(normalizedSearch);
+    })
+    .sort((first, second) =>
+      compareFlatInventoryItems(first, second, filters.sortBy),
+    );
+}
+
+function getSortOptionsForTab(tab: InventoryProductTab) {
+  if (tab === "live_poultry") {
+    return [
+      { label: "Hatch Date", value: "hatch_date" },
+      { label: "Breed", value: "breed" },
+      { label: "Price", value: "price" },
+      { label: "Available Quantity", value: "available" },
+    ];
+  }
+
+  if (tab === "hatching_eggs") {
+    return [
+      { label: "Breed", value: "breed" },
+      { label: "Price", value: "price" },
+      { label: "Available Quantity", value: "available" },
+      { label: "Recently Added", value: "recently_added" },
+    ];
+  }
+
+  if (tab === "processed_poultry") {
+    return [
+      { label: "Product Name", value: "product_name" },
+      { label: "Price", value: "price" },
+      { label: "Available Quantity", value: "available" },
+      { label: "Recently Added", value: "recently_added" },
+    ];
+  }
+
+  return [
+    { label: "Item Name", value: "item_name" },
+    { label: "Price", value: "price" },
+    { label: "Available Quantity", value: "available" },
+    { label: "Recently Added", value: "recently_added" },
+  ];
+}
+
+function buildInventorySummary(
+  activeTab: InventoryProductTab,
+  items: FlatInventoryItem[],
+) {
+  const availableValue = items.reduce(
+    (total, item) => total + item.availableQuantity,
+    0,
+  );
+  const reservedValue = items.reduce(
+    (total, item) => total + item.reservedQuantity,
+    0,
+  );
+  const inventoryValue = items.reduce(
+    (total, item) => total + item.availableQuantity * (item.price ?? 0),
+    0,
+  );
+
+  if (activeTab === "live_poultry") {
+    return {
+      availableGlyph: "/glyphs/hen.png",
+      availableLabel: "Available Birds",
+      availableValue,
+      reservedLabel: "Reserved Birds",
+      reservedValue,
+      inventoryValue,
+    };
+  }
+
+  if (activeTab === "hatching_eggs") {
+    return {
+      availableGlyph: "/glyphs/egg.png",
+      availableLabel: "Available Eggs",
+      availableValue,
+      reservedLabel: "Reserved Eggs",
+      reservedValue,
+      inventoryValue,
+    };
+  }
+
+  return {
+    availableGlyph:
+      activeTab === "processed_poultry"
+        ? "/glyphs/chicken-leg.png"
+        : "/glyphs/feed-sack.png",
+    availableLabel: "Available Units",
+    availableValue,
+    reservedLabel: "Reserved Units",
+    reservedValue,
+    inventoryValue,
+  };
 }
 
 function compareFlatInventoryItems(
@@ -1576,7 +2240,12 @@ function compareFlatInventoryItems(
     return left.breedOrItem.localeCompare(right.breedOrItem);
   }
 
-  if (sortBy === "name") {
+  if (
+    sortBy === "name" ||
+    sortBy === "breed" ||
+    sortBy === "product_name" ||
+    sortBy === "item_name"
+  ) {
     return left.breedOrItem.localeCompare(right.breedOrItem);
   }
 
@@ -1594,6 +2263,12 @@ function compareFlatInventoryItems(
 
   if (sortBy === "price") {
     return compareNullableNumbers(left.price, right.price);
+  }
+
+  if (sortBy === "recently_added") {
+    return getInventoryItemUpdatedAt(right).localeCompare(
+      getInventoryItemUpdatedAt(left),
+    );
   }
 
   const availabilityComparison = left.availabilityLabel.localeCompare(
@@ -1624,12 +2299,69 @@ function compareNullableNumbers(
   return 0;
 }
 
-function buildReservedMap(rows: ReservedRow[]) {
-  return rows.reduce<Record<string, number>>((totals, row) => {
-    if (!row.inventory_item_id) return totals;
+function getInventoryItemUpdatedAt(item: FlatInventoryItem) {
+  if (item.kind === "bird") return item.row.inventory_updated_at ?? "";
 
-    totals[row.inventory_item_id] =
-      (totals[row.inventory_item_id] ?? 0) +
+  return item.row.updated_at;
+}
+
+function getSearchPlaceholder(tab: InventoryProductTab) {
+  if (tab === "processed_poultry") return "Product name";
+  if (tab === "equipment") return "Item name";
+
+  return "Breed or type";
+}
+
+function getEmptyInventoryTitle(tab: InventoryProductTab) {
+  if (tab === "hatching_eggs") return "No hatching egg inventory yet";
+  if (tab === "processed_poultry") return "No poultry product inventory yet";
+  if (tab === "equipment") return "No equipment or supplies yet";
+
+  return "No live poultry inventory yet";
+}
+
+function getEmptyInventoryDescription(tab: InventoryProductTab) {
+  if (tab === "hatching_eggs") {
+    return "Add hatching eggs when you are ready to manage egg availability.";
+  }
+
+  if (tab === "processed_poultry") {
+    return "Create poultry product inventory when you have local-pickup products to sell.";
+  }
+
+  if (tab === "equipment") {
+    return "Add equipment or supplies when you have items ready to sell.";
+  }
+
+  return "Add live birds to start managing flock availability.";
+}
+
+function getInventoryItemSubtitle(item: FlatInventoryItem) {
+  if (item.kind === "processed_poultry") {
+    return [item.productCategory, item.typeSex].filter(Boolean).join(" - ");
+  }
+
+  if (item.kind === "equipment") {
+    return [item.equipmentCategory, item.condition].filter(Boolean).join(" - ");
+  }
+
+  return [item.species, item.typeSex].filter(Boolean).join(" - ");
+}
+
+function buildReservedMap(
+  rows: ReservedRow[],
+  idKey:
+    | "inventory_item_id"
+    | "equipment_inventory_item_id"
+    | "processed_poultry_inventory_item_id",
+) {
+  return rows.reduce<Record<string, number>>((totals, row) => {
+    const itemId = row[idKey];
+
+    if (!itemId) return totals;
+
+    totals[itemId] =
+      (totals[itemId] ?? 0) +
       Math.max(row.remaining_unfulfilled_quantity ?? 0, 0);
 
     return totals;
@@ -1744,13 +2476,47 @@ function matchesAgeFilter(row: InventoryRow, ageFilter: AgeFilter) {
   return false;
 }
 
-function isRowChanged(
+function isBirdRowChanged(
   row: InventoryRow,
   draftQuantities: Record<string, string>,
 ) {
-  const draftValue = draftQuantities[row.inventory_item_id];
+  return isSimpleQuantityChanged(
+    row.inventory_item_id,
+    row.quantity_available ?? 0,
+    draftQuantities,
+  );
+}
 
-  return draftValue != null && draftValue !== String(row.quantity_available ?? 0);
+function isSimpleQuantityChanged(
+  itemId: string,
+  originalQuantity: number,
+  draftQuantities: Record<string, string>,
+) {
+  const draftValue = draftQuantities[itemId];
+
+  return draftValue != null && draftValue !== String(originalQuantity);
+}
+
+function isInventoryItemChanged(
+  item: FlatInventoryItem,
+  draftQuantities: Record<string, string>,
+) {
+  return isSimpleQuantityChanged(
+    getDraftQuantityId(item),
+    getOriginalQuantity(item),
+    draftQuantities,
+  );
+}
+
+function getDraftQuantityId(item: FlatInventoryItem) {
+  if (item.kind === "bird") return item.row.inventory_item_id;
+  if (item.kind === "equipment") return item.row.equipment_inventory_item_id;
+
+  return item.row.processed_poultry_inventory_item_id;
+}
+
+function getOriginalQuantity(item: FlatInventoryItem) {
+  return item.row.quantity_available ?? 0;
 }
 
 function isValidQuantity(value: string) {
@@ -1763,12 +2529,12 @@ function isValidQuantity(value: string) {
   );
 }
 
-function validateChangedRows(
-  changedRows: InventoryRow[],
+function validateChangedQuantities(
+  changedItemIds: string[],
   draftQuantities: Record<string, string>,
 ) {
-  for (const row of changedRows) {
-    const draftValue = draftQuantities[row.inventory_item_id];
+  for (const itemId of changedItemIds) {
+    const draftValue = draftQuantities[itemId];
 
     if (!draftValue || !isValidQuantity(draftValue)) {
       return "Available quantity must be a whole number of zero or more.";
@@ -1785,6 +2551,19 @@ function getDisplayedQuantity(
   const draftValue = draftQuantities[row.inventory_item_id];
 
   if (draftValue == null) return row.quantity_available ?? 0;
+  if (!isValidQuantity(draftValue)) return 0;
+
+  return Number(draftValue);
+}
+
+function getDisplayedSimpleQuantity(
+  itemId: string,
+  originalQuantity: number,
+  draftQuantities: Record<string, string>,
+) {
+  const draftValue = draftQuantities[itemId];
+
+  if (draftValue == null) return originalQuantity;
   if (!isValidQuantity(draftValue)) return 0;
 
   return Number(draftValue);

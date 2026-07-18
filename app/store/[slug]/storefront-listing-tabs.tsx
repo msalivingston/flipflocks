@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { Funnel } from "lucide-react";
 import {
   AvailabilityBadge,
   EmptyStorefront,
@@ -364,8 +365,8 @@ function ListingFilters({
   return (
     <aside className="h-fit rounded-lg border border-[#e3d9c8] bg-white p-3">
       <div className="grid gap-2.5">
-        <label className="grid gap-1 text-[0.68rem] font-bold uppercase tracking-[0.06em] text-stone-700">
-          Search listings
+        <label className="grid gap-1 text-xs font-semibold text-stone-800">
+          Search
           <input
             className="storefront-primary-focus min-h-8 rounded-md border border-[#ddd5c7] bg-white px-2.5 text-xs font-medium normal-case tracking-normal text-stone-950 outline-none transition placeholder:text-stone-400"
             id="storefront-search"
@@ -375,6 +376,15 @@ function ListingFilters({
             value={query}
           />
         </label>
+
+        <div className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-stone-800">
+          <Funnel
+            aria-hidden="true"
+            className="storefront-primary-color size-3.5 text-emerald-700"
+            strokeWidth={2.25}
+          />
+          Filter listings
+        </div>
 
         {showSpeciesFilter ? (
           <FilterSelect
