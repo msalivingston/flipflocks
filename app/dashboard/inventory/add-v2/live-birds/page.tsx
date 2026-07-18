@@ -207,6 +207,15 @@ export function LiveBirdsListingForm({
     null,
   );
   const [groupsReviewMode, setGroupsReviewMode] = useState(false);
+  const [customBreedOfferingId, setCustomBreedOfferingId] = useState<
+    string | null
+  >(null);
+  const [customBreedName, setCustomBreedName] = useState("");
+  const [customBreedError, setCustomBreedError] = useState<string | null>(null);
+  const [customBreedDuplicate, setCustomBreedDuplicate] =
+    useState<BreedOption | null>(null);
+  const [customBreedSaving, setCustomBreedSaving] = useState(false);
+  const customBreedInputRef = useRef<HTMLInputElement>(null);
   const [priceAdjustment, setPriceAdjustment] = useState<PriceAdjustmentState>(
     defaultPriceAdjustment,
   );
@@ -682,6 +691,27 @@ export function LiveBirdsListingForm({
     };
   }, [hasMeaningfulUnsavedChanges, isEditMode]);
 
+  useEffect(() => {
+    if (!customBreedOfferingId) return;
+
+    customBreedInputRef.current?.focus();
+
+    function handleModalKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !customBreedSaving) {
+        setCustomBreedOfferingId(null);
+        setCustomBreedName("");
+        setCustomBreedError(null);
+        setCustomBreedDuplicate(null);
+      }
+    }
+
+    document.addEventListener("keydown", handleModalKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleModalKeyDown);
+    };
+  }, [customBreedOfferingId, customBreedSaving]);
+
   function createLocalOfferingId() {
     const offeringId = `offering-${nextOfferingId.current}`;
     nextOfferingId.current += 1;
@@ -830,6 +860,100 @@ export function LiveBirdsListingForm({
         ? successMessage
         : "Breed added to your personal breed library. The default photo could not be copied automatically.",
     );
+  }
+
+  function openCustomBreedModal(offeringId: string) {
+    setCustomBreedOfferingId(offeringId);
+    setCustomBreedName("");
+    setCustomBreedError(null);
+    setCustomBreedDuplicate(null);
+  }
+
+  function closeCustomBreedModal() {
+    if (customBreedSaving) return;
+
+    setCustomBreedOfferingId(null);
+    setCustomBreedName("");
+    setCustomBreedError(null);
+    setCustomBreedDuplicate(null);
+  }
+
+  function updateCustomBreedName(value: string) {
+    setCustomBreedName(value);
+    setCustomBreedError(null);
+    setCustomBreedDuplicate(null);
+  }
+
+  function useDuplicateCustomBreed() {
+    if (!customBreedOfferingId || !customBreedDuplicate) return;
+
+    updateOfferingBreed(customBreedOfferingId, customBreedDuplicate);
+    closeCustomBreedModal();
+  }
+
+  async function submitCustomBreed() {
+    if (customBreedSaving || !customBreedOfferingId) return;
+
+    const trimmedName = customBreedName.trim();
+
+    if (!species.id) {
+      setCustomBreedError("Select a species before adding a custom breed.");
+      return;
+    }
+
+    if (!trimmedName) {
+      setCustomBreedError("Enter a breed name.");
+      return;
+    }
+
+    const duplicateOption = findDuplicateBreedOption({
+      breedOptions,
+      name: trimmedName,
+      speciesId: species.id,
+    });
+
+    if (duplicateOption) {
+      setCustomBreedDuplicate(duplicateOption);
+      setCustomBreedError("That breed is already in the list.");
+      return;
+    }
+
+    if (!seller?.store_id) {
+      setCustomBreedError("The store context is missing. The breed was not added.");
+      return;
+    }
+
+    setCustomBreedSaving(true);
+    setCustomBreedError(null);
+
+    const createdProfile = await createSellerCustomBreedProfile({
+      breedName: trimmedName,
+      speciesId: species.id,
+      storeId: seller.store_id,
+    });
+
+    if (!createdProfile.ok) {
+      setCustomBreedSaving(false);
+      setCustomBreedError(createdProfile.message);
+      return;
+    }
+
+    const nextProfiles = upsertSellerBreedProfile(
+      sellerBreedProfiles,
+      createdProfile.profile,
+    );
+    const nextOption = getBreedOptionForProfile({
+      catalogBreeds,
+      mediaItems: breedMediaItems,
+      profile: createdProfile.profile,
+    });
+
+    setSellerBreedProfiles(nextProfiles);
+    updateOfferingBreed(customBreedOfferingId, nextOption, {
+      preserveExistingDescription: true,
+    });
+    setCustomBreedSaving(false);
+    closeCustomBreedModal();
   }
 
   async function reloadBreedPhotos() {
@@ -1759,10 +1883,12 @@ export function LiveBirdsListingForm({
                 breedMediaItemsByProfileId={breedMediaItemsByProfileId}
                 breedOptions={breedOptions}
                 breedOptionsMessage={breedOptionsMessage}
+                canAddCustomBreed={Boolean(species.id)}
                 duplicateOfferingIds={duplicateOfferingIds}
                 groupsReviewMode={groupsReviewMode}
                 offerings={offerings}
                 onDoneAddingGroups={finishAddingGroups}
+                onOpenCustomBreedModal={openCustomBreedModal}
                 prepareBreedPhotoProfile={(offeringId) =>
                   void prepareBreedPhotoProfile(offeringId)
                 }
@@ -1862,6 +1988,19 @@ export function LiveBirdsListingForm({
           </div>
         )}
       </div>
+      {customBreedOfferingId ? (
+        <CustomBreedDialog
+          duplicateBreed={customBreedDuplicate}
+          error={customBreedError}
+          inputRef={customBreedInputRef}
+          name={customBreedName}
+          saving={customBreedSaving}
+          onCancel={closeCustomBreedModal}
+          onNameChange={updateCustomBreedName}
+          onSubmit={() => void submitCustomBreed()}
+          onUseExisting={useDuplicateCustomBreed}
+        />
+      ) : null}
       {!isEditMode && isStartOverDialogOpen ? (
         <StartOverDialog
           onCancel={() => setIsStartOverDialogOpen(false)}
@@ -1882,6 +2021,101 @@ export function LiveBirdsListingForm({
         />
       ) : null}
     </DashboardPageContent>
+  );
+}
+
+function CustomBreedDialog({
+  duplicateBreed,
+  error,
+  inputRef,
+  name,
+  saving,
+  onCancel,
+  onNameChange,
+  onSubmit,
+  onUseExisting,
+}: {
+  duplicateBreed: BreedOption | null;
+  error: string | null;
+  inputRef: { current: HTMLInputElement | null };
+  name: string;
+  saving: boolean;
+  onCancel: () => void;
+  onNameChange: (value: string) => void;
+  onSubmit: () => void;
+  onUseExisting: () => void;
+}) {
+  return (
+    <div
+      aria-labelledby="custom-breed-title"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/35 px-4"
+      role="dialog"
+    >
+      <form
+        className="w-full max-w-md rounded-lg border border-stone-200 bg-white p-5 shadow-xl"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit();
+        }}
+      >
+        <h2
+          className="text-lg font-semibold text-stone-950"
+          id="custom-breed-title"
+        >
+          Add custom breed
+        </h2>
+        <label className="mt-4 block">
+          <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
+            Breed name
+          </span>
+          <input
+            className="block min-h-12 w-full rounded-md border border-stone-300 bg-white px-3 text-base text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm"
+            disabled={saving}
+            ref={inputRef}
+            type="text"
+            value={name}
+            onChange={(event) => onNameChange(event.target.value)}
+          />
+        </label>
+        {error ? (
+          <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold leading-6 text-red-700">
+            <p>{error}</p>
+            {duplicateBreed ? (
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-red-800">{duplicateBreed.label}</span>
+                <button
+                  className="inline-flex min-h-10 items-center rounded-md bg-emerald-800 px-3 text-sm font-bold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+                  type="button"
+                  onClick={onUseExisting}
+                >
+                  Use existing breed
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-4 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10 sm:text-sm sm:font-semibold"
+            disabled={saving}
+            type="button"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          {!duplicateBreed ? (
+            <button
+              className="inline-flex min-h-12 items-center rounded-md bg-emerald-800 px-4 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-emerald-800/45 sm:min-h-10 sm:text-sm sm:font-semibold"
+              disabled={saving || name.trim().length === 0}
+              type="submit"
+            >
+              {saving ? "Adding..." : "Add breed"}
+            </button>
+          ) : null}
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -3239,6 +3473,34 @@ function findBreedOptionByLabel(options: BreedOption[], label: string) {
   );
 }
 
+function findDuplicateBreedOption({
+  breedOptions,
+  name,
+  speciesId,
+}: {
+  breedOptions: BreedOption[];
+  name: string;
+  speciesId: string;
+}) {
+  const normalizedName = normalizeBreedNameForDuplicateCheck(name);
+
+  return (
+    breedOptions.find(
+      (option) =>
+        (option.speciesId === speciesId || option.speciesId === null) &&
+        normalizeBreedNameForDuplicateCheck(option.label) === normalizedName,
+    ) ?? null
+  );
+}
+
+function normalizeBreedNameForDuplicateCheck(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[-!"#$%&'()*+,./:;<=>?@[\\\]^_`{|}~]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
 function getBreedOptionsForSpecies({
   catalogBreeds,
   mediaItems,
@@ -3505,6 +3767,70 @@ async function createSellerBreedProfileFromCatalogBreed({
     return {
       ok: false,
       message: "The new breed profile could not be loaded.",
+    };
+  }
+
+  return { ok: true, profile: profileResult.data };
+}
+
+async function createSellerCustomBreedProfile({
+  breedName,
+  speciesId,
+  storeId,
+}: {
+  breedName: string;
+  speciesId: string;
+  storeId: string;
+}): Promise<
+  | { ok: true; profile: SellerBreedProfile }
+  | { ok: false; message: string }
+> {
+  const trimmedName = breedName.trim();
+  const upsertResult = await supabase.rpc("seller_upsert_breed_profile", {
+    p_breed_id: null,
+    p_custom_breed_name: trimmedName,
+    p_display_name: trimmedName,
+    p_seller_breed_profile_id: null,
+    p_seller_description: null,
+    p_seller_notes: null,
+    p_species_id: speciesId,
+    p_store_id: storeId,
+    p_visibility_status: "active",
+  });
+
+  if (upsertResult.error) {
+    return {
+      ok: false,
+      message: "The custom breed could not be added. Please try again.",
+    };
+  }
+
+  const upsertRows = Array.isArray(upsertResult.data)
+    ? (upsertResult.data as BreedProfileUpsertResult[])
+    : [];
+  const createdProfileId =
+    upsertRows[0]?.seller_breed_profile_id ??
+    (upsertResult.data as BreedProfileUpsertResult | null)
+      ?.seller_breed_profile_id;
+
+  if (!createdProfileId) {
+    return {
+      ok: false,
+      message: "The custom breed could not be opened after it was added.",
+    };
+  }
+
+  const profileResult = await supabase
+    .from("seller_breed_profiles")
+    .select(sellerBreedProfileSelect)
+    .eq("store_id", storeId)
+    .eq("id", createdProfileId)
+    .maybeSingle<SellerBreedProfile>();
+
+  if (profileResult.error || !profileResult.data) {
+    return {
+      ok: false,
+      message: "The custom breed could not be opened after it was added.",
     };
   }
 

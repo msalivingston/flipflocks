@@ -25,10 +25,12 @@ export function BirdOfferingsCard({
   breedMediaItemsByProfileId,
   breedOptions,
   breedOptionsMessage,
+  canAddCustomBreed,
   duplicateOfferingIds,
   groupsReviewMode,
   offerings,
   onDoneAddingGroups,
+  onOpenCustomBreedModal,
   prepareBreedPhotoProfile,
   removeOffering,
   scrollToOfferingId,
@@ -46,10 +48,12 @@ export function BirdOfferingsCard({
   breedMediaItemsByProfileId: Record<string, ListingPhotoItem[]>;
   breedOptions: BreedOption[];
   breedOptionsMessage: string | null;
+  canAddCustomBreed: boolean;
   duplicateOfferingIds: Set<string>;
   groupsReviewMode: boolean;
   offerings: BirdOffering[];
   onDoneAddingGroups: () => void;
+  onOpenCustomBreedModal: (offeringId: string) => void;
   prepareBreedPhotoProfile: (offeringId: string) => void;
   removeOffering: (offeringId: string) => void;
   scrollToOfferingId: string | null;
@@ -106,6 +110,7 @@ export function BirdOfferingsCard({
                 key={offering.id}
                 breedMediaItemsByProfileId={breedMediaItemsByProfileId}
                 breedOptions={breedOptions}
+                canAddCustomBreed={canAddCustomBreed}
                 canRemove={!isEditMode && offerings.length > 1}
                 hasDuplicateCombination={duplicateOfferingIds.has(offering.id)}
                 isEditMode={isEditMode}
@@ -120,6 +125,7 @@ export function BirdOfferingsCard({
                 updateOffering={updateOffering}
                 updateOfferingBreed={updateOfferingBreed}
                 onBreedPhotosChanged={onBreedPhotosChanged}
+                onOpenCustomBreedModal={onOpenCustomBreedModal}
                 plan={plan}
               />
             ) : (
@@ -165,6 +171,7 @@ export function BirdOfferingsCard({
 function ExpandedOfferingCard({
   breedMediaItemsByProfileId,
   breedOptions,
+  canAddCustomBreed,
   canRemove,
   hasDuplicateCombination,
   isEditMode,
@@ -179,10 +186,12 @@ function ExpandedOfferingCard({
   updateOffering,
   updateOfferingBreed,
   onBreedPhotosChanged,
+  onOpenCustomBreedModal,
   plan,
 }: {
   breedMediaItemsByProfileId: Record<string, ListingPhotoItem[]>;
   breedOptions: BreedOption[];
+  canAddCustomBreed: boolean;
   canRemove: boolean;
   hasDuplicateCombination: boolean;
   isEditMode: boolean;
@@ -200,6 +209,7 @@ function ExpandedOfferingCard({
   ) => void;
   updateOfferingBreed: (offeringId: string, option: BreedOption) => void;
   onBreedPhotosChanged: () => void;
+  onOpenCustomBreedModal: (offeringId: string) => void;
   plan: PlanCapabilities;
 }) {
   const selectedBreedOption = findSelectedBreedOption(breedOptions, offering);
@@ -269,15 +279,26 @@ function ExpandedOfferingCard({
       </div>
 
       <div className="grid gap-3 px-0 py-4 sm:gap-4 sm:px-4 sm:py-4 lg:grid-cols-4">
-        <SelectField
-          disabled={isEditMode && Boolean(offering.inventoryItemId)}
-          label="Breed"
-          options={breedOptions}
-          value={offering.breed}
-          selectedBreedId={offering.breedId ?? null}
-          selectedId={offering.sellerBreedProfileId}
-          onChange={(option) => updateOfferingBreed(offering.id, option)}
-        />
+        <div>
+          <SelectField
+            disabled={isEditMode && Boolean(offering.inventoryItemId)}
+            label="Breed"
+            options={breedOptions}
+            value={offering.breed}
+            selectedBreedId={offering.breedId ?? null}
+            selectedId={offering.sellerBreedProfileId}
+            onChange={(option) => updateOfferingBreed(offering.id, option)}
+          />
+          <button
+            className="mt-2 inline-flex whitespace-nowrap text-left text-sm font-semibold text-emerald-800 underline-offset-4 transition hover:text-emerald-950 hover:underline disabled:cursor-not-allowed disabled:text-stone-400 disabled:no-underline"
+            disabled={!canAddCustomBreed}
+            title={canAddCustomBreed ? undefined : "Select a species first."}
+            type="button"
+            onClick={() => onOpenCustomBreedModal(offering.id)}
+          >
+            + Add Custom Breed
+          </button>
+        </div>
         <SelectField
           label="Sold as"
           options={soldAsOptions.map((option) => ({
