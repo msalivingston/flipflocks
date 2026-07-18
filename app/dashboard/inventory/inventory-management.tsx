@@ -848,11 +848,11 @@ export function InventoryManagement() {
       </SellerCard>
 
       <SellerCard className="p-3 [&_input]:w-full [&_label]:min-w-0 [&_select]:w-full">
-        <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:thin] [&>label]:w-56 [&>label]:shrink-0">
-          <label className="grid w-64 shrink-0 gap-1.5 text-base font-bold text-stone-700 sm:text-sm">
+        <div className="grid gap-3 lg:grid-flow-col lg:auto-cols-[minmax(0,1fr)] lg:items-end">
+          <label className="grid gap-1 text-[13px] font-bold text-stone-700">
             Search
             <input
-              className="min-h-12 w-full rounded-md border border-stone-300 bg-white px-3 text-base font-semibold text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm sm:font-medium"
+              className="min-h-11 w-full rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 lg:min-h-10 lg:px-2.5"
               placeholder={getSearchPlaceholder(activeTab)}
               value={activeFilters.search}
               onChange={(event) =>
@@ -860,7 +860,7 @@ export function InventoryManagement() {
               }
             />
           </label>
-          {activeTab === "live_poultry" && filterOptions.species.length > 2 ? (
+          {activeTab === "live_poultry" ? (
             <InventorySelectControl
               icon="filter"
               label="Species"
@@ -869,7 +869,7 @@ export function InventoryManagement() {
               onChange={(value) => updateActiveFilter("species", value)}
             />
           ) : null}
-          {activeTab === "live_poultry" && filterOptions.typeSex.length > 2 ? (
+          {activeTab === "live_poultry" ? (
             <InventorySelectControl
               icon="filter"
               label="Type/Sex"
@@ -887,7 +887,7 @@ export function InventoryManagement() {
               onChange={(value) => updateActiveFilter("age", value as AgeFilter)}
             />
           ) : null}
-          {activeTab === "hatching_eggs" && filterOptions.species.length > 2 ? (
+          {activeTab === "hatching_eggs" ? (
             <InventorySelectControl
               icon="filter"
               label="Species"
@@ -896,7 +896,7 @@ export function InventoryManagement() {
               onChange={(value) => updateActiveFilter("species", value)}
             />
           ) : null}
-          {activeTab === "hatching_eggs" && filterOptions.breed.length > 2 ? (
+          {activeTab === "hatching_eggs" ? (
             <InventorySelectControl
               icon="filter"
               label="Breed"
@@ -905,8 +905,7 @@ export function InventoryManagement() {
               onChange={(value) => updateActiveFilter("breed", value)}
             />
           ) : null}
-          {activeTab === "processed_poultry" &&
-          filterOptions.productCategory.length > 1 ? (
+          {activeTab === "processed_poultry" ? (
             <InventorySelectControl
               icon="filter"
               label="Product Category"
@@ -917,8 +916,7 @@ export function InventoryManagement() {
               }
             />
           ) : null}
-          {activeTab === "equipment" &&
-          filterOptions.equipmentCategory.length > 1 ? (
+          {activeTab === "equipment" ? (
             <InventorySelectControl
               icon="filter"
               label="Category"
@@ -929,7 +927,7 @@ export function InventoryManagement() {
               }
             />
           ) : null}
-          {activeTab === "equipment" && filterOptions.condition.length > 2 ? (
+          {activeTab === "equipment" ? (
             <InventorySelectControl
               icon="filter"
               label="Condition"
@@ -938,17 +936,15 @@ export function InventoryManagement() {
               onChange={(value) => updateActiveFilter("condition", value)}
             />
           ) : null}
-          {filterOptions.availability.length > 2 ? (
-            <InventorySelectControl
-              icon="filter"
-              label="Availability"
-              value={activeFilters.availability}
-              options={filterOptions.availability}
-              onChange={(value) =>
-                updateActiveFilter("availability", value as AvailabilityFilter)
-              }
-            />
-          ) : null}
+          <InventorySelectControl
+            icon="filter"
+            label="Availability"
+            value={activeFilters.availability}
+            options={filterOptions.availability}
+            onChange={(value) =>
+              updateActiveFilter("availability", value as AvailabilityFilter)
+            }
+          />
           <InventorySelectControl
             icon="sort"
             label="Sort by"
@@ -1128,17 +1124,17 @@ function InventorySelectControl({
   const Icon = icon === "filter" ? Funnel : ArrowUpDown;
 
   return (
-    <label className="grid gap-1.5 text-base font-bold text-stone-700 sm:text-sm">
-      <span className="inline-flex items-center gap-1.5">
+    <label className="grid gap-1 text-[13px] font-bold text-stone-700">
+      <span className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap">
         <Icon
           aria-hidden="true"
-          className="size-3.5 text-emerald-800"
+          className="size-3.5 shrink-0 text-emerald-800"
           strokeWidth={2.25}
         />
         {label}
       </span>
       <select
-        className="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base font-semibold text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm sm:font-medium"
+        className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 lg:min-h-10 lg:px-2.5"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
