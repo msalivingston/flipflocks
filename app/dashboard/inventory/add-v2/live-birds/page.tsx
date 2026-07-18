@@ -392,6 +392,7 @@ export function LiveBirdsListingForm({
   );
   const isLoadedDraft = loadedDraftId !== null;
   const currentSavedDraftId = loadedDraftId ?? savedListingBatchId;
+  const hasSavedDraft = currentSavedDraftId !== null;
   const loadedDraftSpeciesDisabledReason = isLoadedDraft
     ? getLoadedDraftSaveDisabledReason({
         loadedDraftSpeciesId,
@@ -1559,9 +1560,7 @@ export function LiveBirdsListingForm({
     }
     setSaveDraftStatus("success");
     setSaveDraftMessage(
-      currentSavedDraftId
-        ? "Draft updated. It is not published yet."
-        : "Draft saved. It is not published yet.",
+      "Draft saved. You can find it in Saved drafts at the bottom of the Add Inventory page until it is published.",
     );
 
     setSavedFormSnapshot(currentFormSnapshot);
@@ -1810,6 +1809,8 @@ export function LiveBirdsListingForm({
                       ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                       : isPublished
                     ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : hasSavedDraft && !hasMeaningfulUnsavedChanges
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                     : "border-amber-200 bg-amber-50 text-amber-800"
                 }`}
               >
@@ -1819,8 +1820,10 @@ export function LiveBirdsListingForm({
                     : "Changes saved"
                   : isPublished
                     ? "Published"
-                    : isLoadedDraft
-                      ? "Loaded draft"
+                    : hasSavedDraft
+                      ? hasMeaningfulUnsavedChanges
+                        ? "Unsaved changes"
+                        : "Draft saved"
                       : "Draft not saved yet"}
               </span>
             </div>
