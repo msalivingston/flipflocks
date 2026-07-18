@@ -1287,7 +1287,10 @@ function TableCell({
 
 function TableLink({ href }: { href: string }) {
   return (
-    <Link className="text-sm font-semibold text-emerald-800 hover:text-emerald-950" href={href}>
+    <Link
+      className="inline-flex min-h-9 items-center justify-center whitespace-nowrap rounded-md border border-emerald-800 bg-emerald-800 px-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800/25"
+      href={href}
+    >
       View
     </Link>
   );

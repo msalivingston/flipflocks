@@ -615,27 +615,29 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                 required={false}
                 value={form.addressLine2}
               />
-              <div className="grid gap-2.5 sm:grid-cols-[1fr_5rem_7rem]">
+              <div className="grid gap-2.5">
                 <TextField
                   label="City"
                   name="city"
                   onChange={(value) => updateField("city", value)}
                   value={form.city}
                 />
-                <TextField
-                  label="State"
-                  maxLength={40}
-                  name="state"
-                  onChange={(value) => updateField("state", value)}
-                  value={form.state}
-                />
-                <TextField
-                  label="ZIP"
-                  maxLength={20}
-                  name="postalCode"
-                  onChange={(value) => updateField("postalCode", value)}
-                  value={form.postalCode}
-                />
+                <div className="grid gap-2.5 sm:grid-cols-[minmax(0,8rem)_minmax(0,10rem)]">
+                  <TextField
+                    label="State"
+                    maxLength={40}
+                    name="state"
+                    onChange={(value) => updateField("state", value)}
+                    value={form.state}
+                  />
+                  <TextField
+                    label="ZIP"
+                    maxLength={20}
+                    name="postalCode"
+                    onChange={(value) => updateField("postalCode", value)}
+                    value={form.postalCode}
+                  />
+                </div>
               </div>
 
               <TextArea
@@ -838,10 +840,10 @@ function TextField({
   value: string;
 }) {
   return (
-    <StorefrontLabel className="gap-1 text-xs">
+    <StorefrontLabel className="min-w-0 gap-1 text-xs">
       {label}
       <StorefrontInput
-        className="min-h-9 py-1 text-sm"
+        className="min-h-9 w-full min-w-0 py-1 text-sm"
         maxLength={maxLength}
         name={name}
         onChange={(event) => onChange(event.target.value)}

@@ -368,7 +368,7 @@ function CustomerRow({
       </td>
       <td className="px-4 py-5 text-right">
         <Link
-          className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-md border border-stone-300 bg-white px-3 text-sm font-bold text-emerald-900 transition hover:border-emerald-700 hover:bg-emerald-50 md:min-h-9"
+          className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-md border border-emerald-800 bg-emerald-800 px-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800/25 md:min-h-9"
           href={`/dashboard/customers/${customer.customer_id}`}
         >
           View

@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../../_components/seller-context";
 import {
@@ -75,10 +75,15 @@ type CreatedOrder = {
   total_amount: number | null;
 };
 
+type ManualOrderEmailStatus = "sent" | "failed" | "no_email" | "unknown";
+
 type CustomerMode = "existing" | "new";
+
+const manualOrderSuccessStorageKey = "flockfront:manual-order-success";
 
 export function NewManualOrder() {
   const { seller } = useSellerContext();
+  const router = useRouter();
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [inventory, setInventory] = useState<InventorySearchRow[]>([]);
   const [pickupMethod, setPickupMethod] = useState<PickupMethod>("notes");
@@ -123,7 +128,6 @@ export function NewManualOrder() {
     useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [sendBuyerConfirmation, setSendBuyerConfirmation] = useState(true);
 
@@ -590,24 +594,31 @@ export function NewManualOrder() {
       : [];
     const order = rows[0] ?? null;
 
-    setCreatedOrder(order);
-    setIsSaving(false);
-
-    if (shouldSendBuyerConfirmation) {
-      void supabase.functions
-        .invoke("manual-order-email-kick")
-        .then(({ error }) => {
-          if (error) {
-            console.warn("Manual order email kick failed", error.message);
-          }
-        })
-        .catch((error) => {
-          console.warn(
-            "Manual order email kick failed",
-            error instanceof Error ? error.message : String(error),
-          );
-        });
+    if (!order) {
+      setSaveError("Order was created, but the order details could not be loaded.");
+      setIsSaving(false);
+      return;
     }
+
+    const emailStatus = await getManualOrderEmailStatus({
+      canEmailBuyerConfirmation,
+      shouldSendBuyerConfirmation,
+    });
+    const params = new URLSearchParams({
+      created_order: order.order_number,
+      email_status: emailStatus,
+    });
+    const successMessage = getManualOrderCreatedMessage({
+      emailStatus,
+      orderNumber: order.order_number,
+    });
+
+    window.sessionStorage.setItem(
+      manualOrderSuccessStorageKey,
+      successMessage,
+    );
+
+    router.push(`/dashboard/orders?${params.toString()}`);
   }
 
   if (isLoading) return <LoadingState label="Loading order tools" />;
@@ -618,51 +629,6 @@ export function NewManualOrder() {
         title="New order could not load"
         message="Refresh the page and try again. Inventory or customer lookup may need attention."
       />
-    );
-  }
-
-  if (createdOrder) {
-    return (
-      <SellerCard className="p-5">
-        <h2 className="text-xl font-semibold text-stone-950">
-          Order {createdOrder.order_number} created
-        </h2>
-        <p className="mt-2 text-sm leading-6 text-stone-600">
-          The order is open, inventory was deducted, and no customer email was
-          sent automatically.
-        </p>
-        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-          <Link
-            className="inline-flex min-h-11 items-center justify-center rounded-md bg-stone-950 px-5 text-sm font-semibold text-white transition hover:bg-stone-800"
-            href={`/dashboard/orders/${createdOrder.order_id}`}
-          >
-            View Order
-          </Link>
-          <a
-            className="seller-secondary-button"
-            href={`mailto:${getCreatedCustomerEmail(
-              customerMode,
-              selectedCustomer,
-              newCustomer,
-            )}?subject=${encodeURIComponent(
-              `Order ${createdOrder.order_number}`,
-            )}`}
-          >
-            Send Order Email
-          </a>
-          <button
-            className="seller-secondary-button"
-            type="button"
-            onClick={() =>
-              void navigator.clipboard.writeText(
-                `${window.location.origin}/dashboard/orders/${createdOrder.order_id}`,
-              )
-            }
-          >
-            Copy Order Link
-          </button>
-        </div>
-      </SellerCard>
     );
   }
 
@@ -1212,6 +1178,77 @@ function parseFullName(fullName: string) {
     firstName: parts.slice(0, -1).join(" "),
     lastName: parts[parts.length - 1],
   };
+}
+
+async function getManualOrderEmailStatus({
+  canEmailBuyerConfirmation,
+  shouldSendBuyerConfirmation,
+}: {
+  canEmailBuyerConfirmation: boolean;
+  shouldSendBuyerConfirmation: boolean;
+}): Promise<ManualOrderEmailStatus> {
+  if (!canEmailBuyerConfirmation) return "no_email";
+  if (!shouldSendBuyerConfirmation) return "unknown";
+
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      "manual-order-email-kick",
+    );
+
+    if (error) {
+      console.warn("Manual order email kick failed", error.message);
+      return "failed";
+    }
+
+    if (isManualOrderEmailKickResponse(data)) {
+      return data.success ? "sent" : "failed";
+    }
+  } catch (error) {
+    console.warn(
+      "Manual order email kick failed",
+      error instanceof Error ? error.message : String(error),
+    );
+    return "failed";
+  }
+
+  return "unknown";
+}
+
+function isManualOrderEmailKickResponse(
+  value: unknown,
+): value is { success: boolean } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "success" in value &&
+    typeof (value as { success?: unknown }).success === "boolean"
+  );
+}
+
+function getManualOrderCreatedMessage({
+  emailStatus,
+  orderNumber,
+}: {
+  emailStatus: ManualOrderEmailStatus;
+  orderNumber: string;
+}) {
+  const formattedOrderNumber = orderNumber.startsWith("#")
+    ? orderNumber
+    : `#${orderNumber}`;
+
+  if (emailStatus === "sent") {
+    return `Order ${formattedOrderNumber} created and confirmation email sent.`;
+  }
+
+  if (emailStatus === "no_email") {
+    return `Order ${formattedOrderNumber} created. No confirmation email was sent because this customer does not have an email address.`;
+  }
+
+  if (emailStatus === "failed") {
+    return `Order ${formattedOrderNumber} created, but the confirmation email could not be sent.`;
+  }
+
+  return `Order ${formattedOrderNumber} created.`;
 }
 
 function getCreatedCustomerEmail(

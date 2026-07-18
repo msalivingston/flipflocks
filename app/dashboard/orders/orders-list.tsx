@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
@@ -178,12 +179,15 @@ const orderSortOptions: { label: string; value: OrderSort }[] = [
   { label: "Order total", value: "order_total" },
 ];
 
+const manualOrderSuccessStorageKey = "flockfront:manual-order-success";
+
 /**
  * Seller-facing order intake list for storefront pay-at-pickup requests.
  * Actions stay on the detail page so this view remains a fast work queue.
  */
 export function OrdersList() {
   const { seller } = useSellerContext();
+  const searchParams = useSearchParams();
   const [orders, setOrders] = useState<SellerOrderRow[]>([]);
   const [orderItemsByOrderId, setOrderItemsByOrderId] = useState<
     Record<string, SellerOrderItemRow[]>
@@ -236,6 +240,13 @@ export function OrdersList() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const urlManualOrderMessage = getManualOrderCreatedMessage({
+    emailStatus: searchParams.get("email_status"),
+    orderNumber: searchParams.get("created_order"),
+  });
+  const [manualOrderMessage, setManualOrderMessage] = useState<string | null>(
+    () => getInitialManualOrderMessage(urlManualOrderMessage),
+  );
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -809,6 +820,12 @@ export function OrdersList() {
   return (
     <>
       <div className="orders-screen-content grid gap-4">
+        {manualOrderMessage ? (
+          <p className="rounded-md border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+            {manualOrderMessage}
+          </p>
+        ) : null}
+
         <SellerCard className="rounded-2xl p-3 shadow-[0_16px_38px_rgba(46,39,25,0.05)] sm:p-4">
           <div className="grid gap-3">
             <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_11rem]">
@@ -981,6 +998,12 @@ export function OrdersList() {
           />
         ) : null}
       </div>
+      {manualOrderMessage ? (
+        <ManualOrderCreatedDialog
+          message={manualOrderMessage}
+          onClose={() => setManualOrderMessage(null)}
+        />
+      ) : null}
       {isPrintPortalReady &&
       bulkPrintOrders.length > 0 &&
       typeof document !== "undefined"
@@ -1145,6 +1168,42 @@ function OrdersTableCard({
         ))}
       </div>
     </SellerCard>
+  );
+}
+
+function ManualOrderCreatedDialog({
+  message,
+  onClose,
+}: {
+  message: string;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      aria-labelledby="manual-order-created-title"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/35 px-4 py-6"
+      role="dialog"
+    >
+      <div className="w-full max-w-md rounded-md border border-emerald-100 bg-white p-5 shadow-xl">
+        <h2
+          className="text-lg font-semibold leading-7 text-stone-950"
+          id="manual-order-created-title"
+        >
+          Order created
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-stone-700">{message}</p>
+        <div className="mt-5 flex justify-end">
+          <button
+            className="inline-flex min-h-10 items-center justify-center rounded-md border border-emerald-800 bg-emerald-800 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800/25"
+            type="button"
+            onClick={onClose}
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -3225,6 +3284,47 @@ function formatShortDate(value: string | null) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
+}
+
+function getManualOrderCreatedMessage({
+  emailStatus,
+  orderNumber,
+}: {
+  emailStatus: string | null;
+  orderNumber: string | null;
+}) {
+  if (!orderNumber) return null;
+
+  const formattedOrderNumber = orderNumber.startsWith("#")
+    ? orderNumber
+    : `#${orderNumber}`;
+
+  if (emailStatus === "sent") {
+    return `Order ${formattedOrderNumber} created and confirmation email sent.`;
+  }
+
+  if (emailStatus === "no_email") {
+    return `Order ${formattedOrderNumber} created. No confirmation email was sent because this customer does not have an email address.`;
+  }
+
+  if (emailStatus === "failed") {
+    return `Order ${formattedOrderNumber} created, but the confirmation email could not be sent.`;
+  }
+
+  return `Order ${formattedOrderNumber} created.`;
+}
+
+function getInitialManualOrderMessage(fallbackMessage: string | null) {
+  if (typeof window === "undefined") return fallbackMessage;
+
+  const storedMessage = window.sessionStorage.getItem(
+    manualOrderSuccessStorageKey,
+  );
+
+  if (!storedMessage) return fallbackMessage;
+
+  window.sessionStorage.removeItem(manualOrderSuccessStorageKey);
+  return storedMessage;
 }
 
 function getEmptyTitle(

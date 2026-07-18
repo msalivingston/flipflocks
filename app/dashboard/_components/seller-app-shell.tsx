@@ -55,7 +55,6 @@ export function SellerAppShell({ children }: { children: React.ReactNode }) {
 
 function SellerShellContent({ children }: { children: React.ReactNode }) {
   const { seller, isLoading, error, reload } = useSellerContext();
-  const pathname = usePathname();
   const router = useRouter();
 
   async function handleSignOut() {
@@ -88,7 +87,6 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
 
   const storefrontHref = `/store/${seller.store_slug}`;
   const isLive = seller.is_publicly_available;
-  const showDashboardSketch = pathname === "/dashboard" || pathname === "/dashboard/";
 
   return (
     <div className="min-h-screen overflow-x-clip bg-[#fbfaf6] text-stone-950 lg:grid lg:grid-cols-[224px_minmax(0,1fr)]">
@@ -148,18 +146,6 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
             <LogOut aria-hidden="true" className="size-5 shrink-0" />
             Sign out
           </button>
-          {showDashboardSketch ? (
-            <div className="px-1 pt-7">
-              <Image
-                src="/dashboard/seller-dashboard-chaos-goose.png"
-                alt="Pencil sketch of a goose standing on a desk with a laptop"
-                width={1536}
-                height={1152}
-                className="mx-auto h-auto w-full max-w-[190px] opacity-90 mix-blend-multiply"
-                priority
-              />
-            </div>
-          ) : null}
         </div>
       </aside>
 
