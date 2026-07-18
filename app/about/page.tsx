@@ -1,12 +1,21 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { MobileMarketingMenu } from "../_components/mobile-marketing-menu";
 
 export const metadata: Metadata = {
   title: "About | FlockFront",
   description:
     "Learn why FlockFront was built for poultry sellers and the farm life behind it.",
 };
+
+const mobileNavLinks = [
+  { href: "/#how-it-works", label: "How it works" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "/about", label: "About" },
+  { href: "/faq", label: "FAQ" },
+  { href: "/login", label: "Log In" },
+];
 
 function BrandLogo({
   className = "",
@@ -43,12 +52,12 @@ export default function AboutPage() {
   return (
     <main className="min-h-screen bg-[#fffaf1] text-[#10281c]">
       <div className="mx-auto flex w-full max-w-7xl flex-col px-4 py-2.5 md:px-8 md:py-2.5 lg:px-10">
-        <header className="grid items-center gap-5 py-[19px] md:grid-cols-[1fr_auto_1fr] md:gap-4 md:py-[3px]">
+        <header className="relative grid grid-cols-[auto_1fr] items-center gap-4 py-2 md:grid-cols-[1fr_auto_1fr] md:gap-4 md:py-[3px]">
           <Link
             href="/"
             className="inline-flex w-fit justify-self-start rounded-md focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1]"
           >
-            <BrandLogo className="md:w-[224px]" mobileClassName="w-[150px]" />
+            <BrandLogo className="md:w-[224px]" mobileClassName="w-[132px] min-[420px]:w-[150px]" />
           </Link>
 
           <nav
@@ -73,7 +82,7 @@ export default function AboutPage() {
             </Link>
           </nav>
 
-          <div className="flex items-center gap-4 justify-start justify-self-start md:justify-self-auto md:justify-end">
+          <div className="flex items-center gap-2 justify-self-end md:gap-4 md:justify-self-auto md:justify-end">
             <Link
               className="hidden text-[18px] font-bold text-[#10281c] transition hover:text-[#0e4a2d] md:inline-flex"
               href="/login"
@@ -81,61 +90,47 @@ export default function AboutPage() {
               Log In
             </Link>
             <Link
-              className="inline-flex min-h-9 items-center justify-center rounded-md border border-[#b77918] bg-transparent px-4 text-[15px] font-semibold text-[#a86908] transition hover:bg-[#fff4df] focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1]"
+              className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-md border border-[#b77918] bg-transparent px-3 text-[15px] font-semibold text-[#a86908] transition hover:bg-[#fff4df] focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1] min-[420px]:px-4"
               href="/signup"
             >
               Get Started
             </Link>
+            <MobileMarketingMenu
+              currentHref="/about"
+              links={mobileNavLinks}
+              variant="light"
+            />
           </div>
         </header>
-
-        <nav
-          aria-label="Mobile primary navigation"
-          className="mt-3 flex items-center justify-center gap-4 rounded-md border border-[#e8deca] bg-white/55 px-2 py-2 text-[16px] font-medium text-[#10281c] sm:gap-5 sm:px-3 sm:text-[18px] md:hidden"
-        >
-          <Link className="transition hover:text-[#0e4a2d]" href="/#how-it-works">
-            How it works
-          </Link>
-          <Link className="transition hover:text-[#0e4a2d]" href="/pricing">
-            Pricing
-          </Link>
-          <Link
-            aria-current="page"
-            className="font-semibold text-[#0e4a2d]"
-            href="/about"
-          >
-            About
-          </Link>
-          <Link className="transition hover:text-[#0e4a2d]" href="/faq">
-            FAQ
-          </Link>
-          <Link className="transition hover:text-[#0e4a2d]" href="/login">
-            Log In
-          </Link>
-        </nav>
       </div>
 
       <section className="relative overflow-hidden border-y border-[#eee4d4] bg-[#f7f1e6]">
-        <Image
-          src="/about-page/about-banner-goose-20260714-1406.png"
-          alt="White goose standing in grass on the farm"
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover object-bottom"
+        <div className="absolute inset-y-0 left-1/2 w-full max-w-[1916px] -translate-x-1/2">
+          <Image
+            src="/about-page/about-banner-goose-20260714-1406.png"
+            alt="White goose standing in grass on the farm"
+            fill
+            priority
+            sizes="(min-width: 1916px) 1916px, 100vw"
+            className="object-cover object-bottom max-[899px]:object-[94%_bottom]"
+          />
+        </div>
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 top-0 hidden h-[46%] bg-linear-to-b from-[#10281c]/50 via-[#10281c]/20 to-transparent max-[899px]:block"
         />
 
         <div className="relative mx-auto grid max-w-5xl items-center md:min-h-[390px] md:grid-cols-[0.9fr_1.1fr]">
-          <div className="px-5 py-12 max-[899px]:px-4 md:px-0 md:py-20">
-            <h1 className="text-balance font-serif text-[clamp(2.25rem,4.2vw,3.9rem)] leading-[1.02] text-[#123d27]">
+          <div className="px-5 py-12 max-[899px]:px-4 max-[899px]:pb-2 max-[899px]:pt-8 md:px-0 md:py-20">
+            <h1 className="text-balance font-serif text-[clamp(2.25rem,4.2vw,3.9rem)] leading-[1.02] text-[#123d27] max-[899px]:text-[#fffaf1] max-[899px]:drop-shadow-[0_2px_8px_rgb(16_40_28/0.5)]">
               About FlockFront
             </h1>
-            <p className="mt-4 max-w-2xl text-balance text-[1.1rem] leading-7 text-[#6d532b] md:text-[1.25rem]">
+            <p className="mt-4 max-w-2xl text-balance text-[1.1rem] leading-7 text-[#6d532b] max-[899px]:mt-2 max-[899px]:max-w-[18rem] max-[899px]:font-semibold max-[899px]:leading-6 max-[899px]:text-[#fff4df] max-[899px]:drop-shadow-[0_2px_7px_rgb(16_40_28/0.55)] md:text-[1.25rem]">
               Built for poultry sellers. Shaped by real farm life.
             </p>
           </div>
 
-          <div className="min-h-[260px] md:hidden" aria-hidden="true" />
+          <div className="min-h-[250px] md:hidden" aria-hidden="true" />
         </div>
       </section>
 
@@ -248,6 +243,9 @@ export default function AboutPage() {
             </Link>
             <Link className="hover:text-[#0e4a2d]" href="/login">
               Sign in
+            </Link>
+            <Link className="hover:text-[#0e4a2d]" href="mailto:hello@flockfront.com">
+              Contact
             </Link>
           </nav>
         </div>

@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { MobileMarketingMenu } from "../_components/mobile-marketing-menu";
 import { PLAN_CAPABILITIES } from "@/lib/plan-capabilities";
 
 const smallFlock = PLAN_CAPABILITIES.small_flock;
@@ -12,6 +13,14 @@ const pricing = {
   smallYearlyPrice: 50,
   smallYearlySavings: 10,
 };
+
+const mobileNavLinks = [
+  { href: "/#how-it-works", label: "How it works" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "/about", label: "About" },
+  { href: "/faq", label: "FAQ" },
+  { href: "/login", label: "Log In" },
+];
 
 const comparisonRows = [
   {
@@ -101,12 +110,12 @@ export function PricingPageClient() {
   return (
     <main className="min-h-screen bg-[#fffaf1] text-[#10281c]">
       <div className="mx-auto flex w-full max-w-7xl flex-col px-4 py-2.5 md:px-8 md:py-2.5 lg:px-10">
-        <header className="grid items-center gap-5 py-[19px] md:grid-cols-[1fr_auto_1fr] md:gap-4 md:py-[3px]">
+        <header className="relative grid grid-cols-[auto_1fr] items-center gap-4 py-2 md:grid-cols-[1fr_auto_1fr] md:gap-4 md:py-[3px]">
           <Link
             href="/"
             className="inline-flex w-fit justify-self-start rounded-md focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1]"
           >
-            <BrandLogo className="md:w-[224px]" mobileClassName="w-[150px]" />
+            <BrandLogo className="md:w-[224px]" mobileClassName="w-[132px] min-[420px]:w-[150px]" />
           </Link>
 
           <nav
@@ -131,7 +140,7 @@ export function PricingPageClient() {
             </Link>
           </nav>
 
-          <div className="flex items-center gap-4 justify-start justify-self-start md:justify-self-auto md:justify-end">
+          <div className="flex items-center gap-2 justify-self-end md:gap-4 md:justify-self-auto md:justify-end">
             <Link
               className="hidden text-[18px] font-bold text-[#10281c] transition hover:text-[#0e4a2d] md:inline-flex"
               href="/login"
@@ -139,38 +148,18 @@ export function PricingPageClient() {
               Log In
             </Link>
             <Link
-              className="inline-flex min-h-9 items-center justify-center rounded-md border border-[#b77918] bg-transparent px-4 text-[15px] font-semibold text-[#a86908] transition hover:bg-[#fff4df] focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1]"
+              className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-md border border-[#b77918] bg-transparent px-3 text-[15px] font-semibold text-[#a86908] transition hover:bg-[#fff4df] focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1] min-[420px]:px-4"
               href="/signup"
             >
               Get Started
             </Link>
+            <MobileMarketingMenu
+              currentHref="/pricing"
+              links={mobileNavLinks}
+              variant="light"
+            />
           </div>
         </header>
-
-        <nav
-          aria-label="Mobile primary navigation"
-          className="mt-3 flex items-center justify-center gap-4 rounded-md border border-[#e8deca] bg-white/55 px-2 py-2 text-[16px] font-medium text-[#10281c] sm:gap-5 sm:px-3 sm:text-[18px] md:hidden"
-        >
-          <Link className="transition hover:text-[#0e4a2d]" href="/#how-it-works">
-            How it works
-          </Link>
-          <Link
-            aria-current="page"
-            className="font-semibold text-[#0e4a2d]"
-            href="/pricing"
-          >
-            Pricing
-          </Link>
-          <Link className="transition hover:text-[#0e4a2d]" href="/about">
-            About
-          </Link>
-          <Link className="transition hover:text-[#0e4a2d]" href="/faq">
-            FAQ
-          </Link>
-          <Link className="transition hover:text-[#0e4a2d]" href="/login">
-            Log In
-          </Link>
-        </nav>
 
         <section className="mx-auto max-w-4xl px-2 pb-3 pt-4 text-center md:pb-3 md:pt-4">
           <h1 className="text-balance font-serif text-[clamp(2.05rem,3.5vw,3.35rem)] leading-[1.05] text-[#123d27]">
@@ -266,6 +255,44 @@ export function PricingPageClient() {
           </div>
         </section>
       </div>
+
+      <footer className="border-t border-[#ddd5c6] bg-white/70 px-5 py-3 max-[899px]:px-4 md:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 max-[899px]:items-center max-[899px]:gap-3 max-[899px]:text-center md:flex-row md:items-center md:justify-between md:max-[899px]:flex-col">
+          <div className="flex items-center gap-3 text-sm max-[899px]:flex-col max-[899px]:gap-1.5">
+            <BrandLogo className="w-[173px]" />
+            <p className="text-base text-[#394137]">
+              Simple tools for poultry sellers.
+            </p>
+          </div>
+          <nav
+            aria-label="Footer navigation"
+            className="flex flex-wrap gap-x-9 gap-y-3 text-base font-medium text-[#303830] max-[899px]:grid max-[899px]:w-full max-[899px]:max-w-xs max-[899px]:grid-cols-2 max-[899px]:justify-items-center max-[899px]:gap-x-4 max-[899px]:gap-y-2"
+          >
+            <Link className="hover:text-[#0e4a2d]" href="/#how-it-works">
+              How it works
+            </Link>
+            <Link
+              aria-current="page"
+              className="font-semibold text-[#0e4a2d]"
+              href="/pricing"
+            >
+              Pricing
+            </Link>
+            <Link className="hover:text-[#0e4a2d]" href="/about">
+              About
+            </Link>
+            <Link className="hover:text-[#0e4a2d]" href="/faq">
+              FAQ
+            </Link>
+            <Link className="hover:text-[#0e4a2d]" href="/login">
+              Sign in
+            </Link>
+            <Link className="hover:text-[#0e4a2d]" href="mailto:hello@flockfront.com">
+              Contact
+            </Link>
+          </nav>
+        </div>
+      </footer>
     </main>
   );
 }
@@ -415,7 +442,7 @@ function MobileComparisonRow({
 }) {
   return (
     <div className="grid min-h-12 [grid-template-columns:minmax(0,1fr)_4.75rem_4.75rem] border-t border-[#e8deca] first:border-t-0">
-      <div className="min-w-0 px-3 py-2.5 text-[13px] font-bold leading-5 text-[#111827]">
+      <div className="min-w-0 px-3 py-2.5 text-[14px] font-bold leading-5 text-[#111827]">
         {row.label}
       </div>
       <div className="grid place-items-center border-l border-[#e8deca] px-1 py-2 text-center text-[13px] text-[#111827]">

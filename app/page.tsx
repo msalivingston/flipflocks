@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { MobileMarketingMenu } from "./_components/mobile-marketing-menu";
 
 export const metadata: Metadata = {
   title: "FlockFront | Simple storefronts for poultry sellers",
@@ -53,6 +54,14 @@ const steps = [
     icon: "/landing-page/link-transparent.png",
     alt: "",
   },
+];
+
+const mobileNavLinks = [
+  { href: "/#how-it-works", label: "How it works" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "/about", label: "About" },
+  { href: "/faq", label: "FAQ" },
+  { href: "/login", label: "Sign in" },
 ];
 
 const farmBullets = [
@@ -131,7 +140,7 @@ function BrandLogo({
 export default function Home() {
   return (
     <main className="min-h-screen bg-white text-[#163824]">
-      <section className="relative isolate min-h-[500px] overflow-hidden text-white max-[899px]:min-h-[430px] md:min-h-[560px]">
+      <section className="relative isolate min-h-[500px] overflow-hidden text-white max-[899px]:min-h-[390px] md:min-h-[560px]">
         <Image
           src="/landing-page/hero-image.png"
           alt="Chickens in a pasture near a barn at golden hour"
@@ -143,13 +152,13 @@ export default function Home() {
         <div className="absolute inset-0 bg-[#160f08]/28" />
         <div className="absolute inset-0 bg-linear-to-b from-black/46 via-black/20 to-black/34" />
 
-        <div className="relative z-10 mx-auto flex min-h-[500px] w-full max-w-7xl flex-col px-5 py-4 max-[899px]:min-h-[430px] max-[899px]:px-4 max-[899px]:py-3 md:min-h-[560px] md:px-8 md:py-6 lg:px-12">
-          <header className="grid items-center gap-4 max-[899px]:gap-5 max-[899px]:py-4 md:grid-cols-[1fr_auto_1fr]">
+        <div className="relative z-10 mx-auto flex min-h-[500px] w-full max-w-7xl flex-col px-5 py-4 max-[899px]:min-h-[390px] max-[899px]:px-4 max-[899px]:py-1 md:min-h-[560px] md:px-8 md:py-6 lg:px-12">
+          <header className="relative grid grid-cols-[auto_1fr] items-center gap-4 max-[899px]:py-2 md:grid-cols-[1fr_auto_1fr]">
             <PlaceholderLink className="inline-flex w-fit justify-self-start items-center">
               <BrandLogo
                 variant="hero"
                 className="md:w-[339px]"
-                mobileClassName="w-[175px]"
+                mobileClassName="w-[132px] min-[420px]:w-[160px]"
               />
             </PlaceholderLink>
 
@@ -171,7 +180,7 @@ export default function Home() {
               </PlaceholderLink>
             </nav>
 
-            <div className="flex items-center gap-5 justify-start justify-self-start md:justify-self-auto md:justify-end">
+            <div className="flex items-center gap-2 justify-self-end md:gap-5 md:justify-self-auto md:justify-end">
               <PlaceholderLink
                 className="hidden text-[19px] font-bold text-white/95 transition hover:text-white md:inline-flex"
                 href="/login"
@@ -179,37 +188,17 @@ export default function Home() {
                 Sign in
               </PlaceholderLink>
               <PlaceholderLink
-                className="inline-flex min-h-12 items-center justify-center rounded-md bg-[#075f38] px-6 text-[18px] font-normal text-white shadow-sm shadow-black/15 transition hover:bg-[#064a2d] max-[899px]:min-h-10 max-[899px]:px-5 max-[899px]:text-[16px]"
+                className="inline-flex min-h-12 shrink-0 items-center justify-center rounded-md bg-[#075f38] px-6 text-[18px] font-normal text-white shadow-sm shadow-black/15 transition hover:bg-[#064a2d] max-[899px]:min-h-10 max-[899px]:px-3 max-[899px]:text-[15px] min-[420px]:max-[899px]:px-4 min-[420px]:max-[899px]:text-[16px]"
                 href="/signup"
               >
                 Sign up now
               </PlaceholderLink>
+              <MobileMarketingMenu links={mobileNavLinks} />
             </div>
           </header>
 
-          <nav
-            aria-label="Mobile primary navigation"
-            className="mt-3 flex items-center justify-center gap-5 rounded-md border border-white/25 bg-black/18 px-3 py-2 text-[15px] font-medium text-white/92 backdrop-blur-sm md:hidden"
-          >
-            <PlaceholderLink className="transition hover:text-white" href="/#how-it-works">
-              How it works
-            </PlaceholderLink>
-            <PlaceholderLink className="transition hover:text-white" href="/pricing">
-              Pricing
-            </PlaceholderLink>
-            <PlaceholderLink className="transition hover:text-white" href="/about">
-              About
-            </PlaceholderLink>
-            <PlaceholderLink className="transition hover:text-white" href="/faq">
-              FAQ
-            </PlaceholderLink>
-            <PlaceholderLink className="transition hover:text-white" href="/login">
-              Sign in
-            </PlaceholderLink>
-          </nav>
-
-          <div className="mx-auto flex max-w-5xl flex-1 flex-col items-center justify-center py-7 text-center max-[899px]:py-5 md:pb-14 md:pt-10">
-            <h1 className="text-balance font-serif text-[clamp(2.05rem,3.5vw,3.35rem)] leading-[1.05]">
+          <div className="mx-auto flex max-w-5xl flex-1 flex-col items-center justify-center py-7 text-center max-[899px]:pb-6 max-[899px]:pt-2 md:pb-14 md:pt-10">
+            <h1 className="text-balance font-serif text-[clamp(2.05rem,3.5vw,3.35rem)] leading-[1.05] max-[899px]:leading-[1.02]">
               A better way to sell poultry.
               <br />
               List your birds once, sell from one simple link.
@@ -265,7 +254,7 @@ export default function Home() {
 
           <div className="mt-4 grid gap-6 max-[899px]:gap-4 md:grid-cols-3 md:items-start">
             {steps.map((step, index) => (
-              <article key={step.title} className="relative px-4">
+              <article key={step.title} className="relative px-4 max-[899px]:px-2">
                 {index < steps.length - 1 ? (
                   <div
                     aria-hidden="true"
@@ -280,12 +269,12 @@ export default function Home() {
                   alt={step.alt}
                   width={58}
                   height={58}
-                  className="mx-auto mt-3 size-[58px] object-contain"
+                  className="mx-auto mt-2 size-[58px] object-contain md:mt-3"
                 />
-                <h3 className="mt-3 text-[17px] font-extrabold text-[#124326]">
+                <h3 className="mt-2 text-[17px] font-extrabold text-[#124326] md:mt-3">
                   {step.title}
                 </h3>
-                <p className="mx-auto mt-2 max-w-48 text-[15px] leading-5 text-[#303830]">
+                <p className="mx-auto mt-1 max-w-48 text-[15px] leading-5 text-[#303830] md:mt-2">
                   {step.copy}
                 </p>
               </article>
@@ -295,7 +284,7 @@ export default function Home() {
       </section>
 
       <section className="px-5 py-4 max-[899px]:px-4 md:px-8">
-        <div className="mx-auto grid max-w-6xl items-center gap-5 overflow-hidden rounded-lg border border-[#e8e0d4] bg-[#f4f0e8] px-5 py-6 shadow-[0_8px_24px_rgb(39_31_18/0.035)] max-[899px]:gap-4 max-[899px]:px-4 max-[899px]:py-5 md:grid-cols-[0.72fr_1.68fr] md:px-8 md:py-6">
+        <div className="mx-auto grid max-w-6xl items-center gap-5 overflow-hidden rounded-lg border border-[#e8e0d4] bg-[#f4f0e8] px-5 py-6 shadow-[0_8px_24px_rgb(39_31_18/0.035)] max-[899px]:gap-3 max-[899px]:px-4 max-[899px]:py-4 md:grid-cols-[0.72fr_1.68fr] md:px-8 md:py-6">
           <div>
             <h2 className="whitespace-nowrap font-serif text-[1.8rem] font-bold leading-tight text-[#0e4a2d] md:text-[2rem]">
               Built on a small farm.
@@ -388,7 +377,7 @@ export default function Home() {
             <PlaceholderLink className="hover:text-[#0e4a2d]" href="/login">
               Sign in
             </PlaceholderLink>
-            <PlaceholderLink className="hover:text-[#0e4a2d]">
+            <PlaceholderLink className="hover:text-[#0e4a2d]" href="mailto:hello@flockfront.com">
               Contact
             </PlaceholderLink>
           </nav>

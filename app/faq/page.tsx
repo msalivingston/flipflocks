@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { MobileMarketingMenu } from "../_components/mobile-marketing-menu";
 import { publicSupabase } from "@/lib/public-supabase";
 import { FaqAccordion, type PublicFaq } from "./faq-accordion";
 
@@ -11,6 +12,14 @@ export const metadata: Metadata = {
 };
 
 const previewStoreHref = "/store/willow-creek-poultry";
+
+const mobileNavLinks = [
+  { href: "/#how-it-works", label: "How it works" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "/about", label: "About" },
+  { href: "/faq", label: "FAQ" },
+  { href: "/login", label: "Log In" },
+];
 
 type SiteFaqRow = {
   answer: string;
@@ -78,12 +87,12 @@ export default async function FaqPage() {
   return (
     <main className="min-h-screen bg-[#fffaf1] text-[#10281c]">
       <div className="mx-auto flex w-full max-w-7xl flex-col px-4 py-2.5 md:px-8 md:py-2.5 lg:px-10">
-        <header className="grid items-center gap-5 py-[19px] md:grid-cols-[1fr_auto_1fr] md:gap-4 md:py-[3px]">
+        <header className="relative grid grid-cols-[auto_1fr] items-center gap-4 py-2 md:grid-cols-[1fr_auto_1fr] md:gap-4 md:py-[3px]">
           <Link
             href="/"
             className="inline-flex w-fit justify-self-start rounded-md focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1]"
           >
-            <BrandLogo className="md:w-[224px]" mobileClassName="w-[150px]" />
+            <BrandLogo className="md:w-[224px]" mobileClassName="w-[132px] min-[420px]:w-[150px]" />
           </Link>
 
           <nav
@@ -108,7 +117,7 @@ export default async function FaqPage() {
             </Link>
           </nav>
 
-          <div className="flex items-center gap-4 justify-start justify-self-start md:justify-self-auto md:justify-end">
+          <div className="flex items-center gap-2 justify-self-end md:gap-4 md:justify-self-auto md:justify-end">
             <Link
               className="hidden text-[18px] font-bold text-[#10281c] transition hover:text-[#0e4a2d] md:inline-flex"
               href="/login"
@@ -116,44 +125,24 @@ export default async function FaqPage() {
               Log In
             </Link>
             <Link
-              className="inline-flex min-h-9 items-center justify-center rounded-md border border-[#b77918] bg-transparent px-4 text-[15px] font-semibold text-[#a86908] transition hover:bg-[#fff4df] focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1]"
+              className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-md border border-[#b77918] bg-transparent px-3 text-[15px] font-semibold text-[#a86908] transition hover:bg-[#fff4df] focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1] min-[420px]:px-4"
               href="/signup"
             >
               Get Started
             </Link>
+            <MobileMarketingMenu
+              currentHref="/faq"
+              links={mobileNavLinks}
+              variant="light"
+            />
           </div>
         </header>
-
-        <nav
-          aria-label="Mobile primary navigation"
-          className="mt-3 flex items-center justify-center gap-4 rounded-md border border-[#e8deca] bg-white/55 px-2 py-2 text-[16px] font-medium text-[#10281c] sm:gap-5 sm:px-3 sm:text-[18px] md:hidden"
-        >
-          <Link className="transition hover:text-[#0e4a2d]" href="/#how-it-works">
-            How it works
-          </Link>
-          <Link className="transition hover:text-[#0e4a2d]" href="/pricing">
-            Pricing
-          </Link>
-          <Link className="transition hover:text-[#0e4a2d]" href="/about">
-            About
-          </Link>
-          <Link
-            aria-current="page"
-            className="font-semibold text-[#0e4a2d]"
-            href="/faq"
-          >
-            FAQ
-          </Link>
-          <Link className="transition hover:text-[#0e4a2d]" href="/login">
-            Log In
-          </Link>
-        </nav>
       </div>
 
-      <section className="border-y border-[#eee4d4] bg-[#f7f1e6] px-5 py-1 max-[899px]:px-4 md:px-8 md:py-2">
-        <div className="mx-auto grid max-w-5xl items-center gap-8 md:grid-cols-[1.05fr_0.95fr]">
+      <section className="border-y border-[#eee4d4] bg-[#f7f1e6] px-5 pb-1 pt-3 max-[899px]:px-4 md:px-8 md:py-2">
+        <div className="mx-auto grid max-w-5xl items-center gap-2 md:grid-cols-[1.05fr_0.95fr] md:gap-8">
           <div>
-            <h1 className="text-balance font-serif text-[clamp(1.35rem,2.8vw,2.475rem)] leading-[0.98] text-[#123d27]">
+            <h1 className="text-balance font-serif text-[clamp(1.35rem,2.8vw,2.475rem)] leading-[0.98] text-[#123d27] max-[899px]:text-center">
               Frequently Asked Questions
             </h1>
           </div>
@@ -164,7 +153,7 @@ export default async function FaqPage() {
             width={1536}
             height={1536}
             priority
-            className="ml-auto mr-0 w-full max-w-[102px] -translate-x-[15px] object-contain opacity-60 mix-blend-multiply md:max-w-[121px]"
+            className="mx-auto w-full max-w-[102px] object-contain opacity-60 mix-blend-multiply md:ml-auto md:mr-0 md:max-w-[121px] md:-translate-x-[15px]"
           />
         </div>
       </section>
@@ -178,6 +167,16 @@ export default async function FaqPage() {
               FAQ information is being added. Please check back soon.
             </div>
           )}
+          <p className="mt-6 text-center text-[1rem] font-medium leading-7 text-[#303830]">
+            Still have questions? Email us at{" "}
+            <Link
+              className="font-semibold text-[#0e4a2d] underline-offset-4 hover:underline"
+              href="mailto:hello@flockfront.com"
+            >
+              hello@flockfront.com
+            </Link>
+            .
+          </p>
         </div>
       </section>
 
@@ -235,6 +234,9 @@ export default async function FaqPage() {
             </Link>
             <Link className="hover:text-[#0e4a2d]" href="/login">
               Sign in
+            </Link>
+            <Link className="hover:text-[#0e4a2d]" href="mailto:hello@flockfront.com">
+              Contact
             </Link>
           </nav>
         </div>
