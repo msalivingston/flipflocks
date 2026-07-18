@@ -133,7 +133,6 @@ export function BirdOfferingsCard({
                 key={offering.id}
                 canRemove={!isEditMode && offerings.length > 1}
                 hasDuplicateCombination={duplicateOfferingIds.has(offering.id)}
-                isEditMode={isEditMode}
                 index={index}
                 offering={offering}
                 removeOffering={removeOffering}
@@ -261,14 +260,12 @@ function ExpandedOfferingCard({
           </span>
         </button>
         <div className="hidden shrink-0 items-center gap-3 sm:flex">
-          <RemoveOfferingControl
-            canRemove={canRemove}
-            disabledText={
-              isEditMode ? "Set quantity to 0 to stop selling this group." : undefined
-            }
-            offeringId={offering.id}
-            removeOffering={removeOffering}
-          />
+          {canRemove ? (
+            <RemoveOfferingControl
+              offeringId={offering.id}
+              removeOffering={removeOffering}
+            />
+          ) : null}
           <span
             aria-hidden="true"
             className="text-lg font-semibold leading-none text-stone-300"
@@ -405,16 +402,14 @@ function ExpandedOfferingCard({
             </div>
           </div>
         ) : null}
-        <div className="mt-3 flex justify-end sm:hidden">
-          <RemoveOfferingControl
-            canRemove={canRemove}
-            disabledText={
-              isEditMode ? "Set quantity to 0 to stop selling this group." : undefined
-            }
-            offeringId={offering.id}
-            removeOffering={removeOffering}
-          />
-        </div>
+        {canRemove ? (
+          <div className="mt-3 flex justify-end sm:hidden">
+            <RemoveOfferingControl
+              offeringId={offering.id}
+              removeOffering={removeOffering}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -423,7 +418,6 @@ function ExpandedOfferingCard({
 function CollapsedOfferingRow({
   canRemove,
   hasDuplicateCombination,
-  isEditMode,
   index,
   offering,
   removeOffering,
@@ -431,7 +425,6 @@ function CollapsedOfferingRow({
 }: {
   canRemove: boolean;
   hasDuplicateCombination: boolean;
-  isEditMode: boolean;
   index: number;
   offering: BirdOffering;
   removeOffering: (offeringId: string) => void;
@@ -471,14 +464,12 @@ function CollapsedOfferingRow({
         >
           Edit
         </button>
-        <RemoveOfferingControl
-          canRemove={canRemove}
-          disabledText={
-            isEditMode ? "Set quantity to 0 to stop selling this group." : undefined
-          }
-          offeringId={offering.id}
-          removeOffering={removeOffering}
-        />
+        {canRemove ? (
+          <RemoveOfferingControl
+            offeringId={offering.id}
+            removeOffering={removeOffering}
+          />
+        ) : null}
       </div>
       {hasDuplicateCombination ? (
         <p className="mt-2 text-sm font-semibold text-amber-800 sm:text-xs">
@@ -490,24 +481,12 @@ function CollapsedOfferingRow({
 }
 
 function RemoveOfferingControl({
-  canRemove,
-  disabledText,
   offeringId,
   removeOffering,
 }: {
-  canRemove: boolean;
-  disabledText?: string;
   offeringId: string;
   removeOffering: (offeringId: string) => void;
 }) {
-  if (!canRemove) {
-    return (
-      <span className="cursor-not-allowed text-sm font-semibold text-stone-300">
-        {disabledText ?? "Remove group"}
-      </span>
-    );
-  }
-
   return (
     <button
       className="min-h-12 rounded-md px-2 text-base font-semibold text-red-500 transition hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200 focus:ring-offset-2 sm:min-h-0 sm:px-0 sm:text-sm sm:text-red-500"

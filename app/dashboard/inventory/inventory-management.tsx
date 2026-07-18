@@ -43,6 +43,7 @@ type InventoryRow = {
   listing_batch_visibility_status: string;
   listing_batch_moderation_status: string;
   operational_availability_status: string;
+  cleared_at: string | null;
   inventory_updated_at: string | null;
 };
 
@@ -61,11 +62,12 @@ type InventoryProductTab =
 type AgeFilter = "all" | "0_6" | "7_12" | "13_24" | "25_plus" | "unknown";
 type InventoryVisibility = "draft" | "live" | "hidden" | "archived" | "sold_out";
 type AvailabilityFilter =
-  | "all"
+  | "current_inventory"
   | "available_now"
   | "coming_soon"
   | "sold_out"
-  | "hidden";
+  | "hidden"
+  | "cleared";
 type InventorySort =
   | "hatch_date"
   | "breed"
@@ -92,9 +94,8 @@ type InventoryTabFilters = {
   sortBy: InventorySort;
 };
 
-type DeletedInventoryEntry = {
-  deleted_item_type: "listing_inventory" | "equipment_inventory";
-  deleted_item_id: string;
+type ClearedInventoryEntry = {
+  cleared_inventory_item_id: string;
 };
 
 type FlatInventoryItem =
@@ -116,6 +117,7 @@ type FlatInventoryItem =
       price: number | null;
       availabilityLabel: string;
       availabilityValue: AvailabilityFilter;
+      isCleared: boolean;
       manageHref: string;
       searchText: string;
       row: InventoryRow;
@@ -139,6 +141,7 @@ type FlatInventoryItem =
       price: number;
       availabilityLabel: string;
       availabilityValue: AvailabilityFilter;
+      isCleared: false;
       manageHref: string;
       searchText: string;
       row: ProcessedPoultryInventoryRow;
@@ -163,10 +166,13 @@ type FlatInventoryItem =
       price: number;
       availabilityLabel: string;
       availabilityValue: AvailabilityFilter;
+      isCleared: false;
       manageHref: string;
       searchText: string;
       row: EquipmentInventoryRow;
     };
+
+type BirdInventoryItem = Extract<FlatInventoryItem, { kind: "bird" }>;
 
 const unsavedWarning =
   "You have unsaved inventory changes. Save or discard before leaving.";
@@ -200,7 +206,7 @@ const defaultTabFilters: Record<InventoryProductTab, InventoryTabFilters> = {
     productCategory: "all",
     equipmentCategory: "all",
     condition: "all",
-    availability: "all",
+    availability: "current_inventory",
     search: "",
     sortBy: "hatch_date",
   },
@@ -212,7 +218,7 @@ const defaultTabFilters: Record<InventoryProductTab, InventoryTabFilters> = {
     productCategory: "all",
     equipmentCategory: "all",
     condition: "all",
-    availability: "all",
+    availability: "current_inventory",
     search: "",
     sortBy: "breed",
   },
@@ -224,7 +230,7 @@ const defaultTabFilters: Record<InventoryProductTab, InventoryTabFilters> = {
     productCategory: "all",
     equipmentCategory: "all",
     condition: "all",
-    availability: "all",
+    availability: "current_inventory",
     search: "",
     sortBy: "product_name",
   },
@@ -236,7 +242,7 @@ const defaultTabFilters: Record<InventoryProductTab, InventoryTabFilters> = {
     productCategory: "all",
     equipmentCategory: "all",
     condition: "all",
-    availability: "all",
+    availability: "current_inventory",
     search: "",
     sortBy: "item_name",
   },
@@ -268,8 +274,8 @@ export function InventoryManagement() {
     );
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -293,7 +299,7 @@ export function InventoryManagement() {
         supabase
           .from("seller_inventory_management")
           .select(
-            "store_id, listing_batch_id, inventory_item_id, species_name, species_slug, breed_display_name, batch_type, origin_date, available_date, quantity_available, inventory_type, custom_inventory_label, effective_unit_price, inventory_visibility_status, inventory_moderation_status, listing_batch_visibility_status, listing_batch_moderation_status, operational_availability_status, inventory_updated_at",
+            "store_id, listing_batch_id, inventory_item_id, species_name, species_slug, breed_display_name, batch_type, origin_date, available_date, quantity_available, inventory_type, custom_inventory_label, effective_unit_price, inventory_visibility_status, inventory_moderation_status, listing_batch_visibility_status, listing_batch_moderation_status, operational_availability_status, cleared_at, inventory_updated_at",
           )
           .eq("store_id", seller.store_id)
           .neq("inventory_visibility_status", "archived")
@@ -451,9 +457,34 @@ export function InventoryManagement() {
     () => inventoryItems.filter((item) => item.productTab === activeTab),
     [activeTab, inventoryItems],
   );
+  const hasClearedItems = useMemo(
+    () => activeTabItems.some((item) => item.isCleared),
+    [activeTabItems],
+  );
+  const effectiveAvailability: AvailabilityFilter =
+    activeFilters.availability === "cleared" && !hasClearedItems
+      ? "current_inventory"
+      : activeFilters.availability;
+  const effectiveActiveFilters = useMemo(
+    () =>
+      effectiveAvailability === activeFilters.availability
+        ? activeFilters
+        : { ...activeFilters, availability: effectiveAvailability },
+    [activeFilters, effectiveAvailability],
+  );
+  const statusScopedItems = useMemo(
+    () => filterInventoryItemsByStatus(activeTabItems, effectiveAvailability),
+    [activeTabItems, effectiveAvailability],
+  );
   const filterOptions = useMemo(
-    () => buildFilterOptions(activeTab, activeTabItems),
-    [activeTab, activeTabItems],
+    () =>
+      buildFilterOptions(
+        activeTab,
+        activeTabItems,
+        statusScopedItems,
+        effectiveAvailability,
+      ),
+    [activeTab, activeTabItems, effectiveAvailability, statusScopedItems],
   );
   const activeSortOptions = useMemo(
     () => getSortOptionsForTab(activeTab),
@@ -461,19 +492,19 @@ export function InventoryManagement() {
   );
   const hasActiveFilters = useMemo(
     () =>
-      JSON.stringify(activeFilters) !==
+      JSON.stringify(effectiveActiveFilters) !==
       JSON.stringify(defaultTabFilters[activeTab]),
-    [activeFilters, activeTab],
+    [effectiveActiveFilters, activeTab],
   );
 
   const filteredItems = useMemo(
     () =>
       filterAndSortInventoryItems(
-        activeTabItems,
-        activeFilters,
+        statusScopedItems,
+        effectiveActiveFilters,
         activeTab,
       ),
-    [activeFilters, activeTab, activeTabItems],
+    [activeTab, effectiveActiveFilters, statusScopedItems],
   );
 
   const selectedItems = useMemo(
@@ -482,10 +513,14 @@ export function InventoryManagement() {
   );
   const selectedCount = selectedItems.length;
   const visibleSelectedItemIds = selectedItems.map((item) => item.id);
+  const selectedClearCounts = useMemo(
+    () => getClearSoldOutCounts(selectedItems),
+    [selectedItems],
+  );
 
   const summary = useMemo(
-    () => buildInventorySummary(activeTab, activeTabItems),
-    [activeTab, activeTabItems],
+    () => buildInventorySummary(activeTab, statusScopedItems),
+    [activeTab, statusScopedItems],
   );
 
   function updateActiveFilter<TKey extends keyof InventoryTabFilters>(
@@ -627,9 +662,12 @@ export function InventoryManagement() {
 
         if (draftValue == null) return row;
 
+        const nextQuantity = Number(draftValue);
+
         return {
           ...row,
-          quantity_available: Number(draftValue),
+          quantity_available: nextQuantity,
+          cleared_at: nextQuantity > 0 ? null : row.cleared_at,
         };
       }),
     );
@@ -686,26 +724,42 @@ export function InventoryManagement() {
 
   function clearSelection() {
     setSelectedItemIds([]);
-    setIsDeleteConfirmOpen(false);
+    setIsClearConfirmOpen(false);
   }
 
-  async function deleteSelectedInventory() {
-    if (!seller || selectedItems.length === 0 || isDeleting) return;
+  function requestClearSoldOutItems() {
+    if (selectedItems.length === 0 || isClearing) return;
 
-    const selectedBirdIds = selectedItems
-      .filter((item) => item.kind === "bird")
-      .map((item) => item.row.inventory_item_id);
-    const selectedEquipmentIds = selectedItems
-      .filter((item) => item.kind === "equipment")
-      .map((item) => item.row.equipment_inventory_item_id);
+    if (selectedClearCounts.eligibleCount === 0) {
+      setSaveError("Only sold-out items can be cleared.");
+      setSuccessMessage(null);
+      return;
+    }
 
-    setIsDeleting(true);
+    setSaveError(null);
+    setSuccessMessage(null);
+    setIsClearConfirmOpen(true);
+  }
+
+  async function clearSelectedInventory() {
+    if (!seller || selectedItems.length === 0 || isClearing) return;
+
+    const eligibleItems = getClearSoldOutEligibleItems(selectedItems);
+    const selectedBirdIds = eligibleItems.map((item) => item.row.inventory_item_id);
+    const unchangedCount = selectedItems.length - selectedBirdIds.length;
+
+    if (selectedBirdIds.length === 0) {
+      setSaveError("Only sold-out items can be cleared.");
+      setIsClearConfirmOpen(false);
+      return;
+    }
+
+    setIsClearing(true);
     setSaveError(null);
     setSuccessMessage(null);
 
     try {
-      const result = await supabase.rpc("seller_delete_inventory_entries", {
-        p_equipment_inventory_item_ids: selectedEquipmentIds,
+      const result = await supabase.rpc("seller_clear_inventory_items", {
         p_inventory_item_ids: selectedBirdIds,
       });
 
@@ -713,65 +767,55 @@ export function InventoryManagement() {
         throw new Error(result.error.message);
       }
 
-      const deletedEntries = Array.isArray(result.data)
-        ? (result.data as DeletedInventoryEntry[])
+      const clearedEntries = Array.isArray(result.data)
+        ? (result.data as ClearedInventoryEntry[])
         : [];
-      const deletedBirdIds = new Set(
-        deletedEntries
-          .filter((entry) => entry.deleted_item_type === "listing_inventory")
-          .map((entry) => entry.deleted_item_id),
+      const clearedIds = new Set(
+        clearedEntries.map((entry) => entry.cleared_inventory_item_id),
       );
-      const deletedEquipmentIds = new Set(
-        deletedEntries
-          .filter((entry) => entry.deleted_item_type === "equipment_inventory")
-          .map((entry) => entry.deleted_item_id),
-      );
-      const deletedCount = deletedBirdIds.size + deletedEquipmentIds.size;
 
-      if (deletedCount === 0) {
-        throw new Error("No inventory entries were deleted.");
+      if (clearedIds.size === 0) {
+        throw new Error("No inventory rows were cleared.");
       }
 
+      const clearedAt = new Date().toISOString();
       setRows((current) =>
-        current.filter((row) => !deletedBirdIds.has(row.inventory_item_id)),
-      );
-      setEquipmentRows((current) =>
-        current.filter(
-          (row) => !deletedEquipmentIds.has(row.equipment_inventory_item_id),
+        current.map((row) =>
+          clearedIds.has(row.inventory_item_id)
+            ? { ...row, cleared_at: row.cleared_at ?? clearedAt }
+            : row,
         ),
       );
-      setReservedByItemId((current) => {
-        const next = { ...current };
+      setSelectedItemIds((current) =>
+        current.filter((selectedId) => {
+          const item = selectedItems.find(
+            (selectedItem) => selectedItem.id === selectedId,
+          );
+          const inventoryItemId = item ? getInventoryItemIdForClear(item) : null;
 
-        for (const deletedId of deletedBirdIds) {
-          delete next[deletedId];
-        }
-
-        return next;
-      });
-      setDraftQuantities((current) => {
-        const next = { ...current };
-
-        for (const deletedId of deletedBirdIds) {
-          delete next[deletedId];
-        }
-
-        return next;
-      });
-
-      setSelectedItemIds([]);
+          return inventoryItemId ? !clearedIds.has(inventoryItemId) : false;
+        }),
+      );
       setSuccessMessage(
-        `Deleted ${deletedCount} inventory ${deletedCount === 1 ? "entry" : "entries"}.`,
+        unchangedCount > 0
+          ? `${clearedIds.size} sold-out ${
+              clearedIds.size === 1 ? "item" : "items"
+            } cleared. ${unchangedCount} ${
+              unchangedCount === 1 ? "item was" : "items were"
+            } not changed.`
+          : `${clearedIds.size} sold-out ${
+              clearedIds.size === 1 ? "item" : "items"
+            } cleared.`,
       );
     } catch (error) {
       setSaveError(
         error instanceof Error
           ? error.message
-          : "Could not delete selected inventory entries.",
+          : "Could not clear selected inventory rows.",
       );
     } finally {
-      setIsDeleteConfirmOpen(false);
-      setIsDeleting(false);
+      setIsClearConfirmOpen(false);
+      setIsClearing(false);
     }
   }
 
@@ -938,8 +982,8 @@ export function InventoryManagement() {
           ) : null}
           <InventorySelectControl
             icon="filter"
-            label="Availability"
-            value={activeFilters.availability}
+            label="Status"
+            value={effectiveActiveFilters.availability}
             options={filterOptions.availability}
             onChange={(value) =>
               updateActiveFilter("availability", value as AvailabilityFilter)
@@ -992,10 +1036,13 @@ export function InventoryManagement() {
         ) : (
           <FlatInventoryTable
             draftQuantities={draftQuantities}
+            hideClearSoldOutAction={
+              effectiveActiveFilters.availability === "cleared"
+            }
             items={filteredItems}
-            isDeleting={isDeleting}
+            isClearing={isClearing}
             onClearSelection={clearSelection}
-            onDeleteSelected={() => setIsDeleteConfirmOpen(true)}
+            onClearSoldOutItems={requestClearSoldOutItems}
             onSelectVisible={setVisibleSelection}
             onToggleSelection={toggleItemSelection}
             selectedItemIds={visibleSelectedItemIds}
@@ -1005,12 +1052,14 @@ export function InventoryManagement() {
         )}
       </SellerCard>
 
-      {isDeleteConfirmOpen ? (
-        <DeleteInventoryConfirmModal
-          isDeleting={isDeleting}
+      {isClearConfirmOpen ? (
+        <ClearInventoryConfirmModal
+          eligibleCount={selectedClearCounts.eligibleCount}
+          isClearing={isClearing}
           selectedCount={selectedCount}
-          onCancel={() => setIsDeleteConfirmOpen(false)}
-          onConfirm={deleteSelectedInventory}
+          unchangedCount={selectedClearCounts.unchangedCount}
+          onCancel={() => setIsClearConfirmOpen(false)}
+          onConfirm={clearSelectedInventory}
         />
       ) : null}
 
@@ -1181,20 +1230,33 @@ function InventorySummaryCard({
   );
 }
 
-function DeleteInventoryConfirmModal({
-  isDeleting,
+function ClearInventoryConfirmModal({
+  eligibleCount,
+  isClearing,
   selectedCount,
+  unchangedCount,
   onCancel,
   onConfirm,
 }: {
-  isDeleting: boolean;
+  eligibleCount: number;
+  isClearing: boolean;
   selectedCount: number;
+  unchangedCount: number;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const body =
+    unchangedCount > 0
+      ? `You selected ${selectedCount} items. ${eligibleCount} sold-out ${
+          eligibleCount === 1 ? "item" : "items"
+        } will be removed from your Current inventory view. ${unchangedCount} ${
+          unchangedCount === 1 ? "item" : "items"
+        } with inventory available will stay unchanged. If quantity is added later, cleared items will return automatically.`
+      : "These items will be removed from your Current inventory view. If quantity is added later, they will return automatically.";
+
   return (
     <div
-      aria-labelledby="delete-inventory-title"
+      aria-labelledby="clear-inventory-title"
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 px-4 py-6"
       role="dialog"
@@ -1202,13 +1264,12 @@ function DeleteInventoryConfirmModal({
       <div className="w-full max-w-md rounded-md border border-stone-200 bg-white p-5 shadow-xl">
         <h2
           className="text-lg font-semibold leading-7 text-stone-950"
-          id="delete-inventory-title"
+          id="clear-inventory-title"
         >
-          Delete selected inventory?
+          Clear sold-out items?
         </h2>
         <p className="mt-3 text-sm leading-6 text-stone-700">
-          This permanently removes the selected inventory entries. Use this only
-          for test data or entries that were never actually sold.
+          {body}
         </p>
         <p className="mt-3 text-sm font-semibold text-stone-950">
           {selectedCount} selected
@@ -1217,18 +1278,18 @@ function DeleteInventoryConfirmModal({
           <button
             type="button"
             className="seller-secondary-button"
-            disabled={isDeleting}
+            disabled={isClearing}
             onClick={onCancel}
           >
             Cancel
           </button>
           <button
             type="button"
-            className="rounded-md border border-red-700 bg-red-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700/25 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isDeleting || selectedCount === 0}
+            className="seller-primary-button"
+            disabled={isClearing || eligibleCount === 0}
             onClick={onConfirm}
           >
-            {isDeleting ? "Deleting..." : "Delete permanently"}
+            {isClearing ? "Clearing..." : "Clear sold-out items"}
           </button>
         </div>
       </div>
@@ -1238,10 +1299,11 @@ function DeleteInventoryConfirmModal({
 
 function FlatInventoryTable({
   draftQuantities,
-  isDeleting,
+  hideClearSoldOutAction,
+  isClearing,
   items,
   onClearSelection,
-  onDeleteSelected,
+  onClearSoldOutItems,
   onSelectVisible,
   onToggleSelection,
   selectedItemIds,
@@ -1249,10 +1311,11 @@ function FlatInventoryTable({
   updateDraftQuantity,
 }: {
   draftQuantities: Record<string, string>;
-  isDeleting: boolean;
+  hideClearSoldOutAction: boolean;
+  isClearing: boolean;
   items: FlatInventoryItem[];
   onClearSelection: () => void;
-  onDeleteSelected: () => void;
+  onClearSoldOutItems: () => void;
   onSelectVisible: (shouldSelect: boolean) => void;
   onToggleSelection: (itemId: string) => void;
   selectedItemIds: string[];
@@ -1271,18 +1334,20 @@ function FlatInventoryTable({
             {selectedCount} selected
           </p>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="min-h-12 rounded-md border border-red-700 bg-red-700 px-3 py-2 text-base font-bold text-white shadow-sm transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700/25 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0 sm:text-sm sm:font-semibold"
-              disabled={isDeleting || tab === "processed_poultry"}
-              onClick={onDeleteSelected}
-            >
-              {tab === "processed_poultry" ? "Manage individually" : "Delete selected"}
-            </button>
+            {!hideClearSoldOutAction ? (
+              <button
+                type="button"
+                className="min-h-12 rounded-md border border-emerald-800 bg-emerald-800 px-3 py-2 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800/25 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0 sm:text-sm sm:font-semibold"
+                disabled={isClearing}
+                onClick={onClearSoldOutItems}
+              >
+                Clear sold-out items
+              </button>
+            ) : null}
             <button
               type="button"
               className="seller-secondary-button"
-              disabled={isDeleting}
+              disabled={isClearing}
               onClick={onClearSelection}
             >
               Clear selection
@@ -1313,21 +1378,23 @@ function FlatInventoryTable({
             <p className="min-w-0 flex-1 text-base font-bold text-emerald-950 sm:text-sm sm:font-semibold">
               {selectedCount} selected
             </p>
-            <button
-              type="button"
-              className="min-h-12 rounded-md border border-red-700 bg-red-700 px-3 py-2 text-base font-bold text-white shadow-sm transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700/25 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-11 sm:text-sm sm:font-semibold"
-              disabled={isDeleting || tab === "processed_poultry"}
-              onClick={onDeleteSelected}
-            >
-              {tab === "processed_poultry" ? "Manage" : "Delete selected"}
-            </button>
+            {!hideClearSoldOutAction ? (
+              <button
+                type="button"
+                className="min-h-12 rounded-md border border-emerald-800 bg-emerald-800 px-3 py-2 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800/25 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-11 sm:text-sm sm:font-semibold"
+                disabled={isClearing}
+                onClick={onClearSoldOutItems}
+              >
+                Clear sold-out items
+              </button>
+            ) : null}
             <button
               type="button"
               className="min-h-12 rounded-md border border-stone-300 bg-white px-3 py-2 text-base font-bold text-stone-800 shadow-sm transition hover:border-emerald-700 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-11 sm:text-sm sm:font-semibold"
-              disabled={isDeleting}
+              disabled={isClearing}
               onClick={onClearSelection}
             >
-              Clear
+              Clear selection
             </button>
           </div>
         </div>
@@ -1769,12 +1836,14 @@ function AvailabilityPill({ label }: { label: string }) {
 }
 
 function getAvailabilityFilterLabel(value: AvailabilityFilter) {
+  if (value === "current_inventory") return "Current inventory";
   if (value === "available_now") return "Available now";
   if (value === "coming_soon") return "Coming soon";
   if (value === "sold_out") return "Sold out";
   if (value === "hidden") return "Hidden";
+  if (value === "cleared") return "Cleared";
 
-  return "All availability";
+  return "Current inventory";
 }
 
 function getProcessedPoultryManageHref(row: ProcessedPoultryInventoryRow) {
@@ -1827,6 +1896,7 @@ function buildFlatInventoryItems({
         price: row.effective_unit_price,
         availabilityLabel: availability.label,
         availabilityValue: availability.value,
+        isCleared: Boolean(row.cleared_at),
         manageHref: `/dashboard/inventory/${row.listing_batch_id}/edit`,
         row,
         searchText: [
@@ -1874,6 +1944,7 @@ function buildFlatInventoryItems({
         price: row.price,
         availabilityLabel: availability.label,
         availabilityValue: availability.value,
+        isCleared: false,
         manageHref: getProcessedPoultryManageHref(row),
         row,
         searchText: [
@@ -1918,6 +1989,7 @@ function buildFlatInventoryItems({
         price: row.price,
         availabilityLabel: availability.label,
         availabilityValue: availability.value,
+        isCleared: false,
         manageHref: `/dashboard/inventory/equipment/${row.equipment_inventory_item_id}`,
         row,
         searchText: [
@@ -1939,6 +2011,10 @@ function getBirdAvailability(
   row: InventoryRow,
   draftQuantities: Record<string, string>,
 ): { label: string; value: AvailabilityFilter } {
+  if (row.cleared_at) {
+    return { label: "Cleared", value: "cleared" };
+  }
+
   const visibility = getInventoryVisibility(row);
 
   if (visibility === "draft" || visibility === "hidden") {
@@ -1995,44 +2071,88 @@ function getSimpleInventoryAvailability(row: {
 
 function buildFilterOptions(
   activeTab: InventoryProductTab,
-  items: FlatInventoryItem[],
+  allItems: FlatInventoryItem[],
+  scopedItems: FlatInventoryItem[],
+  activeStatus: AvailabilityFilter,
 ) {
   return {
-    species: buildOptions("All species", items, (item) => [
+    species: buildOptions("All species", scopedItems, (item) => [
       item.speciesFilterValue,
       item.species,
     ]),
-    typeSex: buildOptions("All types", items, (item) =>
+    typeSex: buildOptions("All types", scopedItems, (item) =>
       item.kind === "bird" ? [getTypeFilterValue(item.row), item.typeSex] : null,
     ),
-    breed: buildOptions("All breeds", items, (item) => [
+    breed: buildOptions("All breeds", scopedItems, (item) => [
       item.breedFilterValue,
       item.breedOrItem,
     ]),
-    productCategory: buildOptions("All categories", items, (item) =>
+    productCategory: buildOptions("All categories", scopedItems, (item) =>
       item.kind === "processed_poultry"
         ? [item.productCategory, item.productCategory]
         : null,
     ),
-    equipmentCategory: buildOptions("All categories", items, (item) =>
+    equipmentCategory: buildOptions("All categories", scopedItems, (item) =>
       item.kind === "equipment"
         ? [item.equipmentCategory, item.equipmentCategory]
         : null,
     ),
-    condition: buildOptions("All conditions", items, (item) =>
+    condition: buildOptions("All conditions", scopedItems, (item) =>
       item.kind === "equipment" && item.condition
         ? [item.condition, item.condition]
         : null,
     ),
-    availability: buildOptions("All availability", items, (item) =>
-      activeTab === "equipment" && item.availabilityValue === "coming_soon"
-        ? null
-        : [
-            item.availabilityValue,
-            getAvailabilityFilterLabel(item.availabilityValue),
-          ],
+    availability: buildStatusOptions(
+      allItems,
+      activeStatus,
+      (item) =>
+        activeTab === "equipment" && item.availabilityValue === "coming_soon",
     ),
   };
+}
+
+function buildStatusOptions(
+  items: FlatInventoryItem[],
+  activeStatus: AvailabilityFilter,
+  shouldSkip: (item: FlatInventoryItem) => boolean,
+): { label: string; value: AvailabilityFilter }[] {
+  const uniqueOptions = new Map<AvailabilityFilter, string>();
+
+  for (const item of items) {
+    if (shouldSkip(item)) continue;
+    if (item.availabilityValue === "current_inventory") continue;
+
+    uniqueOptions.set(
+      item.availabilityValue,
+      getAvailabilityFilterLabel(item.availabilityValue),
+    );
+  }
+
+  if (activeStatus !== "current_inventory") {
+    uniqueOptions.set(activeStatus, getAvailabilityFilterLabel(activeStatus));
+  }
+
+  return [
+    { label: "Current inventory", value: "current_inventory" },
+    ...Array.from(uniqueOptions, ([value, label]) => ({ label, value })).sort(
+      (first, second) => first.label.localeCompare(second.label),
+    ),
+  ];
+}
+
+function filterInventoryItemsByStatus(
+  items: FlatInventoryItem[],
+  status: AvailabilityFilter,
+) {
+  if (status === "cleared") {
+    return items.filter((item) => item.isCleared);
+  }
+
+  if (status === "current_inventory") {
+    return items.filter((item) => !item.isCleared);
+  }
+
+  return items.filter((item) => !item.isCleared);
 }
 
 function buildOptions(
@@ -2117,7 +2237,8 @@ function filterAndSortInventoryItems(
       }
 
       if (
-        filters.availability !== "all" &&
+        filters.availability !== "current_inventory" &&
+        filters.availability !== "cleared" &&
         item.availabilityValue !== filters.availability
       ) {
         return false;
@@ -2513,6 +2634,33 @@ function getDraftQuantityId(item: FlatInventoryItem) {
 
 function getOriginalQuantity(item: FlatInventoryItem) {
   return item.row.quantity_available ?? 0;
+}
+
+function getInventoryItemIdForClear(item: FlatInventoryItem) {
+  if (item.kind !== "bird") return null;
+
+  return item.row.inventory_item_id;
+}
+
+function isClearSoldOutEligibleItem(
+  item: FlatInventoryItem,
+): item is BirdInventoryItem {
+  return item.kind === "bird" && getOriginalQuantity(item) === 0;
+}
+
+function getClearSoldOutEligibleItems(
+  items: FlatInventoryItem[],
+): BirdInventoryItem[] {
+  return items.filter(isClearSoldOutEligibleItem);
+}
+
+function getClearSoldOutCounts(items: FlatInventoryItem[]) {
+  const eligibleCount = getClearSoldOutEligibleItems(items).length;
+
+  return {
+    eligibleCount,
+    unchangedCount: items.length - eligibleCount,
+  };
 }
 
 function isValidQuantity(value: string) {

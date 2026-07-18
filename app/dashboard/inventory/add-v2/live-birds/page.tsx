@@ -2552,7 +2552,7 @@ function getEditCurrentRowsValidationIssue({
   if (
     activeRows.some((row) => !offeringInventoryIds.has(row.inventory_item_id))
   ) {
-    return "Group removal is not available yet. Set quantity to 0 to stop selling this group.";
+    return "Group removal is not available yet.";
   }
 
   for (const offering of offerings) {
