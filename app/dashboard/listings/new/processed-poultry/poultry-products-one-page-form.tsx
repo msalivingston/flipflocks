@@ -791,25 +791,7 @@ export function PoultryProductsOnePageForm({
         ) : (
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
             <main className="space-y-4">
-              <SectionCard step="1" title="Photos">
-                <PoultryProductPhotos
-                  addPendingPhotos={addPendingPhotos}
-                  mediaItems={mediaItems}
-                  pendingPhotos={pendingPhotos}
-                  photoError={photoError}
-                  processedPoultryItemId={processedPoultryItemId}
-                  removePendingPhoto={removePendingPhoto}
-                  reorderPendingPhotos={reorderPendingPhotos}
-                  storeId={storeId}
-                  onReload={() => {
-                    if (processedPoultryItemId) {
-                      void loadProcessedPoultryMedia(processedPoultryItemId);
-                    }
-                  }}
-                />
-              </SectionCard>
-
-              <SectionCard step="2" title="Product Details">
+              <SectionCard step="1" title="Product Details">
                 <div className="grid gap-4">
                   <label>
                     <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
@@ -922,6 +904,24 @@ export function PoultryProductsOnePageForm({
                     <ValidationMessage errors={validationErrors} />
                   </div>
                 ) : null}
+              </SectionCard>
+
+              <SectionCard step="2" title="Photos">
+                <PoultryProductPhotos
+                  addPendingPhotos={addPendingPhotos}
+                  mediaItems={mediaItems}
+                  pendingPhotos={pendingPhotos}
+                  photoError={photoError}
+                  processedPoultryItemId={processedPoultryItemId}
+                  removePendingPhoto={removePendingPhoto}
+                  reorderPendingPhotos={reorderPendingPhotos}
+                  storeId={storeId}
+                  onReload={() => {
+                    if (processedPoultryItemId) {
+                      void loadProcessedPoultryMedia(processedPoultryItemId);
+                    }
+                  }}
+                />
               </SectionCard>
 
               <SectionCard step="3" title="Description">

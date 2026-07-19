@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { supabase } from "@/lib/supabase";
 import {
@@ -18,7 +18,10 @@ import {
   LoadingState,
   SellerCard,
 } from "../../../../_components/seller-ui";
-import type { ReferenceSpecies } from "../../../../_lib/seller-types";
+import type {
+  ReferenceBreed,
+  ReferenceSpecies,
+} from "../../../../_lib/seller-types";
 import {
   ListingPhotosSection,
   type ListingPhotoItem,
@@ -63,12 +66,23 @@ type HatchingEggRpcResult = {
 type HatchingEggManagementRow = {
   hatching_egg_inventory_item_id: string;
   available_date: string;
+  created_at?: string;
   description: string | null;
   item_name: string;
   minimum_order_quantity: number | null;
   price: number;
   quantity_available: number;
   species_id: string;
+  updated_at?: string;
+  visibility_status: string;
+};
+
+type HatchingEggGroupRow = {
+  hatching_egg_inventory_item_id: string;
+  created_at: string;
+  description: string | null;
+  item_name: string;
+  updated_at: string;
   visibility_status: string;
 };
 
@@ -117,6 +131,11 @@ export function HatchingEggsStandaloneOnePageForm({
   const hatchingEggsEnabled =
     Boolean(seller?.hatching_eggs_enabled) && plan.hatchingEggsEnabled;
   const [species, setSpecies] = useState<ReferenceSpecies[]>([]);
+  const [breeds, setBreeds] = useState<ReferenceBreed[]>([]);
+  const [hatchingEggGroupRows, setHatchingEggGroupRows] = useState<
+    HatchingEggGroupRow[]
+  >([]);
+  const [selectedBreedId, setSelectedBreedId] = useState<string | null>(null);
   const [form, setForm] = useState<HatchingEggFormState>(emptyForm);
   const [hatchingEggItemId, setHatchingEggItemId] = useState(
     initialHatchingEggItemId ?? "",
@@ -135,6 +154,7 @@ export function HatchingEggsStandaloneOnePageForm({
   const [publishStatus, setPublishStatus] = useState<PublishStatus>("idle");
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [hasEditedDescription, setHasEditedDescription] = useState(false);
   const [isStartOverDialogOpen, setIsStartOverDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -142,34 +162,58 @@ export function HatchingEggsStandaloneOnePageForm({
 
     let isMounted = true;
 
-    async function loadSpecies() {
+    async function loadReferenceData() {
       setIsLoadingSpecies(true);
       setLoadError(null);
 
-      const result = await supabase
-        .from("species")
-        .select("id, common_name, slug, sort_order")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true })
-        .order("common_name", { ascending: true })
-        .returns<ReferenceSpecies[]>();
+      const [speciesResult, breedResult, groupResult] = await Promise.all([
+        supabase
+          .from("species")
+          .select("id, common_name, slug, sort_order")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true })
+          .order("common_name", { ascending: true })
+          .returns<ReferenceSpecies[]>(),
+        supabase
+          .from("breeds")
+          .select("id, species_id, breed_name, breed_slug, sort_order")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true })
+          .order("breed_name", { ascending: true })
+          .returns<ReferenceBreed[]>(),
+        supabase
+          .from("seller_hatching_egg_inventory_management")
+          .select(
+            "hatching_egg_inventory_item_id, item_name, description, visibility_status, created_at, updated_at",
+          )
+          .eq("store_id", storeId)
+          .neq("visibility_status", "archived")
+          .returns<HatchingEggGroupRow[]>(),
+      ]);
 
       if (!isMounted) return;
 
-      if (result.error) {
-        setLoadError(result.error.message);
+      const firstError =
+        speciesResult.error ?? breedResult.error ?? groupResult.error;
+
+      if (firstError) {
+        setLoadError(firstError.message);
         setSpecies([]);
+        setBreeds([]);
+        setHatchingEggGroupRows([]);
         setIsLoadingSpecies(false);
         return;
       }
 
-      const loadedSpecies = result.data ?? [];
+      const loadedSpecies = speciesResult.data ?? [];
       const defaultSpecies =
         loadedSpecies.find((item) => item.slug === "chicken") ??
         loadedSpecies[0] ??
         null;
 
       setSpecies(loadedSpecies);
+      setBreeds(breedResult.data ?? []);
+      setHatchingEggGroupRows(groupResult.data ?? []);
       setForm((current) => ({
         ...current,
         speciesId: current.speciesId || defaultSpecies?.id || "",
@@ -177,7 +221,7 @@ export function HatchingEggsStandaloneOnePageForm({
       setIsLoadingSpecies(false);
     }
 
-    void loadSpecies();
+    void loadReferenceData();
 
     return () => {
       isMounted = false;
@@ -197,6 +241,15 @@ export function HatchingEggsStandaloneOnePageForm({
   }, []);
 
   const selectedSpecies = species.find((item) => item.id === form.speciesId);
+  const matchingDescriptionGroup = useMemo(
+    () =>
+      findMatchingHatchingEggDescriptionGroup({
+        currentItemId: hatchingEggItemId,
+        itemName: form.itemName,
+        rows: hatchingEggGroupRows,
+      }),
+    [form.itemName, hatchingEggGroupRows, hatchingEggItemId],
+  );
   const formSnapshot = useMemo(() => getFormSnapshot(form), [form]);
   const activeSavedPhotoCount = mediaItems.filter(isActiveApprovedPhoto).length;
   const activePhotoCount = activeSavedPhotoCount + pendingPhotos.length;
@@ -213,6 +266,7 @@ export function HatchingEggsStandaloneOnePageForm({
         ? "This draft has already been saved."
         : null;
   const publishDisabledReason = getPublishDisabledReason({
+    descriptionComplete,
     detailsComplete,
     hasSavedChanges,
     isPublishing: publishStatus === "publishing",
@@ -245,6 +299,55 @@ export function HatchingEggsStandaloneOnePageForm({
     setActionMessage(null);
     if (saveDraftStatus === "success") setSaveDraftStatus("idle");
     if (publishStatus === "success") setPublishStatus("idle");
+  }
+
+  function updateSpecies(nextSpeciesId: string) {
+    const selectedBreed = selectedBreedId
+      ? breeds.find((breed) => breed.id === selectedBreedId)
+      : null;
+    const shouldClearSelectedBreed =
+      selectedBreed !== null && selectedBreed.species_id !== nextSpeciesId;
+
+    updateForm({
+      itemName: shouldClearSelectedBreed ? "" : form.itemName,
+      speciesId: nextSpeciesId,
+    });
+
+    if (shouldClearSelectedBreed) {
+      setSelectedBreedId(null);
+    }
+  }
+
+  function updateBreedOrVarietyName(value: string) {
+    setSelectedBreedId(null);
+    updateForm(buildNameUpdateWithSharedDescription(value));
+  }
+
+  function selectReferenceBreed(breed: ReferenceBreed) {
+    setSelectedBreedId(breed.id);
+    updateForm(buildNameUpdateWithSharedDescription(breed.breed_name));
+  }
+
+  function updateDescription(value: string) {
+    setHasEditedDescription(true);
+    updateForm({ description: value });
+  }
+
+  function buildNameUpdateWithSharedDescription(
+    itemName: string,
+  ): Partial<HatchingEggFormState> {
+    const matchingGroup = findMatchingHatchingEggDescriptionGroup({
+      currentItemId: hatchingEggItemId,
+      itemName,
+      rows: hatchingEggGroupRows,
+    });
+
+    return {
+      itemName,
+      ...(!hasEditedDescription && matchingGroup
+        ? { description: matchingGroup.description }
+        : {}),
+    };
   }
 
   const loadHatchingEggMedia = useCallback(
@@ -304,6 +407,8 @@ export function HatchingEggsStandaloneOnePageForm({
 
       const loadedForm = hatchingEggRowToForm(result.data);
       setForm(loadedForm);
+      setHasEditedDescription(false);
+      setSelectedBreedId(null);
       setHatchingEggItemId(result.data.hatching_egg_inventory_item_id);
       setSavedFormSnapshot(getFormSnapshot(loadedForm));
       setValidationErrors([]);
@@ -652,6 +757,8 @@ export function HatchingEggsStandaloneOnePageForm({
 
   function resetForm() {
     pendingPhotos.forEach((photo) => URL.revokeObjectURL(photo.url));
+    setHasEditedDescription(false);
+    setSelectedBreedId(null);
     setForm((current) => ({
       ...emptyForm,
       speciesId:
@@ -749,34 +856,14 @@ export function HatchingEggsStandaloneOnePageForm({
         ) : (
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
             <main className="space-y-4">
-              <SectionCard step="1" title="Photos">
-                <HatchingEggPhotos
-                  addPendingPhotos={addPendingPhotos}
-                  hatchingEggItemId={hatchingEggItemId}
-                  mediaItems={mediaItems}
-                  pendingPhotos={pendingPhotos}
-                  photoError={photoError}
-                  removePendingPhoto={removePendingPhoto}
-                  reorderPendingPhotos={reorderPendingPhotos}
-                  storeId={storeId}
-                  onReload={() => {
-                    if (hatchingEggItemId) {
-                      void loadHatchingEggMedia(hatchingEggItemId);
-                    }
-                  }}
-                />
-              </SectionCard>
-
-              <SectionCard step="2" title="Item Details">
+              <SectionCard step="1" title="Item Details">
                 <div className="grid gap-4">
                   <CompactField label="Species">
                     <select
                       className={inputClass}
                       disabled={fieldsLockedAfterAddSave}
                       value={form.speciesId}
-                      onChange={(event) =>
-                        updateForm({ speciesId: event.target.value })
-                      }
+                      onChange={(event) => updateSpecies(event.target.value)}
                     >
                       <option value="">Choose species</option>
                       {species.map((item) => (
@@ -787,20 +874,15 @@ export function HatchingEggsStandaloneOnePageForm({
                     </select>
                   </CompactField>
 
-                  <label>
-                    <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
-                      Breed or Variety Name
-                    </span>
-                    <input
-                      className={inputClass}
-                      disabled={fieldsLockedAfterAddSave}
-                      placeholder="Lavender Orpington Hatching Eggs"
-                      value={form.itemName}
-                      onChange={(event) =>
-                        updateForm({ itemName: event.target.value })
-                      }
-                    />
-                  </label>
+                  <HatchingEggBreedLookup
+                    breeds={breeds}
+                    disabled={fieldsLockedAfterAddSave}
+                    selectedBreedId={selectedBreedId}
+                    speciesId={form.speciesId}
+                    value={form.itemName}
+                    onCustomChange={updateBreedOrVarietyName}
+                    onSelectBreed={selectReferenceBreed}
+                  />
 
                   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <CompactField label="Available Date">
@@ -879,19 +961,58 @@ export function HatchingEggsStandaloneOnePageForm({
                 </div>
               </SectionCard>
 
+              <SectionCard step="2" title="Photos">
+                <HatchingEggPhotos
+                  addPendingPhotos={addPendingPhotos}
+                  hatchingEggItemId={hatchingEggItemId}
+                  mediaItems={mediaItems}
+                  pendingPhotos={pendingPhotos}
+                  photoError={photoError}
+                  removePendingPhoto={removePendingPhoto}
+                  reorderPendingPhotos={reorderPendingPhotos}
+                  storeId={storeId}
+                  onReload={() => {
+                    if (hatchingEggItemId) {
+                      void loadHatchingEggMedia(hatchingEggItemId);
+                    }
+                  }}
+                />
+              </SectionCard>
+
               <SectionCard step="3" title="Description">
+                {matchingDescriptionGroup ? (
+                  <div className="mb-3 space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm leading-6 text-emerald-900">
+                    <p className="font-semibold">
+                      This will appear with your other{" "}
+                      {matchingDescriptionGroup.displayName} hatching eggs on
+                      the storefront.
+                    </p>
+                    <p>Shared on the storefront: breed name and description</p>
+                    <p>
+                      Kept separate: available date, price, quantity, minimum
+                      order, and photos
+                    </p>
+                  </div>
+                ) : null}
+                <label>
+                  <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
+                    {matchingDescriptionGroup
+                      ? `Storefront description for ${matchingDescriptionGroup.displayName}`
+                      : "Storefront description"}
+                  </span>
                 <textarea
                   className={`${inputClass} min-h-32 resize-y py-3 leading-6`}
                   disabled={fieldsLockedAfterAddSave}
                   maxLength={descriptionMaxLength}
                   placeholder="Share collection timing, fertility notes, rooster details, pickup expectations, or anything buyers should know."
                   value={form.description}
-                  onChange={(event) =>
-                    updateForm({ description: event.target.value })
-                  }
+                  onChange={(event) => updateDescription(event.target.value)}
                 />
+                </label>
                 <p className="mt-2 text-sm text-stone-500">
-                  Keep it clear, accurate, and helpful.
+                  {matchingDescriptionGroup
+                    ? `Changing this description will update it for every ${matchingDescriptionGroup.displayName} hatching egg option.`
+                    : "Required. Keep it clear, accurate, and helpful."}
                 </p>
               </SectionCard>
 
@@ -1094,6 +1215,140 @@ function PendingHatchingEggPhotos({
         </p>
       ) : null}
     </div>
+  );
+}
+
+function HatchingEggBreedLookup({
+  breeds,
+  disabled,
+  onCustomChange,
+  onSelectBreed,
+  selectedBreedId,
+  speciesId,
+  value,
+}: {
+  breeds: ReferenceBreed[];
+  disabled: boolean;
+  onCustomChange: (value: string) => void;
+  onSelectBreed: (breed: ReferenceBreed) => void;
+  selectedBreedId: string | null;
+  speciesId: string;
+  value: string;
+}) {
+  const listboxId = useId();
+  const [isOpen, setIsOpen] = useState(false);
+  const normalizedValue = normalizeLookupText(value);
+  const speciesBreeds = useMemo(
+    () =>
+      speciesId
+        ? breeds.filter((breed) => breed.species_id === speciesId)
+        : breeds,
+    [breeds, speciesId],
+  );
+  const matchingBreeds = useMemo(() => {
+    const matches = normalizedValue
+      ? speciesBreeds.filter((breed) =>
+          normalizeLookupText(breed.breed_name).includes(normalizedValue),
+        )
+      : speciesBreeds;
+
+    return matches.slice(0, 12);
+  }, [normalizedValue, speciesBreeds]);
+  const selectedBreed = selectedBreedId
+    ? breeds.find((breed) => breed.id === selectedBreedId)
+    : null;
+  const canUseCustomName = value.trim().length > 0;
+
+  function closeSoon() {
+    window.setTimeout(() => setIsOpen(false), 120);
+  }
+
+  return (
+    <label className="relative block">
+      <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
+        Breed or variety
+      </span>
+      <input
+        aria-autocomplete="list"
+        aria-controls={listboxId}
+        aria-expanded={isOpen}
+        className={inputClass}
+        disabled={disabled}
+        placeholder="Search breeds or enter a custom name"
+        role="combobox"
+        value={value}
+        onBlur={closeSoon}
+        onChange={(event) => {
+          onCustomChange(event.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+      />
+
+      {selectedBreed ? (
+        <p className="mt-1 text-xs font-semibold text-emerald-800">
+          Using reference breed name: {selectedBreed.breed_name}
+        </p>
+      ) : value.trim() ? (
+        <p className="mt-1 text-xs font-semibold text-stone-500">
+          Using custom name.
+        </p>
+      ) : null}
+
+      {isOpen && !disabled ? (
+        <div
+          className="absolute left-0 right-0 top-full z-20 mt-1 max-h-80 overflow-y-auto rounded-lg border border-stone-200 bg-white p-2 shadow-lg"
+          id={listboxId}
+          role="listbox"
+        >
+          <p className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
+            Breed reference list
+          </p>
+
+          {matchingBreeds.length === 0 ? (
+            <p className="px-3 py-3 text-sm leading-6 text-stone-600">
+              No matching breeds found.
+            </p>
+          ) : null}
+
+          {matchingBreeds.map((breed) => (
+            <button
+              aria-selected={breed.id === selectedBreedId}
+              className="block w-full rounded-md px-3 py-2 text-left text-sm transition hover:bg-stone-50 focus:bg-stone-50 focus:outline-none"
+              key={breed.id}
+              role="option"
+              type="button"
+              onClick={() => {
+                onSelectBreed(breed);
+                setIsOpen(false);
+              }}
+              onMouseDown={(event) => event.preventDefault()}
+            >
+              <span className="block font-semibold text-stone-950">
+                {breed.breed_name}
+              </span>
+            </button>
+          ))}
+
+          <div className="mt-2 border-t border-stone-100 pt-2">
+            <button
+              className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-emerald-800 transition hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none disabled:text-stone-400 disabled:hover:bg-transparent"
+              disabled={!canUseCustomName}
+              type="button"
+              onClick={() => {
+                onCustomChange(value);
+                setIsOpen(false);
+              }}
+              onMouseDown={(event) => event.preventDefault()}
+            >
+              {canUseCustomName
+                ? `Use custom name: ${value.trim()}`
+                : "Use custom name"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </label>
   );
 }
 
@@ -1316,6 +1571,10 @@ function StartOverDialog({
 function validateHatchingEggForm(form: HatchingEggFormState) {
   const errors = validateItemDetails(form);
 
+  if (!form.description.trim()) {
+    errors.push("Add a storefront description.");
+  }
+
   if (form.description.length > descriptionMaxLength) {
     errors.push(`Description must be ${descriptionMaxLength} characters or less.`);
   }
@@ -1429,6 +1688,60 @@ function getFormSnapshot(form: HatchingEggFormState) {
   });
 }
 
+function normalizeLookupText(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function findMatchingHatchingEggDescriptionGroup({
+  currentItemId,
+  itemName,
+  rows,
+}: {
+  currentItemId: string;
+  itemName: string;
+  rows: HatchingEggGroupRow[];
+}) {
+  const groupKey = normalizeLookupText(itemName);
+
+  if (!groupKey) return null;
+
+  const matchingRows = rows.filter(
+    (row) => normalizeLookupText(row.item_name) === groupKey,
+  );
+  const matchingOtherRows = matchingRows.filter(
+    (row) => row.hatching_egg_inventory_item_id !== currentItemId,
+  );
+
+  if (matchingRows.length === 0 || matchingOtherRows.length === 0) {
+    return null;
+  }
+
+  const descriptionSource = [...matchingRows].sort(compareGroupDescriptionRows)[0];
+
+  return {
+    description: descriptionSource.description ?? "",
+    displayName: descriptionSource.item_name,
+    normalizedName: groupKey,
+  };
+}
+
+function compareGroupDescriptionRows(
+  first: HatchingEggGroupRow,
+  second: HatchingEggGroupRow,
+) {
+  const updatedComparison = second.updated_at.localeCompare(first.updated_at);
+
+  if (updatedComparison !== 0) return updatedComparison;
+
+  const createdComparison = second.created_at.localeCompare(first.created_at);
+
+  if (createdComparison !== 0) return createdComparison;
+
+  return second.hatching_egg_inventory_item_id.localeCompare(
+    first.hatching_egg_inventory_item_id,
+  );
+}
+
 function hasStartedForm(form: HatchingEggFormState) {
   return Boolean(
     form.availableDate ||
@@ -1441,16 +1754,19 @@ function hasStartedForm(form: HatchingEggFormState) {
 }
 
 function getPublishDisabledReason({
+  descriptionComplete,
   detailsComplete,
   hasSavedChanges,
   isPublishing,
 }: {
+  descriptionComplete: boolean;
   detailsComplete: boolean;
   hasSavedChanges: boolean;
   isPublishing: boolean;
 }) {
   if (isPublishing) return "Publish already in progress.";
   if (!detailsComplete) return "Complete item details to publish.";
+  if (!descriptionComplete) return "Add a storefront description to publish.";
   if (!hasSavedChanges) return null;
 
   return null;
