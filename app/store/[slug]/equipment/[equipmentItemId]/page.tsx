@@ -1,15 +1,11 @@
-import Image from "next/image";
 import Link from "next/link";
 import {
   AvailabilityBadge,
   EmptyStorefront,
-  ListingPhoto,
-  StorefrontMediaFrame,
   StorefrontPage,
   StorefrontShell,
   cx,
   formatCurrency,
-  toPublicImageUrl,
 } from "../../storefront-ui";
 import {
   StorefrontMedia,
@@ -26,6 +22,7 @@ import {
   getStorefrontCategoryAvailability,
 } from "../../storefront-shell-components";
 import { storefrontSerifClass } from "../../storefront-fonts";
+import { StorefrontProductGallery } from "../../storefront-product-gallery";
 import { EquipmentOrderOptions } from "./equipment-order-options";
 
 export default async function StorefrontEquipmentPage({
@@ -194,55 +191,12 @@ function EquipmentGallery({
   fallbackSrc: string | null;
   gallery: StorefrontMedia[];
 }) {
-  const [featured, ...rest] = gallery;
-
-  if (!featured) {
-    return (
-      <div className="grid gap-4">
-        <div className="overflow-hidden rounded-lg border border-[#ded7c8]">
-          <ListingPhoto alt={fallbackAlt} src={fallbackSrc} />
-        </div>
-        {fallbackSrc ? (
-          <div className="grid grid-cols-4 gap-3">
-            <Image
-              alt={fallbackAlt}
-              className="aspect-square w-full rounded-md border border-[#ded7c8] object-cover"
-              height={240}
-              src={toPublicImageUrl(fallbackSrc)}
-              unoptimized
-              width={320}
-            />
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-  const thumbnails = rest.length > 0 ? rest.slice(0, 4) : [featured];
-
   return (
-    <StorefrontMediaFrame className="grid gap-4 border-0 bg-transparent p-0">
-      <Image
-        alt={featured.alt_text || fallbackAlt}
-        className="aspect-[4/3] w-full rounded-lg border border-[#ded7c8] object-cover"
-        height={720}
-        src={toPublicImageUrl(featured.public_url)}
-        unoptimized
-        width={960}
-      />
-      <div className="grid grid-cols-4 gap-3">
-        {thumbnails.map((image) => (
-          <Image
-            alt={image.alt_text || fallbackAlt}
-            className="aspect-square w-full rounded-md border border-[#ded7c8] object-cover"
-            height={240}
-            key={`${image.entity_type}-${image.public_url}`}
-            src={toPublicImageUrl(image.public_url)}
-            unoptimized
-            width={320}
-          />
-        ))}
-      </div>
-    </StorefrontMediaFrame>
+    <StorefrontProductGallery
+      fallbackAlt={fallbackAlt}
+      fallbackSrc={fallbackSrc}
+      gallery={gallery}
+    />
   );
 }
 
