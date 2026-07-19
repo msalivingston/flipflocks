@@ -4,6 +4,7 @@ import {
 } from "./storefront-ui";
 import {
   loadStorefrontEquipment,
+  loadStorefrontHatchingEggInventory,
   loadStorefrontHome,
   loadStorefrontInventory,
   loadStorefrontProfileImages,
@@ -30,17 +31,20 @@ export default async function StorefrontHomePage({
     homeResult,
     inventoryResult,
     equipmentResult,
+    hatchingEggResult,
     processedPoultryResult,
   ] = await Promise.all([
     loadStorefrontHome(slug),
     loadStorefrontInventory(slug),
     loadStorefrontEquipment(slug),
+    loadStorefrontHatchingEggInventory(slug),
     loadStorefrontProcessedPoultry(slug),
   ]);
   const error =
     homeResult.error ??
     inventoryResult.error ??
     equipmentResult.error ??
+    hatchingEggResult.error ??
     processedPoultryResult.error;
 
   if (error) {
@@ -81,6 +85,7 @@ export default async function StorefrontHomePage({
   return (
     <StorefrontHomeContent
       equipment={equipmentResult.data}
+      hatchingEggs={hatchingEggResult.data}
       inventory={inventoryResult.data}
       livePoultryProfileImages={
         livePoultryProfileImagesResult.error

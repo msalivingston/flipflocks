@@ -10,6 +10,7 @@ import {
   StorefrontHome,
   StorefrontProfileImageMap,
   loadStorefrontEquipment,
+  loadStorefrontHatchingEggInventory,
   loadStorefrontInventory,
   loadStorefrontProfileImages,
   loadStorefrontProcessedPoultry,
@@ -25,6 +26,9 @@ type PreviewState =
   | { status: "error"; message: string }
   | {
       equipment: Awaited<ReturnType<typeof loadStorefrontEquipment>>["data"];
+      hatchingEggs: Awaited<
+        ReturnType<typeof loadStorefrontHatchingEggInventory>
+      >["data"];
       inventory: Awaited<ReturnType<typeof loadStorefrontInventory>>["data"];
       livePoultryProfileImages: StorefrontProfileImageMap;
       processedPoultry: Awaited<
@@ -57,6 +61,7 @@ export function StorefrontPreviewClient({ slug }: { slug: string }) {
         homeResult,
         inventoryResult,
         equipmentResult,
+        hatchingEggResult,
         processedPoultryResult,
       ] = await Promise.all([
         supabase
@@ -66,12 +71,14 @@ export function StorefrontPreviewClient({ slug }: { slug: string }) {
           .maybeSingle(),
         loadStorefrontInventory(slug),
         loadStorefrontEquipment(slug),
+        loadStorefrontHatchingEggInventory(slug),
         loadStorefrontProcessedPoultry(slug),
       ]);
       const error =
         homeResult.error ??
         inventoryResult.error ??
         equipmentResult.error ??
+        hatchingEggResult.error ??
         processedPoultryResult.error;
 
       if (!isMounted) return;
@@ -95,6 +102,7 @@ export function StorefrontPreviewClient({ slug }: { slug: string }) {
 
       setState({
         equipment: equipmentResult.data,
+        hatchingEggs: hatchingEggResult.data,
         inventory: inventoryResult.data,
         livePoultryProfileImages: livePoultryProfileImagesResult.error
           ? {}
@@ -116,6 +124,7 @@ export function StorefrontPreviewClient({ slug }: { slug: string }) {
     return (
       <StorefrontHomeContent
         equipment={state.equipment}
+        hatchingEggs={state.hatchingEggs}
         inventory={state.inventory}
         livePoultryProfileImages={state.livePoultryProfileImages}
         processedPoultry={state.processedPoultry}

@@ -14,8 +14,10 @@ import {
   StorefrontMedia,
   StorefrontProduct,
   findProduct,
+  groupHatchingEggInventoryByProduct,
   groupInventoryByProduct,
   loadStorefrontEquipment,
+  loadStorefrontHatchingEggInventory,
   loadStoreGallery,
   loadStorefrontHome,
   loadStorefrontInventory,
@@ -39,17 +41,20 @@ export default async function StorefrontProductPage({
     homeResult,
     inventoryResult,
     equipmentResult,
+    hatchingEggResult,
     processedPoultryResult,
   ] = await Promise.all([
     loadStorefrontHome(slug),
     loadStorefrontInventory(slug),
     loadStorefrontEquipment(slug),
+    loadStorefrontHatchingEggInventory(slug),
     loadStorefrontProcessedPoultry(slug),
   ]);
   const error =
     homeResult.error ??
     inventoryResult.error ??
     equipmentResult.error ??
+    hatchingEggResult.error ??
     processedPoultryResult.error;
 
   if (error) {
@@ -83,8 +88,8 @@ export default async function StorefrontProductPage({
   const livePoultryProducts = groupInventoryByProduct(
     inventoryResult.data.filter(isLivePoultryItem),
   );
-  const hatchingEggProducts = groupInventoryByProduct(
-    inventoryResult.data.filter(isHatchingEggItem),
+  const hatchingEggProducts = groupHatchingEggInventoryByProduct(
+    hatchingEggResult.data,
   );
   const selectedProduct = findSelectedProduct(
     livePoultryProducts,
@@ -191,7 +196,9 @@ export default async function StorefrontProductPage({
               </p>
             </div>
 
-            <ProductCharacteristics product={product} />
+            {!isHatchingEggProduct ? (
+              <ProductCharacteristics product={product} />
+            ) : null}
           </section>
         </section>
 
@@ -318,6 +325,13 @@ function buildProductGallery(
 }
 
 async function loadProductGallery(slug: string, product: StorefrontProduct) {
+  if (product.productSource === "hatching_egg_inventory") {
+    return {
+      data: [] as StorefrontMedia[],
+      error: null,
+    };
+  }
+
   const gallerySources = [
     {
       entityId: product.listingBatchBreedId,

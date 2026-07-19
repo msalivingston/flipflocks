@@ -21,10 +21,12 @@ import {
   StorefrontProduct,
   StorefrontProfileImageMap,
   StorefrontEquipmentItem,
+  StorefrontHatchingEggItem,
   StorefrontInventoryItem,
   StorefrontProcessedPoultryItem,
   StorefrontHeroCropMetadata,
   StorefrontHome,
+  groupHatchingEggInventoryByProduct,
   groupInventoryByProduct,
   previewText,
 } from "./storefront-data";
@@ -38,6 +40,7 @@ type StorefrontHeroLayout = "full" | "right";
 
 export function StorefrontHomeContent({
   equipment,
+  hatchingEggs,
   inventory,
   livePoultryProfileImages = {},
   processedPoultry,
@@ -45,6 +48,7 @@ export function StorefrontHomeContent({
   store,
 }: {
   equipment: StorefrontEquipmentItem[];
+  hatchingEggs: StorefrontHatchingEggItem[];
   inventory: StorefrontInventoryItem[];
   livePoultryProfileImages?: StorefrontProfileImageMap;
   processedPoultry: StorefrontProcessedPoultryItem[];
@@ -55,9 +59,7 @@ export function StorefrontHomeContent({
     inventory.filter(isLivePoultryItem),
     livePoultryProfileImages,
   );
-  const hatchingEggProducts = groupInventoryByProduct(
-    inventory.filter(isHatchingEggItem),
-  );
+  const hatchingEggProducts = groupHatchingEggInventoryByProduct(hatchingEggs);
   const heroSubheading =
     store.hero_subheading?.trim() ||
     "Browse current availability and request pickup at checkout.";

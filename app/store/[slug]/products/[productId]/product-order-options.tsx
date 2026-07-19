@@ -116,7 +116,7 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
           </h2>
           <p className="text-sm leading-6 text-stone-600">
             {isHatchingEggProduct
-              ? "Choose from the seller's available hatching egg options."
+              ? "Review the seller's available hatching egg options."
               : "Choose the quantities you would like to add to your cart."}
           </p>
         </div>
@@ -249,9 +249,7 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
         <div>
           <p className="font-semibold text-stone-950">Order summary</p>
           <p className="mt-1 text-sm text-stone-600">
-            {summary.totalQuantity > 0
-              ? `${summary.totalQuantity} selected`
-              : "Add quantities above to see your total."}
+            {getOrderSummaryText(isHatchingEggProduct, summary.totalQuantity)}
           </p>
         </div>
         <div>
@@ -262,11 +260,11 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
         </div>
         <StorefrontButton
           className="w-full gap-2 px-5"
-          disabled={summary.totalQuantity <= 0}
+          disabled={isHatchingEggProduct || summary.totalQuantity <= 0}
           onClick={handleAddToCart}
         >
           <StorefrontGlyph className="h-5 w-5" src="/glyphs/cart.png" />
-          {isButtonConfirmed ? "Added to cart" : "Add to cart"}
+          {getAddToCartButtonLabel(isHatchingEggProduct, isButtonConfirmed)}
         </StorefrontButton>
       </div>
 
@@ -461,6 +459,25 @@ function formatShortDate(value: string) {
 }
 
 function getMinimumOrderNote(product: StorefrontProduct) {
+  const hatchingEggMinimums = product.options
+    .map((option) => option.minimumOrderQuantity)
+    .filter(
+      (quantity): quantity is number =>
+        quantity !== null && quantity !== undefined && quantity > 1,
+    );
+
+  if (hatchingEggMinimums.length > 0) {
+    const uniqueMinimums = Array.from(new Set(hatchingEggMinimums)).sort(
+      (first, second) => first - second,
+    );
+
+    if (uniqueMinimums.length === 1) {
+      return `Minimum order: ${uniqueMinimums[0]} eggs.`;
+    }
+
+    return `Minimum order varies by option: ${uniqueMinimums.join(", ")} eggs.`;
+  }
+
   const description = product.description ?? "";
   const match = description.match(/minimum order\s*:\s*([^.\n]+\.?)/i);
 
@@ -469,4 +486,26 @@ function getMinimumOrderNote(product: StorefrontProduct) {
   }
 
   return "Minimum order: No minimum listed.";
+}
+
+function getOrderSummaryText(
+  isHatchingEggProduct: boolean,
+  selectedQuantity: number,
+) {
+  if (isHatchingEggProduct) {
+    return "Checkout for standalone Hatching Eggs is not available yet.";
+  }
+
+  return selectedQuantity > 0
+    ? `${selectedQuantity} selected`
+    : "Add quantities above to see your total.";
+}
+
+function getAddToCartButtonLabel(
+  isHatchingEggProduct: boolean,
+  isButtonConfirmed: boolean,
+) {
+  if (isHatchingEggProduct) return "Checkout coming soon";
+
+  return isButtonConfirmed ? "Added to cart" : "Add to cart";
 }

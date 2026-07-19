@@ -160,6 +160,32 @@ export type StorefrontProcessedPoultryItem = {
   updated_at: string;
 };
 
+export type StorefrontHatchingEggItem = {
+  store_id: string;
+  store_slug: string;
+  hatching_egg_inventory_item_id: string;
+  item_type: "hatching_egg_inventory";
+  hatching_egg_product_id: string;
+  normalized_item_name: string;
+  item_name: string;
+  species_id: string;
+  species_name: string;
+  species_slug: string;
+  description: string | null;
+  quantity_available: number;
+  buyer_availability_code: "ready_now" | "reserve_now" | "sold_out" | string;
+  buyer_availability_label: string;
+  available_date: string;
+  is_available_now: boolean;
+  can_checkout: boolean;
+  unit_price: number;
+  minimum_order_quantity: number | null;
+  featured_image_url: string | null;
+  featured_image_alt_text: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type StorefrontPurchaseOption = {
   inventoryItemId: string;
   inventoryType: string;
@@ -175,10 +201,12 @@ export type StorefrontPurchaseOption = {
   canCheckout: boolean;
   unitPrice: number;
   fulfillmentNote: string | null;
+  minimumOrderQuantity?: number | null;
 };
 
 export type StorefrontProduct = {
   productId: string;
+  productSource: "listing_inventory" | "hatching_egg_inventory";
   sellerBreedProfileId: string;
   listingBatchId: string;
   listingBatchBreedId: string;
@@ -229,6 +257,8 @@ export async function loadStorefrontInventory(slug: string) {
     .from("public_storefront_inventory")
     .select("*")
     .eq("store_slug", slug)
+    .neq("batch_type", "hatching_eggs")
+    .neq("inventory_type", "hatching_eggs")
     .order("breed_sort_order", { ascending: true })
     .order("inventory_sort_order", { ascending: true })
     .order("available_date", { ascending: true });
@@ -298,6 +328,21 @@ export async function loadStorefrontProcessedPoultryItem(
 
   return {
     data: data as StorefrontProcessedPoultryItem | null,
+    error,
+  };
+}
+
+export async function loadStorefrontHatchingEggInventory(slug: string) {
+  const { data, error } = await publicSupabase
+    .from("public_storefront_hatching_egg_inventory")
+    .select("*")
+    .eq("store_slug", slug)
+    .order("normalized_item_name", { ascending: true })
+    .order("available_date", { ascending: true })
+    .order("unit_price", { ascending: true });
+
+  return {
+    data: (data ?? []) as StorefrontHatchingEggItem[],
     error,
   };
 }
@@ -447,6 +492,21 @@ export function groupInventoryByProduct(
   );
 }
 
+export function groupHatchingEggInventoryByProduct(
+  items: StorefrontHatchingEggItem[],
+) {
+  const groups = new Map<string, StorefrontHatchingEggItem[]>();
+
+  for (const item of items) {
+    const groupKey = normalizeHatchingEggItemName(item.item_name);
+    const current = groups.get(groupKey) ?? [];
+    current.push(item);
+    groups.set(groupKey, current);
+  }
+
+  return Array.from(groups.values()).map(toHatchingEggStorefrontProduct);
+}
+
 export function toStorefrontProduct(
   items: StorefrontInventoryItem[],
   profileImages: StorefrontProfileImageMap = {},
@@ -469,6 +529,7 @@ export function toStorefrontProduct(
 
   return {
     productId: first.listing_batch_breed_id,
+    productSource: "listing_inventory",
     sellerBreedProfileId: first.seller_breed_profile_id,
     listingBatchId: first.listing_batch_id,
     listingBatchBreedId: first.listing_batch_breed_id,
@@ -497,6 +558,52 @@ export function toStorefrontProduct(
   } satisfies StorefrontProduct;
 }
 
+export function toHatchingEggStorefrontProduct(
+  items: StorefrontHatchingEggItem[],
+) {
+  const sorted = [...items].sort(compareHatchingEggOptions);
+  const first = sorted[0];
+  const availableOptions = sorted.filter((item) => item.quantity_available > 0);
+  const prices = availableOptions
+    .map((item) => Number(item.unit_price))
+    .filter((value) => Number.isFinite(value));
+  const minPrice = prices.length > 0 ? Math.min(...prices) : null;
+  const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
+  const totalQuantityAvailable = sorted.reduce(
+    (total, item) => total + Math.max(0, item.quantity_available),
+    0,
+  );
+  const availabilityCode = summarizeHatchingEggAvailability(sorted);
+
+  return {
+    productId: first.hatching_egg_product_id,
+    productSource: "hatching_egg_inventory",
+    sellerBreedProfileId: "",
+    listingBatchId: "",
+    listingBatchBreedId: first.hatching_egg_product_id,
+    batchType: "hatching_eggs",
+    storeSlug: first.store_slug,
+    speciesName: first.species_name,
+    name: first.item_name,
+    description: first.description,
+    imageUrl: first.featured_image_url,
+    imageAlt: first.featured_image_alt_text,
+    purpose: null,
+    eggColor: null,
+    annualEggProduction: null,
+    totalQuantityAvailable,
+    optionsCount: sorted.length,
+    minPrice,
+    maxPrice,
+    nextAvailableDate: getNextHatchingEggAvailableDate(sorted),
+    availabilityCode,
+    availabilityLabel: formatAvailabilitySummary(availabilityCode),
+    pricingLabel: formatPricingSummary(minPrice, maxPrice),
+    quantityLabel: formatProductQuantity(totalQuantityAvailable),
+    options: sorted.map(toHatchingEggPurchaseOption),
+  } satisfies StorefrontProduct;
+}
+
 export function toPurchaseOption(
   item: StorefrontInventoryItem,
 ): StorefrontPurchaseOption {
@@ -518,6 +625,30 @@ export function toPurchaseOption(
     canCheckout: item.can_checkout,
     unitPrice: item.unit_price,
     fulfillmentNote: null,
+  };
+}
+
+export function toHatchingEggPurchaseOption(
+  item: StorefrontHatchingEggItem,
+): StorefrontPurchaseOption {
+  return {
+    inventoryItemId: item.hatching_egg_inventory_item_id,
+    inventoryType: "hatching_eggs",
+    label: [item.buyer_availability_label, formatHatchingEggMinimumOrder(item)]
+      .filter(Boolean)
+      .join(" - "),
+    ageLabel: "Hatching eggs",
+    ageFilterDays: null,
+    typeLabel: "Hatching Eggs",
+    quantityAvailable: item.quantity_available,
+    buyerAvailabilityCode: item.buyer_availability_code,
+    buyerAvailabilityLabel: item.buyer_availability_label,
+    availableDate: item.available_date,
+    originDate: null,
+    canCheckout: false,
+    unitPrice: item.unit_price,
+    fulfillmentNote: null,
+    minimumOrderQuantity: item.minimum_order_quantity,
   };
 }
 
@@ -684,6 +815,21 @@ function toSafeNumber(value: number | string | null | undefined) {
   return Number.isFinite(numericValue) ? numericValue : 0;
 }
 
+function compareNullableNumbers(
+  left: number | null | undefined,
+  right: number | null | undefined,
+) {
+  if (left != null && right != null && left !== right) return left - right;
+  if (left != null && right == null) return -1;
+  if (left == null && right != null) return 1;
+
+  return 0;
+}
+
+function normalizeHatchingEggItemName(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 function compareOptions(
   first: StorefrontInventoryItem,
   second: StorefrontInventoryItem,
@@ -698,10 +844,36 @@ function compareOptions(
   );
 }
 
+function compareHatchingEggOptions(
+  first: StorefrontHatchingEggItem,
+  second: StorefrontHatchingEggItem,
+) {
+  return (
+    availabilityRank(first.buyer_availability_code) -
+      availabilityRank(second.buyer_availability_code) ||
+    first.available_date.localeCompare(second.available_date) ||
+    compareNullableNumbers(first.unit_price, second.unit_price) ||
+    first.hatching_egg_inventory_item_id.localeCompare(
+      second.hatching_egg_inventory_item_id,
+    )
+  );
+}
+
 function availabilityRank(code: string) {
   if (code === "ready_now") return 0;
   if (code === "reserve_now") return 1;
   return 2;
+}
+
+function summarizeHatchingEggAvailability(items: StorefrontHatchingEggItem[]) {
+  const liveItems = items.filter((item) => item.quantity_available > 0);
+  const source = liveItems.length > 0 ? liveItems : items;
+  const codes = new Set(source.map((item) => item.buyer_availability_code));
+
+  if (codes.size > 1) return "mixed";
+  if (codes.has("ready_now")) return "ready_now";
+  if (codes.has("reserve_now")) return "reserve_now";
+  return "sold_out";
 }
 
 function summarizeAvailability(items: StorefrontInventoryItem[]) {
@@ -724,6 +896,15 @@ function formatAvailabilitySummary(
   return "Sold out";
 }
 
+function getNextHatchingEggAvailableDate(items: StorefrontHatchingEggItem[]) {
+  const availableDates = items
+    .filter((item) => item.quantity_available > 0)
+    .map((item) => item.available_date)
+    .sort();
+
+  return availableDates[0] ?? null;
+}
+
 function getNextAvailableDate(items: StorefrontInventoryItem[]) {
   const availableDates = items
     .filter((item) => item.quantity_available > 0)
@@ -731,6 +912,14 @@ function getNextAvailableDate(items: StorefrontInventoryItem[]) {
     .sort();
 
   return availableDates[0] ?? null;
+}
+
+function formatHatchingEggMinimumOrder(item: StorefrontHatchingEggItem) {
+  if (!item.minimum_order_quantity || item.minimum_order_quantity <= 1) {
+    return null;
+  }
+
+  return `Minimum ${item.minimum_order_quantity}`;
 }
 
 function formatPricingSummary(

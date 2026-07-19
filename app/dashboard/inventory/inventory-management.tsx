@@ -134,7 +134,7 @@ type ClearedInventoryEntry = {
 type FlatInventoryItem =
   | {
       kind: "bird";
-      productTab: "live_poultry" | "hatching_eggs";
+      productTab: "live_poultry";
       id: string;
       species: string;
       speciesFilterValue: string;
@@ -372,6 +372,8 @@ export function InventoryManagement() {
           .eq("store_id", seller.store_id)
           .neq("inventory_visibility_status", "archived")
           .neq("listing_batch_visibility_status", "archived")
+          .neq("batch_type", "hatching_eggs")
+          .neq("inventory_type", "hatching_eggs")
           .eq("inventory_moderation_status", "normal")
           .eq("listing_batch_moderation_status", "normal")
           .order("species_name", { ascending: true })
@@ -497,7 +499,11 @@ export function InventoryManagement() {
   );
 
   const changedBirdRows = useMemo(
-    () => rows.filter((row) => isBirdRowChanged(row, draftQuantities)),
+    () =>
+      rows.filter(
+        (row) =>
+          isLiveBirdInventoryRow(row) && isBirdRowChanged(row, draftQuantities),
+      ),
     [draftQuantities, rows],
   );
   const changedEquipmentRows = useMemo(
@@ -1663,7 +1669,7 @@ function FlatInventoryTableRow({
   updateDraftQuantity: (item: FlatInventoryItem, nextValue: string) => void;
 }) {
   const isChanged = isInventoryItemChanged(item, draftQuantities);
-  const actionLabel = getInventoryActionLabel(item);
+  const actionLabel = getInventoryActionLabel();
 
   return (
     <tr
@@ -1773,7 +1779,7 @@ function FlatInventoryCard({
   updateDraftQuantity: (item: FlatInventoryItem, nextValue: string) => void;
 }) {
   const isChanged = isInventoryItemChanged(item, draftQuantities);
-  const actionLabel = getInventoryActionLabel(item);
+  const actionLabel = getInventoryActionLabel();
 
   return (
     <article
@@ -1998,15 +2004,13 @@ function buildFlatInventoryItems({
   rows: InventoryRow[];
 }): FlatInventoryItem[] {
   return [
-    ...rows.map((row): FlatInventoryItem => {
+    ...rows.filter(isLiveBirdInventoryRow).map((row): FlatInventoryItem => {
       const typeSex = getInventoryTypeLabel(row);
       const availability = getBirdAvailability(row, draftQuantities);
 
       return {
         kind: "bird",
-        productTab: isLiveBirdInventoryRow(row)
-          ? "live_poultry"
-          : "hatching_eggs",
+        productTab: "live_poultry",
         id: `bird:${row.inventory_item_id}`,
         species: row.species_name,
         speciesFilterValue: row.species_slug,
@@ -2023,10 +2027,7 @@ function buildFlatInventoryItems({
         availabilityLabel: availability.label,
         availabilityValue: availability.value,
         isCleared: Boolean(row.cleared_at),
-        manageHref:
-          row.batch_type === "hatching_eggs"
-            ? "/dashboard/inventory"
-            : `/dashboard/inventory/${row.listing_batch_id}/edit`,
+        manageHref: `/dashboard/inventory/${row.listing_batch_id}/edit`,
         primaryPhoto: null,
         row,
         searchText: [
@@ -2669,11 +2670,7 @@ function getInventoryItemSubtitle(item: FlatInventoryItem) {
   return [item.species, item.typeSex].filter(Boolean).join(" - ");
 }
 
-function getInventoryActionLabel(item: FlatInventoryItem) {
-  if (item.kind === "bird" && item.productTab === "hatching_eggs") {
-    return "View";
-  }
-
+function getInventoryActionLabel() {
   return "Edit";
 }
 
