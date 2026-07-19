@@ -38,24 +38,17 @@ export default async function StorefrontProductPage({
   const [
     homeResult,
     inventoryResult,
-    galleryResult,
     equipmentResult,
     processedPoultryResult,
   ] = await Promise.all([
     loadStorefrontHome(slug),
     loadStorefrontInventory(slug),
-    loadStoreGallery(slug, {
-      entityId: productId,
-      entityType: "seller_breed_profile",
-      limit: 8,
-    }),
     loadStorefrontEquipment(slug),
     loadStorefrontProcessedPoultry(slug),
   ]);
   const error =
     homeResult.error ??
     inventoryResult.error ??
-    galleryResult.error ??
     equipmentResult.error ??
     processedPoultryResult.error;
 
@@ -93,10 +86,13 @@ export default async function StorefrontProductPage({
   const hatchingEggProducts = groupInventoryByProduct(
     inventoryResult.data.filter(isHatchingEggItem),
   );
-  const hatchingEggProduct = findProduct(hatchingEggProducts, productId);
-  const product =
-    findProduct(livePoultryProducts, productId) ?? hatchingEggProduct;
-  const isHatchingEggProduct = product?.productId === hatchingEggProduct?.productId;
+  const selectedProduct = findSelectedProduct(
+    livePoultryProducts,
+    hatchingEggProducts,
+    productId,
+  );
+  const product = selectedProduct?.product ?? null;
+  const isHatchingEggProduct = selectedProduct?.category === "hatching_eggs";
   const categories = getStorefrontCategoryAvailability({
     equipmentCount: equipmentResult.data.length,
     hatchingEggCount: hatchingEggProducts.length,
@@ -114,6 +110,21 @@ export default async function StorefrontProductPage({
           />
         </StorefrontPage>
       </StorefrontChrome>
+    );
+  }
+
+  const galleryResult = await loadProductGallery(slug, product);
+
+  if (galleryResult.error) {
+    return (
+      <StorefrontShell>
+        <StorefrontPage size="narrow" className="py-12">
+          <EmptyStorefront
+            title="This product could not load"
+            description="Please refresh the page or return to the storefront."
+          />
+        </StorefrontPage>
+      </StorefrontShell>
     );
   }
 
@@ -166,7 +177,10 @@ export default async function StorefrontProductPage({
             <div className="flex flex-wrap items-center gap-3 text-base text-stone-800">
               <AvailabilityBadge
                 code={product.availabilityCode}
-                label={formatProductAvailabilityLabel(product.availabilityCode)}
+                label={formatProductAvailabilityLabel(
+                  product,
+                  isHatchingEggProduct,
+                )}
               />
               <p>
                 <span className="font-semibold text-stone-950">
@@ -290,8 +304,8 @@ function buildProductGallery(
       alt_text: product.imageAlt,
       caption: null,
       display_context: "featured",
-      entity_id: product.productId,
-      entity_type: "seller_breed_profile",
+      entity_id: product.listingBatchBreedId,
+      entity_type: "listing_batch_breed",
       height_px: null,
       is_featured: true,
       public_url: product.imageUrl,
@@ -303,6 +317,38 @@ function buildProductGallery(
   ];
 }
 
+async function loadProductGallery(slug: string, product: StorefrontProduct) {
+  const gallerySources = [
+    {
+      entityId: product.listingBatchBreedId,
+      entityType: "listing_batch_breed",
+    },
+    {
+      entityId: product.listingBatchId,
+      entityType: "listing_batch",
+    },
+    {
+      entityId: product.sellerBreedProfileId,
+      entityType: "seller_breed_profile",
+    },
+  ];
+  const results = await Promise.all(
+    gallerySources.map((source) =>
+      loadStoreGallery(slug, {
+        ...source,
+        limit: 8,
+      }),
+    ),
+  );
+  const error = results.find((result) => result.error)?.error ?? null;
+  const data = results.find((result) => result.data.length > 0)?.data ?? [];
+
+  return {
+    data,
+    error,
+  };
+}
+
 function formatProductQuantityUnit(quantity: number, isHatchingEggProduct: boolean) {
   if (isHatchingEggProduct) return quantity === 1 ? "egg" : "eggs";
 
@@ -310,12 +356,44 @@ function formatProductQuantityUnit(quantity: number, isHatchingEggProduct: boole
 }
 
 function formatProductAvailabilityLabel(
-  code: StorefrontProduct["availabilityCode"],
+  product: StorefrontProduct,
+  isHatchingEggProduct: boolean,
 ) {
-  if (code === "ready_now") return "Available";
-  if (code === "reserve_now") return "Available later";
-  if (code === "mixed") return "Multiple dates";
+  if (product.availabilityCode === "ready_now") return "Available";
+  if (product.availabilityCode === "reserve_now") {
+    const canReserve = product.options.some(
+      (option) =>
+        option.buyerAvailabilityCode === "reserve_now" &&
+        option.canCheckout &&
+        option.quantityAvailable > 0,
+    );
+
+    if (!isHatchingEggProduct && canReserve && product.nextAvailableDate) {
+      return `Ready ${formatReadyDate(product.nextAvailableDate)}`;
+    }
+
+    return "Available later";
+  }
+  if (product.availabilityCode === "mixed") return "Multiple dates";
   return "Sold out";
+}
+
+function formatReadyDate(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) return "later";
+
+  const options: Intl.DateTimeFormatOptions = {
+    day: "numeric",
+    month: "long",
+  };
+  const currentYear = new Date().getFullYear();
+
+  if (date.getFullYear() !== currentYear) {
+    options.year = "numeric";
+  }
+
+  return new Intl.DateTimeFormat("en-US", options).format(date);
 }
 
 function formatProductPriceSummary(pricingLabel: string | null) {
@@ -342,4 +420,30 @@ function isHatchingEggItem(item: { batch_type: string | null; inventory_type: st
 
 function isLivePoultryItem(item: { batch_type: string | null; inventory_type: string }) {
   return !isHatchingEggItem(item);
+}
+
+function findSelectedProduct(
+  livePoultryProducts: StorefrontProduct[],
+  hatchingEggProducts: StorefrontProduct[],
+  productId: string,
+) {
+  const liveProduct = findProduct(livePoultryProducts, productId);
+
+  if (liveProduct) {
+    return {
+      category: "live_poultry" as const,
+      product: liveProduct,
+    };
+  }
+
+  const hatchingEggProduct = findProduct(hatchingEggProducts, productId);
+
+  if (hatchingEggProduct) {
+    return {
+      category: "hatching_eggs" as const,
+      product: hatchingEggProduct,
+    };
+  }
+
+  return null;
 }

@@ -179,6 +179,10 @@ export type StorefrontPurchaseOption = {
 
 export type StorefrontProduct = {
   productId: string;
+  sellerBreedProfileId: string;
+  listingBatchId: string;
+  listingBatchBreedId: string;
+  batchType: string | null;
   storeSlug: string;
   speciesName: string;
   name: string;
@@ -433,9 +437,9 @@ export function groupInventoryByProduct(
   const groups = new Map<string, StorefrontInventoryItem[]>();
 
   for (const item of items) {
-    const current = groups.get(item.seller_breed_profile_id) ?? [];
+    const current = groups.get(item.listing_batch_breed_id) ?? [];
     current.push(item);
-    groups.set(item.seller_breed_profile_id, current);
+    groups.set(item.listing_batch_breed_id, current);
   }
 
   return Array.from(groups.values()).map((group) =>
@@ -464,7 +468,11 @@ export function toStorefrontProduct(
   const availabilityCode = summarizeAvailability(sorted);
 
   return {
-    productId: first.seller_breed_profile_id,
+    productId: first.listing_batch_breed_id,
+    sellerBreedProfileId: first.seller_breed_profile_id,
+    listingBatchId: first.listing_batch_id,
+    listingBatchBreedId: first.listing_batch_breed_id,
+    batchType: first.batch_type,
     storeSlug: first.store_slug,
     speciesName: first.species_name,
     name: first.breed_display_name,
