@@ -306,7 +306,7 @@ export function HatchingEggsStandaloneOnePageForm({
       ? breeds.find((breed) => breed.id === selectedBreedId)
       : null;
     const shouldClearSelectedBreed =
-      selectedBreed !== null && selectedBreed.species_id !== nextSpeciesId;
+      selectedBreed != null && selectedBreed.species_id !== nextSpeciesId;
 
     updateForm({
       itemName: shouldClearSelectedBreed ? "" : form.itemName,
@@ -601,6 +601,23 @@ export function HatchingEggsStandaloneOnePageForm({
     return { ok: true };
   }
 
+  async function syncHatchingEggGroupMedia(
+    currentHatchingEggItemId: string,
+  ): Promise<{ ok: true } | { ok: false; message: string }> {
+    const syncResult = await supabase.rpc(
+      "seller_sync_hatching_egg_group_media_from_item",
+      {
+        p_hatching_egg_inventory_item_id: currentHatchingEggItemId,
+      },
+    );
+
+    if (syncResult.error) {
+      return { ok: false, message: syncResult.error.message };
+    }
+
+    return { ok: true };
+  }
+
   async function saveDraft(): Promise<HatchingEggSaveResult> {
     if (!seller) {
       return {
@@ -708,6 +725,18 @@ export function HatchingEggsStandaloneOnePageForm({
       return;
     }
 
+    const syncResult = await syncHatchingEggGroupMedia(
+      saveResult.hatchingEggItemId,
+    );
+
+    if (!syncResult.ok) {
+      setSaveDraftStatus("error");
+      setActionError(
+        `Hatching egg item was saved, but shared photos were not updated. ${syncResult.message}`,
+      );
+      return;
+    }
+
     setSavedFormSnapshot(getFormSnapshot(form));
     setSaveDraftStatus("success");
     setActionMessage(isEditMode ? "Changes saved." : "Draft saved.");
@@ -747,6 +776,18 @@ export function HatchingEggsStandaloneOnePageForm({
     if (!publishResult.ok) {
       setPublishStatus("error");
       setActionError(publishResult.message);
+      return;
+    }
+
+    const syncResult = await syncHatchingEggGroupMedia(
+      saveResult.hatchingEggItemId,
+    );
+
+    if (!syncResult.ok) {
+      setPublishStatus("error");
+      setActionError(
+        `Hatching egg item was published, but shared photos were not updated. ${syncResult.message}`,
+      );
       return;
     }
 

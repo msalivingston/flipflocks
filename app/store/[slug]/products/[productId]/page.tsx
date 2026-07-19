@@ -326,10 +326,13 @@ function buildProductGallery(
 
 async function loadProductGallery(slug: string, product: StorefrontProduct) {
   if (product.productSource === "hatching_egg_inventory") {
-    return {
-      data: [] as StorefrontMedia[],
-      error: null,
-    };
+    const gallerySourceOption = product.options[0];
+
+    return loadStoreGallery(slug, {
+      entityId: gallerySourceOption?.inventoryItemId,
+      entityType: "hatching_egg_inventory_item",
+      limit: 8,
+    });
   }
 
   const gallerySources = [
