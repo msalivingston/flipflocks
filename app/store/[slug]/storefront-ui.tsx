@@ -288,6 +288,7 @@ export function StorefrontButton({
   children,
   className,
   disabled,
+  form,
   href,
   onClick,
   type = "button",
@@ -296,6 +297,7 @@ export function StorefrontButton({
   children: React.ReactNode;
   className?: string;
   disabled?: boolean;
+  form?: string;
   href?: string;
   onClick?: React.MouseEventHandler<HTMLButtonElement>;
   type?: "button" | "submit";
@@ -315,6 +317,7 @@ export function StorefrontButton({
     <button
       className={buttonClass}
       disabled={disabled}
+      form={form}
       onClick={onClick}
       type={type}
     >

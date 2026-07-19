@@ -4,7 +4,8 @@ type CheckoutItem = {
   item_type:
     | "listing_inventory"
     | "equipment_inventory"
-    | "processed_poultry_inventory";
+    | "processed_poultry_inventory"
+    | "hatching_egg_inventory";
   item_id: string;
   inventory_item_id?: string;
   quantity: number;
@@ -235,7 +236,8 @@ function normalizeItems(value: unknown): CheckoutItem[] {
     if (
       itemType !== "listing_inventory" &&
       itemType !== "equipment_inventory" &&
-      itemType !== "processed_poultry_inventory"
+      itemType !== "processed_poultry_inventory" &&
+      itemType !== "hatching_egg_inventory"
     ) {
       throw new Error(
         "Each checkout item must include a valid item type, item ID, and positive quantity.",

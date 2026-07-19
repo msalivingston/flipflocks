@@ -473,6 +473,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
         <div className="grid gap-4 lg:grid-cols-[1fr_21rem] lg:items-start">
           <form
             className="rounded-xl border border-[#ded7c8] bg-white p-4"
+            id="storefront-checkout-form"
             onSubmit={handleSubmit}
           >
             <p className="storefront-primary-color text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
@@ -646,7 +647,8 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                 onChange={(value) => updateField("buyerNotes", value)}
                 value={form.buyerNotes}
               />
-              {form.fulfillmentMethod === "pickup" ? (
+              {form.fulfillmentMethod === "pickup" &&
+              store.pickup_method === "notes" ? (
                 <TextArea
                   label="Pickup notes"
                   name="pickupNote"
@@ -661,24 +663,6 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                 </div>
               ) : null}
 
-              <StorefrontButton
-                className="mt-1 min-h-10"
-                disabled={
-                  isSubmitting ||
-                  isChecking ||
-                  isLoadingPickupOptions ||
-                  checkoutItems.length === 0 ||
-                  summary?.is_checkout_available === false ||
-                  (form.fulfillmentMethod === "pickup" &&
-                    usesManualPickupOptions &&
-                    !form.pickupOptionId) ||
-                  (form.fulfillmentMethod === "delivery" &&
-                    !form.deliveryOptionId)
-                }
-                type="submit"
-              >
-                {isSubmitting ? "Placing order..." : "Place order"}
-              </StorefrontButton>
             </div>
           </form>
 
@@ -739,6 +723,25 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                   {toBuyerOrderError(summaryMessage)}
                 </p>
               ) : null}
+              <StorefrontButton
+                className="mt-3 min-h-10 w-full"
+                disabled={
+                  isSubmitting ||
+                  isChecking ||
+                  isLoadingPickupOptions ||
+                  checkoutItems.length === 0 ||
+                  summary?.is_checkout_available === false ||
+                  (form.fulfillmentMethod === "pickup" &&
+                    usesManualPickupOptions &&
+                    !form.pickupOptionId) ||
+                  (form.fulfillmentMethod === "delivery" &&
+                    !form.deliveryOptionId)
+                }
+                form="storefront-checkout-form"
+                type="submit"
+              >
+                {isSubmitting ? "Placing order..." : "Place order"}
+              </StorefrontButton>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <StorefrontButton
                   className="min-h-10 w-full px-3 text-sm"

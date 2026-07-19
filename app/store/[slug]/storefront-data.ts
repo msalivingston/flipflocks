@@ -645,7 +645,9 @@ export function toHatchingEggPurchaseOption(
     buyerAvailabilityLabel: item.buyer_availability_label,
     availableDate: item.available_date,
     originDate: null,
-    canCheckout: false,
+    canCheckout:
+      item.quantity_available > 0 &&
+      item.quantity_available >= (item.minimum_order_quantity ?? 1),
     unitPrice: item.unit_price,
     fulfillmentNote: null,
     minimumOrderQuantity: item.minimum_order_quantity,

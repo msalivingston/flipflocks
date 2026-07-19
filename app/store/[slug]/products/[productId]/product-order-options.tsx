@@ -49,15 +49,19 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
   const selectedItems = useMemo<StorefrontCartItem[]>(
     () =>
       selectableOptions.reduce<StorefrontCartItem[]>((items, option) => {
-        const quantity = normalizeQuantity(
+        const quantity = normalizeOptionQuantity(
           quantities[option.inventoryItemId] ?? 0,
           option.quantityAvailable,
+          getOptionMinimumQuantity(option),
         );
 
         if (quantity <= 0) return items;
 
         items.push({
-          itemType: "listing_inventory",
+          itemType:
+            product.productSource === "hatching_egg_inventory"
+              ? "hatching_egg_inventory"
+              : "listing_inventory",
           itemId: option.inventoryItemId,
           inventoryItemId: option.inventoryItemId,
           productId: product.productId,
@@ -87,9 +91,16 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
     showAddToCartConfirmation,
   } = useAddToCartConfirmation();
 
-  function updateQuantity(inventoryItemId: string, rawValue: string, max: number) {
+  function updateQuantity(
+    inventoryItemId: string,
+    rawValue: string,
+    max: number,
+    min = 1,
+  ) {
     const parsed = Number.parseInt(rawValue, 10);
-    const quantity = Number.isNaN(parsed) ? 0 : normalizeQuantity(parsed, max);
+    const quantity = Number.isNaN(parsed)
+      ? 0
+      : normalizeOptionQuantity(parsed, max, min);
 
     setQuantities((current) => ({
       ...current,
@@ -169,11 +180,13 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
                       <QuantityStepper
                         disabled={!isAvailable}
                         max={option.quantityAvailable}
+                        min={getOptionMinimumQuantity(option)}
                         onChange={(value) =>
                           updateQuantity(
                             option.inventoryItemId,
                             value,
                             option.quantityAvailable,
+                            getOptionMinimumQuantity(option),
                           )
                         }
                         value={selectedQuantity}
@@ -226,11 +239,13 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
                     <QuantityStepper
                       disabled={!isAvailable}
                       max={option.quantityAvailable}
+                      min={getOptionMinimumQuantity(option)}
                       onChange={(value) =>
                         updateQuantity(
                           option.inventoryItemId,
                           value,
                           option.quantityAvailable,
+                          getOptionMinimumQuantity(option),
                         )
                       }
                       value={selectedQuantity}
@@ -249,7 +264,7 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
         <div>
           <p className="font-semibold text-stone-950">Order summary</p>
           <p className="mt-1 text-sm text-stone-600">
-            {getOrderSummaryText(isHatchingEggProduct, summary.totalQuantity)}
+            {getOrderSummaryText(summary.totalQuantity)}
           </p>
         </div>
         <div>
@@ -260,11 +275,11 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
         </div>
         <StorefrontButton
           className="w-full gap-2 px-5"
-          disabled={isHatchingEggProduct || summary.totalQuantity <= 0}
+          disabled={summary.totalQuantity <= 0}
           onClick={handleAddToCart}
         >
           <StorefrontGlyph className="h-5 w-5" src="/glyphs/cart.png" />
-          {getAddToCartButtonLabel(isHatchingEggProduct, isButtonConfirmed)}
+          {getAddToCartButtonLabel(isButtonConfirmed)}
         </StorefrontButton>
       </div>
 
@@ -369,20 +384,25 @@ function MobileFact({
 function QuantityStepper({
   disabled,
   max,
+  min,
   onChange,
   value,
 }: {
   disabled: boolean;
   max: number;
+  min: number;
   onChange: (value: string) => void;
   value: number;
 }) {
+  const nextIncrement = value <= 0 ? min : value + 1;
+  const nextDecrement = value <= min ? 0 : value - 1;
+
   return (
     <div className="inline-grid grid-cols-[2.5rem_3.25rem_2.5rem] overflow-hidden rounded-md border border-[#ded7c8] bg-white align-middle">
       <button
         className="flex h-10 items-center justify-center border-r border-[#ded7c8] text-lg disabled:text-stone-300"
         disabled={disabled || value <= 0}
-        onClick={() => onChange(String(value - 1))}
+        onClick={() => onChange(String(nextDecrement))}
         type="button"
       >
         -
@@ -401,7 +421,7 @@ function QuantityStepper({
       <button
         className="flex h-10 items-center justify-center border-l border-[#ded7c8] text-lg disabled:text-stone-300"
         disabled={disabled || value >= max}
-        onClick={() => onChange(String(value + 1))}
+        onClick={() => onChange(String(nextIncrement))}
         type="button"
       >
         +
@@ -436,8 +456,24 @@ function getSelectedQuantity(
   quantities: Record<string, number>,
 ) {
   return quantities[option.inventoryItemId] !== undefined
-    ? normalizeQuantity(quantities[option.inventoryItemId], option.quantityAvailable)
+    ? normalizeOptionQuantity(
+        quantities[option.inventoryItemId],
+        option.quantityAvailable,
+        getOptionMinimumQuantity(option),
+      )
     : 0;
+}
+
+function getOptionMinimumQuantity(option: StorefrontProduct["options"][number]) {
+  return Math.max(1, Math.floor(option.minimumOrderQuantity ?? 1));
+}
+
+function normalizeOptionQuantity(value: number, max: number, min: number) {
+  const quantity = normalizeQuantity(value, max);
+
+  if (quantity <= 0) return 0;
+
+  return Math.max(quantity, Math.min(min, Math.max(0, Math.floor(max))));
 }
 
 function formatQuantityAvailable(quantity: number) {
@@ -488,24 +524,12 @@ function getMinimumOrderNote(product: StorefrontProduct) {
   return "Minimum order: No minimum listed.";
 }
 
-function getOrderSummaryText(
-  isHatchingEggProduct: boolean,
-  selectedQuantity: number,
-) {
-  if (isHatchingEggProduct) {
-    return "Checkout for standalone Hatching Eggs is not available yet.";
-  }
-
+function getOrderSummaryText(selectedQuantity: number) {
   return selectedQuantity > 0
     ? `${selectedQuantity} selected`
     : "Add quantities above to see your total.";
 }
 
-function getAddToCartButtonLabel(
-  isHatchingEggProduct: boolean,
-  isButtonConfirmed: boolean,
-) {
-  if (isHatchingEggProduct) return "Checkout coming soon";
-
+function getAddToCartButtonLabel(isButtonConfirmed: boolean) {
   return isButtonConfirmed ? "Added to cart" : "Add to cart";
 }

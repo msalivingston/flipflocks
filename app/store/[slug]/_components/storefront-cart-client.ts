@@ -4,7 +4,8 @@ export type StorefrontCartItem = {
   itemType:
     | "listing_inventory"
     | "equipment_inventory"
-    | "processed_poultry_inventory";
+    | "processed_poultry_inventory"
+    | "hatching_egg_inventory";
   itemId: string;
   inventoryItemId: string;
   productId: string;
@@ -188,7 +189,9 @@ function normalizeCartItem(
       ? "equipment_inventory"
       : item.itemType === "processed_poultry_inventory"
         ? "processed_poultry_inventory"
-        : "listing_inventory";
+        : item.itemType === "hatching_egg_inventory"
+          ? "hatching_egg_inventory"
+          : "listing_inventory";
   const itemId =
     typeof item.itemId === "string"
       ? item.itemId
