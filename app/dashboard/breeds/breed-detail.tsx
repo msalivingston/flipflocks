@@ -3,7 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../_components/seller-context";
 import {
@@ -54,6 +60,15 @@ type FunctionErrorContext = {
   name?: string;
 };
 
+type RestoreOptionKey = "description" | "details" | "photos";
+
+type RestoreCatalogSelection = Record<RestoreOptionKey, boolean>;
+
+type RestoreCatalogOption = {
+  key: RestoreOptionKey;
+  label: string;
+};
+
 const buyerDescriptionMaxLength = 1000;
 const birdTypeOptions = [
   { label: "Egg Layer", value: "layer" },
@@ -92,10 +107,18 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
   const [isRemoving, setIsRemoving] = useState(false);
   const [isRestoringCatalogDefaults, setIsRestoringCatalogDefaults] =
     useState(false);
-  const [isRestoringDefaultPhoto, setIsRestoringDefaultPhoto] = useState(false);
+  const [isRestoreDialogOpen, setIsRestoreDialogOpen] = useState(false);
+  const [restoreDialogError, setRestoreDialogError] = useState<string | null>(
+    null,
+  );
+  const [restoreSelection, setRestoreSelection] =
+    useState<RestoreCatalogSelection>({
+      description: false,
+      details: false,
+      photos: false,
+    });
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
-  const [photoActionError, setPhotoActionError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -109,7 +132,6 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
       setIsLoading(true);
       setLoadError(null);
       setMediaError(null);
-      setPhotoActionError(null);
 
       const [speciesResult, breedResult, profileResult] = await Promise.all([
         supabase
@@ -205,36 +227,63 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
   const catalogBreed =
     profile?.breed_id ? libraryByBreedId.get(profile.breed_id) ?? null : null;
   const defaultPhotoUrl = catalogBreed?.image_url?.trim() ?? "";
-  const activeBreedPhotos = useMemo(
-    () =>
-      mediaItems.filter(
-        (item) =>
-          item.visibility_status === "active" &&
-          item.asset_status === "active" &&
-          item.moderation_status === "approved",
-      ),
-    [mediaItems],
-  );
-  const activeBreedPhotoCount = activeBreedPhotos.length;
-  const hasActiveCatalogDefaultPhoto = Boolean(
-    catalogBreed &&
-      defaultPhotoUrl &&
-      activeBreedPhotos.some(
-        (item) =>
-          item.source_type === "catalog_breed_image" &&
-          item.source_breed_id === catalogBreed.id &&
-          item.source_image_url === defaultPhotoUrl,
-      ),
-  );
   const canManagePhotos = profile?.visibility_status !== "archived";
-  const canShowRestoreDefaultPhoto =
-    Boolean(catalogBreed && defaultPhotoUrl && !hasActiveCatalogDefaultPhoto) &&
-    !mediaError;
-  const isBreedPhotoLimitReached = activeBreedPhotoCount >= 4;
+  const hasCatalogDescription = Boolean(catalogBreed?.description?.trim());
+  const hasCatalogDetails = Boolean(
+    isChickenBreed &&
+      catalogBreed &&
+      (catalogBreed.bird_type ||
+        catalogBreed.egg_color ||
+        catalogBreed.annual_egg_production),
+  );
+  const hasCatalogPhoto = Boolean(defaultPhotoUrl && canManagePhotos && !mediaError);
+  const restoreOptions = useMemo<RestoreCatalogOption[]>(() => {
+    const options: RestoreCatalogOption[] = [];
+
+    if (hasCatalogDescription) {
+      options.push({ key: "description", label: "Description" });
+    }
+
+    if (hasCatalogDetails) {
+      options.push({ key: "details", label: "Breed details" });
+    }
+
+    if (hasCatalogPhoto) {
+      options.push({ key: "photos", label: "Photos" });
+    }
+
+    return options;
+  }, [hasCatalogDescription, hasCatalogDetails, hasCatalogPhoto]);
+  const hasRestoreOptions = restoreOptions.length > 0;
+  const hasSelectedRestoreOption = restoreOptions.some(
+    (option) => restoreSelection[option.key],
+  );
+
   function updateDraft(updates: Partial<BreedDraft>) {
     setDraft((current) => (current ? { ...current, ...updates } : current));
     setSaveError(null);
     setSuccessMessage(null);
+  }
+
+  function openRestoreDialog() {
+    const nextSelection: RestoreCatalogSelection = {
+      description: false,
+      details: false,
+      photos: false,
+    };
+    const firstOption = restoreOptions[0]?.key;
+
+    if (hasCatalogDescription) {
+      nextSelection.description = true;
+    } else if (firstOption) {
+      nextSelection[firstOption] = true;
+    }
+
+    setRestoreSelection(nextSelection);
+    setRestoreDialogError(null);
+    setSaveError(null);
+    setSuccessMessage(null);
+    setIsRestoreDialogOpen(true);
   }
 
   async function saveChanges() {
@@ -284,128 +333,135 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
     setReloadKey((current) => current + 1);
   }
 
-  async function restoreCatalogDefaults() {
+  async function restoreCatalogDefaults(selection: RestoreCatalogSelection) {
     if (!profile || !draft || !catalogBreed || isRestoringCatalogDefaults) {
       return;
     }
 
-    const restoreItems = [
-      "Description",
-      ...(isChickenBreed
-        ? ["Bird Type", "Egg Color", "Annual Egg Production"]
-        : []),
-    ];
-    const shouldRestore = window.confirm(
-      [
-        "Restore Catalog Defaults?",
-        "",
-        "Restore this breed's information from the FlockFront breed library?",
-        "",
-        "This will replace your customized:",
-        ...restoreItems.map((item) => `* ${item}`),
-        "",
-        "Photos, listings, inventory, and other records will not be changed.",
-      ].join("\n"),
-    );
+    const shouldRestoreDescription = selection.description && hasCatalogDescription;
+    const shouldRestoreDetails = selection.details && hasCatalogDetails;
+    const shouldRestorePhotos = selection.photos && hasCatalogPhoto;
 
-    if (!shouldRestore) return;
-
-    setIsRestoringCatalogDefaults(true);
-    setSaveError(null);
-    setSuccessMessage(null);
-
-    const restoredDescription = catalogBreed.description?.trim() ?? "";
-    const restoredBirdType = isChickenBreed ? catalogBreed.bird_type ?? null : null;
-    const restoredEggColor = isChickenBreed ? catalogBreed.egg_color ?? null : null;
-    const restoredAnnualEggProduction = isChickenBreed
-      ? catalogBreed.annual_egg_production ?? null
-      : null;
-
-    const { error } = await supabase.rpc("seller_upsert_breed_profile", {
-      p_breed_id: profile.breed_id,
-      p_custom_breed_name: profile.custom_breed_name,
-      p_display_name: draft.displayName.trim() || profile.display_name,
-      p_annual_egg_production: restoredAnnualEggProduction,
-      p_bird_type: restoredBirdType,
-      p_egg_color: restoredEggColor,
-      p_seller_breed_profile_id: profile.id,
-      p_seller_description: restoredDescription || null,
-      p_seller_notes: profile.seller_notes,
-      p_species_id: profile.species_id,
-      p_store_id: storeId,
-      p_visibility_status: profile.visibility_status,
-    });
-
-    if (error) {
-      setSaveError(error.message);
-      setIsRestoringCatalogDefaults(false);
-      return;
-    }
-
-    const { error: metadataError } = await supabase
-      .from("seller_breed_profiles")
-      .update({
-        annual_egg_production: restoredAnnualEggProduction,
-        bird_type: restoredBirdType,
-        egg_color: restoredEggColor,
-      })
-      .eq("store_id", storeId)
-      .eq("id", profile.id);
-
-    if (metadataError) {
-      setSaveError(metadataError.message);
-      setIsRestoringCatalogDefaults(false);
-      return;
-    }
-
-    setDraft((current) =>
-      current
-        ? {
-            ...current,
-            annualEggProduction: restoredAnnualEggProduction ?? "",
-            birdType: restoredBirdType ?? "",
-            eggColor: restoredEggColor ?? "",
-            sellerDescription: restoredDescription,
-          }
-        : current,
-    );
-    setSuccessMessage("Breed restored from the FlockFront breed library.");
-    setIsRestoringCatalogDefaults(false);
-    setReloadKey((current) => current + 1);
-  }
-
-  async function restoreDefaultPhoto() {
     if (
-      !profile ||
-      !catalogBreed ||
-      !defaultPhotoUrl ||
-      isRestoringDefaultPhoto ||
-      hasActiveCatalogDefaultPhoto
+      !shouldRestoreDescription &&
+      !shouldRestoreDetails &&
+      !shouldRestorePhotos
     ) {
       return;
     }
 
-    setPhotoActionError(null);
+    setIsRestoringCatalogDefaults(true);
+    setRestoreDialogError(null);
     setSaveError(null);
     setSuccessMessage(null);
 
-    if (isBreedPhotoLimitReached) {
-      setPhotoActionError(
-        "You already have 4 breed photos. Remove a photo before restoring the default photo.",
-      );
-      return;
+    const restoredDescription = shouldRestoreDescription
+      ? catalogBreed.description?.trim() ?? ""
+      : profile.seller_description ?? "";
+    const restoredBirdType = shouldRestoreDetails
+      ? catalogBreed.bird_type ?? null
+      : profile.bird_type ?? null;
+    const restoredEggColor = shouldRestoreDetails
+      ? catalogBreed.egg_color ?? null
+      : profile.egg_color ?? null;
+    const restoredAnnualEggProduction = shouldRestoreDetails
+      ? catalogBreed.annual_egg_production ?? null
+      : profile.annual_egg_production ?? null;
+
+    if (shouldRestoreDescription || shouldRestoreDetails) {
+      const { error } = await supabase.rpc("seller_upsert_breed_profile", {
+        p_breed_id: profile.breed_id,
+        p_custom_breed_name: profile.custom_breed_name,
+        p_display_name: profile.display_name,
+        p_annual_egg_production: restoredAnnualEggProduction,
+        p_bird_type: restoredBirdType,
+        p_egg_color: restoredEggColor,
+        p_seller_breed_profile_id: profile.id,
+        p_seller_description: restoredDescription || null,
+        p_seller_notes: profile.seller_notes,
+        p_species_id: profile.species_id,
+        p_store_id: storeId,
+        p_visibility_status: profile.visibility_status,
+      });
+
+      if (error) {
+        setSaveError(error.message);
+        setRestoreDialogError(error.message);
+        setIsRestoringCatalogDefaults(false);
+        return;
+      }
     }
 
-    setIsRestoringDefaultPhoto(true);
+    if (shouldRestoreDetails) {
+      const { error: metadataError } = await supabase
+        .from("seller_breed_profiles")
+        .update({
+          annual_egg_production: restoredAnnualEggProduction,
+          bird_type: restoredBirdType,
+          egg_color: restoredEggColor,
+        })
+        .eq("store_id", storeId)
+        .eq("id", profile.id);
+
+      if (metadataError) {
+        setSaveError(metadataError.message);
+        setRestoreDialogError(metadataError.message);
+        setReloadKey((current) => current + 1);
+        setIsRestoringCatalogDefaults(false);
+        return;
+      }
+    }
+
+    if (shouldRestorePhotos) {
+      const photoResult = await restoreCatalogPhoto();
+
+      if (!photoResult.ok) {
+        setSaveError(photoResult.message);
+        setRestoreDialogError(photoResult.message);
+        setReloadKey((current) => current + 1);
+        setIsRestoringCatalogDefaults(false);
+        return;
+      }
+    }
+
+    setDraft((current) => {
+      if (!current) return current;
+
+      return {
+        ...current,
+        annualEggProduction: shouldRestoreDetails
+          ? restoredAnnualEggProduction ?? ""
+          : current.annualEggProduction,
+        birdType: shouldRestoreDetails ? restoredBirdType ?? "" : current.birdType,
+        eggColor: shouldRestoreDetails ? restoredEggColor ?? "" : current.eggColor,
+        sellerDescription: shouldRestoreDescription
+          ? restoredDescription
+          : current.sellerDescription,
+      };
+    });
+    setSuccessMessage("Selected catalog defaults restored.");
+    setIsRestoreDialogOpen(false);
+    setIsRestoringCatalogDefaults(false);
+    setReloadKey((current) => current + 1);
+  }
+
+  async function restoreCatalogPhoto() {
+    if (!profile || !catalogBreed || !defaultPhotoUrl) {
+      return {
+        ok: false,
+        message: "This breed does not have a default catalog photo.",
+      };
+    }
 
     const { data: sessionData, error: sessionError } =
       await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token;
 
     if (sessionError || !accessToken) {
-      setPhotoActionError("Please sign in again and try restoring the default photo.");
-      setIsRestoringDefaultPhoto(false);
-      return;
+      return {
+        ok: false,
+        message: "Please sign in again and try restoring the catalog photo.",
+      };
     }
 
     const { data, error } =
@@ -413,6 +469,7 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
         "seller-restore-catalog-breed-photo",
         {
           body: {
+            replace_existing: true,
             seller_breed_profile_id: profile.id,
           },
           headers: {
@@ -423,22 +480,40 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
 
     if (error || data?.error) {
       const functionError = await readRestoreDefaultPhotoError(error);
-      setPhotoActionError(
-        data?.error?.message ??
+
+      return {
+        ok: false,
+        message:
+          data?.error?.message ??
           functionError?.message ??
           "Default photo could not be restored. Please try again.",
-      );
-      setIsRestoringDefaultPhoto(false);
-      return;
+      };
     }
 
-    setSuccessMessage(
-      data?.already_present
-        ? "Default photo is already included."
-        : data?.message ?? "Default photo restored.",
-    );
-    setIsRestoringDefaultPhoto(false);
-    setReloadKey((current) => current + 1);
+    return {
+      ok: true,
+      message: data?.message ?? "Default photo restored.",
+    };
+  }
+
+  function updateRestoreSelection(key: RestoreOptionKey, value: boolean) {
+    setRestoreSelection((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  function closeRestoreDialog() {
+    if (isRestoringCatalogDefaults) return;
+
+    setRestoreDialogError(null);
+    setIsRestoreDialogOpen(false);
+  }
+
+  async function submitRestoreDialog() {
+    if (!hasSelectedRestoreOption) return;
+
+    await restoreCatalogDefaults(restoreSelection);
   }
 
   async function removeBreed() {
@@ -574,45 +649,6 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
                 onReload={() => setReloadKey((current) => current + 1)}
               />
             )}
-
-            {canShowRestoreDefaultPhoto ? (
-              <SellerCard className="p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <SectionHeading
-                      glyph="/glyphs/storefront.png"
-                      title="Default Breed Photo"
-                      compact
-                    />
-                    <p className="mt-2 text-sm leading-5 text-stone-500">
-                      Add the FlockFront catalog image to this photo set.
-                    </p>
-                    {isBreedPhotoLimitReached ? (
-                      <p className="mt-2 text-sm font-semibold text-amber-800">
-                        Remove a photo before restoring the default photo.
-                      </p>
-                    ) : null}
-                    {photoActionError ? (
-                      <p className="mt-2 text-sm font-semibold text-red-700">
-                        {photoActionError}
-                      </p>
-                    ) : null}
-                  </div>
-                  <button
-                    className="seller-secondary-button"
-                    disabled={
-                      !canManagePhotos ||
-                      isBreedPhotoLimitReached ||
-                      isRestoringDefaultPhoto
-                    }
-                    onClick={() => void restoreDefaultPhoto()}
-                    type="button"
-                  >
-                    {isRestoringDefaultPhoto ? "Restoring" : "Restore Default Photo"}
-                  </button>
-                </div>
-              </SellerCard>
-            ) : null}
           </div>
 
           <SellerCard className="order-2 p-4 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
@@ -624,8 +660,8 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
               {catalogBreed ? (
                 <button
                   className="seller-small-button"
-                  disabled={isRestoringCatalogDefaults}
-                  onClick={() => void restoreCatalogDefaults()}
+                  disabled={isRestoringCatalogDefaults || !hasRestoreOptions}
+                  onClick={openRestoreDialog}
                   type="button"
                 >
                   {isRestoringCatalogDefaults
@@ -749,7 +785,6 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
                 }
               />
             </label>
-
           </SellerCard>
         </div>
 
@@ -777,7 +812,170 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
           </div>
         </SellerCard>
       </main>
+
+      {isRestoreDialogOpen ? (
+        <RestoreCatalogDefaultsDialog
+          canSubmit={hasSelectedRestoreOption}
+          errorMessage={restoreDialogError}
+          isSubmitting={isRestoringCatalogDefaults}
+          options={restoreOptions}
+          selection={restoreSelection}
+          onCancel={closeRestoreDialog}
+          onChange={updateRestoreSelection}
+          onSubmit={() => void submitRestoreDialog()}
+        />
+      ) : null}
     </>
+  );
+}
+
+function RestoreCatalogDefaultsDialog({
+  canSubmit,
+  errorMessage,
+  isSubmitting,
+  onCancel,
+  onChange,
+  onSubmit,
+  options,
+  selection,
+}: {
+  canSubmit: boolean;
+  errorMessage: string | null;
+  isSubmitting: boolean;
+  onCancel: () => void;
+  onChange: (key: RestoreOptionKey, value: boolean) => void;
+  onSubmit: () => void;
+  options: RestoreCatalogOption[];
+  selection: RestoreCatalogSelection;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusedElementRef = useRef<HTMLElement | null>(null);
+  const titleId = "restore-catalog-defaults-title";
+  const descriptionId = "restore-catalog-defaults-description";
+
+  useEffect(() => {
+    previousFocusedElementRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+
+    const cancelButton =
+      dialogRef.current?.querySelector<HTMLButtonElement>(
+        "[data-dialog-cancel]",
+      );
+    cancelButton?.focus();
+
+    return () => {
+      previousFocusedElementRef.current?.focus();
+    };
+  }, []);
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onCancel();
+      return;
+    }
+
+    if (event.key !== "Tab") return;
+
+    const focusableElements = Array.from(
+      dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    );
+
+    if (focusableElements.length === 0) return;
+
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+
+    if (event.shiftKey && document.activeElement === firstElement) {
+      event.preventDefault();
+      lastElement.focus();
+    } else if (!event.shiftKey && document.activeElement === lastElement) {
+      event.preventDefault();
+      firstElement.focus();
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-stone-950/60 px-3 py-4 sm:items-center"
+      onKeyDown={handleKeyDown}
+    >
+      <div
+        aria-describedby={descriptionId}
+        aria-labelledby={titleId}
+        aria-modal="true"
+        className="w-full max-w-lg rounded-lg bg-white shadow-xl"
+        ref={dialogRef}
+        role="dialog"
+      >
+        <div className="border-b border-stone-200 px-5 py-4">
+          <h2 className="text-lg font-bold text-stone-950" id={titleId}>
+            Restore Catalog Defaults
+          </h2>
+          <p className="mt-1 text-sm text-stone-600" id={descriptionId}>
+            What would you like to restore?
+          </p>
+        </div>
+
+        <div className="grid gap-4 px-5 py-4">
+          <div className="grid gap-2">
+            {options.map((option) => (
+              <label
+                className="flex items-center gap-3 rounded-md border border-stone-200 px-3 py-2 text-sm font-semibold text-stone-800"
+                key={option.key}
+              >
+                <input
+                  checked={selection[option.key]}
+                  className="size-4 accent-emerald-800"
+                  disabled={isSubmitting}
+                  type="checkbox"
+                  onChange={(event) =>
+                    onChange(option.key, event.target.checked)
+                  }
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
+            Selected catalog information will replace the customized information
+            for this breed and related listings that use it. Inventory
+            quantities, pricing, and orders will not be changed.
+          </p>
+
+          {errorMessage ? (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold leading-5 text-red-700">
+              {errorMessage}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex flex-col-reverse gap-2 border-t border-stone-200 px-5 py-4 sm:flex-row sm:justify-end">
+          <button
+            className="seller-secondary-button"
+            data-dialog-cancel
+            disabled={isSubmitting}
+            onClick={onCancel}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className="seller-primary-button"
+            disabled={!canSubmit || isSubmitting}
+            onClick={onSubmit}
+            type="button"
+          >
+            {isSubmitting ? "Restoring" : "Restore Selected"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

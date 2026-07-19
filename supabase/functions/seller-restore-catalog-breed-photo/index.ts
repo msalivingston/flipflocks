@@ -33,6 +33,7 @@ type ImageDimensions = {
 };
 
 type RestoreRequest = {
+  replace_existing?: boolean;
   seller_breed_profile_id?: string;
 };
 
@@ -63,6 +64,7 @@ type MediaAssetRow = {
 
 type MediaLinkRow = {
   id: string;
+  is_featured: boolean;
   media_asset_id: string;
   sort_order: number | null;
 };
@@ -457,6 +459,7 @@ Deno.serve(async (req) => {
       body?.seller_breed_profile_id,
       "seller_breed_profile_id",
     );
+    const replaceExisting = body?.replace_existing === true;
 
     step = "load_seller_breed_profile";
     const { data: profile, error: profileError } = await serviceClient
@@ -542,7 +545,7 @@ Deno.serve(async (req) => {
     step = "load_active_photo_links";
     const { data: mediaLinks, error: mediaLinksError } = await serviceClient
       .from("media_links")
-      .select("id, media_asset_id, sort_order")
+      .select("id, media_asset_id, is_featured, sort_order")
       .eq("store_id", profile.store_id)
       .eq("entity_type", "seller_breed_profile")
       .eq("entity_id", profile.id)
@@ -601,7 +604,7 @@ Deno.serve(async (req) => {
       );
     });
 
-    if (existingDefaultPhoto) {
+    if (!replaceExisting && existingDefaultPhoto) {
       return jsonResponse({
         already_present: true,
         details: publicErrorDetails("check_existing_default_photo"),
@@ -609,7 +612,7 @@ Deno.serve(async (req) => {
       }, 200, responseHeaders);
     }
 
-    if (visiblePhotoLinks.length >= 4) {
+    if (!replaceExisting && visiblePhotoLinks.length >= 4) {
       return errorResponse(
         "photo_limit_reached",
         "You already have 4 breed photos. Remove a photo before restoring the default photo.",
@@ -704,11 +707,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    const nextSortOrder =
-      visiblePhotoLinks.length === 0
+    const nextSortOrder = replaceExisting
+      ? 0
+      : visiblePhotoLinks.length === 0
         ? 0
         : Math.max(...visiblePhotoLinks.map((link) => link.sort_order ?? 0)) + 1;
-    const shouldFeature = visiblePhotoLinks.length === 0;
+    const shouldFeature = !replaceExisting && visiblePhotoLinks.length === 0;
     storagePath = buildStoragePath(profile.store_id, detectedMimeType);
 
     step = "upload_to_seller_media";
@@ -793,6 +797,51 @@ Deno.serve(async (req) => {
 
     storagePath = null;
 
+    async function archiveCreatedReplacementLink() {
+      if (!replaceExisting || !createdMedia?.media_link_id) return;
+
+      const { error: cleanupLinkError } = await serviceClient
+        .from("media_links")
+        .update({
+          is_featured: false,
+          updated_at: new Date().toISOString(),
+          visibility_status: "archived",
+        })
+        .eq("store_id", profile.store_id)
+        .eq("id", createdMedia.media_link_id)
+        .eq("entity_type", "seller_breed_profile")
+        .eq("entity_id", profile.id)
+        .eq("display_context", "gallery")
+        .eq("visibility_status", "active");
+
+      if (cleanupLinkError) {
+        console.error("seller-restore-catalog-breed-photo replacement cleanup failed", cleanupLinkError);
+      }
+    }
+
+    async function restorePreviouslyActiveLinks() {
+      if (!replaceExisting || activeLinks.length === 0) return;
+
+      for (const link of activeLinks) {
+        const { error: restoreLinkError } = await serviceClient
+          .from("media_links")
+          .update({
+            is_featured: link.is_featured,
+            updated_at: new Date().toISOString(),
+            visibility_status: "active",
+          })
+          .eq("store_id", profile.store_id)
+          .eq("id", link.id)
+          .eq("entity_type", "seller_breed_profile")
+          .eq("entity_id", profile.id)
+          .eq("display_context", "gallery");
+
+        if (restoreLinkError) {
+          console.error("seller-restore-catalog-breed-photo replacement rollback failed", restoreLinkError);
+        }
+      }
+    }
+
     step = "mark_catalog_source";
     const { error: sourceUpdateError } = await serviceClient
       .from("media_assets")
@@ -805,6 +854,7 @@ Deno.serve(async (req) => {
       .eq("store_id", profile.store_id);
 
     if (sourceUpdateError) {
+      await archiveCreatedReplacementLink();
       console.error("seller-restore-catalog-breed-photo source marker update failed", sourceUpdateError);
       return errorResponse(
         "save_failed",
@@ -816,6 +866,67 @@ Deno.serve(async (req) => {
           database_error: serializeSupabaseError(sourceUpdateError),
         }),
       );
+    }
+
+    if (replaceExisting) {
+      step = "archive_replaced_photo_links";
+      const { error: archiveError } = await serviceClient
+        .from("media_links")
+        .update({
+          is_featured: false,
+          updated_at: new Date().toISOString(),
+          visibility_status: "archived",
+        })
+        .eq("store_id", profile.store_id)
+        .eq("entity_type", "seller_breed_profile")
+        .eq("entity_id", profile.id)
+        .eq("display_context", "gallery")
+        .eq("visibility_status", "active")
+        .neq("id", createdMedia.media_link_id);
+
+      if (archiveError) {
+        await archiveCreatedReplacementLink();
+        console.error("seller-restore-catalog-breed-photo replacement archive failed", archiveError);
+        return errorResponse(
+          "save_failed",
+          "Default photo was copied, but existing photos could not be replaced. Please try again.",
+          500,
+          responseHeaders,
+          publicErrorDetails(step, {
+            database_error: serializeSupabaseError(archiveError),
+          }),
+        );
+      }
+
+      step = "feature_replacement_photo";
+      const { error: featureError } = await serviceClient
+        .from("media_links")
+        .update({
+          is_featured: true,
+          sort_order: 0,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("store_id", profile.store_id)
+        .eq("id", createdMedia.media_link_id)
+        .eq("entity_type", "seller_breed_profile")
+        .eq("entity_id", profile.id)
+        .eq("display_context", "gallery")
+        .eq("visibility_status", "active");
+
+      if (featureError) {
+        await archiveCreatedReplacementLink();
+        await restorePreviouslyActiveLinks();
+        console.error("seller-restore-catalog-breed-photo replacement feature failed", featureError);
+        return errorResponse(
+          "save_failed",
+          "Default photo was copied, but it could not be set as the featured photo. Please try again.",
+          500,
+          responseHeaders,
+          publicErrorDetails(step, {
+            database_error: serializeSupabaseError(featureError),
+          }),
+        );
+      }
     }
 
     step = "load_created_media";
@@ -842,6 +953,7 @@ Deno.serve(async (req) => {
       already_present: false,
       details: publicErrorDetails("complete", {
         catalog_image_url: resolvedCatalogImageUrl,
+        replace_existing: replaceExisting,
       }),
       media: Array.isArray(refreshedMediaRows) ? refreshedMediaRows[0] ?? null : refreshedMediaRows,
       message: "Default photo restored.",
