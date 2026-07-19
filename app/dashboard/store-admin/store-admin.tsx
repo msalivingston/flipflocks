@@ -717,6 +717,11 @@ export function StoreAdmin() {
     }
 
     const displayContext = role === "about" ? "gallery" : role;
+    const replacedMediaItems = storeMediaItems.filter(
+      (item) =>
+        item.display_context === displayContext &&
+        item.visibility_status === "active",
+    );
     const formData = new FormData();
     formData.append("file", file);
     formData.append("store_id", seller.store_id);
@@ -769,6 +774,15 @@ export function StoreAdmin() {
       }
     }
 
+    const archiveError = await archiveReplacedStoreMedia(
+      replacedMediaItems,
+      uploadedMedia.media_link_id,
+    );
+
+    if (archiveError) {
+      setMediaError(archiveError);
+    }
+
     setStoreMediaItems((current) =>
       sortStoreMedia([
         ...current.filter((item) =>
@@ -781,6 +795,25 @@ export function StoreAdmin() {
     );
     setIsMediaUploading(null);
     void reloadStoreMedia();
+  }
+
+  async function archiveReplacedStoreMedia(
+    replacedMediaItems: StoreMediaItem[],
+    uploadedMediaLinkId: string,
+  ) {
+    for (const item of replacedMediaItems) {
+      if (item.media_link_id === uploadedMediaLinkId) continue;
+
+      const { error } = await supabase.rpc("seller_archive_media_link", {
+        p_media_link_id: item.media_link_id,
+      });
+
+      if (error) {
+        return "The previous photo was not replaced. Please try removing it and uploading again.";
+      }
+    }
+
+    return null;
   }
 
   async function selectHeroLibraryImage(image: HeroLibraryImage) {

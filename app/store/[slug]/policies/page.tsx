@@ -80,7 +80,7 @@ export default async function StorefrontPoliciesPage({
         </nav>
 
         <header className="max-w-2xl">
-          <h1 className="text-xs font-bold uppercase tracking-[0.2em] text-[#596747]">
+          <h1 className="storefront-heading-color text-xs font-bold uppercase tracking-[0.2em]">
             Pickup & Policies
           </h1>
           <div className="mt-3 h-px w-14 bg-[#cbbd96]" />

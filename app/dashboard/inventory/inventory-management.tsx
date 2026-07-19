@@ -1897,7 +1897,10 @@ function buildFlatInventoryItems({
         availabilityLabel: availability.label,
         availabilityValue: availability.value,
         isCleared: Boolean(row.cleared_at),
-        manageHref: `/dashboard/inventory/${row.listing_batch_id}/edit`,
+        manageHref:
+          row.batch_type === "hatching_eggs"
+            ? `/dashboard/listings/${row.listing_batch_id}`
+            : `/dashboard/inventory/${row.listing_batch_id}/edit`,
         row,
         searchText: [
           row.breed_display_name,
