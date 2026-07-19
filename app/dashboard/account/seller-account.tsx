@@ -27,6 +27,7 @@ type BillingStatus = {
 
 type BillingAddress = {
   billing_address_line1: string | null;
+  billing_address_line2: string | null;
   billing_city: string | null;
   billing_country: string | null;
   billing_postal_code: string | null;
@@ -106,7 +107,7 @@ export function SellerAccount() {
         supabase
           .from("stores")
           .select(
-            "billing_address_line1, billing_city, billing_state, billing_postal_code, billing_country",
+            "billing_address_line1, billing_address_line2, billing_city, billing_state, billing_postal_code, billing_country",
           )
           .eq("id", seller.store_id)
           .maybeSingle()
@@ -142,7 +143,7 @@ export function SellerAccount() {
       });
       setBillingForm({
         addressLine1: nextAddress?.billing_address_line1 ?? "",
-        addressLine2: "",
+        addressLine2: nextAddress?.billing_address_line2 ?? "",
         billingName: nextUser.name ?? "",
         city: nextAddress?.billing_city ?? "",
         postalCode: nextAddress?.billing_postal_code ?? "",
@@ -280,11 +281,70 @@ export function SellerAccount() {
     reload();
   }
 
-  function handleSaveBilling() {
+  async function handleSaveBilling() {
+    if (!seller) return;
+
+    setIsSaving(true);
     setSaveMessage(null);
-    setSaveError(
-      "Billing address saving needs a secure account settings update before it can be changed here.",
-    );
+    setSaveError(null);
+
+    const trimmedAddressLine1 = billingForm.addressLine1.trim();
+    const trimmedAddressLine2 = billingForm.addressLine2.trim();
+    const trimmedCity = billingForm.city.trim();
+    const trimmedPostalCode = billingForm.postalCode.trim();
+    const trimmedState = billingForm.state.trim().toUpperCase();
+
+    if (
+      !trimmedAddressLine1 ||
+      !trimmedCity ||
+      !trimmedState ||
+      !trimmedPostalCode
+    ) {
+      setSaveError("Street address, city, state, and ZIP code are required.");
+      setIsSaving(false);
+      return;
+    }
+
+    const { data, error } = await supabase.rpc("seller_update_billing_address", {
+      p_address: {
+        billing_address_line1: trimmedAddressLine1,
+        billing_address_line2: trimmedAddressLine2 || null,
+        billing_city: trimmedCity,
+        billing_country: billingAddress?.billing_country ?? "US",
+        billing_postal_code: trimmedPostalCode,
+        billing_state: trimmedState,
+      },
+      p_store_id: seller.store_id,
+    });
+
+    if (error) {
+      setSaveError(error.message);
+      setIsSaving(false);
+      return;
+    }
+
+    const rows = Array.isArray(data) ? (data as BillingAddress[]) : [];
+    const nextAddress = rows[0] ?? {
+      billing_address_line1: trimmedAddressLine1,
+      billing_address_line2: trimmedAddressLine2 || null,
+      billing_city: trimmedCity,
+      billing_country: billingAddress?.billing_country ?? "US",
+      billing_postal_code: trimmedPostalCode,
+      billing_state: trimmedState,
+    };
+
+    setBillingAddress(nextAddress);
+    setBillingForm({
+      addressLine1: nextAddress.billing_address_line1 ?? "",
+      addressLine2: nextAddress.billing_address_line2 ?? "",
+      billingName: accountUser.name ?? "",
+      city: nextAddress.billing_city ?? "",
+      postalCode: nextAddress.billing_postal_code ?? "",
+      state: formatState(nextAddress.billing_state) ?? "",
+    });
+    setEditingSection(null);
+    setSaveMessage("Billing address updated.");
+    setIsSaving(false);
   }
 
   function cancelEdit() {
@@ -301,7 +361,7 @@ export function SellerAccount() {
     });
     setBillingForm({
       addressLine1: billingAddress?.billing_address_line1 ?? "",
-      addressLine2: "",
+      addressLine2: billingAddress?.billing_address_line2 ?? "",
       billingName: accountUser.name ?? "",
       city: billingAddress?.billing_city ?? "",
       postalCode: billingAddress?.billing_postal_code ?? "",
@@ -461,7 +521,7 @@ export function SellerAccount() {
               rows={[
                 ["Billing name", accountUser.name],
                 ["Street address", billingAddress?.billing_address_line1],
-                ["Address line 2", null],
+                ["Address line 2", billingAddress?.billing_address_line2],
                 ["City", billingAddress?.billing_city],
                 ["State", formatState(billingAddress?.billing_state)],
                 ["ZIP code", billingAddress?.billing_postal_code],
