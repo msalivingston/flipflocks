@@ -194,15 +194,19 @@ function PreflightList({
 
 export function SaveDraftButton({
   canSaveDraft,
+  idleLabel = "Save draft",
   onSaveDraft,
   saveDraftDisabledReason,
   saveDraftStatus,
+  successLabel = "Draft saved",
   stepLocked = false,
 }: {
   canSaveDraft: boolean;
+  idleLabel?: string;
   onSaveDraft: () => void;
   saveDraftDisabledReason: string | null;
   saveDraftStatus: SaveDraftStatus;
+  successLabel?: string;
   stepLocked?: boolean;
 }) {
   const disabled =
@@ -211,7 +215,7 @@ export function SaveDraftButton({
     !canSaveDraft ||
     saveDraftStatus === "saving" ||
     saveDraftStatus === "success";
-  const label = getSaveDraftButtonLabel(saveDraftStatus);
+  const label = getSaveDraftButtonLabel(saveDraftStatus, idleLabel, successLabel);
 
   if (disabled) {
     return (
@@ -281,11 +285,15 @@ export function PublishInventoryButton({
   );
 }
 
-function getSaveDraftButtonLabel(saveDraftStatus: SaveDraftStatus) {
+function getSaveDraftButtonLabel(
+  saveDraftStatus: SaveDraftStatus,
+  idleLabel: string,
+  successLabel: string,
+) {
   if (saveDraftStatus === "saving") return "Saving...";
-  if (saveDraftStatus === "success") return "Draft saved";
+  if (saveDraftStatus === "success") return successLabel;
 
-  return "Save draft";
+  return idleLabel;
 }
 
 function getPublishInventoryButtonLabel(publishStatus: PublishStatus) {

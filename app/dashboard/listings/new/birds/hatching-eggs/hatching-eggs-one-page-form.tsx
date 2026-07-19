@@ -85,6 +85,10 @@ type UploadResponse = {
   };
 };
 
+type HatchingEggsOnePageFormProps = {
+  initialListingBatchId?: string;
+};
+
 const emptyForm: HatchingEggFormState = {
   availableDate: "",
   breedName: "",
@@ -100,7 +104,9 @@ const acceptedPendingImageTypes = ["image/jpeg", "image/png", "image/webp"] as c
 const maxPendingImageSizeBytes = 8 * 1024 * 1024;
 const maxHatchingEggPhotos = 4;
 
-export function HatchingEggsOnePageForm() {
+export function HatchingEggsOnePageForm({
+  initialListingBatchId = "",
+}: HatchingEggsOnePageFormProps) {
   const router = useRouter();
   const { seller } = useSellerContext();
   const plan = getPlanCapabilities(seller?.plan_key);
@@ -109,7 +115,8 @@ export function HatchingEggsOnePageForm() {
     Boolean(seller?.hatching_eggs_enabled) && plan.hatchingEggsEnabled;
   const [species, setSpecies] = useState<ReferenceSpecies[]>([]);
   const [form, setForm] = useState<HatchingEggFormState>(emptyForm);
-  const [listingBatchId, setListingBatchId] = useState("");
+  const [listingBatchId, setListingBatchId] = useState(initialListingBatchId);
+  const [listingBatchBreedId, setListingBatchBreedId] = useState("");
   const [inventoryItemId, setInventoryItemId] = useState("");
   const [sellerBreedProfileId, setSellerBreedProfileId] = useState("");
   const [draftRows, setDraftRows] = useState<SellerInventoryManagementRow[]>(
@@ -131,6 +138,7 @@ export function HatchingEggsOnePageForm() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isStartOverDialogOpen, setIsStartOverDialogOpen] = useState(false);
+  const isEditMode = Boolean(initialListingBatchId);
 
   useEffect(() => {
     if (!storeId || !hatchingEggsEnabled) return;
@@ -346,6 +354,71 @@ export function HatchingEggsOnePageForm() {
     },
     [storeId],
   );
+
+  useEffect(() => {
+    if (!storeId || !hatchingEggsEnabled || !initialListingBatchId) return;
+
+    let isMounted = true;
+
+    async function loadExistingHatchingEggs() {
+      setIsLoading(true);
+      setLoadError(null);
+
+      const rows = await loadDraftRows(initialListingBatchId);
+      const firstRow = rows[0];
+
+      if (!isMounted) return;
+
+      if (!firstRow || firstRow.batch_type !== "hatching_eggs") {
+        setLoadError("This hatching egg listing could not be found.");
+        setIsLoading(false);
+        return;
+      }
+
+      const parsedDescription = parseHatchingEggDescription(
+        firstRow.breed_description ?? "",
+      );
+      const loadedForm: HatchingEggFormState = {
+        availableDate: firstRow.available_date ?? "",
+        breedName: firstRow.breed_display_name ?? "",
+        description: parsedDescription.description,
+        minimumOrderQuantity: parsedDescription.minimumOrderQuantity,
+        pricePerEgg:
+          firstRow.base_price === null || firstRow.base_price === undefined
+            ? ""
+            : String(firstRow.base_price),
+        quantity:
+          firstRow.quantity_available === null ||
+          firstRow.quantity_available === undefined
+            ? ""
+            : String(firstRow.quantity_available),
+        speciesId: firstRow.species_id,
+      };
+
+      setListingBatchId(firstRow.listing_batch_id);
+      setListingBatchBreedId(firstRow.listing_batch_breed_id);
+      setInventoryItemId(firstRow.inventory_item_id);
+      setForm(loadedForm);
+      setSavedFormSnapshot(getFormSnapshot(loadedForm));
+      setActionMessage(null);
+      setActionError(null);
+      await loadInventoryItemMedia(firstRow.inventory_item_id);
+
+      if (isMounted) setIsLoading(false);
+    }
+
+    void loadExistingHatchingEggs();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    hatchingEggsEnabled,
+    initialListingBatchId,
+    loadDraftRows,
+    loadInventoryItemMedia,
+    storeId,
+  ]);
 
   function addPendingPhotos(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -580,14 +653,16 @@ export function HatchingEggsOnePageForm() {
     setListingBatchId(createdListingBatchId);
     const loadedRows = await loadDraftRows(createdListingBatchId);
     const createdInventoryItemId = loadedRows[0]?.inventory_item_id;
+    const createdListingBatchBreedId = loadedRows[0]?.listing_batch_breed_id;
 
-    if (!createdInventoryItemId) {
+    if (!createdInventoryItemId || !createdListingBatchBreedId) {
       return {
         ok: false,
-        message: "The draft saved, but the photo target could not be loaded.",
+        message: "The draft saved, but the listing details could not be loaded.",
       };
     }
 
+    setListingBatchBreedId(createdListingBatchBreedId);
     await loadInventoryItemMedia(createdInventoryItemId);
     return {
       ok: true,
@@ -680,7 +755,7 @@ export function HatchingEggsOnePageForm() {
 
     setSaveDraftStatus("success");
     setSavedFormSnapshot(formSnapshot);
-    setActionMessage("Draft saved.");
+    setActionMessage(isEditMode ? "Changes saved." : "Draft saved.");
   }
 
   async function handlePublish() {
@@ -734,6 +809,7 @@ export function HatchingEggsOnePageForm() {
 
     setForm({ ...emptyForm, speciesId: defaultSpecies?.id ?? "" });
     setListingBatchId("");
+    setListingBatchBreedId("");
     setInventoryItemId("");
     setSellerBreedProfileId("");
     setDraftRows([]);
@@ -789,14 +865,14 @@ export function HatchingEggsOnePageForm() {
         <header className="mb-5">
           <Link
             className="inline-flex min-h-11 items-center text-base font-bold text-emerald-800 underline-offset-4 hover:underline sm:min-h-0 sm:text-sm sm:font-semibold"
-            href="/dashboard/inventory/add-v2"
+            href={isEditMode ? "/dashboard/inventory" : "/dashboard/inventory/add-v2"}
           >
-            Inventory / Add Inventory
+            {isEditMode ? "Inventory" : "Inventory / Add Inventory"}
           </Link>
           <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h1 className="text-3xl font-semibold text-stone-950">
-                Add Hatching Eggs
+                {isEditMode ? "Edit Hatching Eggs" : "Add Hatching Eggs"}
               </h1>
               <p className="mt-2 max-w-3xl text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
                 Add hatching eggs from one collection date, then list them for
@@ -804,13 +880,19 @@ export function HatchingEggsOnePageForm() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-3 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-9 sm:text-sm sm:font-semibold"
-                type="button"
-                onClick={() => setIsStartOverDialogOpen(true)}
-              >
-                Start over
-              </button>
+              {isEditMode ? (
+                <Link className="seller-secondary-button bg-white" href="/dashboard/inventory">
+                  Cancel
+                </Link>
+              ) : (
+                <button
+                  className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-3 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-9 sm:text-sm sm:font-semibold"
+                  type="button"
+                  onClick={() => setIsStartOverDialogOpen(true)}
+                >
+                  Start over
+                </button>
+              )}
               <span
                 className={`inline-flex min-h-8 w-fit items-center rounded-full border px-3 py-1 text-sm font-semibold sm:min-h-0 sm:text-xs ${
                   publishStatus === "success"
@@ -822,7 +904,11 @@ export function HatchingEggsOnePageForm() {
               >
                 {publishStatus === "success"
                   ? "Published"
-                  : listingBatchId
+                  : isEditMode
+                    ? savedFormSnapshot
+                      ? "Changes saved"
+                      : "Loaded for editing"
+                    : listingBatchId
                     ? "Draft saved"
                     : "Draft not saved yet"}
               </span>
@@ -865,6 +951,7 @@ export function HatchingEggsOnePageForm() {
                     </span>
                     <select
                       className={inputClass}
+                      disabled={isEditMode}
                       value={form.speciesId}
                       onChange={(event) =>
                         updateForm({ speciesId: event.target.value })
@@ -968,8 +1055,9 @@ export function HatchingEggsOnePageForm() {
                 <div className="space-y-4 sm:space-y-6">
                   <div className="space-y-2">
                     <p className="text-base leading-7 text-stone-700 sm:text-sm sm:leading-6">
-                      Review the details above, then publish when everything
-                      looks right.
+                      {isEditMode
+                        ? "Review the details above, then save your changes."
+                        : "Review the details above, then publish when everything looks right."}
                     </p>
                     <p className="text-base leading-7 text-stone-500 sm:text-sm sm:leading-6">
                       Your listing will be visible in your storefront inventory.
@@ -984,15 +1072,19 @@ export function HatchingEggsOnePageForm() {
                   <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
                     <SaveDraftButton
                       canSaveDraft={!saveDraftDisabledReason}
+                      idleLabel={isEditMode ? "Save Changes" : undefined}
                       onSaveDraft={handleSaveDraft}
                       saveDraftDisabledReason={saveDraftDisabledReason}
                       saveDraftStatus={saveDraftStatus}
+                      successLabel={isEditMode ? "Changes saved" : undefined}
                     />
-                    <PublishInventoryButton
-                      onReviewPublish={handlePublish}
-                      publishDisabledReason={publishDisabledReason}
-                      publishStatus={publishStatus}
-                    />
+                    {!isEditMode ? (
+                      <PublishInventoryButton
+                        onReviewPublish={handlePublish}
+                        publishDisabledReason={publishDisabledReason}
+                        publishStatus={publishStatus}
+                      />
+                    ) : null}
                   </div>
                 </div>
               </SectionCard>
@@ -1010,7 +1102,7 @@ export function HatchingEggsOnePageForm() {
         )}
       </div>
 
-      {isStartOverDialogOpen ? (
+      {!isEditMode && isStartOverDialogOpen ? (
         <StartOverDialog
           onCancel={() => setIsStartOverDialogOpen(false)}
           onConfirm={resetForm}
@@ -1326,6 +1418,58 @@ function StartOverDialog({
   );
 }
 
+async function upsertPlainBreedProfile({
+  description,
+  form,
+  sellerBreedProfileId,
+  speciesName,
+  storeId,
+}: {
+  description: string;
+  form: HatchingEggFormState;
+  sellerBreedProfileId: string;
+  speciesName: string;
+  storeId: string;
+}): Promise<
+  | { ok: true; profileId: string }
+  | { ok: false; message: string }
+> {
+  const displayName = form.breedName.trim();
+  const { data, error } = await supabase.rpc("seller_upsert_breed_profile", {
+    p_store_id: storeId,
+    p_species_id: form.speciesId,
+    p_breed_id: null,
+    p_custom_breed_name: createUniqueProfileToken(displayName, speciesName),
+    p_display_name: displayName,
+    p_seller_description: description.trim() || null,
+    p_seller_notes: null,
+    p_visibility_status: "active",
+    p_seller_breed_profile_id: sellerBreedProfileId || null,
+  });
+
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+
+  const rows = Array.isArray(data)
+    ? (data as BreedProfileUpsertResult[])
+    : [data as BreedProfileUpsertResult | null];
+  const profileId = rows[0]?.seller_breed_profile_id ?? null;
+
+  if (!profileId) {
+    return {
+      ok: false,
+      message: "The hatching egg breed profile could not be saved.",
+    };
+  }
+
+  return { ok: true, profileId };
+}
+
+function createUniqueProfileToken(displayName: string, speciesName: string) {
+  return `${speciesName.trim()} ${displayName.trim()}`.trim();
+}
+
 function validateHatchingEggForm(
   form: HatchingEggFormState,
   publicDescription: string,
@@ -1421,52 +1565,20 @@ function buildPublicDescription(form: HatchingEggFormState) {
   return parts.join("\n\n");
 }
 
-async function upsertPlainBreedProfile({
-  description,
-  form,
-  sellerBreedProfileId,
-  speciesName,
-  storeId,
-}: {
-  description: string;
-  form: HatchingEggFormState;
-  sellerBreedProfileId: string;
-  speciesName: string;
-  storeId: string;
-}): Promise<
-  | { ok: true; profileId: string }
-  | { ok: false; message: string }
-> {
-  const displayName = form.breedName.trim() || speciesName;
-  const result = await supabase.rpc("seller_upsert_breed_profile", {
-    p_store_id: storeId,
-    p_species_id: form.speciesId,
-    p_breed_id: null,
-    p_custom_breed_name: displayName,
-    p_display_name: displayName,
-    p_seller_description: description.trim() || null,
-    p_seller_notes: null,
-    p_visibility_status: "active",
-    p_seller_breed_profile_id: sellerBreedProfileId || null,
-  });
+function parseHatchingEggDescription(value: string) {
+  const match = value.match(/^Minimum order:\s*(\d+)\s*eggs?\.\s*(?:\n\n)?/i);
 
-  if (result.error) {
-    return { ok: false, message: result.error.message };
+  if (!match) {
+    return {
+      description: value,
+      minimumOrderQuantity: "",
+    };
   }
 
-  const rows = Array.isArray(result.data)
-    ? (result.data as BreedProfileUpsertResult[])
-    : [];
-  const profileId =
-    rows[0]?.seller_breed_profile_id ??
-    (result.data as BreedProfileUpsertResult | null)?.seller_breed_profile_id ??
-    null;
-
-  if (!profileId) {
-    return { ok: false, message: "The breed could not be prepared." };
-  }
-
-  return { ok: true, profileId };
+  return {
+    description: value.slice(match[0].length),
+    minimumOrderQuantity: match[1],
+  };
 }
 
 function getPublishDisabledReason({

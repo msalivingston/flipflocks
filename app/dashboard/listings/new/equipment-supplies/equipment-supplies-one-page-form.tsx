@@ -72,6 +72,21 @@ type UploadResponse = {
   };
 };
 
+type ExistingEquipmentRow = {
+  available_date: string | null;
+  category: string;
+  condition: string | null;
+  description: string | null;
+  equipment_inventory_item_id: string;
+  item_name: string;
+  price: number | null;
+  quantity_available: number | null;
+};
+
+type EquipmentSuppliesOnePageFormProps = {
+  initialEquipmentItemId?: string;
+};
+
 const todayIsoDate = new Date().toISOString().slice(0, 10);
 
 const emptyForm: EquipmentFormState = {
@@ -89,7 +104,9 @@ const descriptionMaxLength = 1000;
 const maxEquipmentPhotos = 4;
 const maxPendingImageSizeBytes = 8 * 1024 * 1024;
 
-export function EquipmentSuppliesOnePageForm() {
+export function EquipmentSuppliesOnePageForm({
+  initialEquipmentItemId = "",
+}: EquipmentSuppliesOnePageFormProps) {
   const router = useRouter();
   const { seller, isLoading: isSellerLoading } = useSellerContext();
   const plan = getPlanCapabilities(seller?.plan_key);
@@ -97,7 +114,7 @@ export function EquipmentSuppliesOnePageForm() {
   const equipmentSuppliesEnabled =
     Boolean(seller?.equipment_supplies_enabled) && plan.equipmentSuppliesEnabled;
   const [form, setForm] = useState<EquipmentFormState>(emptyForm);
-  const [equipmentItemId, setEquipmentItemId] = useState("");
+  const [equipmentItemId, setEquipmentItemId] = useState(initialEquipmentItemId);
   const [mediaItems, setMediaItems] = useState<ListingPhotoItem[]>([]);
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -106,12 +123,16 @@ export function EquipmentSuppliesOnePageForm() {
   );
   const pendingPhotosRef = useRef<PendingPhoto[]>([]);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [isLoadingExistingEquipment, setIsLoadingExistingEquipment] =
+    useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saveDraftStatus, setSaveDraftStatus] =
     useState<SaveDraftStatus>("idle");
   const [publishStatus, setPublishStatus] = useState<PublishStatus>("idle");
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isStartOverDialogOpen, setIsStartOverDialogOpen] = useState(false);
+  const isEditMode = Boolean(initialEquipmentItemId);
 
   const formSnapshot = useMemo(() => getFormSnapshot(form), [form]);
   const activeSavedPhotoCount = mediaItems.filter(
@@ -241,6 +262,79 @@ export function EquipmentSuppliesOnePageForm() {
     },
     [storeId],
   );
+
+  useEffect(() => {
+    if (!storeId || !equipmentSuppliesEnabled || !initialEquipmentItemId) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadExistingEquipment() {
+      setIsLoadingExistingEquipment(true);
+      setLoadError(null);
+
+      const result = await supabase
+        .from("seller_equipment_inventory_management")
+        .select(
+          "equipment_inventory_item_id, item_name, category, condition, available_date, description, quantity_available, price",
+        )
+        .eq("store_id", storeId)
+        .eq("equipment_inventory_item_id", initialEquipmentItemId)
+        .maybeSingle<ExistingEquipmentRow>();
+
+      if (!isMounted) return;
+
+      if (result.error) {
+        setLoadError(result.error.message);
+        setIsLoadingExistingEquipment(false);
+        return;
+      }
+
+      if (!result.data) {
+        setLoadError("This equipment item could not be found.");
+        setIsLoadingExistingEquipment(false);
+        return;
+      }
+
+      const loadedForm: EquipmentFormState = {
+        availableDate: result.data.available_date ?? todayIsoDate,
+        category: result.data.category ?? "",
+        condition: result.data.condition ?? "",
+        description: result.data.description ?? "",
+        itemName: result.data.item_name ?? "",
+        price:
+          result.data.price === null || result.data.price === undefined
+            ? ""
+            : String(result.data.price),
+        quantityAvailable:
+          result.data.quantity_available === null ||
+          result.data.quantity_available === undefined
+            ? ""
+            : String(result.data.quantity_available),
+      };
+
+      setEquipmentItemId(result.data.equipment_inventory_item_id);
+      setForm(loadedForm);
+      setSavedFormSnapshot(getFormSnapshot(loadedForm));
+      setActionMessage(null);
+      setActionError(null);
+      await loadEquipmentMedia(result.data.equipment_inventory_item_id);
+
+      if (isMounted) setIsLoadingExistingEquipment(false);
+    }
+
+    void loadExistingEquipment();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    equipmentSuppliesEnabled,
+    initialEquipmentItemId,
+    loadEquipmentMedia,
+    storeId,
+  ]);
 
   function updateForm(updates: Partial<EquipmentFormState>) {
     setForm((current) => ({ ...current, ...updates }));
@@ -459,7 +553,7 @@ export function EquipmentSuppliesOnePageForm() {
 
     setSavedFormSnapshot(getFormSnapshot(form));
     setSaveDraftStatus("success");
-    setActionMessage("Draft saved.");
+    setActionMessage(isEditMode ? "Changes saved." : "Draft saved.");
   }
 
   async function handlePublish() {
@@ -561,34 +655,51 @@ export function EquipmentSuppliesOnePageForm() {
         <header className="mb-5">
           <Link
             className="inline-flex min-h-11 items-center text-base font-bold text-emerald-800 underline-offset-4 hover:underline sm:min-h-0 sm:text-sm sm:font-semibold"
-            href="/dashboard/inventory/add-v2"
+            href={isEditMode ? "/dashboard/inventory" : "/dashboard/inventory/add-v2"}
           >
-            Inventory / Add Inventory
+            {isEditMode ? "Inventory" : "Inventory / Add Inventory"}
           </Link>
           <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h1 className="text-3xl font-semibold text-stone-950">
-                Add Equipment & Supplies
+                {isEditMode ? "Edit Equipment & Supplies" : "Add Equipment & Supplies"}
               </h1>
               <p className="mt-2 max-w-3xl text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
                 Add equipment, supplies, or other non-bird inventory for sale.
               </p>
             </div>
             <div className="flex flex-wrap gap-2 lg:justify-end">
-              <button
-                className="seller-secondary-button bg-white"
-                type="button"
-                onClick={() => setIsStartOverDialogOpen(true)}
-              >
-                Start over
-              </button>
+              {isEditMode ? (
+                <Link className="seller-secondary-button bg-white" href="/dashboard/inventory">
+                  Cancel
+                </Link>
+              ) : (
+                <button
+                  className="seller-secondary-button bg-white"
+                  type="button"
+                  onClick={() => setIsStartOverDialogOpen(true)}
+                >
+                  Start over
+                </button>
+              )}
               <span className="inline-flex min-h-10 items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-800">
-                {savedFormSnapshot ? "Draft saved" : "Draft not saved yet"}
+                {isEditMode
+                  ? savedFormSnapshot
+                    ? "Changes saved"
+                    : "Loaded for editing"
+                  : savedFormSnapshot
+                    ? "Draft saved"
+                    : "Draft not saved yet"}
               </span>
             </div>
           </div>
         </header>
 
+        {isLoadingExistingEquipment ? (
+          <LoadingState label="Loading equipment form..." />
+        ) : loadError ? (
+          <ErrorState title="Equipment could not load" message={loadError} />
+        ) : (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
           <main className="space-y-4">
             <SectionCard step="1" title="Photos">
@@ -737,8 +848,9 @@ export function EquipmentSuppliesOnePageForm() {
               <div className="space-y-4">
                 <div>
                   <p className="text-base leading-7 text-stone-700 sm:text-sm sm:leading-6">
-                    Review the details above, then publish when everything
-                    looks right.
+                    {isEditMode
+                      ? "Review the details above, then save your changes."
+                      : "Review the details above, then publish when everything looks right."}
                   </p>
                   <p className="text-base leading-7 text-stone-500 sm:text-sm sm:leading-6">
                     Your item will be visible in your storefront inventory.
@@ -757,15 +869,19 @@ export function EquipmentSuppliesOnePageForm() {
                 <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
                   <SaveDraftButton
                     canSaveDraft
+                    idleLabel={isEditMode ? "Save Changes" : undefined}
                     onSaveDraft={() => void handleSaveDraft()}
                     saveDraftDisabledReason={saveDraftDisabledReason}
                     saveDraftStatus={saveDraftStatus}
+                    successLabel={isEditMode ? "Changes saved" : undefined}
                   />
-                  <PublishInventoryButton
-                    onReviewPublish={() => void handlePublish()}
-                    publishDisabledReason={publishDisabledReason}
-                    publishStatus={publishStatus}
-                  />
+                  {!isEditMode ? (
+                    <PublishInventoryButton
+                      onReviewPublish={() => void handlePublish()}
+                      publishDisabledReason={publishDisabledReason}
+                      publishStatus={publishStatus}
+                    />
+                  ) : null}
                 </div>
               </div>
             </SectionCard>
@@ -780,9 +896,10 @@ export function EquipmentSuppliesOnePageForm() {
             />
           </aside>
         </div>
+        )}
       </div>
 
-      {isStartOverDialogOpen ? (
+      {!isEditMode && isStartOverDialogOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/40 p-4">
           <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
             <h2 className="text-lg font-semibold text-stone-950">

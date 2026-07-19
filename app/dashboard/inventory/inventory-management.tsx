@@ -54,6 +54,39 @@ type ReservedRow = {
   remaining_unfulfilled_quantity: number | null;
 };
 
+type HatchingEggInventoryRow = {
+  hatching_egg_inventory_item_id: string;
+  store_id: string;
+  item_name: string;
+  species_id: string;
+  species_name: string;
+  species_slug: string;
+  description: string | null;
+  quantity_available: number;
+  price: number;
+  available_date: string;
+  minimum_order_quantity: number | null;
+  visibility_status: string;
+  moderation_status: string;
+  operational_availability_status: string;
+  seller_notes: string | null;
+  first_published_at: string | null;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type InventoryMediaRow = {
+  entity_id: string;
+  public_url: string | null;
+  alt_text: string | null;
+};
+
+type InventoryPrimaryPhoto = {
+  url: string;
+  alt: string;
+};
+
 type InventoryProductTab =
   | "live_poultry"
   | "hatching_eggs"
@@ -119,8 +152,33 @@ type FlatInventoryItem =
       availabilityValue: AvailabilityFilter;
       isCleared: boolean;
       manageHref: string;
+      primaryPhoto: InventoryPrimaryPhoto | null;
       searchText: string;
       row: InventoryRow;
+    }
+  | {
+      kind: "hatching_egg";
+      productTab: "hatching_eggs";
+      id: string;
+      species: string;
+      speciesFilterValue: string;
+      breedFilterValue: string;
+      breedOrItem: string;
+      typeSex: "Hatching Eggs";
+      hatchDate: null;
+      availableDate: string;
+      ageDays: null;
+      ageLabel: string;
+      availableQuantity: number;
+      reservedQuantity: 0;
+      price: number;
+      availabilityLabel: string;
+      availabilityValue: AvailabilityFilter;
+      isCleared: false;
+      manageHref: string;
+      primaryPhoto: InventoryPrimaryPhoto | null;
+      searchText: string;
+      row: HatchingEggInventoryRow;
     }
   | {
       kind: "processed_poultry";
@@ -143,6 +201,7 @@ type FlatInventoryItem =
       availabilityValue: AvailabilityFilter;
       isCleared: false;
       manageHref: string;
+      primaryPhoto: InventoryPrimaryPhoto | null;
       searchText: string;
       row: ProcessedPoultryInventoryRow;
     }
@@ -168,6 +227,7 @@ type FlatInventoryItem =
       availabilityValue: AvailabilityFilter;
       isCleared: false;
       manageHref: string;
+      primaryPhoto: InventoryPrimaryPhoto | null;
       searchText: string;
       row: EquipmentInventoryRow;
     };
@@ -255,6 +315,12 @@ export function InventoryManagement() {
   const [processedPoultryRows, setProcessedPoultryRows] = useState<
     ProcessedPoultryInventoryRow[]
   >([]);
+  const [hatchingEggRows, setHatchingEggRows] = useState<
+    HatchingEggInventoryRow[]
+  >([]);
+  const [hatchingEggPrimaryPhotos, setHatchingEggPrimaryPhotos] = useState<
+    Record<string, InventoryPrimaryPhoto>
+  >({});
   const [reservedByItemId, setReservedByItemId] = useState<
     Record<string, number>
   >({});
@@ -295,6 +361,8 @@ export function InventoryManagement() {
         reservedResult,
         equipmentResult,
         processedPoultryResult,
+        hatchingEggResult,
+        hatchingEggMediaResult,
       ] = await Promise.all([
         supabase
           .from("seller_inventory_management")
@@ -332,6 +400,25 @@ export function InventoryManagement() {
           .eq("moderation_status", "normal")
           .order("updated_at", { ascending: false })
           .returns<ProcessedPoultryInventoryRow[]>(),
+        supabase
+          .from("seller_hatching_egg_inventory_management")
+          .select("*")
+          .eq("store_id", seller.store_id)
+          .neq("visibility_status", "archived")
+          .eq("moderation_status", "normal")
+          .order("updated_at", { ascending: false })
+          .returns<HatchingEggInventoryRow[]>(),
+        supabase
+          .from("seller_media_management")
+          .select("entity_id, public_url, alt_text")
+          .eq("store_id", seller.store_id)
+          .eq("entity_type", "hatching_egg_inventory_item")
+          .eq("display_context", "gallery")
+          .eq("visibility_status", "active")
+          .eq("moderation_status", "normal")
+          .order("is_featured", { ascending: false })
+          .order("sort_order", { ascending: true })
+          .returns<InventoryMediaRow[]>(),
       ]);
 
       if (!isMounted) return;
@@ -340,7 +427,9 @@ export function InventoryManagement() {
         inventoryResult.error ??
         reservedResult.error ??
         equipmentResult.error ??
-        processedPoultryResult.error;
+        processedPoultryResult.error ??
+        hatchingEggResult.error ??
+        hatchingEggMediaResult.error;
 
       if (firstError) {
         setLoadError(firstError.message);
@@ -351,6 +440,10 @@ export function InventoryManagement() {
       setRows(inventoryResult.data ?? []);
       setEquipmentRows(equipmentResult.data ?? []);
       setProcessedPoultryRows(processedPoultryResult.data ?? []);
+      setHatchingEggRows(hatchingEggResult.data ?? []);
+      setHatchingEggPrimaryPhotos(
+        buildPrimaryPhotoMap(hatchingEggMediaResult.data ?? []),
+      );
       setReservedByItemId(
         buildReservedMap(reservedResult.data ?? [], "inventory_item_id"),
       );
@@ -382,6 +475,8 @@ export function InventoryManagement() {
       buildFlatInventoryItems({
         draftQuantities,
         equipmentRows,
+        hatchingEggPrimaryPhotos,
+        hatchingEggRows,
         processedPoultryRows,
         reservedByEquipmentId,
         reservedByItemId,
@@ -391,6 +486,8 @@ export function InventoryManagement() {
     [
       draftQuantities,
       equipmentRows,
+      hatchingEggPrimaryPhotos,
+      hatchingEggRows,
       processedPoultryRows,
       reservedByEquipmentId,
       reservedByItemId,
@@ -1566,6 +1663,7 @@ function FlatInventoryTableRow({
   updateDraftQuantity: (item: FlatInventoryItem, nextValue: string) => void;
 }) {
   const isChanged = isInventoryItemChanged(item, draftQuantities);
+  const actionLabel = getInventoryActionLabel(item);
 
   return (
     <tr
@@ -1593,10 +1691,11 @@ function FlatInventoryTableRow({
       ) : null}
       <td className="px-3 py-3 align-top">
         <Link
-          className="font-semibold text-stone-950 underline-offset-4 hover:underline"
+          className="inline-flex min-w-0 items-center gap-2 font-semibold text-stone-950 underline-offset-4 hover:underline"
           href={item.manageHref}
         >
-          {item.breedOrItem}
+          <InventoryItemThumbnail item={item} />
+          <span className="min-w-0">{item.breedOrItem}</span>
         </Link>
       </td>
       {tab === "live_poultry" ? (
@@ -1653,7 +1752,7 @@ function FlatInventoryTableRow({
           className="inline-flex min-h-8 items-center justify-center rounded-md bg-emerald-800 px-3 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
           href={item.manageHref}
         >
-          Edit
+          {actionLabel}
         </Link>
       </td>
     </tr>
@@ -1674,6 +1773,7 @@ function FlatInventoryCard({
   updateDraftQuantity: (item: FlatInventoryItem, nextValue: string) => void;
 }) {
   const isChanged = isInventoryItemChanged(item, draftQuantities);
+  const actionLabel = getInventoryActionLabel(item);
 
   return (
     <article
@@ -1695,9 +1795,12 @@ function FlatInventoryCard({
             onChange={() => onToggleSelection(item.id)}
           />
           <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold text-stone-950">
-              {item.breedOrItem}
-            </h2>
+            <div className="flex min-w-0 items-center gap-2">
+              <InventoryItemThumbnail item={item} />
+              <h2 className="truncate text-base font-semibold text-stone-950">
+                {item.breedOrItem}
+              </h2>
+            </div>
             <p className="mt-0.5 text-sm leading-5 text-stone-600">
               {getInventoryItemSubtitle(item)}
             </p>
@@ -1761,9 +1864,24 @@ function FlatInventoryCard({
         className="mt-4 inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
         href={item.manageHref}
       >
-        Edit
+        {actionLabel}
       </Link>
     </article>
+  );
+}
+
+function InventoryItemThumbnail({ item }: { item: FlatInventoryItem }) {
+  if (!item.primaryPhoto) return null;
+
+  return (
+    <Image
+      alt={item.primaryPhoto.alt}
+      className="size-10 shrink-0 rounded-md border border-stone-200 object-cover"
+      height={40}
+      unoptimized
+      src={item.primaryPhoto.url}
+      width={40}
+    />
   );
 }
 
@@ -1793,6 +1911,14 @@ function AvailableQuantityControl({
   item: FlatInventoryItem;
   updateDraftQuantity: (item: FlatInventoryItem, nextValue: string) => void;
 }) {
+  if (item.kind === "hatching_egg") {
+    return (
+      <span className="inline-flex h-12 min-w-24 items-center justify-center rounded-md border border-stone-200 bg-stone-50 px-2 text-lg font-bold text-stone-950 sm:h-8 sm:min-w-16 sm:text-sm sm:font-semibold">
+        {item.availableQuantity}
+      </span>
+    );
+  }
+
   const draftId = getDraftQuantityId(item);
   const quantityValue =
     draftQuantities[draftId] ?? String(getOriginalQuantity(item));
@@ -1847,16 +1973,14 @@ function getAvailabilityFilterLabel(value: AvailabilityFilter) {
 }
 
 function getProcessedPoultryManageHref(row: ProcessedPoultryInventoryRow) {
-  if (row.visibility_status === "hidden") {
-    return `/dashboard/listings/new/processed-poultry/${row.processed_poultry_inventory_item_id}`;
-  }
-
-  return `/dashboard/inventory/processed-poultry/${row.processed_poultry_inventory_item_id}`;
+  return `/dashboard/listings/new/processed-poultry/${row.processed_poultry_inventory_item_id}`;
 }
 
 function buildFlatInventoryItems({
   draftQuantities,
   equipmentRows,
+  hatchingEggPrimaryPhotos,
+  hatchingEggRows,
   processedPoultryRows,
   reservedByEquipmentId,
   reservedByItemId,
@@ -1865,6 +1989,8 @@ function buildFlatInventoryItems({
 }: {
   draftQuantities: Record<string, string>;
   equipmentRows: EquipmentInventoryRow[];
+  hatchingEggPrimaryPhotos: Record<string, InventoryPrimaryPhoto>;
+  hatchingEggRows: HatchingEggInventoryRow[];
   processedPoultryRows: ProcessedPoultryInventoryRow[];
   reservedByEquipmentId: Record<string, number>;
   reservedByItemId: Record<string, number>;
@@ -1899,8 +2025,9 @@ function buildFlatInventoryItems({
         isCleared: Boolean(row.cleared_at),
         manageHref:
           row.batch_type === "hatching_eggs"
-            ? `/dashboard/listings/${row.listing_batch_id}`
+            ? "/dashboard/inventory"
             : `/dashboard/inventory/${row.listing_batch_id}/edit`,
+        primaryPhoto: null,
         row,
         searchText: [
           row.breed_display_name,
@@ -1909,6 +2036,44 @@ function buildFlatInventoryItems({
           row.custom_inventory_label,
           availability.label,
           formatInventoryStatus(row.operational_availability_status),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase(),
+      };
+    }),
+    ...hatchingEggRows.map((row): FlatInventoryItem => {
+      const availability = getStandaloneHatchingEggAvailability(row);
+
+      return {
+        kind: "hatching_egg",
+        productTab: "hatching_eggs",
+        id: `hatching_egg:${row.hatching_egg_inventory_item_id}`,
+        species: row.species_name,
+        speciesFilterValue: row.species_slug,
+        breedFilterValue: row.item_name,
+        breedOrItem: row.item_name,
+        typeSex: "Hatching Eggs",
+        hatchDate: null,
+        availableDate: row.available_date,
+        ageDays: null,
+        ageLabel: "--",
+        availableQuantity: row.quantity_available,
+        reservedQuantity: 0,
+        price: row.price,
+        availabilityLabel: availability.label,
+        availabilityValue: availability.value,
+        isCleared: false,
+        manageHref: `/dashboard/listings/new/birds/hatching-eggs/${row.hatching_egg_inventory_item_id}`,
+        primaryPhoto:
+          hatchingEggPrimaryPhotos[row.hatching_egg_inventory_item_id] ?? null,
+        row,
+        searchText: [
+          row.item_name,
+          row.species_name,
+          "Hatching Eggs",
+          row.description,
+          availability.label,
         ]
           .filter(Boolean)
           .join(" ")
@@ -1949,6 +2114,7 @@ function buildFlatInventoryItems({
         availabilityValue: availability.value,
         isCleared: false,
         manageHref: getProcessedPoultryManageHref(row),
+        primaryPhoto: null,
         row,
         searchText: [
           row.product_name,
@@ -1993,7 +2159,8 @@ function buildFlatInventoryItems({
         availabilityLabel: availability.label,
         availabilityValue: availability.value,
         isCleared: false,
-        manageHref: `/dashboard/inventory/equipment/${row.equipment_inventory_item_id}`,
+        manageHref: `/dashboard/listings/new/equipment-supplies/${row.equipment_inventory_item_id}`,
+        primaryPhoto: null,
         row,
         searchText: [
           row.item_name,
@@ -2067,6 +2234,35 @@ function getSimpleInventoryAvailability(row: {
 
   if (row.visibility_status !== "active") {
     return { label: "Hidden", value: "hidden" };
+  }
+
+  return { label: "Available now", value: "available_now" };
+}
+
+function getStandaloneHatchingEggAvailability(
+  row: HatchingEggInventoryRow,
+): { label: string; value: AvailabilityFilter } {
+  if (row.visibility_status === "hidden") {
+    return { label: "Hidden", value: "hidden" };
+  }
+
+  if (
+    row.visibility_status === "sold_out" ||
+    row.operational_availability_status === "sold_out" ||
+    row.quantity_available <= 0
+  ) {
+    return { label: "Sold out", value: "sold_out" };
+  }
+
+  if (row.visibility_status !== "active") {
+    return { label: "Hidden", value: "hidden" };
+  }
+
+  if (row.available_date && isFutureDate(row.available_date)) {
+    return {
+      label: `Coming ${formatShortDate(row.available_date)}`,
+      value: "coming_soon",
+    };
   }
 
   return { label: "Available now", value: "available_now" };
@@ -2426,6 +2622,7 @@ function getInventoryItemUpdatedAt(item: FlatInventoryItem) {
 }
 
 function getSearchPlaceholder(tab: InventoryProductTab) {
+  if (tab === "hatching_eggs") return "Breed, variety, or species";
   if (tab === "processed_poultry") return "Product name";
   if (tab === "equipment") return "Item name";
 
@@ -2457,6 +2654,10 @@ function getEmptyInventoryDescription(tab: InventoryProductTab) {
 }
 
 function getInventoryItemSubtitle(item: FlatInventoryItem) {
+  if (item.kind === "hatching_egg") {
+    return [item.species, item.typeSex].filter(Boolean).join(" - ");
+  }
+
   if (item.kind === "processed_poultry") {
     return [item.productCategory, item.typeSex].filter(Boolean).join(" - ");
   }
@@ -2466,6 +2667,27 @@ function getInventoryItemSubtitle(item: FlatInventoryItem) {
   }
 
   return [item.species, item.typeSex].filter(Boolean).join(" - ");
+}
+
+function getInventoryActionLabel(item: FlatInventoryItem) {
+  if (item.kind === "bird" && item.productTab === "hatching_eggs") {
+    return "View";
+  }
+
+  return "Edit";
+}
+
+function buildPrimaryPhotoMap(rows: InventoryMediaRow[]) {
+  return rows.reduce<Record<string, InventoryPrimaryPhoto>>((photos, row) => {
+    if (!row.public_url || photos[row.entity_id]) return photos;
+
+    photos[row.entity_id] = {
+      url: row.public_url,
+      alt: row.alt_text || "Hatching eggs inventory photo",
+    };
+
+    return photos;
+  }, {});
 }
 
 function buildReservedMap(
@@ -2630,6 +2852,9 @@ function isInventoryItemChanged(
 
 function getDraftQuantityId(item: FlatInventoryItem) {
   if (item.kind === "bird") return item.row.inventory_item_id;
+  if (item.kind === "hatching_egg") {
+    return item.row.hatching_egg_inventory_item_id;
+  }
   if (item.kind === "equipment") return item.row.equipment_inventory_item_id;
 
   return item.row.processed_poultry_inventory_item_id;
