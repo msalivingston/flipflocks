@@ -481,7 +481,7 @@ export function groupInventoryByProduct(
 ) {
   const groups = new Map<string, StorefrontInventoryItem[]>();
 
-  for (const item of items) {
+  for (const item of items.filter(isStorefrontCardEligibleInventoryItem)) {
     const current = groups.get(item.listing_batch_breed_id) ?? [];
     current.push(item);
     groups.set(item.listing_batch_breed_id, current);
@@ -490,6 +490,16 @@ export function groupInventoryByProduct(
   return Array.from(groups.values()).map((group) =>
     toStorefrontProduct(group, profileImages),
   );
+}
+
+function isStorefrontCardEligibleInventoryItem(item: StorefrontInventoryItem) {
+  if (!isLivePoultryStorefrontItem(item)) return true;
+
+  return item.quantity_available > 0 && item.buyer_availability_code !== "sold_out";
+}
+
+function isLivePoultryStorefrontItem(item: StorefrontInventoryItem) {
+  return item.batch_type !== "hatching_eggs" && item.inventory_type !== "hatching_eggs";
 }
 
 export function groupHatchingEggInventoryByProduct(
