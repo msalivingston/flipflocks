@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { supabase } from "@/lib/supabase";
+import { ListingShareDialog } from "../../../_components/listing-share-dialog";
 import { PhotoManager, type DashboardPhoto } from "../../../_components/photo-manager";
 import { PlanUpgradePrompt } from "../../../_components/plan-upgrade-prompt";
 import { useSellerContext } from "../../../_components/seller-context";
@@ -19,6 +20,7 @@ import {
   sellerMediaSelect,
   type ListingPhotoItem,
 } from "../../../_components/processed-poultry-photos";
+import { buildPublicListingPath } from "../../../_lib/public-listing-url";
 import type { ReferenceSpecies } from "../../../_lib/seller-types";
 import {
   ListingPhotosSection,
@@ -90,6 +92,13 @@ type PoultryProductsOnePageFormProps = {
   initialProcessedPoultryItemId?: string;
 };
 
+type PublishSuccessDialogState = {
+  listingTitle: string;
+  publicPath: ReturnType<typeof buildPublicListingPath>;
+  shareText: string | null;
+  summary: string | null;
+};
+
 const emptyForm: PoultryProductFormState = {
   availableDate: "",
   description: "",
@@ -145,6 +154,9 @@ export function PoultryProductsOnePageForm({
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isStartOverDialogOpen, setIsStartOverDialogOpen] = useState(false);
+  const [publishSuccessDialog, setPublishSuccessDialog] =
+    useState<PublishSuccessDialogState | null>(null);
+  const isNavigatingAfterPublishRef = useRef(false);
   const isEditMode = Boolean(initialProcessedPoultryItemId);
 
   useEffect(() => {
@@ -218,11 +230,13 @@ export function PoultryProductsOnePageForm({
   const productDetailsComplete = validateProductDetails(form).length === 0;
   const descriptionComplete = form.description.trim().length > 0;
   const publishDisabledReason = getPublishDisabledReason({
-    isPublishing: publishStatus === "publishing",
+    isPublishing: publishStatus === "publishing" || Boolean(publishSuccessDialog),
     productDetailsComplete,
   });
   const saveDraftDisabledReason =
-    saveDraftStatus === "saving" || publishStatus === "publishing"
+    saveDraftStatus === "saving" ||
+    publishStatus === "publishing" ||
+    publishSuccessDialog
       ? "Save already in progress."
       : null;
   const hasUnsavedChanges =
@@ -417,6 +431,7 @@ export function PoultryProductsOnePageForm({
     setActionMessage(null);
     if (saveDraftStatus === "success") setSaveDraftStatus("idle");
     if (publishStatus === "success") setPublishStatus("idle");
+    setPublishSuccessDialog(null);
   }
 
   function addPendingPhotos(files: FileList | null) {
@@ -636,11 +651,18 @@ export function PoultryProductsOnePageForm({
   }
 
   async function handlePublish() {
-    if (publishStatus === "publishing" || saveDraftStatus === "saving") return;
+    if (
+      publishStatus === "publishing" ||
+      saveDraftStatus === "saving" ||
+      publishSuccessDialog
+    ) {
+      return;
+    }
 
     setPublishStatus("publishing");
     setActionError(null);
     setActionMessage(null);
+    setPublishSuccessDialog(null);
 
     const saveResult = await saveDraft();
 
@@ -677,6 +699,23 @@ export function PoultryProductsOnePageForm({
 
     setSavedFormSnapshot(getFormSnapshot(form));
     setPublishStatus("success");
+    setPublishSuccessDialog({
+      listingTitle: form.productName.trim() || "Poultry product",
+      publicPath: buildPublicListingPath({
+        listingType: "poultry_products",
+        processedPoultryItemId: saveResult.processedPoultryItemId,
+        storeSlug: seller?.store_slug,
+      }),
+      shareText: buildPoultryProductShareText(form, seller?.store_name),
+      summary: buildPoultryProductShareSummary(form),
+    });
+  }
+
+  function navigateToInventoryAfterPublish() {
+    if (isNavigatingAfterPublishRef.current) return;
+
+    isNavigatingAfterPublishRef.current = true;
+    setPublishSuccessDialog(null);
     router.push("/dashboard/inventory");
   }
 
@@ -1000,6 +1039,18 @@ export function PoultryProductsOnePageForm({
           onConfirm={resetForm}
         />
       ) : null}
+      <ListingShareDialog
+        isStorePublic={Boolean(seller?.is_publicly_available)}
+        listingTitle={publishSuccessDialog?.listingTitle ?? "Poultry product"}
+        mode="published"
+        open={Boolean(publishSuccessDialog)}
+        publicPath={publishSuccessDialog?.publicPath}
+        shareText={publishSuccessDialog?.shareText}
+        storeName={seller?.store_name ?? "your store"}
+        summary={publishSuccessDialog?.summary}
+        onClose={navigateToInventoryAfterPublish}
+        onDone={navigateToInventoryAfterPublish}
+      />
     </DashboardPageContent>
   );
 }
@@ -1468,6 +1519,57 @@ function formatCurrency(value: string) {
   }).format(Number(value || 0));
 }
 
+function buildPoultryProductShareText(
+  form: PoultryProductFormState,
+  storeName: string | null | undefined,
+) {
+  const listingTitle = stripTrailingSentencePunctuation(form.productName);
+  const sellerStoreName = stripTrailingSentencePunctuation(storeName ?? "");
+  const price = isValidMoney(form.price) ? formatCurrency(form.price) : null;
+  const priceUnit = formatPoultryProductShareUnit(form.packageSize);
+  const sentences = [
+    sellerStoreName ? `${listingTitle} from ${sellerStoreName}` : listingTitle,
+    formatPoultryProductAvailability(form),
+    price ? `${price}${priceUnit ? ` per ${priceUnit}` : ""}` : null,
+  ]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map((value) => `${stripTrailingSentencePunctuation(value)}.`);
+
+  return sentences.length > 0 ? sentences.join(" ") : null;
+}
+
+function buildPoultryProductShareSummary(form: PoultryProductFormState) {
+  const price = isValidMoney(form.price) ? formatCurrency(form.price) : null;
+  const priceUnit = formatPoultryProductShareUnit(form.packageSize);
+  const summaryParts = [
+    formatPoultryProductAvailability(form),
+    price ? `${price}${priceUnit ? ` per ${priceUnit}` : ""}` : null,
+  ].filter(Boolean);
+
+  return summaryParts.length > 0 ? summaryParts.join(" - ") : null;
+}
+
+function formatPoultryProductAvailability(form: PoultryProductFormState) {
+  const quantity = Number(form.quantityAvailable);
+
+  if (Number.isFinite(quantity) && quantity <= 0) return "Sold out";
+  if (form.availableDate) {
+    return isDateTodayOrEarlier(form.availableDate)
+      ? "Available now"
+      : `Available ${formatShareDate(form.availableDate)}`;
+  }
+
+  return null;
+}
+
+function formatPoultryProductShareUnit(packageSize: string) {
+  const unit = stripTrailingSentencePunctuation(packageSize)
+    .replace(/^per\s+/i, "")
+    .trim();
+
+  return unit || null;
+}
+
 function formatDate(value: string) {
   if (!value) return "Not selected";
 
@@ -1476,6 +1578,28 @@ function formatDate(value: string) {
     month: "short",
     year: "numeric",
   }).format(new Date(`${value.slice(0, 10)}T00:00:00`));
+}
+
+function formatShareDate(value: string) {
+  if (!value) return null;
+
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${value.slice(0, 10)}T00:00:00`));
+}
+
+function isDateTodayOrEarlier(value: string) {
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Number.isFinite(date.getTime()) && date <= today;
+}
+
+function stripTrailingSentencePunctuation(value: string) {
+  return value.trim().replace(/[.!?]+$/g, "");
 }
 
 function getPublishDisabledReason({

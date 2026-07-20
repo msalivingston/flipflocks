@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { supabase } from "@/lib/supabase";
+import { ListingShareDialog } from "../../../_components/listing-share-dialog";
 import { PhotoManager, type DashboardPhoto } from "../../../_components/photo-manager";
 import { PlanUpgradePrompt } from "../../../_components/plan-upgrade-prompt";
 import { useSellerContext } from "../../../_components/seller-context";
@@ -19,6 +20,7 @@ import {
   sellerMediaSelect,
   type ListingPhotoItem,
 } from "../../../_components/equipment-photos";
+import { buildPublicListingPath } from "../../../_lib/public-listing-url";
 import {
   equipmentCategories,
   equipmentConditions,
@@ -87,6 +89,13 @@ type EquipmentSuppliesOnePageFormProps = {
   initialEquipmentItemId?: string;
 };
 
+type PublishSuccessDialogState = {
+  listingTitle: string;
+  publicPath: ReturnType<typeof buildPublicListingPath>;
+  shareText: string | null;
+  summary: string | null;
+};
+
 const todayIsoDate = new Date().toISOString().slice(0, 10);
 
 const emptyForm: EquipmentFormState = {
@@ -132,6 +141,9 @@ export function EquipmentSuppliesOnePageForm({
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isStartOverDialogOpen, setIsStartOverDialogOpen] = useState(false);
+  const [publishSuccessDialog, setPublishSuccessDialog] =
+    useState<PublishSuccessDialogState | null>(null);
+  const isNavigatingAfterPublishRef = useRef(false);
   const isEditMode = Boolean(initialEquipmentItemId);
 
   const formSnapshot = useMemo(() => getFormSnapshot(form), [form]);
@@ -145,11 +157,13 @@ export function EquipmentSuppliesOnePageForm({
   const itemDetailsComplete = validateItemDetails(form).length === 0;
   const descriptionComplete = form.description.trim().length > 0;
   const saveDraftDisabledReason =
-    saveDraftStatus === "saving" || publishStatus === "publishing"
+    saveDraftStatus === "saving" ||
+    publishStatus === "publishing" ||
+    publishSuccessDialog
       ? "Save already in progress."
       : null;
   const publishDisabledReason = getPublishDisabledReason({
-    isPublishing: publishStatus === "publishing",
+    isPublishing: publishStatus === "publishing" || Boolean(publishSuccessDialog),
     itemDetailsComplete,
   });
   const hasUnsavedChanges =
@@ -343,6 +357,7 @@ export function EquipmentSuppliesOnePageForm({
     setActionMessage(null);
     if (saveDraftStatus === "success") setSaveDraftStatus("idle");
     if (publishStatus === "success") setPublishStatus("idle");
+    setPublishSuccessDialog(null);
   }
 
   function addPendingPhotos(files: FileList | null) {
@@ -557,11 +572,18 @@ export function EquipmentSuppliesOnePageForm({
   }
 
   async function handlePublish() {
-    if (publishStatus === "publishing" || saveDraftStatus === "saving") return;
+    if (
+      publishStatus === "publishing" ||
+      saveDraftStatus === "saving" ||
+      publishSuccessDialog
+    ) {
+      return;
+    }
 
     setPublishStatus("publishing");
     setActionError(null);
     setActionMessage(null);
+    setPublishSuccessDialog(null);
 
     const saveResult = await saveDraft();
 
@@ -597,6 +619,23 @@ export function EquipmentSuppliesOnePageForm({
 
     setSavedFormSnapshot(getFormSnapshot(form));
     setPublishStatus("success");
+    setPublishSuccessDialog({
+      listingTitle: form.itemName.trim() || "Equipment or supply item",
+      publicPath: buildPublicListingPath({
+        listingType: "equipment_supplies",
+        equipmentItemId: saveResult.equipmentItemId,
+        storeSlug: seller?.store_slug,
+      }),
+      shareText: buildEquipmentShareText(form, seller?.store_name),
+      summary: buildEquipmentShareSummary(form),
+    });
+  }
+
+  function navigateToInventoryAfterPublish() {
+    if (isNavigatingAfterPublishRef.current) return;
+
+    isNavigatingAfterPublishRef.current = true;
+    setPublishSuccessDialog(null);
     router.push("/dashboard/inventory");
   }
 
@@ -928,6 +967,20 @@ export function EquipmentSuppliesOnePageForm({
           </div>
         </div>
       ) : null}
+      <ListingShareDialog
+        isStorePublic={Boolean(seller?.is_publicly_available)}
+        listingTitle={
+          publishSuccessDialog?.listingTitle ?? "Equipment or supply item"
+        }
+        mode="published"
+        open={Boolean(publishSuccessDialog)}
+        publicPath={publishSuccessDialog?.publicPath}
+        shareText={publishSuccessDialog?.shareText}
+        storeName={seller?.store_name ?? "your store"}
+        summary={publishSuccessDialog?.summary}
+        onClose={navigateToInventoryAfterPublish}
+        onDone={navigateToInventoryAfterPublish}
+      />
     </DashboardPageContent>
   );
 }
@@ -1291,6 +1344,33 @@ function formatCurrency(value: string) {
   }).format(amount);
 }
 
+function buildEquipmentShareText(
+  form: EquipmentFormState,
+  storeName: string | null | undefined,
+) {
+  const listingTitle = stripTrailingSentencePunctuation(form.itemName);
+  const sellerStoreName = stripTrailingSentencePunctuation(storeName ?? "");
+  const price = isValidMoney(form.price) ? formatCurrency(form.price) : null;
+  const sentences = [
+    sellerStoreName ? `${listingTitle} from ${sellerStoreName}` : listingTitle,
+    form.condition ? `${form.condition} condition` : null,
+    price,
+  ]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map((value) => `${stripTrailingSentencePunctuation(value)}.`);
+
+  return sentences.length > 0 ? sentences.join(" ") : null;
+}
+
+function buildEquipmentShareSummary(form: EquipmentFormState) {
+  const summaryParts = [
+    form.condition ? `${form.condition} condition` : null,
+    isValidMoney(form.price) ? formatCurrency(form.price) : null,
+  ].filter(Boolean);
+
+  return summaryParts.length > 0 ? summaryParts.join(" - ") : null;
+}
+
 function formatDate(value: string) {
   if (!value) return "Not selected";
 
@@ -1299,4 +1379,8 @@ function formatDate(value: string) {
     month: "short",
     year: "numeric",
   }).format(new Date(`${value}T00:00:00`));
+}
+
+function stripTrailingSentencePunctuation(value: string) {
+  return value.trim().replace(/[.!?]+$/g, "");
 }
