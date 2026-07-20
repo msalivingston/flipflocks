@@ -393,13 +393,24 @@ function toEquipmentCard(item: StorefrontEquipmentItem): StorefrontListingCard {
 }
 
 function toProductCard(product: StorefrontProduct): StorefrontListingCard {
+  const purchasableOptions = product.options.filter(
+    (option) => option.canCheckout && option.quantityAvailable > 0,
+  );
+  const batchFilters =
+    product.productSource === "listing_inventory"
+      ? purchasableOptions.map((option) => ({
+          ageFilterDays: option.ageFilterDays,
+          availabilityCode: option.buyerAvailabilityCode,
+        }))
+      : undefined;
+
   return {
-    ageFilterDays: product.options
-      .filter((option) => option.quantityAvailable > 0)
+    ageFilterDays: purchasableOptions
       .map((option) => option.ageFilterDays)
       .filter((age): age is number => age !== null),
     availabilityCode: product.availabilityCode,
     availabilityLabel: formatAvailableBadge(product.totalQuantityAvailable),
+    batchFilters,
     breedFilter: product.name,
     description: product.description,
     detail: product.quantityLabel,

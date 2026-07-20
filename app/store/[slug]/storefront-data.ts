@@ -188,6 +188,7 @@ export type StorefrontHatchingEggItem = {
 
 export type StorefrontPurchaseOption = {
   inventoryItemId: string;
+  listingBatchBreedId: string | null;
   inventoryType: string;
   label: string;
   ageLabel: string;
@@ -482,9 +483,9 @@ export function groupInventoryByProduct(
   const groups = new Map<string, StorefrontInventoryItem[]>();
 
   for (const item of items.filter(isStorefrontCardEligibleInventoryItem)) {
-    const current = groups.get(item.listing_batch_breed_id) ?? [];
+    const current = groups.get(item.seller_breed_profile_id) ?? [];
     current.push(item);
-    groups.set(item.listing_batch_breed_id, current);
+    groups.set(item.seller_breed_profile_id, current);
   }
 
   return Array.from(groups.values()).map((group) =>
@@ -538,7 +539,7 @@ export function toStorefrontProduct(
   const availabilityCode = summarizeAvailability(sorted);
 
   return {
-    productId: first.listing_batch_breed_id,
+    productId: first.seller_breed_profile_id,
     productSource: "listing_inventory",
     sellerBreedProfileId: first.seller_breed_profile_id,
     listingBatchId: first.listing_batch_id,
@@ -622,6 +623,7 @@ export function toPurchaseOption(
 
   return {
     inventoryItemId: item.inventory_item_id,
+    listingBatchBreedId: item.listing_batch_breed_id,
     inventoryType: item.inventory_type,
     label: [ageLabel, typeLabel].filter(Boolean).join(" - ") || typeLabel,
     ageLabel,
@@ -643,6 +645,7 @@ export function toHatchingEggPurchaseOption(
 ): StorefrontPurchaseOption {
   return {
     inventoryItemId: item.hatching_egg_inventory_item_id,
+    listingBatchBreedId: null,
     inventoryType: "hatching_eggs",
     label: [item.buyer_availability_label, formatHatchingEggMinimumOrder(item)]
       .filter(Boolean)
@@ -687,7 +690,15 @@ export function findProduct(
   products: StorefrontProduct[],
   productId: string,
 ) {
-  return products.find((product) => product.productId === productId) ?? null;
+  return (
+    products.find(
+      (product) =>
+        product.productId === productId ||
+        product.options.some(
+          (option) => option.listingBatchBreedId === productId,
+        ),
+    ) ?? null
+  );
 }
 
 export function previewText(value: string | null, fallback: string) {

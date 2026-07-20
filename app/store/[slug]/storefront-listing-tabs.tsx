@@ -19,6 +19,7 @@ export type StorefrontListingCard = {
   ageFilterDays?: number[];
   availabilityCode: string;
   availabilityLabel: string;
+  batchFilters?: StorefrontListingCardBatchFilter[];
   breedFilter?: string | null;
   categoryFilter?: string | null;
   conditionFilter?: string | null;
@@ -31,6 +32,11 @@ export type StorefrontListingCard = {
   price: string;
   speciesFilter?: string | null;
   title: string;
+};
+
+export type StorefrontListingCardBatchFilter = {
+  ageFilterDays: number | null;
+  availabilityCode: string;
 };
 
 export type StorefrontListingSection = {
@@ -627,14 +633,7 @@ function filterCards(
       return false;
     }
 
-    if (
-      filters.age !== "all" &&
-      !(card.ageFilterDays ?? []).some((ageInDays) =>
-        matchesAgeRange(ageInDays, filters.age),
-      )
-    ) {
-      return false;
-    }
+    if (!matchesBatchFilters(card, filters)) return false;
 
     if (
       filters.species !== "all" &&
@@ -668,10 +667,7 @@ function filterCards(
       return false;
     }
 
-    if (
-      filters.availability !== "all" &&
-      card.availabilityCode !== filters.availability
-    ) {
+    if (!card.batchFilters && !matchesCardAvailability(card, filters.availability)) {
       return false;
     }
 
@@ -684,19 +680,68 @@ function filterCards(
 }
 
 const ageRangeOptions = [
-  { label: "1-14 days", value: "1-14-days" },
+  { label: "0-14 days", value: "1-14-days" },
   { label: "2-12 weeks", value: "2-12-weeks" },
   { label: "12-20 weeks", value: "12-20-weeks" },
   { label: "20-52 weeks", value: "20-52-weeks" },
   { label: "1 year+", value: "1-year-plus" },
 ];
 
+function matchesBatchFilters(
+  card: StorefrontListingCard,
+  filters: {
+    age: string;
+    availability: string;
+  },
+) {
+  if (!card.batchFilters) {
+    return matchesCardAge(card, filters.age);
+  }
+
+  if (filters.age === "all" && filters.availability === "all") return true;
+
+  return card.batchFilters.some(
+    (batch) =>
+      matchesBatchAge(batch, filters.age) &&
+      matchesAvailabilityCode(batch.availabilityCode, filters.availability),
+  );
+}
+
+function matchesCardAge(card: StorefrontListingCard, ageFilter: string) {
+  if (ageFilter === "all") return true;
+
+  return (card.ageFilterDays ?? []).some((ageInDays) =>
+    matchesAgeRange(ageInDays, ageFilter),
+  );
+}
+
+function matchesBatchAge(
+  batch: StorefrontListingCardBatchFilter,
+  ageFilter: string,
+) {
+  if (ageFilter === "all") return true;
+  if (batch.ageFilterDays === null) return false;
+
+  return matchesAgeRange(batch.ageFilterDays, ageFilter);
+}
+
+function matchesCardAvailability(
+  card: StorefrontListingCard,
+  availabilityFilter: string,
+) {
+  return matchesAvailabilityCode(card.availabilityCode, availabilityFilter);
+}
+
+function matchesAvailabilityCode(code: string, availabilityFilter: string) {
+  return availabilityFilter === "all" || code === availabilityFilter;
+}
+
 function matchesAgeRange(ageInDays: number, range: string) {
   if (!Number.isFinite(ageInDays)) return false;
 
   const wholeDays = Math.floor(ageInDays);
 
-  if (range === "1-14-days") return wholeDays >= 1 && wholeDays <= 14;
+  if (range === "1-14-days") return wholeDays >= 0 && wholeDays <= 14;
   if (range === "2-12-weeks") return wholeDays >= 14 && wholeDays <= 84;
   if (range === "12-20-weeks") return wholeDays >= 84 && wholeDays <= 140;
   if (range === "20-52-weeks") return wholeDays >= 140 && wholeDays <= 364;
