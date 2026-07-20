@@ -1,10 +1,14 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+import { headers } from "next/headers";
+import { cache } from "react";
 import {
   AvailabilityBadge,
   EmptyStorefront,
   StorefrontPage,
   StorefrontShell,
   cx,
+  toPublicImageUrl,
 } from "../../storefront-ui";
 import {
   StorefrontMedia,
@@ -27,32 +31,63 @@ import { storefrontSerifClass } from "../../storefront-fonts";
 import { StorefrontProductGallery } from "../../storefront-product-gallery";
 import { ProductOrderOptions } from "./product-order-options";
 
+type StorefrontProductPageParams = Promise<{ productId: string; slug: string }>;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: StorefrontProductPageParams;
+}): Promise<Metadata> {
+  const { productId, slug } = await params;
+  const origin = await getRequestOrigin();
+  const canonicalUrl = origin
+    ? new URL(buildCanonicalProductPath(slug, productId), origin).toString()
+    : null;
+  const data = await loadProductPageData(slug, productId);
+
+  if (data.error || !data.store || !data.product) {
+    const title = "Product not found | FlockFront";
+    const description = "This product may no longer be visible on FlockFront.";
+
+    return buildProductMetadata({
+      canonicalUrl,
+      description,
+      image: null,
+      title,
+    });
+  }
+
+  const gallery = buildProductGallery(data.product, data.gallery);
+  const image = getProductMetadataImage(data.product, gallery, origin);
+  const title = `${data.product.name} | ${data.store.store_name}`;
+  const description = buildMetadataDescription({
+    isHatchingEggProduct: data.isHatchingEggProduct,
+    product: data.product,
+    storeName: data.store.store_name,
+  });
+
+  return buildProductMetadata({
+    canonicalUrl,
+    description,
+    image,
+    title,
+  });
+}
+
 export default async function StorefrontProductPage({
   params,
 }: {
-  params: Promise<{ productId: string; slug: string }>;
+  params: StorefrontProductPageParams;
 }) {
   const { productId, slug } = await params;
-
-  const [
-    homeResult,
-    inventoryResult,
-    equipmentResult,
-    hatchingEggResult,
-    processedPoultryResult,
-  ] = await Promise.all([
-    loadStorefrontHome(slug),
-    loadStorefrontInventory(slug),
-    loadStorefrontEquipment(slug),
-    loadStorefrontHatchingEggInventory(slug),
-    loadStorefrontProcessedPoultry(slug),
-  ]);
-  const error =
-    homeResult.error ??
-    inventoryResult.error ??
-    equipmentResult.error ??
-    hatchingEggResult.error ??
-    processedPoultryResult.error;
+  const {
+    categories,
+    error,
+    gallery: linkedGallery,
+    isHatchingEggProduct,
+    product,
+    store,
+  } = await loadProductPageData(slug, productId);
 
   if (error) {
     return (
@@ -67,8 +102,6 @@ export default async function StorefrontProductPage({
     );
   }
 
-  const store = homeResult.data;
-
   if (!store) {
     return (
       <StorefrontShell>
@@ -81,26 +114,6 @@ export default async function StorefrontProductPage({
       </StorefrontShell>
     );
   }
-
-  const livePoultryProducts = groupInventoryByProduct(
-    inventoryResult.data.filter(isLivePoultryItem),
-  );
-  const hatchingEggProducts = groupHatchingEggInventoryByProduct(
-    hatchingEggResult.data,
-  );
-  const selectedProduct = findSelectedProduct(
-    livePoultryProducts,
-    hatchingEggProducts,
-    productId,
-  );
-  const product = selectedProduct?.product ?? null;
-  const isHatchingEggProduct = selectedProduct?.category === "hatching_eggs";
-  const categories = getStorefrontCategoryAvailability({
-    equipmentCount: equipmentResult.data.length,
-    hatchingEggCount: hatchingEggProducts.length,
-    livePoultryCount: livePoultryProducts.length,
-    processedPoultryCount: processedPoultryResult.data.length,
-  });
 
   if (!product) {
     return (
@@ -115,22 +128,7 @@ export default async function StorefrontProductPage({
     );
   }
 
-  const galleryResult = await loadProductGallery(slug, product);
-
-  if (galleryResult.error) {
-    return (
-      <StorefrontShell>
-        <StorefrontPage size="narrow" className="py-12">
-          <EmptyStorefront
-            title="This product could not load"
-            description="Please refresh the page or return to the storefront."
-          />
-        </StorefrontPage>
-      </StorefrontShell>
-    );
-  }
-
-  const gallery = buildProductGallery(product, galleryResult.data);
+  const gallery = buildProductGallery(product, linkedGallery);
 
   return (
     <StorefrontChrome categories={categories} store={store}>
@@ -246,6 +244,221 @@ function ProductGallery({
       gallery={gallery}
     />
   );
+}
+
+const loadProductPageData = cache(async (slug: string, productId: string) => {
+  const [
+    homeResult,
+    inventoryResult,
+    equipmentResult,
+    hatchingEggResult,
+    processedPoultryResult,
+  ] = await Promise.all([
+    loadStorefrontHome(slug),
+    loadStorefrontInventory(slug),
+    loadStorefrontEquipment(slug),
+    loadStorefrontHatchingEggInventory(slug),
+    loadStorefrontProcessedPoultry(slug),
+  ]);
+  const error =
+    homeResult.error ??
+    inventoryResult.error ??
+    equipmentResult.error ??
+    hatchingEggResult.error ??
+    processedPoultryResult.error;
+  const livePoultryProducts = groupInventoryByProduct(
+    inventoryResult.data.filter(isLivePoultryItem),
+  );
+  const hatchingEggProducts = groupHatchingEggInventoryByProduct(
+    hatchingEggResult.data,
+  );
+  const selectedProduct = findSelectedProduct(
+    livePoultryProducts,
+    hatchingEggProducts,
+    productId,
+  );
+  const product = selectedProduct?.product ?? null;
+  const categories = getStorefrontCategoryAvailability({
+    equipmentCount: equipmentResult.data.length,
+    hatchingEggCount: hatchingEggProducts.length,
+    livePoultryCount: livePoultryProducts.length,
+    processedPoultryCount: processedPoultryResult.data.length,
+  });
+
+  if (error || !homeResult.data || !product) {
+    return {
+      categories,
+      error,
+      gallery: [] as StorefrontMedia[],
+      isHatchingEggProduct: selectedProduct?.category === "hatching_eggs",
+      product,
+      store: homeResult.data,
+    };
+  }
+
+  const galleryResult = await loadProductGallery(slug, product);
+
+  return {
+    categories,
+    error: galleryResult.error,
+    gallery: galleryResult.data,
+    isHatchingEggProduct: selectedProduct?.category === "hatching_eggs",
+    product,
+    store: homeResult.data,
+  };
+});
+
+function buildProductMetadata({
+  canonicalUrl,
+  description,
+  image,
+  title,
+}: {
+  canonicalUrl: string | null;
+  description: string;
+  image: ProductMetadataImage | null;
+  title: string;
+}): Metadata {
+  const metadata: Metadata = {
+    description,
+    title,
+    openGraph: {
+      description,
+      title,
+      type: "website",
+      ...(canonicalUrl ? { url: canonicalUrl } : {}),
+      ...(image
+        ? {
+            images: [
+              {
+                alt: image.alt,
+                url: image.url,
+                ...(image.width ? { width: image.width } : {}),
+                ...(image.height ? { height: image.height } : {}),
+              },
+            ],
+          }
+        : {}),
+    },
+    twitter: {
+      card: image ? "summary_large_image" : "summary",
+      description,
+      title,
+      ...(image ? { images: [image.url] } : {}),
+    },
+  };
+
+  if (canonicalUrl) {
+    metadata.alternates = {
+      canonical: canonicalUrl,
+    };
+  }
+
+  return metadata;
+}
+
+function buildMetadataDescription({
+  isHatchingEggProduct,
+  product,
+  storeName,
+}: {
+  isHatchingEggProduct: boolean;
+  product: StorefrontProduct;
+  storeName: string;
+}) {
+  const summary = [
+    product.name,
+    `from ${storeName}`,
+    product.pricingLabel ? `${product.pricingLabel} each` : null,
+    formatProductAvailabilityLabel(product, isHatchingEggProduct),
+  ]
+    .filter(Boolean)
+    .join(" - ");
+  const description = formatProductDescription(product.description);
+  const fallback = `View ${product.name} from ${storeName} on FlockFront.`;
+
+  return truncateMetadataDescription(
+    description ? `${summary}. ${description}` : summary || fallback,
+  );
+}
+
+type ProductMetadataImage = {
+  alt: string;
+  height: number | null;
+  url: string;
+  width: number | null;
+};
+
+function getProductMetadataImage(
+  product: StorefrontProduct,
+  gallery: StorefrontMedia[],
+  origin: string | null,
+): ProductMetadataImage | null {
+  const image = gallery[0];
+  const imageUrl = image?.public_url ?? product.imageUrl;
+  const absoluteUrl = toAbsoluteImageUrl(imageUrl, origin);
+
+  if (!absoluteUrl) return null;
+
+  return {
+    alt: image?.alt_text || product.imageAlt || product.name,
+    height: image?.height_px ?? null,
+    url: absoluteUrl,
+    width: image?.width_px ?? null,
+  };
+}
+
+function toAbsoluteImageUrl(value: string | null | undefined, origin: string | null) {
+  const trimmed = value?.trim();
+
+  if (!trimmed) return null;
+
+  const publicUrl = toPublicImageUrl(trimmed);
+
+  if (/^https?:\/\//i.test(publicUrl)) return publicUrl;
+  if (!origin || !publicUrl.startsWith("/")) return null;
+
+  try {
+    return new URL(publicUrl, origin).toString();
+  } catch {
+    return null;
+  }
+}
+
+async function getRequestOrigin() {
+  const headersList = await headers();
+  const host = getForwardedHeaderValue(headersList.get("x-forwarded-host")) ??
+    headersList.get("host");
+
+  if (!host) return null;
+
+  const proto =
+    getForwardedHeaderValue(headersList.get("x-forwarded-proto")) ??
+    (host.startsWith("localhost") || host.startsWith("127.0.0.1")
+      ? "http"
+      : "https");
+
+  try {
+    return new URL(`${proto}://${host}`).origin;
+  } catch {
+    return null;
+  }
+}
+
+function getForwardedHeaderValue(value: string | null) {
+  return value?.split(",")[0]?.trim() || null;
+}
+
+function buildCanonicalProductPath(slug: string, productId: string) {
+  return `/store/${encodeURIComponent(slug)}/products/${encodeURIComponent(productId)}`;
+}
+
+function truncateMetadataDescription(value: string) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+
+  if (normalized.length <= 180) return normalized;
+
+  return `${normalized.slice(0, 177).trimEnd()}...`;
 }
 
 function buildProductGallery(
