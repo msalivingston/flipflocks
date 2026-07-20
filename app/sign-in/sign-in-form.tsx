@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { PublicSignupCta } from "@/app/_components/public-signup-cta";
 import { PasswordResetRequest } from "@/app/_components/password-reset-request";
 import { supabase } from "@/lib/supabase";
 import { isCurrentUserPlatformAdmin } from "@/app/admin/_lib/admin-auth";
@@ -13,7 +14,11 @@ type OnboardingState = {
   onboarding_complete: boolean | null;
 };
 
-export function SignInForm() {
+export function SignInForm({
+  sellerSignupsEnabled,
+}: {
+  sellerSignupsEnabled: boolean;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -137,12 +142,13 @@ export function SignInForm() {
         <div className="mt-6 border-t border-stone-200 pt-5 text-center">
           <p className="text-sm font-medium text-stone-600">
             New to FlockFront?{" "}
-            <Link
+            <PublicSignupCta
               className="font-bold text-[#246f38] underline-offset-4 hover:underline"
-              href="/signup"
+              disabledClassName="hover:no-underline"
+              sellerSignupsEnabled={sellerSignupsEnabled}
             >
               Create your farm storefront
-            </Link>
+            </PublicSignupCta>
           </p>
           <p className="mt-4 text-xs font-medium leading-5 text-stone-500">
             Built for small poultry farms, hatcheries, and local pickup sales.
