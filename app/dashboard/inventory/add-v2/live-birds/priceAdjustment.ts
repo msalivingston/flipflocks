@@ -117,7 +117,7 @@ export function getPriceAdjustmentIssues({
 export function formatPriceAdjustmentSummary(value: PriceAdjustmentState) {
   if (!value.enabled) return "Age-based price changes are off.";
 
-  const verb = value.direction === "increase" ? "Increase" : "Decrease";
+  const verb = value.direction === "increase" ? "increase" : "decrease";
   const stopPrice =
     value.direction === "increase" ? value.maxPrice : value.minPrice;
   const amount = Number(value.amount);
@@ -138,7 +138,12 @@ export function formatPriceAdjustmentSummary(value: PriceAdjustmentState) {
       : "Enter a minimum price to finish this rule.";
   }
 
-  const weekLabel = intervalWeeks === 1 ? "week" : "weeks";
+  const cadence =
+    intervalWeeks === 1 ? "every week" : `every ${intervalWeeks} weeks`;
+  const stopPhrase =
+    value.direction === "increase"
+      ? `up to $${parsedStopPrice}`
+      : `down to $${parsedStopPrice}`;
 
-  return `${verb} by $${amount} every ${intervalWeeks} ${weekLabel}, stop at $${parsedStopPrice}.`;
+  return `Start at the listed price when available. Then ${verb} by $${amount} ${cadence}, ${stopPhrase}.`;
 }

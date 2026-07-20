@@ -2139,6 +2139,10 @@ function EditListingForm({
                 {!ageBasedPricingEnabled ? "(Market)" : ""}
               </span>
             </label>
+            <p className="text-sm leading-6 text-stone-600">
+              Price changes begin after the first available date. The starting
+              price remains in effect when the birds first become available.
+            </p>
 
             {!ageBasedPricingEnabled ? (
               <PlanUpgradePrompt compact feature="age_based_pricing" />
@@ -2738,21 +2742,23 @@ function formatPriceAdjustmentSummary(listing: ListingDetailSummary) {
   }
 
   const direction =
-    listing.priceAdjustmentDirection === "increase" ? "Increase" : "Decrease";
+    listing.priceAdjustmentDirection === "increase" ? "increase" : "decrease";
+  const cadence =
+    listing.priceAdjustmentIntervalWeeks === 1
+      ? "every week"
+      : `every ${listing.priceAdjustmentIntervalWeeks} weeks`;
   const cap =
     listing.priceAdjustmentDirection === "increase"
       ? listing.priceAdjustmentMaxPrice == null
         ? ""
-        : `, max ${formatCurrency(listing.priceAdjustmentMaxPrice)}`
+        : `, up to ${formatCurrency(listing.priceAdjustmentMaxPrice)}`
       : listing.priceAdjustmentMinPrice == null
         ? ""
-        : `, min ${formatCurrency(listing.priceAdjustmentMinPrice)}`;
+        : `, down to ${formatCurrency(listing.priceAdjustmentMinPrice)}`;
 
-  return `${direction} ${formatCurrency(
+  return `Start at the listed price when available. Then ${direction} by ${formatCurrency(
     listing.priceAdjustmentAmount,
-  )} every ${listing.priceAdjustmentIntervalWeeks} week${
-    listing.priceAdjustmentIntervalWeeks === 1 ? "" : "s"
-  } after available date${cap}`;
+  )} ${cadence}${cap}.`;
 }
 
 function getDisplayedListingStatus(listing: ListingDetailSummary) {

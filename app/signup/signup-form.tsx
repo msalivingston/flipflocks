@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { playDustySuccessSound } from "@/lib/success-sound";
 import { supabase } from "@/lib/supabase";
 
 type SignupErrors = {
@@ -68,13 +67,11 @@ export function SignupForm() {
       }
 
       if (data.user && data.session) {
-        playDustySuccessSound();
         router.push("/onboarding");
         return;
       }
 
       if (data.user && !data.session) {
-        playDustySuccessSound();
         setSuccessMessage(
           "Account created. Please check your email to confirm your account, then sign in to continue setup.",
         );

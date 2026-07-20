@@ -650,18 +650,20 @@ export function hydratePriceAdjustment(
 export function formatPriceAdjustmentSummary(value: PriceAdjustmentState) {
   if (!value.enabled) return "Off";
 
-  const verb = value.direction === "increase" ? "Increase" : "Decrease";
+  const verb = value.direction === "increase" ? "increase" : "decrease";
   const interval = Number(value.intervalWeeks);
   const cadence =
     interval === 1 ? "every week" : `every ${value.intervalWeeks} weeks`;
   const cap =
     value.direction === "increase" && value.maxPrice.trim()
-      ? ` until ${formatCurrency(value.maxPrice)}`
+      ? `, up to ${formatCurrency(value.maxPrice)}`
       : value.direction === "decrease" && value.minPrice.trim()
-        ? ` until ${formatCurrency(value.minPrice)}`
+        ? `, down to ${formatCurrency(value.minPrice)}`
         : "";
 
-  return `${verb} by ${formatCurrency(value.amount)} ${cadence}${cap}`;
+  return `Start at the listed price when available. Then ${verb} by ${formatCurrency(
+    value.amount,
+  )} ${cadence}${cap}.`;
 }
 
 export function uniqueSorted(values: string[]) {

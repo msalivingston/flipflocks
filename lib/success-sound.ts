@@ -1,5 +1,7 @@
 const dustySuccessSoundPath = "/sounds/dusty-success.mp3";
 
+export const storeSetupSuccessSoundKey = "flipflocks:store-setup-success-sound";
+
 export function playDustySuccessSound() {
   if (typeof window === "undefined") return;
 

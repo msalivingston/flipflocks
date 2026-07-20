@@ -4,6 +4,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
+import {
+  playDustySuccessSound,
+  storeSetupSuccessSoundKey,
+} from "@/lib/success-sound";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "./seller-context";
 import {
@@ -53,6 +57,15 @@ export function SellerDashboard() {
   const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(
     () => new Set(),
   );
+
+  useEffect(() => {
+    if (window.sessionStorage.getItem(storeSetupSuccessSoundKey) !== "1") {
+      return;
+    }
+
+    window.sessionStorage.removeItem(storeSetupSuccessSoundKey);
+    playDustySuccessSound();
+  }, []);
 
   useEffect(() => {
     let isMounted = true;

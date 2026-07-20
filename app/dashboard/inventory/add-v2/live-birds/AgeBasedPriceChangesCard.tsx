@@ -41,6 +41,10 @@ export function AgeBasedPriceChangesCard({
                 "Automatically raise or lower prices after the available date."}
             </p>
             <p className="mt-1 text-sm font-medium leading-6 text-stone-500">
+              Price changes begin after the first available date. The starting
+              price remains in effect when the birds first become available.
+            </p>
+            <p className="mt-1 text-sm font-medium leading-6 text-stone-500">
               Applies to every Birds for Sale group in this hatch. Buyers only
               see the current price.
             </p>

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { PLAN_CAPABILITIES, normalizePlanId } from "@/lib/plan-capabilities";
+import { storeSetupSuccessSoundKey } from "@/lib/success-sound";
 
 type Step6ReviewSetupProps = {
   onBack: () => void;
@@ -142,6 +143,7 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
       return;
     }
 
+    window.sessionStorage.setItem(storeSetupSuccessSoundKey, "1");
     router.push("/dashboard");
   }
 
