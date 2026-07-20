@@ -11,6 +11,7 @@ export type ListingShareDialogProps = {
   storeName: string;
   publicPath: ReturnType<typeof buildPublicListingPath> | undefined;
   isStorePublic: boolean;
+  shareText?: string | null;
   summary?: string | null;
   mode?: ListingShareDialogMode;
   open: boolean;
@@ -26,6 +27,7 @@ export function ListingShareDialog({
   storeName,
   publicPath,
   isStorePublic,
+  shareText: customShareText,
   summary,
   mode = "published",
   open,
@@ -51,7 +53,8 @@ export function ListingShareDialog({
       return null;
     }
   }, [normalizedPublicPath, origin]);
-  const shareText = buildShareText({ listingTitle, storeName, summary });
+  const shareText =
+    customShareText?.trim() || buildShareText({ listingTitle, storeName, summary });
   const hasValidPublicPath = Boolean(normalizedPublicPath);
   const canSharePublicLink = Boolean(isStorePublic && absoluteUrl);
   const isPublishedMode = mode === "published";
@@ -170,7 +173,11 @@ export function ListingShareDialog({
     if (!absoluteUrl) return;
 
     const subject = listingTitle;
-    const body = [listingTitle, storeName, summary?.trim(), absoluteUrl]
+    const customEmailBody = customShareText?.trim();
+    const bodyParts = customEmailBody
+      ? [customEmailBody, absoluteUrl]
+      : [listingTitle, storeName, summary?.trim(), absoluteUrl];
+    const body = bodyParts
       .filter((value): value is string => Boolean(value))
       .join("\n\n");
     window.location.href = `mailto:?subject=${encodeURIComponent(

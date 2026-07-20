@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     "Frequently asked questions about FlockFront for poultry sellers.",
 };
 
-const previewStoreHref = "/store/willow-creek-poultry";
+const previewStoreHref = "/store/meadowgate-poultry";
 
 const mobileNavLinks = [
   { href: "/#how-it-works", label: "How it works" },

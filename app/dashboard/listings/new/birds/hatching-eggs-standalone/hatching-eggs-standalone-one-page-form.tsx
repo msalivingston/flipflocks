@@ -110,6 +110,7 @@ type UploadResponse = {
 type PublishSuccessDialogState = {
   listingTitle: string;
   publicPath: ReturnType<typeof buildPublicListingPath>;
+  shareText: string | null;
   summary: string | null;
 };
 
@@ -842,6 +843,7 @@ export function HatchingEggsStandaloneOnePageForm({
         productId: saveResult.hatchingEggProductId,
         storeSlug: seller?.store_slug,
       }),
+      shareText: buildHatchingEggShareText(form, seller?.store_name),
       summary: buildHatchingEggShareSummary(form),
     });
   }
@@ -1198,6 +1200,7 @@ export function HatchingEggsStandaloneOnePageForm({
         mode="published"
         open={Boolean(publishSuccessDialog)}
         publicPath={publishSuccessDialog?.publicPath}
+        shareText={publishSuccessDialog?.shareText}
         storeName={seller?.store_name ?? "your store"}
         summary={publishSuccessDialog?.summary}
         onClose={navigateToInventoryAfterPublish}
@@ -1921,6 +1924,36 @@ function formatDate(value: string) {
   }).format(new Date(`${value.slice(0, 10)}T00:00:00`));
 }
 
+function formatShareDate(value: string) {
+  if (!value) return null;
+
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${value.slice(0, 10)}T00:00:00`));
+}
+
+function buildHatchingEggShareText(
+  form: HatchingEggFormState,
+  storeName: string | null | undefined,
+) {
+  const listingTitle = stripTrailingSentencePunctuation(form.itemName);
+  const sellerStoreName = stripTrailingSentencePunctuation(storeName ?? "");
+  const listingLabel = /\bhatching eggs\b/i.test(listingTitle)
+    ? listingTitle
+    : `${listingTitle || "Hatching eggs"} hatching eggs`;
+  const sentences = [
+    sellerStoreName ? `${listingLabel} from ${sellerStoreName}` : listingLabel,
+    form.availableDate ? `Ready ${formatShareDate(form.availableDate)}` : null,
+    isValidMoney(form.price) ? `${formatCurrency(form.price)} per egg` : null,
+  ]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map((value) => `${stripTrailingSentencePunctuation(value)}.`);
+
+  return sentences.length > 0 ? sentences.join(" ") : null;
+}
+
 function buildHatchingEggShareSummary(form: HatchingEggFormState) {
   const summaryParts = [
     form.availableDate ? `Ready ${formatDate(form.availableDate)}` : null,
@@ -1928,4 +1961,8 @@ function buildHatchingEggShareSummary(form: HatchingEggFormState) {
   ].filter(Boolean);
 
   return summaryParts.length > 0 ? summaryParts.join(" - ") : null;
+}
+
+function stripTrailingSentencePunctuation(value: string) {
+  return value.trim().replace(/[.!?]+$/g, "");
 }
