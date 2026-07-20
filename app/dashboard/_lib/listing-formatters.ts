@@ -32,6 +32,28 @@ export function formatAgeAtAvailability(days: number | null | undefined) {
   return parts.join(" + ");
 }
 
+export function formatInventoryAgeLabel(days: number | null | undefined) {
+  if (days == null) return "Not set";
+  if (days < 0) return "Not set";
+  if (days === 0) return "Hatch day";
+  if (days < 7) return days === 1 ? "1 day old" : `${days} days old`;
+
+  const weeks = Math.floor(days / 7);
+
+  return weeks === 1 ? "1 week old" : `${weeks} weeks old`;
+}
+
+export function formatInventoryAgeLabelFromDates(
+  originDate: string | null | undefined,
+  availableDate: string | null | undefined,
+) {
+  if (!originDate || !availableDate) return "Not set";
+
+  return formatInventoryAgeLabel(
+    calculateAgeAtAvailabilityDays(originDate, availableDate),
+  );
+}
+
 export function formatAgeAtAvailabilityFromDates(
   originDate: string | null | undefined,
   availableDate: string | null | undefined,

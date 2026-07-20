@@ -3,6 +3,7 @@ import type {
   BirdOffering,
   ReadinessChecks,
 } from "./types";
+import { formatInventoryAgeLabel } from "../../../_lib/listing-formatters";
 
 export function getAgeAtAvailability(
   hatchDateValue: string,
@@ -27,11 +28,8 @@ export function getAgeAtAvailability(
     };
   }
 
-  const weeks = Math.floor(diffDays / 7);
-  const days = diffDays % 7;
-
   return {
-    message: `Age at availability: ${weeks} weeks + ${days} days`,
+    message: `Age at availability: ${formatInventoryAgeLabel(diffDays)}`,
     status: "ready",
   };
 }

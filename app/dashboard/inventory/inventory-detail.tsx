@@ -15,7 +15,7 @@ import {
 } from "../_components/seller-ui";
 import type { SellerInventoryManagementRow } from "../_lib/seller-types";
 import {
-  formatAgeAtAvailabilityFromDates,
+  formatInventoryAgeLabelFromDates,
   formatInventoryTypeLabel,
 } from "../_lib/listing-formatters";
 
@@ -532,7 +532,7 @@ function InventoryDetailsSection({
     isHatchingEggs ? hatchingEggInventoryTypes : liveAnimalInventoryTypes;
   const canEditType = summary.inventoryTypes.length === 1;
   const customTypeSelected = draft.inventoryType === "other";
-  const ageAtAvailability = formatAgeAtAvailabilityFromDates(
+  const ageAtAvailability = formatInventoryAgeLabelFromDates(
     draft.originDate || firstRow.origin_date,
     draft.availableDate,
   );
