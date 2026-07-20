@@ -10,6 +10,7 @@ import {
   PhotoManager,
   type DashboardPhoto,
 } from "../../../../_components/photo-manager";
+import { ListingShareDialog } from "../../../../_components/listing-share-dialog";
 import { PlanUpgradePrompt } from "../../../../_components/plan-upgrade-prompt";
 import { useSellerContext } from "../../../../_components/seller-context";
 import {
@@ -22,6 +23,7 @@ import type {
   ReferenceBreed,
   ReferenceSpecies,
 } from "../../../../_lib/seller-types";
+import { buildPublicListingPath } from "../../../../_lib/public-listing-url";
 import {
   ListingPhotosSection,
   type ListingPhotoItem,
@@ -55,7 +57,11 @@ type HatchingEggFormState = {
 };
 
 type HatchingEggSaveResult =
-  | { ok: true; hatchingEggItemId: string }
+  | {
+      ok: true;
+      hatchingEggItemId: string;
+      hatchingEggProductId: string | null;
+    }
   | { ok: false; message: string };
 
 type HatchingEggRpcResult = {
@@ -65,6 +71,7 @@ type HatchingEggRpcResult = {
 
 type HatchingEggManagementRow = {
   hatching_egg_inventory_item_id: string;
+  hatching_egg_product_id?: string | null;
   available_date: string;
   created_at?: string;
   description: string | null;
@@ -98,6 +105,12 @@ type UploadResponse = {
     code?: string;
     message?: string;
   };
+};
+
+type PublishSuccessDialogState = {
+  listingTitle: string;
+  publicPath: ReturnType<typeof buildPublicListingPath>;
+  summary: string | null;
 };
 
 const emptyForm: HatchingEggFormState = {
@@ -156,6 +169,9 @@ export function HatchingEggsStandaloneOnePageForm({
   const [actionError, setActionError] = useState<string | null>(null);
   const [hasEditedDescription, setHasEditedDescription] = useState(false);
   const [isStartOverDialogOpen, setIsStartOverDialogOpen] = useState(false);
+  const [publishSuccessDialog, setPublishSuccessDialog] =
+    useState<PublishSuccessDialogState | null>(null);
+  const isNavigatingAfterPublishRef = useRef(false);
 
   useEffect(() => {
     if (!storeId || !hatchingEggsEnabled) return;
@@ -184,7 +200,7 @@ export function HatchingEggsStandaloneOnePageForm({
         supabase
           .from("seller_hatching_egg_inventory_management")
           .select(
-            "hatching_egg_inventory_item_id, item_name, description, visibility_status, created_at, updated_at",
+            "hatching_egg_inventory_item_id, hatching_egg_product_id, item_name, description, visibility_status, created_at, updated_at",
           )
           .eq("store_id", storeId)
           .neq("visibility_status", "archived")
@@ -260,7 +276,9 @@ export function HatchingEggsStandaloneOnePageForm({
   const hasSavedChanges =
     savedFormSnapshot !== null && formSnapshot === savedFormSnapshot;
   const saveDraftDisabledReason =
-    saveDraftStatus === "saving" || publishStatus === "publishing"
+    saveDraftStatus === "saving" ||
+    publishStatus === "publishing" ||
+    publishSuccessDialog
       ? "Save already in progress."
       : fieldsLockedAfterAddSave && !pendingPhotos.length
         ? "This draft has already been saved."
@@ -269,7 +287,7 @@ export function HatchingEggsStandaloneOnePageForm({
     descriptionComplete,
     detailsComplete,
     hasSavedChanges,
-    isPublishing: publishStatus === "publishing",
+    isPublishing: publishStatus === "publishing" || Boolean(publishSuccessDialog),
   });
   const hasUnsavedChanges =
     pendingPhotos.length > 0 ||
@@ -385,7 +403,7 @@ export function HatchingEggsStandaloneOnePageForm({
       const result = await supabase
         .from("seller_hatching_egg_inventory_management")
         .select(
-          "hatching_egg_inventory_item_id, item_name, species_id, description, quantity_available, price, available_date, minimum_order_quantity, visibility_status",
+          "hatching_egg_inventory_item_id, hatching_egg_product_id, item_name, species_id, description, quantity_available, price, available_date, minimum_order_quantity, visibility_status",
         )
         .eq("store_id", sellerStoreId)
         .eq("hatching_egg_inventory_item_id", initialHatchingEggItemId)
@@ -434,23 +452,28 @@ export function HatchingEggsStandaloneOnePageForm({
   ]);
 
   async function verifySavedItem(currentHatchingEggItemId: string) {
-    if (!seller) return;
+    if (!seller) return null;
 
     const result = await supabase
       .from("seller_hatching_egg_inventory_management")
-      .select("hatching_egg_inventory_item_id, visibility_status")
+      .select(
+        "hatching_egg_inventory_item_id, hatching_egg_product_id, visibility_status",
+      )
       .eq("store_id", seller.store_id)
       .eq("hatching_egg_inventory_item_id", currentHatchingEggItemId)
       .maybeSingle<HatchingEggManagementRow>();
 
     if (result.error) {
       setActionError(result.error.message);
-      return;
+      return null;
     }
 
     if (!result.data) {
       setActionError("The saved hatching egg item could not be loaded.");
+      return null;
     }
+
+    return result.data;
   }
 
   function addPendingPhotos(files: FileList | null) {
@@ -657,10 +680,14 @@ export function HatchingEggsStandaloneOnePageForm({
 
         if (!visibilityResult.ok) return visibilityResult;
 
-        await verifySavedItem(hatchingEggItemId);
+        const verifiedItem = await verifySavedItem(hatchingEggItemId);
         await loadHatchingEggMedia(hatchingEggItemId);
 
-        return { ok: true, hatchingEggItemId };
+        return {
+          ok: true,
+          hatchingEggItemId,
+          hatchingEggProductId: verifiedItem?.hatching_egg_product_id ?? null,
+        };
       }
 
       if (formSnapshot !== savedFormSnapshot) {
@@ -671,8 +698,12 @@ export function HatchingEggsStandaloneOnePageForm({
         };
       }
 
-      await verifySavedItem(hatchingEggItemId);
-      return { ok: true, hatchingEggItemId };
+      const verifiedItem = await verifySavedItem(hatchingEggItemId);
+      return {
+        ok: true,
+        hatchingEggItemId,
+        hatchingEggProductId: verifiedItem?.hatching_egg_product_id ?? null,
+      };
     }
 
     const result = await supabase.rpc("seller_create_hatching_egg_inventory_item", {
@@ -694,10 +725,14 @@ export function HatchingEggsStandaloneOnePageForm({
     }
 
     setHatchingEggItemId(savedId);
-    await verifySavedItem(savedId);
+    const verifiedItem = await verifySavedItem(savedId);
     await loadHatchingEggMedia(savedId);
 
-    return { ok: true, hatchingEggItemId: savedId };
+    return {
+      ok: true,
+      hatchingEggItemId: savedId,
+      hatchingEggProductId: verifiedItem?.hatching_egg_product_id ?? null,
+    };
   }
 
   async function handleSaveDraft() {
@@ -744,11 +779,18 @@ export function HatchingEggsStandaloneOnePageForm({
   }
 
   async function handlePublish() {
-    if (publishStatus === "publishing" || saveDraftStatus === "saving") return;
+    if (
+      publishStatus === "publishing" ||
+      saveDraftStatus === "saving" ||
+      publishSuccessDialog
+    ) {
+      return;
+    }
 
     setPublishStatus("publishing");
     setActionError(null);
     setActionMessage(null);
+    setPublishSuccessDialog(null);
 
     const saveResult = await saveDraft();
 
@@ -793,6 +835,22 @@ export function HatchingEggsStandaloneOnePageForm({
 
     setSavedFormSnapshot(getFormSnapshot(form));
     setPublishStatus("success");
+    setPublishSuccessDialog({
+      listingTitle: form.itemName.trim() || "Hatching eggs",
+      publicPath: buildPublicListingPath({
+        listingType: "hatching_eggs",
+        productId: saveResult.hatchingEggProductId,
+        storeSlug: seller?.store_slug,
+      }),
+      summary: buildHatchingEggShareSummary(form),
+    });
+  }
+
+  function navigateToInventoryAfterPublish() {
+    if (isNavigatingAfterPublishRef.current) return;
+
+    isNavigatingAfterPublishRef.current = true;
+    setPublishSuccessDialog(null);
     router.push("/dashboard/inventory");
   }
 
@@ -818,6 +876,8 @@ export function HatchingEggsStandaloneOnePageForm({
     setSaveDraftStatus("idle");
     setPublishStatus("idle");
     setIsStartOverDialogOpen(false);
+    setPublishSuccessDialog(null);
+    isNavigatingAfterPublishRef.current = false;
   }
 
   if (isSellerLoading) {
@@ -1132,6 +1192,17 @@ export function HatchingEggsStandaloneOnePageForm({
           onConfirm={resetForm}
         />
       ) : null}
+      <ListingShareDialog
+        isStorePublic={Boolean(seller?.is_publicly_available)}
+        listingTitle={publishSuccessDialog?.listingTitle ?? "Hatching eggs"}
+        mode="published"
+        open={Boolean(publishSuccessDialog)}
+        publicPath={publishSuccessDialog?.publicPath}
+        storeName={seller?.store_name ?? "your store"}
+        summary={publishSuccessDialog?.summary}
+        onClose={navigateToInventoryAfterPublish}
+        onDone={navigateToInventoryAfterPublish}
+      />
     </DashboardPageContent>
   );
 }
@@ -1848,4 +1919,13 @@ function formatDate(value: string) {
     month: "short",
     year: "numeric",
   }).format(new Date(`${value.slice(0, 10)}T00:00:00`));
+}
+
+function buildHatchingEggShareSummary(form: HatchingEggFormState) {
+  const summaryParts = [
+    form.availableDate ? `Ready ${formatDate(form.availableDate)}` : null,
+    isValidMoney(form.price) ? `${formatCurrency(form.price)} per egg` : null,
+  ].filter(Boolean);
+
+  return summaryParts.length > 0 ? summaryParts.join(" - ") : null;
 }

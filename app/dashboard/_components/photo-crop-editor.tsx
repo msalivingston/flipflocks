@@ -19,7 +19,7 @@ export type EditableCropPhoto = {
 };
 
 const defaultCrop: PhotoCropMetadata = {
-  aspect: 4 / 3,
+  aspect: 1,
   x: 0,
   y: 0,
   zoom: 1,
@@ -210,7 +210,7 @@ export function normalizeCrop(
   if (!crop) return defaultCrop;
 
   return {
-    aspect: Number.isFinite(crop.aspect) && crop.aspect > 0 ? crop.aspect : 4 / 3,
+    aspect: Number.isFinite(crop.aspect) && crop.aspect > 0 ? crop.aspect : 1,
     x: Number.isFinite(crop.x) ? Math.round(crop.x) : 0,
     y: Number.isFinite(crop.y) ? Math.round(crop.y) : 0,
     zoom: Number.isFinite(crop.zoom) && crop.zoom > 0 ? crop.zoom : 1,

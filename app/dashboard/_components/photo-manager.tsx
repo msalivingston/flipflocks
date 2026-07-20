@@ -503,9 +503,7 @@ function PhotoTile({
       </span>
       <div
         aria-label={`Drag to reorder ${photo.filename || photo.label}`}
-        className={`relative w-full cursor-grab touch-none overflow-hidden rounded-md bg-stone-100 active:cursor-grabbing ${
-          variant === "featured" ? "aspect-[4/3]" : "aspect-[4/3]"
-        }`}
+        className="relative aspect-square w-full cursor-grab touch-none overflow-hidden rounded-md bg-stone-100 active:cursor-grabbing"
         role="img"
         tabIndex={-1}
         onPointerCancel={onEndDrag}
@@ -631,7 +629,7 @@ function getDragPreviewSize(rect: DOMRect) {
   const width = Math.min(180, Math.max(96, rect.width));
 
   return {
-    height: Math.round(width * 0.75),
+    height: width,
     width,
   };
 }
@@ -735,7 +733,7 @@ function AddPhotoTile({
   onAddPhotos: (files: FileList | null) => void;
 }) {
   return (
-    <label className="flex aspect-[4/3] cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-stone-300 bg-stone-50 px-3 text-center text-sm transition hover:border-emerald-700 hover:bg-emerald-50">
+    <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-stone-300 bg-stone-50 px-3 text-center text-sm transition hover:border-emerald-700 hover:bg-emerald-50">
       <Image
         alt=""
         className="size-6 opacity-60"
