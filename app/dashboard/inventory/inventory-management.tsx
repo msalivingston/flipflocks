@@ -14,9 +14,21 @@ import {
   SellerCard,
 } from "../_components/seller-ui";
 import {
+  buildEquipmentShareSummary,
+  buildEquipmentShareText,
+} from "../_lib/equipment-share-text";
+import {
   loadLivePoultryShareProducts,
   type LivePoultryShareProduct,
 } from "../_lib/live-poultry-share-products";
+import {
+  buildHatchingEggShareSummary,
+  buildHatchingEggShareText,
+} from "../_lib/hatching-egg-share-text";
+import {
+  buildPoultryProductShareSummary,
+  buildPoultryProductShareText,
+} from "../_lib/poultry-product-share-text";
 import {
   calculateAgeAtAvailabilityDays,
   formatAgeAtAvailabilityFromDates,
@@ -64,6 +76,7 @@ type ReservedRow = {
 
 type HatchingEggInventoryRow = {
   hatching_egg_inventory_item_id: string;
+  hatching_egg_product_id: string | null;
   store_id: string;
   item_name: string;
   species_id: string;
@@ -241,6 +254,7 @@ type FlatInventoryItem =
     };
 
 type BirdInventoryItem = Extract<FlatInventoryItem, { kind: "bird" }>;
+type InventoryShareDialogState = LivePoultryShareProduct;
 
 const unsavedWarning =
   "You have unsaved inventory changes. Save or discard before leaving.";
@@ -356,7 +370,7 @@ export function InventoryManagement() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [sharingItemId, setSharingItemId] = useState<string | null>(null);
   const [shareProduct, setShareProduct] =
-    useState<LivePoultryShareProduct | null>(null);
+    useState<InventoryShareDialogState | null>(null);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const isMountedRef = useRef(true);
   const isShareResolvingRef = useRef(false);
@@ -944,6 +958,15 @@ export function InventoryManagement() {
     }
   }
 
+  function openInventoryRowShare(item: FlatInventoryItem) {
+    if (item.kind === "bird") {
+      void openLivePoultryRowShare(item);
+      return;
+    }
+
+    openSimpleInventoryRowShare(item);
+  }
+
   async function openLivePoultryRowShare(item: BirdInventoryItem) {
     if (!seller || isShareResolvingRef.current) return;
 
@@ -1016,6 +1039,27 @@ export function InventoryManagement() {
   function closeLivePoultryRowShare() {
     setIsShareDialogOpen(false);
     setShareProduct(null);
+    isShareResolvingRef.current = false;
+  }
+
+  function openSimpleInventoryRowShare(item: FlatInventoryItem) {
+    if (!seller || isShareResolvingRef.current || isShareDialogOpen) return;
+
+    const shareProduct = buildSimpleInventoryShareProduct(item, seller);
+
+    if (!shareProduct?.publicPath) {
+      setSaveError("A public listing link is not available for this listing.");
+      setSuccessMessage(null);
+      return;
+    }
+
+    isShareResolvingRef.current = true;
+    setSharingItemId(item.id);
+    setShareProduct(shareProduct);
+    setSaveError(null);
+    setSuccessMessage(null);
+    setIsShareDialogOpen(true);
+    setSharingItemId(null);
   }
 
   if (isLoading) {
@@ -1243,7 +1287,7 @@ export function InventoryManagement() {
             sharingItemId={sharingItemId}
             onClearSelection={clearSelection}
             onClearSoldOutItems={requestClearSoldOutItems}
-            onShareLivePoultryItem={openLivePoultryRowShare}
+            onShareInventoryItem={openInventoryRowShare}
             onSelectVisible={setVisibleSelection}
             onToggleSelection={toggleItemSelection}
             selectedItemIds={visibleSelectedItemIds}
@@ -1520,7 +1564,7 @@ function FlatInventoryTable({
   sharingItemId,
   onClearSelection,
   onClearSoldOutItems,
-  onShareLivePoultryItem,
+  onShareInventoryItem,
   onSelectVisible,
   onToggleSelection,
   selectedItemIds,
@@ -1534,7 +1578,7 @@ function FlatInventoryTable({
   sharingItemId: string | null;
   onClearSelection: () => void;
   onClearSoldOutItems: () => void;
-  onShareLivePoultryItem: (item: BirdInventoryItem) => void;
+  onShareInventoryItem: (item: FlatInventoryItem) => void;
   onSelectVisible: (shouldSelect: boolean) => void;
   onToggleSelection: (itemId: string) => void;
   selectedItemIds: string[];
@@ -1587,7 +1631,7 @@ function FlatInventoryTable({
             item={item}
             isSelected={selectedItemIds.includes(item.id)}
             sharingItemId={sharingItemId}
-            onShareLivePoultryItem={onShareLivePoultryItem}
+            onShareInventoryItem={onShareInventoryItem}
             onToggleSelection={onToggleSelection}
             updateDraftQuantity={updateDraftQuantity}
           />
@@ -1637,7 +1681,7 @@ function FlatInventoryTable({
                 item={item}
                 isSelected={selectedItemIds.includes(item.id)}
                 sharingItemId={sharingItemId}
-                onShareLivePoultryItem={onShareLivePoultryItem}
+                onShareInventoryItem={onShareInventoryItem}
                 onToggleSelection={onToggleSelection}
                 tab={tab}
                 updateDraftQuantity={updateDraftQuantity}
@@ -1778,7 +1822,7 @@ function FlatInventoryTableRow({
   isSelected,
   item,
   sharingItemId,
-  onShareLivePoultryItem,
+  onShareInventoryItem,
   onToggleSelection,
   tab,
   updateDraftQuantity,
@@ -1787,7 +1831,7 @@ function FlatInventoryTableRow({
   isSelected: boolean;
   item: FlatInventoryItem;
   sharingItemId: string | null;
-  onShareLivePoultryItem: (item: BirdInventoryItem) => void;
+  onShareInventoryItem: (item: FlatInventoryItem) => void;
   onToggleSelection: (itemId: string) => void;
   tab: InventoryProductTab;
   updateDraftQuantity: (item: FlatInventoryItem, nextValue: string) => void;
@@ -1877,20 +1921,11 @@ function FlatInventoryTableRow({
         <AvailabilityPill label={item.availabilityLabel} />
       </td>
       <td className="px-3 py-3 text-right align-top">
-        {item.kind === "bird" ? (
-          <InventoryItemActionsMenu
-            item={item}
-            isSharing={sharingItemId === item.id}
-            onShareLivePoultryItem={onShareLivePoultryItem}
-          />
-        ) : (
-          <Link
-            className="inline-flex min-h-8 items-center justify-center rounded-md bg-emerald-800 px-3 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
-            href={item.manageHref}
-          >
-            {getInventoryActionLabel()}
-          </Link>
-        )}
+        <InventoryItemActionsMenu
+          item={item}
+          isSharing={sharingItemId === item.id}
+          onShareInventoryItem={onShareInventoryItem}
+        />
       </td>
     </tr>
   );
@@ -1901,7 +1936,7 @@ function FlatInventoryCard({
   isSelected,
   item,
   sharingItemId,
-  onShareLivePoultryItem,
+  onShareInventoryItem,
   onToggleSelection,
   updateDraftQuantity,
 }: {
@@ -1909,7 +1944,7 @@ function FlatInventoryCard({
   isSelected: boolean;
   item: FlatInventoryItem;
   sharingItemId: string | null;
-  onShareLivePoultryItem: (item: BirdInventoryItem) => void;
+  onShareInventoryItem: (item: FlatInventoryItem) => void;
   onToggleSelection: (itemId: string) => void;
   updateDraftQuantity: (item: FlatInventoryItem, nextValue: string) => void;
 }) {
@@ -2000,22 +2035,13 @@ function FlatInventoryCard({
         <InventoryCardField label="Availability" value={item.availabilityLabel} />
       </dl>
 
-      {item.kind === "bird" ? (
-        <div className="mt-4 flex justify-end">
-          <InventoryItemActionsMenu
-            item={item}
-            isSharing={sharingItemId === item.id}
-            onShareLivePoultryItem={onShareLivePoultryItem}
-          />
-        </div>
-      ) : (
-        <Link
-          className="mt-4 inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
-          href={item.manageHref}
-        >
-          {getInventoryActionLabel()}
-        </Link>
-      )}
+      <div className="mt-4 flex justify-end">
+        <InventoryItemActionsMenu
+          item={item}
+          isSharing={sharingItemId === item.id}
+          onShareInventoryItem={onShareInventoryItem}
+        />
+      </div>
     </article>
   );
 }
@@ -2023,14 +2049,14 @@ function FlatInventoryCard({
 function InventoryItemActionsMenu({
   isSharing,
   item,
-  onShareLivePoultryItem,
+  onShareInventoryItem,
 }: {
   isSharing: boolean;
-  item: BirdInventoryItem;
-  onShareLivePoultryItem: (item: BirdInventoryItem) => void;
+  item: FlatInventoryItem;
+  onShareInventoryItem: (item: FlatInventoryItem) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const canShare = isShareableLivePoultryItem(item);
+  const canShare = isShareableInventoryItem(item);
 
   return (
     <details
@@ -2059,7 +2085,7 @@ function InventoryItemActionsMenu({
             disabled={isSharing}
             onClick={() => {
               setIsOpen(false);
-              onShareLivePoultryItem(item);
+              onShareInventoryItem(item);
             }}
           >
             {isSharing ? "Opening..." : "Share listing"}
@@ -2864,8 +2890,37 @@ function getInventoryItemSubtitle(item: FlatInventoryItem) {
   return [item.species, item.typeSex].filter(Boolean).join(" - ");
 }
 
-function getInventoryActionLabel() {
-  return "Edit";
+function isShareableInventoryItem(item: FlatInventoryItem) {
+  if (item.kind === "bird") return isShareableLivePoultryItem(item);
+
+  if (item.kind === "hatching_egg") {
+    return Boolean(
+      item.row.hatching_egg_product_id?.trim() &&
+        item.row.visibility_status === "active" &&
+        item.row.moderation_status === "normal" &&
+        !item.row.archived_at,
+    );
+  }
+
+  if (item.kind === "processed_poultry") {
+    return Boolean(
+      item.row.processed_poultry_inventory_item_id?.trim() &&
+        item.row.visibility_status === "active" &&
+        item.row.moderation_status === "normal" &&
+        !item.row.archived_at,
+    );
+  }
+
+  if (item.kind === "equipment") {
+    return Boolean(
+      item.row.equipment_inventory_item_id?.trim() &&
+        item.row.visibility_status === "active" &&
+        item.row.moderation_status === "normal" &&
+        !item.row.archived_at,
+    );
+  }
+
+  return false;
 }
 
 function isShareableLivePoultryItem(item: FlatInventoryItem): item is BirdInventoryItem {
@@ -2882,6 +2937,76 @@ function isShareableLivePoultryItem(item: FlatInventoryItem): item is BirdInvent
       row.listing_batch_moderation_status === "normal" &&
       row.inventory_moderation_status === "normal",
   );
+}
+
+function buildSimpleInventoryShareProduct(
+  item: FlatInventoryItem,
+  seller: { store_name: string | null | undefined; store_slug: string | null | undefined },
+): InventoryShareDialogState | null {
+  if (!isShareableInventoryItem(item) || item.kind === "bird") return null;
+
+  if (item.kind === "hatching_egg") {
+    const input = {
+      availableDate: item.row.available_date,
+      itemName: item.row.item_name,
+      price: item.row.price,
+    };
+
+    return {
+      id: item.row.hatching_egg_inventory_item_id,
+      publicPath: buildPublicListingPath({
+        listingType: "hatching_eggs",
+        productId: item.row.hatching_egg_product_id,
+        storeSlug: seller.store_slug,
+      }),
+      shareText: buildHatchingEggShareText(input, seller.store_name),
+      summary: buildHatchingEggShareSummary(input),
+      title: item.row.item_name,
+    };
+  }
+
+  if (item.kind === "processed_poultry") {
+    const input = {
+      packageSize: item.row.package_size,
+      price: item.row.price,
+      productName: item.row.product_name,
+      quantityAvailable: item.row.quantity_available,
+    };
+
+    return {
+      id: item.row.processed_poultry_inventory_item_id,
+      publicPath: buildPublicListingPath({
+        listingType: "poultry_products",
+        processedPoultryItemId: item.row.processed_poultry_inventory_item_id,
+        storeSlug: seller.store_slug,
+      }),
+      shareText: buildPoultryProductShareText(input, seller.store_name),
+      summary: buildPoultryProductShareSummary(input),
+      title: item.row.product_name,
+    };
+  }
+
+  if (item.kind === "equipment") {
+    const input = {
+      condition: item.row.condition,
+      itemName: item.row.item_name,
+      price: item.row.price,
+    };
+
+    return {
+      id: item.row.equipment_inventory_item_id,
+      publicPath: buildPublicListingPath({
+        listingType: "equipment_supplies",
+        equipmentItemId: item.row.equipment_inventory_item_id,
+        storeSlug: seller.store_slug,
+      }),
+      shareText: buildEquipmentShareText(input, seller.store_name),
+      summary: buildEquipmentShareSummary(input),
+      title: item.row.item_name,
+    };
+  }
+
+  return null;
 }
 
 function buildPrimaryPhotoMap(rows: InventoryMediaRow[]) {
