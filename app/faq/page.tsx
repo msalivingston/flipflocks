@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { MobileMarketingMenu } from "../_components/mobile-marketing-menu";
+import { PublicSignupCta } from "../_components/public-signup-cta";
 import { publicSupabase } from "@/lib/public-supabase";
+import { loadSellerSignupsEnabled } from "@/lib/platform-settings";
 import { FaqAccordion, type PublicFaq } from "./faq-accordion";
 
 export const metadata: Metadata = {
@@ -82,7 +84,10 @@ function BrandLogo({
 }
 
 export default async function FaqPage() {
-  const { faqs, hasError } = await loadPublishedFaqs();
+  const [{ faqs, hasError }, sellerSignupsEnabled] = await Promise.all([
+    loadPublishedFaqs(),
+    loadSellerSignupsEnabled(),
+  ]);
 
   return (
     <main className="min-h-screen bg-[#fffaf1] text-[#10281c]">
@@ -124,12 +129,13 @@ export default async function FaqPage() {
             >
               Log In
             </Link>
-            <Link
+            <PublicSignupCta
               className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-md border border-[#b77918] bg-transparent px-3 text-[15px] font-semibold text-[#a86908] transition hover:bg-[#fff4df] focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1] min-[420px]:px-4"
-              href="/signup"
+              disabledClassName="hover:bg-transparent"
+              sellerSignupsEnabled={sellerSignupsEnabled}
             >
               Get Started
-            </Link>
+            </PublicSignupCta>
             <MobileMarketingMenu
               currentHref="/faq"
               links={mobileNavLinks}
@@ -192,12 +198,13 @@ export default async function FaqPage() {
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row md:justify-end">
-            <Link
+            <PublicSignupCta
               className="inline-flex min-h-11 items-center justify-center rounded-md bg-[#0f4329] px-5 text-[15px] font-semibold text-white transition hover:bg-[#0a3220] focus:outline-none focus:ring-2 focus:ring-[#0f4329] focus:ring-offset-4 focus:ring-offset-[#f4f0e8]"
-              href="/signup"
+              disabledClassName="hover:bg-[#0f4329]"
+              sellerSignupsEnabled={sellerSignupsEnabled}
             >
               Start Your 7-Day Free Trial
-            </Link>
+            </PublicSignupCta>
             <Link
               className="inline-flex min-h-11 items-center justify-center rounded-md border border-[#123d27] bg-white/55 px-5 text-[15px] font-semibold text-[#123d27] transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#0f4329] focus:ring-offset-4 focus:ring-offset-[#f4f0e8]"
               href={previewStoreHref}

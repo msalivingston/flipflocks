@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { MobileMarketingMenu } from "../_components/mobile-marketing-menu";
+import { PublicSignupCta } from "../_components/public-signup-cta";
 import { PLAN_CAPABILITIES } from "@/lib/plan-capabilities";
 
 const smallFlock = PLAN_CAPABILITIES.small_flock;
@@ -106,7 +107,11 @@ function BrandLogo({
   );
 }
 
-export function PricingPageClient() {
+export function PricingPageClient({
+  sellerSignupsEnabled,
+}: {
+  sellerSignupsEnabled: boolean;
+}) {
   return (
     <main className="min-h-screen bg-[#fffaf1] text-[#10281c]">
       <div className="mx-auto flex w-full max-w-7xl flex-col px-4 py-2.5 md:px-8 md:py-2.5 lg:px-10">
@@ -147,12 +152,13 @@ export function PricingPageClient() {
             >
               Log In
             </Link>
-            <Link
+            <PublicSignupCta
               className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-md border border-[#b77918] bg-transparent px-3 text-[15px] font-semibold text-[#a86908] transition hover:bg-[#fff4df] focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1] min-[420px]:px-4"
-              href="/signup"
+              disabledClassName="hover:bg-transparent"
+              sellerSignupsEnabled={sellerSignupsEnabled}
             >
               Get Started
-            </Link>
+            </PublicSignupCta>
             <MobileMarketingMenu
               currentHref="/pricing"
               links={mobileNavLinks}
@@ -188,6 +194,7 @@ export function PricingPageClient() {
               name={smallFlock.displayName}
               yearlyPrice={pricing.smallYearlyPrice}
               yearlySavings={pricing.smallYearlySavings}
+              sellerSignupsEnabled={sellerSignupsEnabled}
             />
             <PlanHeader
               buttonLabel="Choose Market"
@@ -197,6 +204,7 @@ export function PricingPageClient() {
               name={fullFlock.displayName}
               yearlyPrice={pricing.fullYearlyPrice}
               yearlySavings={pricing.fullYearlySavings}
+              sellerSignupsEnabled={sellerSignupsEnabled}
             />
 
             {comparisonRows.map((row) => (
@@ -212,6 +220,7 @@ export function PricingPageClient() {
               name={smallFlock.displayName}
               yearlyPrice={pricing.smallYearlyPrice}
               yearlySavings={pricing.smallYearlySavings}
+              sellerSignupsEnabled={sellerSignupsEnabled}
             />
             <PlanSummaryCard
               buttonLabel="Choose Market"
@@ -221,6 +230,7 @@ export function PricingPageClient() {
               name={fullFlock.displayName}
               yearlyPrice={pricing.fullYearlyPrice}
               yearlySavings={pricing.fullYearlySavings}
+              sellerSignupsEnabled={sellerSignupsEnabled}
             />
 
             <div className="overflow-hidden rounded-lg border border-[#e8deca] bg-white/62 text-[#111827]">
@@ -303,6 +313,7 @@ function PlanHeader({
   emphasized = false,
   monthlyPrice,
   name,
+  sellerSignupsEnabled,
   yearlyPrice,
   yearlySavings,
 }: {
@@ -311,6 +322,7 @@ function PlanHeader({
   emphasized?: boolean;
   monthlyPrice: number;
   name: string;
+  sellerSignupsEnabled: boolean;
   yearlyPrice: number;
   yearlySavings: number;
 }) {
@@ -345,14 +357,15 @@ function PlanHeader({
       <p className="mt-2 max-w-sm text-[13px] leading-5 text-[#111827]">
         {description}
       </p>
-      <form action="/signup" className="mt-auto w-full max-w-[230px]">
-        <button
+      <div className="mt-auto w-full max-w-[230px]">
+        <PublicSignupCta
           className="inline-flex min-h-9 w-full items-center justify-center rounded-md bg-[#0f4329] px-4 text-[14px] font-semibold text-white transition hover:bg-[#0a3220] focus:outline-none focus:ring-2 focus:ring-[#0f4329] focus:ring-offset-4 focus:ring-offset-[#fffaf1]"
-          type="submit"
+          disabledClassName="hover:bg-[#0f4329]"
+          sellerSignupsEnabled={sellerSignupsEnabled}
         >
           {buttonLabel}
-        </button>
-      </form>
+        </PublicSignupCta>
+      </div>
     </div>
   );
 }
@@ -363,6 +376,7 @@ function PlanSummaryCard({
   emphasized = false,
   monthlyPrice,
   name,
+  sellerSignupsEnabled,
   yearlyPrice,
   yearlySavings,
 }: {
@@ -371,6 +385,7 @@ function PlanSummaryCard({
   emphasized?: boolean;
   monthlyPrice: number;
   name: string;
+  sellerSignupsEnabled: boolean;
   yearlyPrice: number;
   yearlySavings: number;
 }) {
@@ -403,14 +418,15 @@ function PlanSummaryCard({
       <p className="mx-auto mt-3 max-w-md text-[15px] leading-6 text-[#111827] sm:mt-4 sm:text-base sm:leading-7">
         {description}
       </p>
-      <form action="/signup" className="mt-4 sm:mt-6">
-        <button
+      <div className="mt-4 sm:mt-6">
+        <PublicSignupCta
           className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-[#0f4329] px-5 text-base font-semibold text-white transition hover:bg-[#0a3220] focus:outline-none focus:ring-2 focus:ring-[#0f4329] focus:ring-offset-4 focus:ring-offset-[#fffaf1] sm:min-h-12"
-          type="submit"
+          disabledClassName="hover:bg-[#0f4329]"
+          sellerSignupsEnabled={sellerSignupsEnabled}
         >
           {buttonLabel}
-        </button>
-      </form>
+        </PublicSignupCta>
+      </div>
     </article>
   );
 }

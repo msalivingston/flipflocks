@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { MobileMarketingMenu } from "./_components/mobile-marketing-menu";
+import { PublicSignupCta } from "./_components/public-signup-cta";
+import { loadSellerSignupsEnabled } from "@/lib/platform-settings";
 
 export const metadata: Metadata = {
   title: "FlockFront | Simple storefronts for poultry sellers",
@@ -137,7 +139,9 @@ function BrandLogo({
   );
 }
 
-export default function Home() {
+export default async function Home() {
+  const sellerSignupsEnabled = await loadSellerSignupsEnabled();
+
   return (
     <main className="min-h-screen bg-white text-[#163824]">
       <section className="relative isolate min-h-[500px] overflow-hidden text-white max-[899px]:min-h-[390px] md:min-h-[560px]">
@@ -187,12 +191,13 @@ export default function Home() {
               >
                 Sign in
               </PlaceholderLink>
-              <PlaceholderLink
+              <PublicSignupCta
                 className="inline-flex min-h-12 shrink-0 items-center justify-center rounded-md bg-[#075f38] px-6 text-[18px] font-normal text-white shadow-sm shadow-black/15 transition hover:bg-[#064a2d] max-[899px]:min-h-10 max-[899px]:px-3 max-[899px]:text-[15px] min-[420px]:max-[899px]:px-4 min-[420px]:max-[899px]:text-[16px]"
-                href="/signup"
+                disabledClassName="hover:bg-[#075f38]"
+                sellerSignupsEnabled={sellerSignupsEnabled}
               >
                 Sign up now
-              </PlaceholderLink>
+              </PublicSignupCta>
               <MobileMarketingMenu links={mobileNavLinks} />
             </div>
           </header>
@@ -330,15 +335,16 @@ export default function Home() {
             <p className="mt-1 text-[16px] text-[#303830]">
               Join FlockFront and start selling with confidence.
             </p>
-            <PlaceholderLink
+            <PublicSignupCta
               className="mt-3 inline-flex min-h-11 items-center justify-center gap-3 rounded-md bg-[#08633c] px-7 text-[17px] font-bold text-white shadow-sm transition hover:bg-[#064b2f]"
-              href="/signup"
+              disabledClassName="hover:bg-[#08633c]"
+              sellerSignupsEnabled={sellerSignupsEnabled}
             >
               Sign up now
               <span aria-hidden="true" className="text-xl leading-none">
                 &rarr;
               </span>
-            </PlaceholderLink>
+            </PublicSignupCta>
           </div>
           <Image
             src="/landing-page/pickup-truck-flipped.png"

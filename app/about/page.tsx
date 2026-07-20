@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { MobileMarketingMenu } from "../_components/mobile-marketing-menu";
+import { PublicSignupCta } from "../_components/public-signup-cta";
+import { loadSellerSignupsEnabled } from "@/lib/platform-settings";
 
 export const metadata: Metadata = {
   title: "About | FlockFront",
@@ -48,7 +50,9 @@ function BrandLogo({
   );
 }
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const sellerSignupsEnabled = await loadSellerSignupsEnabled();
+
   return (
     <main className="min-h-screen bg-[#fffaf1] text-[#10281c]">
       <div className="mx-auto flex w-full max-w-7xl flex-col px-4 py-2.5 md:px-8 md:py-2.5 lg:px-10">
@@ -89,12 +93,13 @@ export default function AboutPage() {
             >
               Log In
             </Link>
-            <Link
+            <PublicSignupCta
               className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-md border border-[#b77918] bg-transparent px-3 text-[15px] font-semibold text-[#a86908] transition hover:bg-[#fff4df] focus:outline-none focus:ring-2 focus:ring-[#0e4a2d] focus:ring-offset-4 focus:ring-offset-[#fffaf1] min-[420px]:px-4"
-              href="/signup"
+              disabledClassName="hover:bg-transparent"
+              sellerSignupsEnabled={sellerSignupsEnabled}
             >
               Get Started
-            </Link>
+            </PublicSignupCta>
             <MobileMarketingMenu
               currentHref="/about"
               links={mobileNavLinks}

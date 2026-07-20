@@ -10,6 +10,7 @@ const adminNavItems = [
   { label: "Stores", href: "/admin/stores" },
   { label: "FAQs", href: "/admin/faqs" },
   { label: "Breeds", href: "/admin/breeds" },
+  { label: "Settings", href: "/admin/settings" },
 ];
 
 export function AdminAppShell({ children }: { children: React.ReactNode }) {
