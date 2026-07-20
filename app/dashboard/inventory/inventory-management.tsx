@@ -57,12 +57,15 @@ type InventoryRow = {
   inventory_type: string;
   custom_inventory_label: string | null;
   effective_unit_price: number | null;
+  price_override: number | null;
+  inventory_item_sort_order: number | null;
   inventory_visibility_status: string;
   inventory_moderation_status: string;
   listing_batch_breed_visibility_status: string;
   listing_batch_visibility_status: string;
   listing_batch_moderation_status: string;
   operational_availability_status: string;
+  inventory_seller_notes: string | null;
   archived_at: string | null;
   inventory_updated_at: string | null;
 };
@@ -271,7 +274,7 @@ const ageTooltipText =
 const reservedTooltipText =
   "Reserved inventory has been sold but not picked up or fulfilled yet.";
 const liveBirdInventorySelect =
-  "store_id, listing_batch_id, listing_batch_breed_id, inventory_item_id, species_name, species_slug, breed_display_name, batch_type, origin_date, available_date, quantity_available, inventory_type, custom_inventory_label, effective_unit_price, inventory_visibility_status, inventory_moderation_status, listing_batch_breed_visibility_status, listing_batch_visibility_status, listing_batch_moderation_status, operational_availability_status, archived_at, inventory_updated_at";
+  "store_id, listing_batch_id, listing_batch_breed_id, inventory_item_id, species_name, species_slug, breed_display_name, batch_type, origin_date, available_date, quantity_available, inventory_type, custom_inventory_label, effective_unit_price, price_override, inventory_item_sort_order, inventory_visibility_status, inventory_moderation_status, listing_batch_breed_visibility_status, listing_batch_visibility_status, listing_batch_moderation_status, operational_availability_status, inventory_seller_notes, archived_at, inventory_updated_at";
 
 const ageFilterOptions: { label: string; value: AgeFilter }[] = [
   { label: "All ages", value: "all" },
@@ -364,6 +367,7 @@ export function InventoryManagement() {
   const [draftQuantities, setDraftQuantities] = useState<
     Record<string, string>
   >({});
+  const [draftPrices, setDraftPrices] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] =
     useState<InventoryProductTab>("live_poultry");
   const [filtersByTab, setFiltersByTab] =
@@ -385,6 +389,8 @@ export function InventoryManagement() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [restoreSuccessDialogMessage, setRestoreSuccessDialogMessage] =
+    useState<string | null>(null);
   const [sharingItemId, setSharingItemId] = useState<string | null>(null);
   const [shareProduct, setShareProduct] =
     useState<InventoryShareDialogState | null>(null);
@@ -574,10 +580,33 @@ export function InventoryManagement() {
       ),
     [draftQuantities, processedPoultryRows],
   );
-  const changedCount =
-    changedBirdRows.length +
-    changedEquipmentRows.length +
-    changedProcessedPoultryRows.length;
+  const changedPriceItems = useMemo(
+    () =>
+      inventoryItems.filter((item) => isInventoryItemPriceChanged(item, draftPrices)),
+    [draftPrices, inventoryItems],
+  );
+  const changedItemIds = useMemo(() => {
+    const itemIds = new Set<string>();
+
+    changedBirdRows.forEach((row) => itemIds.add(`bird:${row.inventory_item_id}`));
+    changedEquipmentRows.forEach((row) =>
+      itemIds.add(`equipment:${row.equipment_inventory_item_id}`),
+    );
+    changedProcessedPoultryRows.forEach((row) =>
+      itemIds.add(
+        `processed_poultry:${row.processed_poultry_inventory_item_id}`,
+      ),
+    );
+    changedPriceItems.forEach((item) => itemIds.add(item.id));
+
+    return itemIds;
+  }, [
+    changedBirdRows,
+    changedEquipmentRows,
+    changedPriceItems,
+    changedProcessedPoultryRows,
+  ]);
+  const changedCount = changedItemIds.size;
   const hasUnsavedChanges = changedCount > 0;
 
   useUnsavedInventoryWarning(hasUnsavedChanges);
@@ -701,8 +730,92 @@ export function InventoryManagement() {
     setSuccessMessage(null);
   }
 
+  function updateDraftPrice(item: FlatInventoryItem, nextValue: string) {
+    setDraftPrices((current) => {
+      const priceItemId = getPriceEditItemId(item);
+      const normalizedValue = normalizePriceInput(nextValue);
+
+      if (
+        normalizedValue != null &&
+        areMoneyValuesEqual(normalizedValue, getOriginalPrice(item))
+      ) {
+        const next = { ...current };
+        delete next[priceItemId];
+
+        return next;
+      }
+
+      return {
+        ...current,
+        [priceItemId]: nextValue,
+      };
+    });
+    setSaveError(null);
+    setSuccessMessage(null);
+  }
+
+  function resetDraftPrice(item: FlatInventoryItem) {
+    setDraftPrices((current) => {
+      const next = { ...current };
+      delete next[getPriceEditItemId(item)];
+
+      return next;
+    });
+    setSaveError(null);
+  }
+
+  function applyInventoryItemPrice(item: FlatInventoryItem, nextPrice: number) {
+    if (item.kind === "bird") {
+      setRows((current) =>
+        current.map((row) =>
+          row.inventory_item_id === item.row.inventory_item_id
+            ? {
+                ...row,
+                effective_unit_price: nextPrice,
+                price_override: nextPrice,
+              }
+            : row,
+        ),
+      );
+      return;
+    }
+
+    if (item.kind === "hatching_egg") {
+      setHatchingEggRows((current) =>
+        current.map((row) =>
+          row.hatching_egg_inventory_item_id ===
+          item.row.hatching_egg_inventory_item_id
+            ? { ...row, price: nextPrice }
+            : row,
+        ),
+      );
+      return;
+    }
+
+    if (item.kind === "processed_poultry") {
+      setProcessedPoultryRows((current) =>
+        current.map((row) =>
+          row.processed_poultry_inventory_item_id ===
+          item.row.processed_poultry_inventory_item_id
+            ? { ...row, price: nextPrice }
+            : row,
+        ),
+      );
+      return;
+    }
+
+    setEquipmentRows((current) =>
+      current.map((row) =>
+        row.equipment_inventory_item_id === item.row.equipment_inventory_item_id
+          ? { ...row, price: nextPrice }
+          : row,
+      ),
+    );
+  }
+
   function discardChanges() {
     setDraftQuantities({});
+    setDraftPrices({});
     setSaveError(null);
     setSuccessMessage(null);
   }
@@ -710,7 +823,7 @@ export function InventoryManagement() {
   async function saveChanges() {
     if (!seller || isSaving || changedCount === 0) return;
 
-    const validationMessage = validateChangedQuantities(
+    const quantityValidationMessage = validateChangedQuantities(
       [
         ...changedBirdRows.map((row) => row.inventory_item_id),
         ...changedEquipmentRows.map((row) => row.equipment_inventory_item_id),
@@ -721,8 +834,16 @@ export function InventoryManagement() {
       draftQuantities,
     );
 
-    if (validationMessage) {
-      setSaveError(validationMessage);
+    if (quantityValidationMessage) {
+      setSaveError(quantityValidationMessage);
+      setSuccessMessage(null);
+      return;
+    }
+
+    const priceValidationMessage = validateChangedPrices(changedPriceItems, draftPrices);
+
+    if (priceValidationMessage) {
+      setSaveError(priceValidationMessage);
       setSuccessMessage(null);
       return;
     }
@@ -754,7 +875,11 @@ export function InventoryManagement() {
         p_quantity_available: Number(
           draftQuantities[row.equipment_inventory_item_id],
         ),
-        p_price: row.price,
+        p_price: getPendingInventoryPrice(
+          row.equipment_inventory_item_id,
+          row.price,
+          draftPrices,
+        ),
         p_condition: row.condition || null,
         p_description: row.description || null,
         p_seller_notes: row.seller_notes || null,
@@ -779,11 +904,57 @@ export function InventoryManagement() {
           p_quantity_available: Number(
             draftQuantities[row.processed_poultry_inventory_item_id],
           ),
-          p_price: row.price,
+          p_price: getPendingInventoryPrice(
+            row.processed_poultry_inventory_item_id,
+            row.price,
+            draftPrices,
+          ),
           p_package_size: row.package_size || null,
           p_description: row.description || null,
           p_seller_notes: row.seller_notes || null,
         },
+      );
+
+      if (result.error) {
+        setSaveError(result.error.message);
+        setIsSaving(false);
+        return;
+      }
+    }
+
+    for (const item of changedPriceItems) {
+      const nextPrice = normalizePriceInput(
+        draftPrices[getPriceEditItemId(item)] ?? "",
+      );
+
+      if (nextPrice == null) continue;
+
+      if (
+        item.kind === "equipment" &&
+        changedEquipmentRows.some(
+          (row) =>
+            row.equipment_inventory_item_id ===
+            item.row.equipment_inventory_item_id,
+        )
+      ) {
+        continue;
+      }
+
+      if (
+        item.kind === "processed_poultry" &&
+        changedProcessedPoultryRows.some(
+          (row) =>
+            row.processed_poultry_inventory_item_id ===
+            item.row.processed_poultry_inventory_item_id,
+        )
+      ) {
+        continue;
+      }
+
+      const result = await updateInventoryItemPrice(
+        item,
+        nextPrice,
+        draftQuantities,
       );
 
       if (result.error) {
@@ -832,8 +1003,18 @@ export function InventoryManagement() {
         };
       }),
     );
+    for (const item of changedPriceItems) {
+      const nextPrice = normalizePriceInput(
+        draftPrices[getPriceEditItemId(item)] ?? "",
+      );
+
+      if (nextPrice == null) continue;
+
+      applyInventoryItemPrice(item, nextPrice);
+    }
     setDraftQuantities({});
-    setSuccessMessage("Inventory quantities saved.");
+    setDraftPrices({});
+    setSuccessMessage("Inventory changes saved.");
     setIsSaving(false);
   }
 
@@ -1067,6 +1248,7 @@ export function InventoryManagement() {
     setUpdatingArchiveItemIds(targetIds);
     setSaveError(null);
     setSuccessMessage(null);
+    setRestoreSuccessDialogMessage(null);
 
     for (const item of targetItems) {
       try {
@@ -1110,27 +1292,33 @@ export function InventoryManagement() {
     }
 
     const isArchive = nextStatus === "archived";
+    const restoreSuccessMessage =
+      successfulIds.size === 1
+        ? "Restored to inventory. This item is still hidden from your storefront. Use “Show on store” when you’re ready for buyers to see it."
+        : "Restored to inventory. Restored items are still hidden from your storefront. Use “Show on store” when you’re ready for buyers to see them.";
 
     if (successfulIds.size > 0 && failedMessages.length === 0) {
-      setSuccessMessage(
-        targetItems.length === 1
-          ? isArchive
+      if (isArchive) {
+        setSuccessMessage(
+          targetItems.length === 1
             ? "Inventory item archived."
-            : "Inventory restored to Current Inventory."
-          : isArchive
-            ? `${successfulIds.size} inventory items archived.`
-            : `${successfulIds.size} inventory items restored to Current Inventory.`,
-      );
+            : `${successfulIds.size} inventory items archived.`,
+        );
+      } else {
+        setRestoreSuccessDialogMessage(restoreSuccessMessage);
+      }
     } else if (successfulIds.size > 0 && failedMessages.length > 0) {
-      setSuccessMessage(
-        isArchive
-          ? `${successfulIds.size} inventory ${
-              successfulIds.size === 1 ? "item" : "items"
-            } archived. ${failedMessages.length} failed.`
-          : `${successfulIds.size} inventory ${
-              successfulIds.size === 1 ? "item" : "items"
-            } restored to Current Inventory. ${failedMessages.length} failed.`,
-      );
+      if (isArchive) {
+        setSuccessMessage(
+          `${successfulIds.size} inventory ${
+            successfulIds.size === 1 ? "item" : "items"
+          } archived. ${failedMessages.length} failed.`,
+        );
+      } else {
+        setRestoreSuccessDialogMessage(
+          `${restoreSuccessMessage} ${failedMessages.length} failed.`,
+        );
+      }
       setSaveError(failedMessages[0] ?? "Some inventory rows could not be updated.");
     } else {
       setSaveError(
@@ -1491,6 +1679,7 @@ export function InventoryManagement() {
           </div>
         ) : (
           <FlatInventoryTable
+            draftPrices={draftPrices}
             draftQuantities={draftQuantities}
             items={filteredItems}
             isArchiveProcessing={isArchiveProcessing}
@@ -1506,6 +1695,8 @@ export function InventoryManagement() {
             onToggleSelection={toggleItemSelection}
             selectedItemIds={visibleSelectedItemIds}
             tab={activeTab}
+            resetDraftPrice={resetDraftPrice}
+            updateDraftPrice={updateDraftPrice}
             updateDraftQuantity={updateDraftQuantity}
           />
         )}
@@ -1518,6 +1709,13 @@ export function InventoryManagement() {
           selectedCount={archiveConfirm.items.length}
           onCancel={() => setArchiveConfirm(null)}
           onConfirm={confirmArchiveInventoryItems}
+        />
+      ) : null}
+
+      {restoreSuccessDialogMessage ? (
+        <RestoreInventorySuccessDialog
+          message={restoreSuccessDialogMessage}
+          onClose={() => setRestoreSuccessDialogMessage(null)}
         />
       ) : null}
 
@@ -1766,7 +1964,44 @@ function ArchiveInventoryConfirmModal({
   );
 }
 
+function RestoreInventorySuccessDialog({
+  message,
+  onClose,
+}: {
+  message: string;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      aria-labelledby="restore-inventory-success-title"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 px-4 py-6"
+      role="dialog"
+    >
+      <div className="w-full max-w-md rounded-md border border-stone-200 bg-white p-5 shadow-xl">
+        <h2
+          className="text-lg font-semibold leading-7 text-stone-950"
+          id="restore-inventory-success-title"
+        >
+          Inventory restored
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-stone-700">{message}</p>
+        <div className="mt-5 flex justify-end">
+          <button
+            type="button"
+            className="seller-primary-button"
+            onClick={onClose}
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FlatInventoryTable({
+  draftPrices,
   draftQuantities,
   isArchiveProcessing,
   items,
@@ -1780,10 +2015,13 @@ function FlatInventoryTable({
   onSelectVisible,
   onSetLiveBirdInventoryVisibility,
   onToggleSelection,
+  resetDraftPrice,
   selectedItemIds,
   tab,
+  updateDraftPrice,
   updateDraftQuantity,
 }: {
+  draftPrices: Record<string, string>;
   draftQuantities: Record<string, string>;
   isArchiveProcessing: boolean;
   items: FlatInventoryItem[];
@@ -1803,8 +2041,10 @@ function FlatInventoryTable({
     nextStatus: InventoryStoreVisibilityStatus,
   ) => void;
   onToggleSelection: (itemId: string) => void;
+  resetDraftPrice: (item: FlatInventoryItem) => void;
   selectedItemIds: string[];
   tab: InventoryProductTab;
+  updateDraftPrice: (item: FlatInventoryItem, nextValue: string) => void;
   updateDraftQuantity: (item: FlatInventoryItem, nextValue: string) => void;
 }) {
   const selectedCount = selectedItemIds.length;
@@ -1864,6 +2104,7 @@ function FlatInventoryTable({
         ) : null}
         {items.map((item) => (
           <FlatInventoryCard
+            draftPrices={draftPrices}
             key={item.id}
             draftQuantities={draftQuantities}
             item={item}
@@ -1878,6 +2119,8 @@ function FlatInventoryTable({
             onShareInventoryItem={onShareInventoryItem}
             onSetLiveBirdInventoryVisibility={onSetLiveBirdInventoryVisibility}
             onToggleSelection={onToggleSelection}
+            resetDraftPrice={resetDraftPrice}
+            updateDraftPrice={updateDraftPrice}
             updateDraftQuantity={updateDraftQuantity}
           />
         ))}
@@ -1925,6 +2168,7 @@ function FlatInventoryTable({
           <tbody className="divide-y divide-stone-200 bg-white">
             {items.map((item) => (
               <FlatInventoryTableRow
+                draftPrices={draftPrices}
                 key={item.id}
                 draftQuantities={draftQuantities}
                 item={item}
@@ -1939,7 +2183,9 @@ function FlatInventoryTable({
                 onShareInventoryItem={onShareInventoryItem}
                 onSetLiveBirdInventoryVisibility={onSetLiveBirdInventoryVisibility}
                 onToggleSelection={onToggleSelection}
+                resetDraftPrice={resetDraftPrice}
                 tab={tab}
+                updateDraftPrice={updateDraftPrice}
                 updateDraftQuantity={updateDraftQuantity}
               />
             ))}
@@ -1985,7 +2231,7 @@ function FlatInventoryTableHeader({
         <>
           <th className="px-3 py-2.5">Type/Sex</th>
           <th className="px-3 py-2.5">Hatch date</th>
-          <th className="px-3 py-2.5">
+          <th className="w-24 px-3 py-2.5">
             <AgeHeaderWithTooltip tooltipId="inventory-age-tooltip-table" />
           </th>
         </>
@@ -2013,7 +2259,7 @@ function FlatInventoryTableHeader({
           />
         </span>
       </th>
-      <th className="px-3 py-2.5">Price</th>
+      <th className="w-28 px-3 py-2.5">Price</th>
       <th className="px-3 py-2.5">Availability</th>
       <th className="px-3 py-2.5 text-right">Action</th>
     </tr>
@@ -2171,6 +2417,7 @@ function InfoTooltip({
 }
 
 function FlatInventoryTableRow({
+  draftPrices,
   draftQuantities,
   isSelected,
   item,
@@ -2182,9 +2429,12 @@ function FlatInventoryTableRow({
   onShareInventoryItem,
   onSetLiveBirdInventoryVisibility,
   onToggleSelection,
+  resetDraftPrice,
   tab,
+  updateDraftPrice,
   updateDraftQuantity,
 }: {
+  draftPrices: Record<string, string>;
   draftQuantities: Record<string, string>;
   isSelected: boolean;
   item: FlatInventoryItem;
@@ -2199,10 +2449,24 @@ function FlatInventoryTableRow({
     nextStatus: InventoryStoreVisibilityStatus,
   ) => void;
   onToggleSelection: (itemId: string) => void;
+  resetDraftPrice: (item: FlatInventoryItem) => void;
   tab: InventoryProductTab;
+  updateDraftPrice: (item: FlatInventoryItem, nextValue: string) => void;
   updateDraftQuantity: (item: FlatInventoryItem, nextValue: string) => void;
 }) {
-  const isChanged = isInventoryItemChanged(item, draftQuantities);
+  const isChanged =
+    isInventoryItemChanged(item, draftQuantities) ||
+    isInventoryItemPriceChanged(item, draftPrices);
+  const priceCell = (
+    <td className="w-28 px-3 py-3 align-top">
+      <PriceEditControl
+        draftPrices={draftPrices}
+        item={item}
+        resetDraftPrice={resetDraftPrice}
+        updateDraftPrice={updateDraftPrice}
+      />
+    </td>
+  );
 
   return (
     <tr
@@ -2245,7 +2509,7 @@ function FlatInventoryTableRow({
           <td className="px-3 py-3 align-top text-stone-700">
             {formatTableDate(item.hatchDate)}
           </td>
-          <td className="px-3 py-3 align-top text-stone-700">
+          <td className="w-24 px-3 py-3 align-top text-stone-700">
             {item.ageLabel}
           </td>
         </>
@@ -2280,9 +2544,7 @@ function FlatInventoryTableRow({
       <td className="px-3 py-3 text-center align-top font-medium text-stone-700">
         {item.reservedQuantity}
       </td>
-      <td className="px-3 py-3 align-top font-medium text-stone-700">
-        {formatCurrency(item.price)}
-      </td>
+      {priceCell}
       <td className="px-3 py-3 align-top">
         <AvailabilityPill label={item.availabilityLabel} />
       </td>
@@ -2309,6 +2571,7 @@ function FlatInventoryTableRow({
 }
 
 function FlatInventoryCard({
+  draftPrices,
   draftQuantities,
   isSelected,
   item,
@@ -2320,8 +2583,11 @@ function FlatInventoryCard({
   onShareInventoryItem,
   onSetLiveBirdInventoryVisibility,
   onToggleSelection,
+  resetDraftPrice,
+  updateDraftPrice,
   updateDraftQuantity,
 }: {
+  draftPrices: Record<string, string>;
   draftQuantities: Record<string, string>;
   isSelected: boolean;
   item: FlatInventoryItem;
@@ -2336,9 +2602,13 @@ function FlatInventoryCard({
     nextStatus: InventoryStoreVisibilityStatus,
   ) => void;
   onToggleSelection: (itemId: string) => void;
+  resetDraftPrice: (item: FlatInventoryItem) => void;
+  updateDraftPrice: (item: FlatInventoryItem, nextValue: string) => void;
   updateDraftQuantity: (item: FlatInventoryItem, nextValue: string) => void;
 }) {
-  const isChanged = isInventoryItemChanged(item, draftQuantities);
+  const isChanged =
+    isInventoryItemChanged(item, draftQuantities) ||
+    isInventoryItemPriceChanged(item, draftPrices);
 
   return (
     <article
@@ -2421,7 +2691,19 @@ function FlatInventoryCard({
           label="Reserved"
           value={String(item.reservedQuantity)}
         />
-        <InventoryCardField label="Price" value={formatCurrency(item.price)} />
+        <div className="rounded-md bg-stone-50 px-2.5 py-2">
+          <dt className="text-sm font-bold uppercase tracking-[0.05em] text-stone-500 sm:text-xs sm:font-semibold">
+            Price
+          </dt>
+          <dd className="mt-1">
+            <PriceEditControl
+              draftPrices={draftPrices}
+              item={item}
+              resetDraftPrice={resetDraftPrice}
+              updateDraftPrice={updateDraftPrice}
+            />
+          </dd>
+        </div>
         <InventoryCardField label="Availability" value={item.availabilityLabel} />
       </dl>
 
@@ -2684,6 +2966,71 @@ function AvailableQuantityControl({
         value={quantityValue}
         onChange={(event) => updateDraftQuantity(item, event.target.value)}
       />
+      {isChanged ? (
+        <p className="mt-1 text-sm font-semibold text-amber-700 sm:text-xs">
+          Unsaved
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function PriceEditControl({
+  draftPrices,
+  item,
+  resetDraftPrice,
+  updateDraftPrice,
+}: {
+  draftPrices: Record<string, string>;
+  item: FlatInventoryItem;
+  resetDraftPrice: (item: FlatInventoryItem) => void;
+  updateDraftPrice: (item: FlatInventoryItem, nextValue: string) => void;
+}) {
+  const priceItemId = getPriceEditItemId(item);
+  const priceValue =
+    draftPrices[priceItemId] ?? formatPriceInput(getOriginalPrice(item));
+  const rowHasInvalidPrice =
+    draftPrices[priceItemId] != null && normalizePriceInput(priceValue) == null;
+  const isChanged = isInventoryItemPriceChanged(item, draftPrices);
+
+  return (
+    <div className="flex flex-col items-start">
+      <label className="sr-only" htmlFor={`price-${priceItemId}`}>
+        Price for {item.breedOrItem}
+      </label>
+      <div className="relative">
+        <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-bold text-stone-500">
+          $
+        </span>
+        <input
+          id={`price-${priceItemId}`}
+          aria-label={`Price for ${item.breedOrItem}`}
+          className={`h-12 w-24 rounded-md border py-0 pl-6 pr-2 text-right text-lg font-bold text-stone-950 shadow-sm focus:outline-none focus:ring-2 sm:h-8 sm:w-20 sm:text-sm sm:font-semibold ${
+            rowHasInvalidPrice
+              ? "border-red-400 focus:border-red-600 focus:ring-red-600/20"
+              : isChanged
+                ? "border-amber-300 bg-amber-50 focus:border-amber-600 focus:ring-amber-600/20"
+              : "border-stone-300 focus:border-emerald-700 focus:ring-emerald-700/20"
+          }`}
+          inputMode="decimal"
+          min="0"
+          step="0.01"
+          type="text"
+          value={priceValue}
+          onChange={(event) => updateDraftPrice(item, event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              event.currentTarget.blur();
+            }
+
+            if (event.key === "Escape") {
+              event.preventDefault();
+              resetDraftPrice(item);
+            }
+          }}
+        />
+      </div>
       {isChanged ? (
         <p className="mt-1 text-sm font-semibold text-amber-700 sm:text-xs">
           Unsaved
@@ -3652,7 +3999,8 @@ function calculateInventoryAgeDays(row: InventoryRow) {
 }
 
 function formatInventoryAge(row: InventoryRow) {
-  return formatInventoryAgeLabelFromDates(row.origin_date, row.available_date);
+  return formatInventoryAgeLabelFromDates(row.origin_date, row.available_date)
+    .replace(/ old$/, "");
 }
 
 function matchesAgeFilter(row: InventoryRow, ageFilter: AgeFilter) {
@@ -3716,6 +4064,59 @@ function getDraftQuantityId(item: FlatInventoryItem) {
 
 function getOriginalQuantity(item: FlatInventoryItem) {
   return item.row.quantity_available ?? 0;
+}
+
+function getPriceEditItemId(item: FlatInventoryItem) {
+  return `price:${getDraftQuantityId(item)}`;
+}
+
+function getOriginalPrice(item: FlatInventoryItem) {
+  return item.price ?? 0;
+}
+
+function formatPriceInput(value: number | null | undefined) {
+  return (value ?? 0).toFixed(2);
+}
+
+function normalizePriceInput(value: string) {
+  const trimmedValue = value.trim();
+
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmedValue)) return null;
+
+  const numericValue = Number(trimmedValue);
+
+  if (!Number.isFinite(numericValue) || numericValue < 0) return null;
+
+  return Math.round(numericValue * 100) / 100;
+}
+
+function areMoneyValuesEqual(left: number, right: number | null | undefined) {
+  return Math.round(left * 100) === Math.round((right ?? 0) * 100);
+}
+
+function isInventoryItemPriceChanged(
+  item: FlatInventoryItem,
+  draftPrices: Record<string, string>,
+) {
+  const draftValue = draftPrices[getPriceEditItemId(item)];
+
+  if (draftValue == null) return false;
+
+  const normalizedValue = normalizePriceInput(draftValue);
+
+  if (normalizedValue == null) return true;
+
+  return !areMoneyValuesEqual(normalizedValue, getOriginalPrice(item));
+}
+
+function getPendingInventoryPrice(
+  itemId: string,
+  originalPrice: number,
+  draftPrices: Record<string, string>,
+) {
+  const normalizedValue = normalizePriceInput(draftPrices[`price:${itemId}`] ?? "");
+
+  return normalizedValue ?? originalPrice;
 }
 
 function isStoreVisibilityInventoryItem(
@@ -3918,6 +4319,73 @@ async function setInventoryItemArchiveStatus(
   );
 }
 
+async function updateInventoryItemPrice(
+  item: FlatInventoryItem,
+  nextPrice: number,
+  draftQuantities: Record<string, string>,
+) {
+  if (item.kind === "bird") {
+    return supabase.rpc("seller_update_inventory_item", {
+      p_custom_inventory_label: item.row.custom_inventory_label,
+      p_inventory_item_id: item.row.inventory_item_id,
+      p_inventory_type: item.row.inventory_type,
+      p_price_override: nextPrice,
+      p_seller_notes: item.row.inventory_seller_notes,
+      p_sort_order: item.row.inventory_item_sort_order ?? 0,
+    });
+  }
+
+  if (item.kind === "hatching_egg") {
+    return supabase.rpc("seller_update_hatching_egg_inventory_item", {
+      p_available_date: item.row.available_date,
+      p_description: item.row.description ?? "",
+      p_hatching_egg_inventory_item_id:
+        item.row.hatching_egg_inventory_item_id,
+      p_item_name: item.row.item_name,
+      p_minimum_order_quantity: item.row.minimum_order_quantity,
+      p_price: nextPrice,
+      p_quantity_available:
+        draftQuantities[item.row.hatching_egg_inventory_item_id] != null
+          ? Number(draftQuantities[item.row.hatching_egg_inventory_item_id])
+          : item.row.quantity_available,
+      p_seller_notes: item.row.seller_notes,
+      p_species_id: item.row.species_id,
+    });
+  }
+
+  if (item.kind === "processed_poultry") {
+    return supabase.rpc("seller_update_processed_poultry_inventory_item", {
+      p_description: item.row.description || null,
+      p_package_size: item.row.package_size || null,
+      p_poultry_type: item.row.poultry_type,
+      p_price: nextPrice,
+      p_processed_poultry_inventory_item_id:
+        item.row.processed_poultry_inventory_item_id,
+      p_product_name: item.row.product_name,
+      p_product_type: item.row.product_type,
+      p_quantity_available:
+        draftQuantities[item.row.processed_poultry_inventory_item_id] != null
+          ? Number(draftQuantities[item.row.processed_poultry_inventory_item_id])
+          : item.row.quantity_available,
+      p_seller_notes: item.row.seller_notes || null,
+    });
+  }
+
+  return supabase.rpc("seller_update_equipment_inventory_item", {
+    p_category: item.row.category,
+    p_condition: item.row.condition || null,
+    p_description: item.row.description || null,
+    p_equipment_inventory_item_id: item.row.equipment_inventory_item_id,
+    p_item_name: item.row.item_name,
+    p_price: nextPrice,
+    p_quantity_available:
+      draftQuantities[item.row.equipment_inventory_item_id] != null
+        ? Number(draftQuantities[item.row.equipment_inventory_item_id])
+        : item.row.quantity_available,
+    p_seller_notes: item.row.seller_notes || null,
+  });
+}
+
 function isValidQuantity(value: string) {
   if (!value.trim()) return false;
 
@@ -3937,6 +4405,25 @@ function validateChangedQuantities(
 
     if (!draftValue || !isValidQuantity(draftValue)) {
       return "Available quantity must be a whole number of zero or more.";
+    }
+  }
+
+  return null;
+}
+
+function validateChangedPrices(
+  changedItems: FlatInventoryItem[],
+  draftPrices: Record<string, string>,
+) {
+  for (const item of changedItems) {
+    const draftValue = draftPrices[getPriceEditItemId(item)];
+
+    if (draftValue == null) continue;
+
+    const normalizedValue = normalizePriceInput(draftValue);
+
+    if (normalizedValue == null) {
+      return "Price must be a zero or positive dollar amount with up to two decimal places.";
     }
   }
 
