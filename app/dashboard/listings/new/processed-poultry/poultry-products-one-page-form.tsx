@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
+import { playDustySuccessSound } from "@/lib/success-sound";
 import { supabase } from "@/lib/supabase";
 import { ListingShareDialog } from "../../../_components/listing-share-dialog";
 import { PhotoManager, type DashboardPhoto } from "../../../_components/photo-manager";
@@ -699,6 +700,9 @@ export function PoultryProductsOnePageForm({
 
     setSavedFormSnapshot(getFormSnapshot(form));
     setPublishStatus("success");
+    if (!isEditMode) {
+      playDustySuccessSound();
+    }
     setPublishSuccessDialog({
       listingTitle: form.productName.trim() || "Poultry product",
       publicPath: buildPublicListingPath({

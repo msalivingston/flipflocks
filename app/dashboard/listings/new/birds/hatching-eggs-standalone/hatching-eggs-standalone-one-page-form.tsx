@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
+import { playDustySuccessSound } from "@/lib/success-sound";
 import { supabase } from "@/lib/supabase";
 import {
   PhotoManager,
@@ -836,6 +837,9 @@ export function HatchingEggsStandaloneOnePageForm({
 
     setSavedFormSnapshot(getFormSnapshot(form));
     setPublishStatus("success");
+    if (!isEditMode) {
+      playDustySuccessSound();
+    }
     setPublishSuccessDialog({
       listingTitle: form.itemName.trim() || "Hatching eggs",
       publicPath: buildPublicListingPath({

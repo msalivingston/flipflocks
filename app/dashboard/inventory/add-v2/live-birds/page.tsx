@@ -5,8 +5,18 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
+import { playDustySuccessSound } from "@/lib/success-sound";
+import {
+  ListingShareDialog,
+  ListingShareMultiDialog,
+} from "../../../_components/listing-share-dialog";
 import { useSellerContext } from "../../../_components/seller-context";
 import { DashboardPageContent } from "../../../_components/seller-ui";
+import {
+  buildFallbackLivePoultryShareProduct,
+  loadLivePoultryShareProducts,
+  type LivePoultryShareProduct,
+} from "../../../_lib/live-poultry-share-products";
 import {
   breedLibrarySelect,
   pickFeaturedMedia,
@@ -124,6 +134,10 @@ type BreedProfileUpsertResult = {
 
 type EditSaveStatus = "idle" | "saving" | "success" | "error";
 
+type LivePoultryPublishSuccessDialogState = {
+  products: LivePoultryShareProduct[];
+};
+
 const showDeveloperSavePreview =
   process.env.NODE_ENV === "development" &&
   process.env.NEXT_PUBLIC_SHOW_ADD_INVENTORY_V2_SAVE_PREVIEW === "true";
@@ -187,6 +201,9 @@ export function LiveBirdsListingForm({
   const [publishedListingBatchId, setPublishedListingBatchId] = useState<
     string | null
   >(null);
+  const [publishSuccessDialog, setPublishSuccessDialog] =
+    useState<LivePoultryPublishSuccessDialogState | null>(null);
+  const isNavigatingAfterPublishRef = useRef(false);
   const [isStartOverDialogOpen, setIsStartOverDialogOpen] = useState(false);
   const [pendingNavigationHref, setPendingNavigationHref] = useState<
     string | null
@@ -572,6 +589,8 @@ export function LiveBirdsListingForm({
         setSaveDraftMessage(null);
         setPublishStatus("idle");
         setPublishMessage(null);
+        setPublishSuccessDialog(null);
+        isNavigatingAfterPublishRef.current = false;
         setEditSaveStatus("idle");
         setEditSaveMessage(null);
         setPublishedListingBatchId(null);
@@ -602,6 +621,8 @@ export function LiveBirdsListingForm({
         setSaveDraftMessage(null);
         setPublishStatus("idle");
         setPublishMessage(null);
+        setPublishSuccessDialog(null);
+        isNavigatingAfterPublishRef.current = false;
         setEditSaveStatus("idle");
         setEditSaveMessage(null);
         setPublishedListingBatchId(null);
@@ -1617,6 +1638,7 @@ export function LiveBirdsListingForm({
       publishDisabledReason ||
       publishStatus === "publishing" ||
       publishStatus === "success" ||
+      publishSuccessDialog ||
       saveDraftStatus === "saving"
     ) {
       return;
@@ -1660,11 +1682,44 @@ export function LiveBirdsListingForm({
       return;
     }
 
+    const shareProductsResult = await loadLivePoultryShareProducts({
+      listingBatchId: saveResult.listingBatchId,
+      storeId: seller.store_id,
+      storeName: seller.store_name,
+      storeSlug: seller.store_slug,
+    });
+    const shareProducts = shareProductsResult.ok
+      ? shareProductsResult.products
+      : [];
+
+    if (!shareProductsResult.ok) {
+      console.error("Live poultry share products could not be loaded", {
+        listingBatchId: saveResult.listingBatchId,
+        message: shareProductsResult.message,
+      });
+    }
+
     setPublishedListingBatchId(saveResult.listingBatchId);
     setPublishStatus("success");
     setPublishMessage("Published to storefront.");
+    if (!isEditMode) {
+      playDustySuccessSound();
+    }
     setSaveDraftMessage(null);
     setSavedFormSnapshot(currentFormSnapshot);
+    setPublishSuccessDialog({
+      products:
+        shareProducts.length > 0
+          ? shareProducts
+          : [buildFallbackLivePoultryShareProduct(saveResult.listingBatchId)],
+    });
+  }
+
+  function navigateToInventoryAfterPublish() {
+    if (isNavigatingAfterPublishRef.current) return;
+
+    isNavigatingAfterPublishRef.current = true;
+    setPublishSuccessDialog(null);
     router.push("/dashboard/inventory");
   }
 
@@ -1701,6 +1756,8 @@ export function LiveBirdsListingForm({
     setSaveDraftStatus("idle");
     setPublishMessage(null);
     setPublishStatus("idle");
+    setPublishSuccessDialog(null);
+    isNavigatingAfterPublishRef.current = false;
     setPublishedListingBatchId(null);
     setSavedListingBatchId(null);
     setPendingNavigationHref(null);
@@ -2022,6 +2079,33 @@ export function LiveBirdsListingForm({
           onLeaveWithoutSaving={leavePendingNavigationWithoutSaving}
           onSaveDraft={saveDraftThenContinuePendingNavigation}
         />
+      ) : null}
+      {publishSuccessDialog ? (
+        publishSuccessDialog.products.length > 1 ? (
+          <ListingShareMultiDialog
+            isStorePublic={Boolean(seller?.is_publicly_available)}
+            items={publishSuccessDialog.products}
+            open
+            storeName={seller?.store_name ?? "your store"}
+            onClose={navigateToInventoryAfterPublish}
+            onDone={navigateToInventoryAfterPublish}
+          />
+        ) : (
+          <ListingShareDialog
+            isStorePublic={Boolean(seller?.is_publicly_available)}
+            listingTitle={
+              publishSuccessDialog.products[0]?.title ?? "Live poultry listing"
+            }
+            mode="published"
+            open
+            publicPath={publishSuccessDialog.products[0]?.publicPath}
+            shareText={publishSuccessDialog.products[0]?.shareText}
+            storeName={seller?.store_name ?? "your store"}
+            summary={publishSuccessDialog.products[0]?.summary}
+            onClose={navigateToInventoryAfterPublish}
+            onDone={navigateToInventoryAfterPublish}
+          />
+        )
       ) : null}
     </DashboardPageContent>
   );

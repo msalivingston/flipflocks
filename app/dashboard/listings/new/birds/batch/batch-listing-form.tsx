@@ -3,10 +3,15 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { Dispatch, SetStateAction } from "react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
+import { playDustySuccessSound } from "@/lib/success-sound";
 import { supabase } from "@/lib/supabase";
 import { restoreCatalogDefaultPhotoBestEffort } from "../../../../breeds/breed-data";
+import {
+  ListingShareDialog,
+  ListingShareMultiDialog,
+} from "../../../../_components/listing-share-dialog";
 import { useSellerContext } from "../../../../_components/seller-context";
 import {
   ErrorState,
@@ -21,6 +26,11 @@ import type {
   SellerBreedProfileOption,
   SellerInventoryManagementRow,
 } from "../../../../_lib/seller-types";
+import {
+  buildFallbackLivePoultryShareProduct,
+  loadLivePoultryShareProducts,
+  type LivePoultryShareProduct,
+} from "../../../../_lib/live-poultry-share-products";
 import {
   buildMediaSummary,
   buildReadinessListing,
@@ -133,6 +143,11 @@ type InventoryItemResult = {
   id: string;
 };
 
+type BatchPublishSuccessDialogState = {
+  listingBatchId: string;
+  products: LivePoultryShareProduct[];
+};
+
 type GroupSessionDraft = {
   form: GroupFormState;
   rows: InventoryRow[];
@@ -204,6 +219,9 @@ export function GroupListingForm({
   const [isDiscardingDraft, setIsDiscardingDraft] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [publishSuccessDialog, setPublishSuccessDialog] =
+    useState<BatchPublishSuccessDialogState | null>(null);
+  const isNavigatingAfterPublishRef = useRef(false);
   const [isCustomBreedDialogOpen, setIsCustomBreedDialogOpen] = useState(false);
   const [customBreedInitialName, setCustomBreedInitialName] = useState("");
   const [customBreedTargetRowId, setCustomBreedTargetRowId] = useState("");
@@ -1126,7 +1144,9 @@ export function GroupListingForm({
   }
 
   async function publishListing() {
-    if (!readinessReport || isSavingDraft || isPublishing) return;
+    if (!readinessReport || isSavingDraft || isPublishing || publishSuccessDialog) {
+      return;
+    }
 
     setPublishError(null);
     setSaveDraftError(null);
@@ -1147,11 +1167,46 @@ export function GroupListingForm({
 
     if (!publishedListingBatchId) return;
 
+    const shareProductsResult = seller
+      ? await loadLivePoultryShareProducts({
+          listingBatchId: publishedListingBatchId,
+          storeId: seller.store_id,
+          storeName: seller.store_name,
+          storeSlug: seller.store_slug,
+        })
+      : { ok: true as const, products: [] };
+    const shareProducts = shareProductsResult.ok
+      ? shareProductsResult.products
+      : [];
+
+    if (!shareProductsResult.ok) {
+      console.error("Live poultry share products could not be loaded", {
+        listingBatchId: publishedListingBatchId,
+        message: shareProductsResult.message,
+      });
+    }
+
+    playDustySuccessSound();
     window.sessionStorage.setItem(
       "flipflocksListingCreatedMessage",
       "Listing published. Buyers can now see it on your storefront.",
     );
     clearGroupSessionDraft();
+    setPublishSuccessDialog({
+      listingBatchId: publishedListingBatchId,
+      products:
+        shareProducts.length > 0
+          ? shareProducts
+          : [buildFallbackLivePoultryShareProduct(publishedListingBatchId)],
+    });
+  }
+
+  function navigateToPublishedListingAfterShare() {
+    if (!publishSuccessDialog || isNavigatingAfterPublishRef.current) return;
+
+    isNavigatingAfterPublishRef.current = true;
+    const publishedListingBatchId = publishSuccessDialog.listingBatchId;
+    setPublishSuccessDialog(null);
     router.push(`/dashboard/listings/${publishedListingBatchId}`);
   }
 
@@ -1607,7 +1662,7 @@ export function GroupListingForm({
                 variant="group"
               />
               <PublishReadinessReview
-                isPublishing={isPublishing}
+                isPublishing={isPublishing || Boolean(publishSuccessDialog)}
                 isSavingDraft={isSavingDraft}
                 publishError={publishError}
                 saveDraftError={saveDraftError}
@@ -1658,6 +1713,33 @@ export function GroupListingForm({
           }}
           onSave={saveCustomBreed}
         />
+      ) : null}
+      {publishSuccessDialog ? (
+        publishSuccessDialog.products.length > 1 ? (
+          <ListingShareMultiDialog
+            isStorePublic={Boolean(seller?.is_publicly_available)}
+            items={publishSuccessDialog.products}
+            open
+            storeName={seller?.store_name ?? "your store"}
+            onClose={navigateToPublishedListingAfterShare}
+            onDone={navigateToPublishedListingAfterShare}
+          />
+        ) : (
+          <ListingShareDialog
+            isStorePublic={Boolean(seller?.is_publicly_available)}
+            listingTitle={
+              publishSuccessDialog.products[0]?.title ?? "Live poultry listing"
+            }
+            mode="published"
+            open
+            publicPath={publishSuccessDialog.products[0]?.publicPath}
+            shareText={publishSuccessDialog.products[0]?.shareText}
+            storeName={seller?.store_name ?? "your store"}
+            summary={publishSuccessDialog.products[0]?.summary}
+            onClose={navigateToPublishedListingAfterShare}
+            onDone={navigateToPublishedListingAfterShare}
+          />
+        )
       ) : null}
     </>
   );

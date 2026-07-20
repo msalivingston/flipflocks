@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
+import { playDustySuccessSound } from "@/lib/success-sound";
 import { supabase } from "@/lib/supabase";
 import { restoreCatalogDefaultPhotoBestEffort } from "../../../../breeds/breed-data";
 import { useSellerContext } from "../../../../_components/seller-context";
@@ -1012,6 +1013,7 @@ export function SimpleListingForm({
 
     if (!publishedListingBatchId) return;
 
+    playDustySuccessSound();
     window.sessionStorage.setItem(
       "flipflocksListingCreatedMessage",
       "Listing published. Buyers can now see it on your storefront.",

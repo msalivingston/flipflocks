@@ -6,6 +6,14 @@ import type { buildPublicListingPath } from "../_lib/public-listing-url";
 
 type ListingShareDialogMode = "published" | "share";
 
+export type ListingShareDialogItem = {
+  id: string;
+  title: string;
+  publicPath: ReturnType<typeof buildPublicListingPath> | undefined;
+  shareText?: string | null;
+  summary?: string | null;
+};
+
 export type ListingShareDialogProps = {
   listingTitle: string;
   storeName: string;
@@ -45,13 +53,7 @@ export function ListingShareDialog({
 
   const normalizedPublicPath = normalizePublicPath(publicPath);
   const absoluteUrl = useMemo(() => {
-    if (!origin || !normalizedPublicPath) return null;
-
-    try {
-      return new URL(normalizedPublicPath, origin).toString();
-    } catch {
-      return null;
-    }
+    return buildAbsoluteUrl(normalizedPublicPath, origin);
   }, [normalizedPublicPath, origin]);
   const shareText =
     customShareText?.trim() || buildShareText({ listingTitle, storeName, summary });
@@ -163,10 +165,7 @@ export function ListingShareDialog({
   function openFacebookShare() {
     if (!absoluteUrl) return;
 
-    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
-      absoluteUrl,
-    )}`;
-    openExternalWindow(shareUrl);
+    openExternalWindow(buildFacebookShareUrl(absoluteUrl));
   }
 
   function openEmailShare() {
@@ -177,12 +176,10 @@ export function ListingShareDialog({
     const bodyParts = customEmailBody
       ? [customEmailBody, absoluteUrl]
       : [listingTitle, storeName, summary?.trim(), absoluteUrl];
-    const body = bodyParts
-      .filter((value): value is string => Boolean(value))
-      .join("\n\n");
-    window.location.href = `mailto:?subject=${encodeURIComponent(
+    window.location.href = buildEmailShareUrl({
+      bodyParts,
       subject,
-    )}&body=${encodeURIComponent(body)}`;
+    });
   }
 
   if (!open) return null;
@@ -230,6 +227,327 @@ export function ListingShareDialog({
             <HiddenStoreContent
               dialogTitleId={dialogTitleId}
               listingTitle={listingTitle}
+              onDone={handleDone}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ListingShareMultiDialog({
+  isStorePublic,
+  items,
+  open,
+  onClose,
+  onDone,
+  storeName,
+}: {
+  isStorePublic: boolean;
+  items: ListingShareDialogItem[];
+  open: boolean;
+  onClose: () => void;
+  onDone?: () => void;
+  storeName: string;
+}) {
+  const dialogTitleId = useId();
+  const fallbackTitleId = useId();
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const copyResetTimer = useRef<number | null>(null);
+  const [origin, setOrigin] = useState("");
+  const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
+  const [copyErrorItemId, setCopyErrorItemId] = useState<string | null>(null);
+  const [fallbackItemId, setFallbackItemId] = useState<string | null>(null);
+  const [shareFailure, setShareFailure] = useState<ShareFailure>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const resetTimer = window.setTimeout(() => {
+      setOrigin(window.location.origin);
+      setCopiedItemId(null);
+      setCopyErrorItemId(null);
+      setFallbackItemId(null);
+      setShareFailure(null);
+      closeButtonRef.current?.focus();
+    }, 0);
+
+    return () => window.clearTimeout(resetTimer);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !copiedItemId) return;
+
+    copyResetTimer.current = window.setTimeout(() => {
+      setCopiedItemId(null);
+    }, 1600);
+
+    return () => {
+      if (copyResetTimer.current) {
+        window.clearTimeout(copyResetTimer.current);
+        copyResetTimer.current = null;
+      }
+    };
+  }, [copiedItemId, open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") handleClose();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  });
+
+  function handleClose() {
+    setFallbackItemId(null);
+    setShareFailure(null);
+    onClose();
+  }
+
+  function handleDone() {
+    setFallbackItemId(null);
+    setShareFailure(null);
+    if (onDone) {
+      onDone();
+      return;
+    }
+
+    onClose();
+  }
+
+  function getAbsoluteUrl(item: ListingShareDialogItem) {
+    return buildAbsoluteUrl(item.publicPath, origin);
+  }
+
+  function getShareText(item: ListingShareDialogItem) {
+    return (
+      item.shareText?.trim() ||
+      buildShareText({
+        listingTitle: item.title,
+        storeName,
+        summary: item.summary,
+      })
+    );
+  }
+
+  async function copyListingUrl(item: ListingShareDialogItem) {
+    const absoluteUrl = getAbsoluteUrl(item);
+    if (!absoluteUrl) return;
+
+    const copied = await copyTextToClipboard(absoluteUrl);
+    setCopiedItemId(copied ? item.id : null);
+    setCopyErrorItemId(copied ? null : item.id);
+  }
+
+  async function shareListing(item: ListingShareDialogItem) {
+    const absoluteUrl = getAbsoluteUrl(item);
+    if (!absoluteUrl || !isStorePublic) return;
+
+    setShareFailure(null);
+
+    if (!("share" in navigator) || typeof navigator.share !== "function") {
+      setFallbackItemId(item.id);
+      setShareFailure("unavailable");
+      return;
+    }
+
+    const shareData = {
+      title: item.title,
+      text: getShareText(item),
+      url: absoluteUrl,
+    };
+
+    try {
+      if (
+        "canShare" in navigator &&
+        typeof navigator.canShare === "function" &&
+        !navigator.canShare(shareData)
+      ) {
+        setFallbackItemId(item.id);
+        setShareFailure("unavailable");
+        return;
+      }
+
+      await navigator.share(shareData);
+    } catch (error) {
+      if (isAbortError(error)) return;
+
+      setFallbackItemId(item.id);
+      setShareFailure("failed");
+    }
+  }
+
+  function openFacebookShare(item: ListingShareDialogItem) {
+    const absoluteUrl = getAbsoluteUrl(item);
+    if (!absoluteUrl) return;
+
+    openExternalWindow(buildFacebookShareUrl(absoluteUrl));
+  }
+
+  function openEmailShare(item: ListingShareDialogItem) {
+    const absoluteUrl = getAbsoluteUrl(item);
+    if (!absoluteUrl) return;
+
+    window.location.href = buildEmailShareUrl({
+      bodyParts: [getShareText(item), absoluteUrl],
+      subject: item.title,
+    });
+  }
+
+  if (!open) return null;
+
+  const fallbackItem = items.find((item) => item.id === fallbackItemId) ?? null;
+
+  return (
+    <div
+      aria-labelledby={dialogTitleId}
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-stone-950/45 px-3 py-5 sm:px-4 sm:py-6"
+      role="dialog"
+    >
+      <div className="relative w-full max-w-2xl overflow-hidden rounded-xl border border-stone-200 bg-white shadow-2xl">
+        <button
+          ref={closeButtonRef}
+          aria-label="Close dialog"
+          className="absolute right-3 top-3 inline-flex size-9 items-center justify-center rounded-full text-2xl leading-none text-stone-500 transition hover:bg-stone-100 hover:text-stone-950 focus:outline-none focus:ring-2 focus:ring-emerald-700"
+          type="button"
+          onClick={handleClose}
+        >
+          &times;
+        </button>
+
+        <div className="grid gap-5 px-4 pb-5 pt-6 sm:px-6 sm:pb-6">
+          {isStorePublic ? (
+            <>
+              <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-emerald-800 text-3xl font-semibold text-white shadow-sm">
+                <Image
+                  alt=""
+                  aria-hidden="true"
+                  className="size-7 object-contain brightness-0 invert"
+                  height={28}
+                  src="/glyphs/checkmark.png"
+                  width={28}
+                />
+              </div>
+              <div className="text-center">
+                <h2
+                  className="text-2xl font-semibold leading-tight text-stone-950"
+                  id={dialogTitleId}
+                >
+                  Your listings are live!
+                </h2>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-700">
+                  Your live poultry listings are now published on your
+                  storefront.
+                </p>
+              </div>
+
+              <div className="grid gap-3">
+                {items.map((item) => {
+                  const normalizedPath = normalizePublicPath(item.publicPath);
+                  const absoluteUrl = getAbsoluteUrl(item);
+                  const copyState =
+                    copiedItemId === item.id
+                      ? "copied"
+                      : copyErrorItemId === item.id
+                        ? "error"
+                        : "idle";
+
+                  return (
+                    <section
+                      className="grid gap-3 rounded-lg border border-stone-200 bg-stone-50 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                      key={item.id}
+                    >
+                      <div className="min-w-0">
+                        <h3 className="truncate text-sm font-semibold text-stone-950">
+                          {item.title}
+                        </h3>
+                        {item.summary ? (
+                          <p className="mt-1 text-xs leading-5 text-stone-600">
+                            {item.summary}
+                          </p>
+                        ) : null}
+                        {!normalizedPath ? (
+                          <p className="mt-1 text-xs font-medium text-amber-700">
+                            The public listing link is not available yet.
+                          </p>
+                        ) : copyState === "copied" ? (
+                          <p
+                            aria-live="polite"
+                            className="mt-1 text-xs font-semibold text-emerald-700"
+                            role="status"
+                          >
+                            Copied
+                          </p>
+                        ) : copyState === "error" ? (
+                          <p
+                            aria-live="polite"
+                            className="mt-1 text-xs font-semibold text-red-700"
+                            role="status"
+                          >
+                            Copy was not available.
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+                        <button
+                          className="seller-secondary-button min-h-10 justify-center px-3 text-sm"
+                          disabled={!absoluteUrl}
+                          type="button"
+                          onClick={() => absoluteUrl && openExternalWindow(absoluteUrl)}
+                        >
+                          View
+                        </button>
+                        <button
+                          className="seller-secondary-button min-h-10 justify-center px-3 text-sm"
+                          disabled={!absoluteUrl}
+                          type="button"
+                          onClick={() => void shareListing(item)}
+                        >
+                          Share
+                        </button>
+                        <button
+                          className="seller-secondary-button min-h-10 justify-center px-3 text-sm"
+                          disabled={!absoluteUrl}
+                          type="button"
+                          onClick={() => void copyListingUrl(item)}
+                        >
+                          {copyState === "copied" ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+
+              {fallbackItem ? (
+                <FallbackSharePanel
+                  fallbackTitleId={fallbackTitleId}
+                  shareFailure={shareFailure}
+                  onClose={() => setFallbackItemId(null)}
+                  onCopy={() => void copyListingUrl(fallbackItem)}
+                  onEmail={() => openEmailShare(fallbackItem)}
+                  onFacebook={() => openFacebookShare(fallbackItem)}
+                />
+              ) : null}
+
+              <div className="flex justify-center">
+                <button
+                  className="seller-secondary-button min-w-28 justify-center"
+                  type="button"
+                  onClick={handleDone}
+                >
+                  Done
+                </button>
+              </div>
+            </>
+          ) : (
+            <HiddenStoreMultiContent
+              dialogTitleId={dialogTitleId}
               onDone={handleDone}
             />
           )}
@@ -584,11 +902,68 @@ function NeutralMissingPathContent({
   );
 }
 
+function HiddenStoreMultiContent({
+  dialogTitleId,
+  onDone,
+}: {
+  dialogTitleId: string;
+  onDone: () => void;
+}) {
+  return (
+    <>
+      <div className="mx-auto flex size-14 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-2xl font-bold text-amber-800">
+        <span aria-hidden="true">!</span>
+      </div>
+      <div className="text-center">
+        <h2
+          className="text-2xl font-semibold leading-tight text-stone-950"
+          id={dialogTitleId}
+        >
+          Your listings are published
+        </h2>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-700">
+          Your listings are saved, but your storefront is currently hidden.
+          Make your store live before sharing them with buyers.
+        </p>
+      </div>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-center">
+        <button
+          className="seller-secondary-button justify-center"
+          type="button"
+          onClick={onDone}
+        >
+          Done
+        </button>
+        <a
+          className="seller-primary-button justify-center"
+          href="/dashboard/store-admin"
+        >
+          Go to Store Setup
+        </a>
+      </div>
+    </>
+  );
+}
+
 function normalizePublicPath(value: string | null | undefined) {
   const trimmed = value?.trim();
   if (!trimmed || !trimmed.startsWith("/")) return null;
 
   return trimmed;
+}
+
+function buildAbsoluteUrl(
+  publicPath: string | null | undefined,
+  origin: string,
+) {
+  const normalizedPath = normalizePublicPath(publicPath);
+  if (!origin || !normalizedPath) return null;
+
+  try {
+    return new URL(normalizedPath, origin).toString();
+  } catch {
+    return null;
+  }
 }
 
 function buildShareText({
@@ -637,6 +1012,28 @@ function fallbackCopyText(value: string) {
   } finally {
     document.body.removeChild(textarea);
   }
+}
+
+function buildFacebookShareUrl(absoluteUrl: string) {
+  return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+    absoluteUrl,
+  )}`;
+}
+
+function buildEmailShareUrl({
+  bodyParts,
+  subject,
+}: {
+  bodyParts: Array<string | null | undefined>;
+  subject: string;
+}) {
+  const body = bodyParts
+    .filter((value): value is string => Boolean(value))
+    .join("\n\n");
+
+  return `mailto:?subject=${encodeURIComponent(
+    subject,
+  )}&body=${encodeURIComponent(body)}`;
 }
 
 function openExternalWindow(url: string) {
