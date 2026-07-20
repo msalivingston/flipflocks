@@ -26,6 +26,7 @@ export type EquipmentInventoryRow = {
   category: EquipmentCategory | string;
   condition: EquipmentCondition | string | null;
   description: string | null;
+  available_date: string;
   quantity_available: number;
   price: number;
   visibility_status: string;

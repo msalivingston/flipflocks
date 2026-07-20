@@ -19,6 +19,7 @@ export type ProcessedPoultryInventoryRow = {
   product_type: ProcessedPoultryProductType | string;
   package_size: string | null;
   description: string | null;
+  available_date: string;
   quantity_available: number;
   price: number;
   visibility_status: string;

@@ -115,6 +115,7 @@ type InventoryProductTab =
   | "equipment";
 type AgeFilter = "all" | "0_6" | "7_12" | "13_24" | "25_plus" | "unknown";
 type InventoryVisibility = "draft" | "live" | "hidden" | "archived" | "sold_out";
+type InventoryStoreVisibilityStatus = "hidden" | "active";
 type AvailabilityFilter =
   | "current_inventory"
   | "available_now"
@@ -212,7 +213,7 @@ type FlatInventoryItem =
       productCategory: string;
       typeSex: string;
       hatchDate: null;
-      availableDate: null;
+      availableDate: string;
       ageDays: null;
       ageLabel: string;
       availableQuantity: number;
@@ -238,7 +239,7 @@ type FlatInventoryItem =
       condition: string;
       typeSex: string;
       hatchDate: null;
-      availableDate: null;
+      availableDate: string;
       ageDays: null;
       ageLabel: string;
       availableQuantity: number;
@@ -254,8 +255,11 @@ type FlatInventoryItem =
     };
 
 type BirdInventoryItem = Extract<FlatInventoryItem, { kind: "bird" }>;
+type StoreVisibilityInventoryItem = Extract<
+  FlatInventoryItem,
+  { kind: "bird" | "hatching_egg" | "processed_poultry" | "equipment" }
+>;
 type InventoryShareDialogState = LivePoultryShareProduct;
-type LiveBirdInventoryVisibilityStatus = "active" | "hidden";
 
 const unsavedWarning =
   "You have unsaved inventory changes. Save or discard before leaving.";
@@ -868,18 +872,93 @@ export function InventoryManagement() {
     setRows(result.data ?? []);
   }
 
-  async function setLiveBirdInventoryVisibility(
-    items: BirdInventoryItem[],
-    nextStatus: LiveBirdInventoryVisibilityStatus,
+  async function refetchHatchingEggInventoryRows() {
+    if (!seller) return;
+
+    const result = await supabase
+      .from("seller_hatching_egg_inventory_management")
+      .select("*")
+      .eq("store_id", seller.store_id)
+      .neq("visibility_status", "archived")
+      .eq("moderation_status", "normal")
+      .order("updated_at", { ascending: false })
+      .returns<HatchingEggInventoryRow[]>();
+
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
+
+    setHatchingEggRows(result.data ?? []);
+  }
+
+  async function refetchProcessedPoultryInventoryRows() {
+    if (!seller) return;
+
+    const result = await supabase
+      .from("seller_processed_poultry_inventory_management")
+      .select("*")
+      .eq("store_id", seller.store_id)
+      .neq("visibility_status", "archived")
+      .eq("moderation_status", "normal")
+      .order("updated_at", { ascending: false })
+      .returns<ProcessedPoultryInventoryRow[]>();
+
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
+
+    setProcessedPoultryRows(result.data ?? []);
+  }
+
+  async function refetchEquipmentInventoryRows() {
+    if (!seller) return;
+
+    const result = await supabase
+      .from("seller_equipment_inventory_management")
+      .select("*")
+      .eq("store_id", seller.store_id)
+      .neq("visibility_status", "archived")
+      .eq("moderation_status", "normal")
+      .order("updated_at", { ascending: false })
+      .returns<EquipmentInventoryRow[]>();
+
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
+
+    setEquipmentRows(result.data ?? []);
+  }
+
+  async function refetchVisibilityCategories(
+    kinds: Set<StoreVisibilityInventoryItem["kind"]>,
+  ) {
+    const refetches: Promise<void>[] = [];
+
+    if (kinds.has("bird")) refetches.push(refetchLiveBirdInventoryRows());
+    if (kinds.has("hatching_egg")) {
+      refetches.push(refetchHatchingEggInventoryRows());
+    }
+    if (kinds.has("processed_poultry")) {
+      refetches.push(refetchProcessedPoultryInventoryRows());
+    }
+    if (kinds.has("equipment")) refetches.push(refetchEquipmentInventoryRows());
+
+    await Promise.all(refetches);
+  }
+
+  async function setInventoryStoreVisibility(
+    items: StoreVisibilityInventoryItem[],
+    nextStatus: InventoryStoreVisibilityStatus,
   ) {
     if (!seller || updatingVisibilityItemIds.length > 0) return;
 
-    const targetItems = getLiveBirdVisibilityTargetItems(items, nextStatus);
+    const targetItems = getStoreVisibilityTargetItems(items, nextStatus);
 
     if (targetItems.length === 0) return;
 
-    const targetIds = targetItems.map((item) => item.row.inventory_item_id);
+    const targetIds = targetItems.map(getStoreVisibilityItemId);
     const successfulIds = new Set<string>();
+    const successfulKinds = new Set<StoreVisibilityInventoryItem["kind"]>();
     const failedMessages: string[] = [];
 
     setUpdatingVisibilityItemIds(targetIds);
@@ -887,25 +966,19 @@ export function InventoryManagement() {
     setSuccessMessage(null);
 
     for (const item of targetItems) {
-      const result = await supabase.rpc("seller_set_inventory_visibility", {
-        p_inventory_item_id: item.row.inventory_item_id,
-        p_visibility_status: nextStatus,
-        p_note:
-          nextStatus === "hidden"
-            ? "Hidden from seller Inventory page."
-            : "Shown from seller Inventory page.",
-      });
+      const result = await setInventoryItemVisibility(item, nextStatus);
 
       if (result.error) {
         failedMessages.push(result.error.message);
       } else {
-        successfulIds.add(item.row.inventory_item_id);
+        successfulIds.add(getStoreVisibilityItemId(item));
+        successfulKinds.add(item.kind);
       }
     }
 
     if (successfulIds.size > 0) {
       try {
-        await refetchLiveBirdInventoryRows();
+        await refetchVisibilityCategories(successfulKinds);
       } catch (error) {
         setSaveError(
           error instanceof Error
@@ -918,9 +991,9 @@ export function InventoryManagement() {
         current.filter((selectedId) => {
           const selectedItem = selectedItems.find((item) => item.id === selectedId);
 
-          return selectedItem?.kind === "bird"
-            ? !successfulIds.has(selectedItem.row.inventory_item_id)
-            : true;
+          if (!selectedItem) return true;
+
+          return !successfulIds.has(getStoreVisibilityItemId(selectedItem));
         }),
       );
     }
@@ -936,16 +1009,14 @@ export function InventoryManagement() {
         targetItems.length === 1
           ? singleSuccessMessage
           : `${successfulIds.size} inventory ${
-              successfulIds.size === 1 ? "row" : "rows"
+              successfulIds.size === 1 ? "item" : "items"
             } ${actionText} store.`,
       );
     } else if (successfulIds.size > 0 && failedMessages.length > 0) {
       setSuccessMessage(
         `${successfulIds.size} inventory ${
-          successfulIds.size === 1 ? "row was" : "rows were"
-        } ${actionText} store. ${failedMessages.length} ${
-          failedMessages.length === 1 ? "row" : "rows"
-        } failed.`,
+          successfulIds.size === 1 ? "item" : "items"
+        } ${actionText} store. ${failedMessages.length} failed.`,
       );
       setSaveError(failedMessages[0] ?? "Some inventory rows could not be updated.");
     } else {
@@ -958,6 +1029,13 @@ export function InventoryManagement() {
     }
 
     setUpdatingVisibilityItemIds([]);
+  }
+
+  async function setLiveBirdInventoryVisibility(
+    items: StoreVisibilityInventoryItem[],
+    nextStatus: InventoryStoreVisibilityStatus,
+  ) {
+    await setInventoryStoreVisibility(items, nextStatus);
   }
 
   function toggleItemSelection(itemId: string) {
@@ -1706,8 +1784,8 @@ function FlatInventoryTable({
   onShareInventoryItem: (item: FlatInventoryItem) => void;
   onSelectVisible: (shouldSelect: boolean) => void;
   onSetLiveBirdInventoryVisibility: (
-    items: BirdInventoryItem[],
-    nextStatus: LiveBirdInventoryVisibilityStatus,
+    items: StoreVisibilityInventoryItem[],
+    nextStatus: InventoryStoreVisibilityStatus,
   ) => void;
   onToggleSelection: (itemId: string) => void;
   selectedItemIds: string[];
@@ -1717,10 +1795,10 @@ function FlatInventoryTable({
   const selectedCount = selectedItemIds.length;
   const allVisibleSelected =
     items.length > 0 && items.every((item) => selectedItemIds.includes(item.id));
-  const selectedLiveBirdItems = items.filter(
-    (item): item is BirdInventoryItem =>
-      tab === "live_poultry" &&
-      item.kind === "bird" &&
+  const selectedStoreVisibilityItems = items.filter(
+    (item): item is StoreVisibilityInventoryItem =>
+      item.productTab === tab &&
+      isStoreVisibilityInventoryItem(item) &&
       selectedItemIds.includes(item.id),
   );
 
@@ -1732,8 +1810,8 @@ function FlatInventoryTable({
             {selectedCount} selected
           </p>
           <div className="flex items-center gap-2">
-            <LiveBirdVisibilityBulkActions
-              items={selectedLiveBirdItems}
+            <InventoryVisibilityBulkActions
+              items={selectedStoreVisibilityItems}
               updatingVisibilityItemIds={updatingVisibilityItemIds}
               onSetLiveBirdInventoryVisibility={onSetLiveBirdInventoryVisibility}
             />
@@ -1785,8 +1863,8 @@ function FlatInventoryTable({
             <p className="min-w-0 flex-1 text-base font-bold text-emerald-950 sm:text-sm sm:font-semibold">
               {selectedCount} selected
             </p>
-            <LiveBirdVisibilityBulkActions
-              items={selectedLiveBirdItems}
+            <InventoryVisibilityBulkActions
+              items={selectedStoreVisibilityItems}
               updatingVisibilityItemIds={updatingVisibilityItemIds}
               onSetLiveBirdInventoryVisibility={onSetLiveBirdInventoryVisibility}
             />
@@ -1913,26 +1991,26 @@ function FlatInventoryTableHeader({
   );
 }
 
-function LiveBirdVisibilityBulkActions({
+function InventoryVisibilityBulkActions({
   items,
   updatingVisibilityItemIds,
   onSetLiveBirdInventoryVisibility,
 }: {
-  items: BirdInventoryItem[];
+  items: StoreVisibilityInventoryItem[];
   updatingVisibilityItemIds: string[];
   onSetLiveBirdInventoryVisibility: (
-    items: BirdInventoryItem[],
-    nextStatus: LiveBirdInventoryVisibilityStatus,
+    items: StoreVisibilityInventoryItem[],
+    nextStatus: InventoryStoreVisibilityStatus,
   ) => void;
 }) {
   if (items.length === 0) return null;
 
-  const hiddenItems = getLiveBirdVisibilityTargetItems(items, "active");
-  const visibleItems = getLiveBirdVisibilityTargetItems(items, "hidden");
+  const hiddenItems = getStoreVisibilityTargetItems(items, "active");
+  const visibleItems = getStoreVisibilityTargetItems(items, "hidden");
   const hasHiddenItems = hiddenItems.length > 0;
   const hasVisibleItems = visibleItems.length > 0;
   const isUpdatingSelection = items.some((item) =>
-    updatingVisibilityItemIds.includes(item.row.inventory_item_id),
+    updatingVisibilityItemIds.includes(getStoreVisibilityItemId(item)),
   );
 
   return (
@@ -2035,8 +2113,8 @@ function FlatInventoryTableRow({
   updatingVisibilityItemIds: string[];
   onShareInventoryItem: (item: FlatInventoryItem) => void;
   onSetLiveBirdInventoryVisibility: (
-    items: BirdInventoryItem[],
-    nextStatus: LiveBirdInventoryVisibilityStatus,
+    items: StoreVisibilityInventoryItem[],
+    nextStatus: InventoryStoreVisibilityStatus,
   ) => void;
   onToggleSelection: (itemId: string) => void;
   tab: InventoryProductTab;
@@ -2131,8 +2209,8 @@ function FlatInventoryTableRow({
           item={item}
           isSharing={sharingItemId === item.id}
           isVisibilityUpdating={
-            item.kind === "bird" &&
-            updatingVisibilityItemIds.includes(item.row.inventory_item_id)
+            isStoreVisibilityInventoryItem(item) &&
+            updatingVisibilityItemIds.includes(getStoreVisibilityItemId(item))
           }
           onShareInventoryItem={onShareInventoryItem}
           onSetLiveBirdInventoryVisibility={onSetLiveBirdInventoryVisibility}
@@ -2160,8 +2238,8 @@ function FlatInventoryCard({
   updatingVisibilityItemIds: string[];
   onShareInventoryItem: (item: FlatInventoryItem) => void;
   onSetLiveBirdInventoryVisibility: (
-    items: BirdInventoryItem[],
-    nextStatus: LiveBirdInventoryVisibilityStatus,
+    items: StoreVisibilityInventoryItem[],
+    nextStatus: InventoryStoreVisibilityStatus,
   ) => void;
   onToggleSelection: (itemId: string) => void;
   updateDraftQuantity: (item: FlatInventoryItem, nextValue: string) => void;
@@ -2258,8 +2336,8 @@ function FlatInventoryCard({
           item={item}
           isSharing={sharingItemId === item.id}
           isVisibilityUpdating={
-            item.kind === "bird" &&
-            updatingVisibilityItemIds.includes(item.row.inventory_item_id)
+            isStoreVisibilityInventoryItem(item) &&
+            updatingVisibilityItemIds.includes(getStoreVisibilityItemId(item))
           }
           onShareInventoryItem={onShareInventoryItem}
           onSetLiveBirdInventoryVisibility={onSetLiveBirdInventoryVisibility}
@@ -2281,14 +2359,13 @@ function InventoryItemActionsMenu({
   item: FlatInventoryItem;
   onShareInventoryItem: (item: FlatInventoryItem) => void;
   onSetLiveBirdInventoryVisibility: (
-    items: BirdInventoryItem[],
-    nextStatus: LiveBirdInventoryVisibilityStatus,
+    items: StoreVisibilityInventoryItem[],
+    nextStatus: InventoryStoreVisibilityStatus,
   ) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const canShare = isShareableInventoryItem(item);
-  const liveBirdVisibilityAction =
-    item.kind === "bird" ? getLiveBirdVisibilityAction(item) : null;
+  const storeVisibilityAction = getStoreVisibilityAction(item);
 
   return (
     <details
@@ -2323,7 +2400,7 @@ function InventoryItemActionsMenu({
             {isSharing ? "Opening..." : "Share listing"}
           </button>
         ) : null}
-        {liveBirdVisibilityAction ? (
+        {storeVisibilityAction ? (
           <button
             type="button"
             className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-stone-800 transition hover:bg-stone-100 hover:text-stone-950 focus:bg-stone-100 focus:outline-none disabled:cursor-wait disabled:opacity-60"
@@ -2331,14 +2408,14 @@ function InventoryItemActionsMenu({
             onClick={() => {
               setIsOpen(false);
               onSetLiveBirdInventoryVisibility(
-                [item],
-                liveBirdVisibilityAction.nextStatus,
+                [storeVisibilityAction.item],
+                storeVisibilityAction.nextStatus,
               );
             }}
           >
             {isVisibilityUpdating
               ? "Updating..."
-              : liveBirdVisibilityAction.label}
+              : storeVisibilityAction.label}
           </button>
         ) : null}
       </div>
@@ -2572,7 +2649,7 @@ function buildFlatInventoryItems({
           ? `${row.poultry_type} - ${row.package_size}`
           : row.poultry_type,
         hatchDate: null,
-        availableDate: null,
+        availableDate: row.available_date,
         ageDays: null,
         ageLabel: "--",
         availableQuantity: displayedQuantity,
@@ -2620,7 +2697,7 @@ function buildFlatInventoryItems({
         condition: row.condition ?? "",
         typeSex: "--",
         hatchDate: null,
-        availableDate: null,
+        availableDate: row.available_date,
         ageDays: null,
         ageLabel: "--",
         availableQuantity: displayedQuantity,
@@ -2685,6 +2762,7 @@ function getBirdAvailability(
 }
 
 function getSimpleInventoryAvailability(row: {
+  available_date?: string | null;
   operational_availability_status: string;
   quantity_available: number;
   visibility_status: string;
@@ -2705,6 +2783,13 @@ function getSimpleInventoryAvailability(row: {
 
   if (row.visibility_status !== "active") {
     return { label: "Hidden", value: "hidden" };
+  }
+
+  if (row.available_date && isFutureDate(row.available_date)) {
+    return {
+      label: `Ready ${formatShortDate(row.available_date)}`,
+      value: "coming_soon",
+    };
   }
 
   return { label: "Ready now", value: "available_now" };
@@ -3463,26 +3548,99 @@ function getInventoryItemIdForClear(item: FlatInventoryItem) {
   return item.row.inventory_item_id;
 }
 
-function getLiveBirdVisibilityAction(item: BirdInventoryItem): {
-  label: string;
-  nextStatus: LiveBirdInventoryVisibilityStatus;
-} {
-  if (item.row.inventory_visibility_status === "hidden") {
-    return { label: "Show on store", nextStatus: "active" };
-  }
-
-  return { label: "Hide from store", nextStatus: "hidden" };
+function isStoreVisibilityInventoryItem(
+  item: FlatInventoryItem,
+): item is StoreVisibilityInventoryItem {
+  return (
+    item.kind === "bird" ||
+    item.kind === "hatching_egg" ||
+    item.kind === "processed_poultry" ||
+    item.kind === "equipment"
+  );
 }
 
-function getLiveBirdVisibilityTargetItems(
-  items: BirdInventoryItem[],
-  nextStatus: LiveBirdInventoryVisibilityStatus,
+function getStoreVisibilityItemId(item: StoreVisibilityInventoryItem) {
+  if (item.kind === "bird") return item.row.inventory_item_id;
+  if (item.kind === "hatching_egg") {
+    return item.row.hatching_egg_inventory_item_id;
+  }
+  if (item.kind === "processed_poultry") {
+    return item.row.processed_poultry_inventory_item_id;
+  }
+
+  return item.row.equipment_inventory_item_id;
+}
+
+function getStoreVisibilityStatus(item: StoreVisibilityInventoryItem) {
+  if (item.kind === "bird") return item.row.inventory_visibility_status;
+
+  return item.row.visibility_status;
+}
+
+function getStoreVisibilityAction(item: FlatInventoryItem): {
+  item: StoreVisibilityInventoryItem;
+  label: string;
+  nextStatus: InventoryStoreVisibilityStatus;
+} | null {
+  if (!isStoreVisibilityInventoryItem(item)) return null;
+
+  const visibilityStatus = getStoreVisibilityStatus(item);
+
+  if (visibilityStatus === "archived") return null;
+
+  if (visibilityStatus === "hidden") {
+    return { item, label: "Show on store", nextStatus: "active" };
+  }
+
+  return { item, label: "Hide from store", nextStatus: "hidden" };
+}
+
+function getStoreVisibilityTargetItems(
+  items: StoreVisibilityInventoryItem[],
+  nextStatus: InventoryStoreVisibilityStatus,
 ) {
   return items.filter((item) =>
     nextStatus === "hidden"
-      ? item.row.inventory_visibility_status !== "hidden"
-      : item.row.inventory_visibility_status === "hidden",
+      ? getStoreVisibilityStatus(item) !== "hidden"
+      : getStoreVisibilityStatus(item) === "hidden",
   );
+}
+
+async function setInventoryItemVisibility(
+  item: StoreVisibilityInventoryItem,
+  nextStatus: InventoryStoreVisibilityStatus,
+) {
+  if (item.kind === "bird") {
+    return supabase.rpc("seller_set_inventory_visibility", {
+      p_inventory_item_id: item.row.inventory_item_id,
+      p_visibility_status: nextStatus,
+      p_note:
+        nextStatus === "hidden"
+          ? "Hidden from seller Inventory page."
+          : "Shown from seller Inventory page.",
+    });
+  }
+
+  if (item.kind === "hatching_egg") {
+    return supabase.rpc("seller_set_hatching_egg_inventory_visibility", {
+      p_hatching_egg_inventory_item_id:
+        item.row.hatching_egg_inventory_item_id,
+      p_visibility_status: nextStatus,
+    });
+  }
+
+  if (item.kind === "processed_poultry") {
+    return supabase.rpc("seller_set_processed_poultry_inventory_visibility", {
+      p_processed_poultry_inventory_item_id:
+        item.row.processed_poultry_inventory_item_id,
+      p_visibility_status: nextStatus,
+    });
+  }
+
+  return supabase.rpc("seller_set_equipment_inventory_visibility", {
+    p_equipment_inventory_item_id: item.row.equipment_inventory_item_id,
+    p_visibility_status: nextStatus,
+  });
 }
 
 function isClearSoldOutEligibleItem(
