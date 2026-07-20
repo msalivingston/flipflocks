@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { StorefrontHeaderCartLink } from "./storefront-header-cart-link";
+import { StorefrontMobileMenu } from "./storefront-mobile-menu";
 import {
   StoreLogo,
   StorefrontGlyph,
@@ -51,47 +52,58 @@ export function StorefrontChrome({
 export function StorefrontHeader({ store }: { store: StorefrontHome }) {
   return (
     <header className="storefront-top-menu border-b border-[#e7e0d2] bg-white">
-      <div className="mx-auto grid max-w-[70rem] gap-3 px-5 py-2.5 sm:px-7 lg:min-h-[6rem] lg:grid-cols-[minmax(24rem,1fr)_auto_auto] lg:items-center">
+      <div className="mx-auto grid max-w-[70rem] grid-cols-[minmax(0,1fr)_auto] gap-x-2.5 px-3 py-2.5 sm:px-7 lg:min-h-[6rem] lg:grid-cols-[minmax(24rem,1fr)_auto_auto] lg:items-center lg:gap-3 lg:px-7 lg:py-2.5">
         <Link
-          className="flex min-w-0 items-center gap-4 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+          className="flex min-w-0 items-center gap-2.5 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 lg:gap-4"
           href={`/store/${store.store_slug}`}
         >
           <StoreLogo store={store} size="lg" />
-          <div className="min-w-0 max-w-[24rem] sm:max-w-[32rem] lg:max-w-[34rem]">
+          <div className="min-w-0 sm:max-w-[32rem] lg:max-w-[34rem]">
             <p
               className={cx(
                 storefrontSerifClass,
-                "storefront-heading-color text-xl font-normal leading-tight text-[#073f1e] sm:text-2xl lg:text-[1.625rem]",
+                "storefront-heading-color truncate text-[1rem] font-normal leading-tight text-[#073f1e] sm:text-2xl lg:text-[1.625rem]",
               )}
             >
               {store.store_name}
             </p>
-            <p className="mt-1 truncate text-xs font-semibold uppercase tracking-[0.16em] text-stone-600">
+            <p className="mt-0.5 truncate text-[0.76rem] font-semibold leading-tight text-stone-600 lg:mt-1 lg:text-xs lg:uppercase lg:tracking-[0.16em]">
               {formatLocation(store)}
             </p>
           </div>
         </Link>
 
-        <nav className="flex flex-wrap items-center justify-start gap-2 text-base font-semibold text-stone-950 lg:justify-end lg:gap-7 xl:gap-10">
-          <Link href={`/store/${store.store_slug}#shop-listings`}>Shop</Link>
-          <Link href={`/store/${store.store_slug}/about`}>About</Link>
-          <Link href={`/store/${store.store_slug}/policies`}>
+        <nav className="hidden items-center text-base font-semibold text-stone-950 lg:flex lg:justify-end lg:gap-7 xl:gap-10">
+          <Link
+            href={`/store/${store.store_slug}#shop-listings`}
+          >
+            Shop
+          </Link>
+          <Link
+            href={`/store/${store.store_slug}/about`}
+          >
+            About
+          </Link>
+          <Link
+            href={`/store/${store.store_slug}/policies`}
+          >
             Pickup & Policies
           </Link>
         </nav>
 
-        <div className="flex items-center gap-1.5 lg:ml-4 lg:justify-end xl:ml-6">
+        <div className="order-2 col-start-2 row-start-1 flex items-center gap-0.5 self-center lg:order-none lg:col-start-auto lg:row-start-auto lg:ml-4 lg:justify-end lg:gap-1.5 xl:ml-6">
           <Link
             aria-label="Search listings"
             className="storefront-primary-color inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 lg:h-11 lg:w-11"
             href={`/store/${store.store_slug}#storefront-search`}
           >
             <StorefrontGlyph
-              className="h-6 w-6 lg:h-7 lg:w-7"
+              className="h-5 w-5 lg:h-7 lg:w-7"
               src="/glyphs/looking-glass.png"
             />
           </Link>
           <StorefrontHeaderCartLink storeSlug={store.store_slug} />
+          <StorefrontMobileMenu storeSlug={store.store_slug} />
         </div>
       </div>
     </header>
@@ -149,18 +161,18 @@ export function StorefrontFooter({
             "url('/storefront-heroes/footer-fence-line.png')",
         }}
       />
-      <div className="relative mx-auto max-w-[70rem] px-5 py-5 sm:px-7 lg:py-7">
-        <div className="storefront-text-color grid gap-7 text-sm text-[#1f2f37] sm:grid-cols-2 lg:grid-cols-[1.45fr_0.9fr_1fr_1fr] lg:gap-10">
+      <div className="relative mx-auto max-w-[70rem] px-4 py-4 sm:px-7 lg:px-5 lg:py-7">
+        <div className="storefront-text-color grid gap-5 text-sm text-[#1f2f37] sm:grid-cols-2 lg:grid-cols-[1.45fr_0.9fr_1fr_1fr] lg:gap-10">
           <div>
             <p
               className={cx(
                 storefrontSerifClass,
-                "storefront-heading-color max-w-xs text-3xl font-normal leading-[1.05] text-[#073f1e]",
+                "storefront-heading-color max-w-xs text-2xl font-normal leading-[1.05] text-[#073f1e] lg:text-3xl",
               )}
             >
               {store.store_name}
             </p>
-            <div className="mt-4">
+            <div className="mt-3 lg:mt-4">
               <FooterContactLine glyph="/glyphs/map-pin.png">
                 <span>{formatLocation(store)}</span>
               </FooterContactLine>
@@ -199,7 +211,7 @@ export function StorefrontFooter({
           </FooterColumn>
         </div>
 
-        <div className="relative mt-5 border-t border-[#d5cbb9] pt-3">
+        <div className="relative mt-4 border-t border-[#d5cbb9] pt-3 lg:mt-5">
           <div className="storefront-text-color flex items-center justify-center gap-3 text-sm font-medium text-[#1f2f37]">
             <span>Powered by</span>
             <a
@@ -234,12 +246,14 @@ function FooterColumn({
       <p
         className={cx(
           storefrontSerifClass,
-          "storefront-heading-color text-xl font-normal leading-tight text-[#073f1e]",
+          "storefront-heading-color text-lg font-normal leading-tight text-[#073f1e] lg:text-xl",
         )}
       >
         {title}
       </p>
-      <div className="mt-3 grid gap-2 leading-6 text-[#1f2f37]">{children}</div>
+      <div className="mt-2 grid gap-1.5 leading-6 text-[#1f2f37] lg:mt-3 lg:gap-2">
+        {children}
+      </div>
     </div>
   );
 }
@@ -252,8 +266,8 @@ function FooterContactLine({
   glyph: string;
 }) {
   return (
-    <p className="flex min-w-0 items-center gap-3 leading-6">
-      <StorefrontGlyph className="storefront-primary-color h-6 w-6 opacity-80" src={glyph} />
+    <p className="flex min-w-0 items-center gap-2.5 leading-6 lg:gap-3">
+      <StorefrontGlyph className="storefront-primary-color h-5 w-5 opacity-80 lg:h-6 lg:w-6" src={glyph} />
       <span className="min-w-0 break-words">{children}</span>
     </p>
   );

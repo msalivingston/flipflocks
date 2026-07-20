@@ -86,6 +86,7 @@ export function StorefrontHomeContent({
   });
   const heroLayout = store.hero_image_layout === "right" ? "right" : "full";
   const heroIsLeftFade = heroLayout === "right";
+  const heroTextColor = heroIsLeftFade ? "text-white" : "text-white lg:text-black";
 
   return (
     <>
@@ -95,7 +96,7 @@ export function StorefrontHomeContent({
         </div>
       ) : null}
       <StorefrontChrome categories={categories} store={store}>
-      <main className="grid gap-3 pb-4 lg:gap-4">
+      <main className="grid gap-2.5 pb-4 lg:gap-4">
         <section className={storefrontHeroFrame.publicClass}>
           <HeroBackdrop
             alt={store.hero_image_alt_text || `${store.store_name} farm photo`}
@@ -103,31 +104,23 @@ export function StorefrontHomeContent({
             layout={heroLayout}
             src={store.hero_image_url}
           />
-          <div className="relative z-10 mx-auto h-full max-w-[70rem] px-5 sm:px-7">
+          <div className="relative z-10 mx-auto h-full max-w-[70rem] px-4 sm:px-7">
             <div
-              className={`flex h-full max-w-[32rem] flex-col justify-center gap-4 lg:max-w-[36rem] ${
-                heroIsLeftFade ? "text-white" : "text-black"
-              }`}
+              className={`flex h-full max-w-[16.5rem] flex-col justify-center gap-2.5 sm:max-w-[32rem] sm:gap-4 lg:max-w-[36rem] ${heroTextColor}`}
             >
               <div>
                 <p
-                  className={`${storefrontHeroTypography.eyebrow} ${
-                    heroIsLeftFade ? "text-white" : "text-black"
-                  }`}
+                  className={`${storefrontHeroTypography.eyebrow} ${heroTextColor}`}
                 >
                   Local farm storefront
                 </p>
                 <h1
-                  className={`${storefrontHeroTypography.title} ${
-                    heroIsLeftFade ? "text-white" : "text-black"
-                  }`}
+                  className={`${storefrontHeroTypography.title} line-clamp-2 ${heroTextColor}`}
                 >
                   {heroTitle}
                 </h1>
                 <p
-                  className={`${storefrontHeroTypography.body} ${
-                    heroIsLeftFade ? "text-white" : "text-black"
-                  }`}
+                  className={`${storefrontHeroTypography.body} line-clamp-2 ${heroTextColor}`}
                 >
                   {heroSubheading}
                 </p>
@@ -135,11 +128,11 @@ export function StorefrontHomeContent({
               <div className="grid justify-items-start gap-2">
                 <HeroPickupBadge
                   location={formatLocation(store)}
-                  light={heroIsLeftFade}
+                  light
                 />
                 <a
                   className={storefrontButtonClass({
-                    className: "mt-3 min-h-12 px-6 text-xl lg:min-h-[3.25rem] lg:px-7 lg:!text-[1.45rem]",
+                    className: "mt-1 min-h-10 px-5 text-base max-lg:!hidden sm:mt-3 sm:min-h-12 sm:px-6 sm:text-xl lg:min-h-[3.25rem] lg:px-7 lg:!text-[1.45rem]",
                   })}
                   href="#shop-listings"
                 >
@@ -150,15 +143,15 @@ export function StorefrontHomeContent({
           </div>
         </section>
 
-        <div className="mx-auto grid w-full max-w-[70rem] gap-5 px-5 sm:px-7 lg:gap-6">
+        <div className="mx-auto grid w-full max-w-[70rem] gap-3.5 px-4 sm:px-7 lg:gap-6">
           <section
-            className="rounded-lg bg-[#fbf7ef] p-4 sm:p-5"
+            className="lg:rounded-lg lg:bg-[#fbf7ef] lg:p-5"
             id="shop-listings"
           >
             <StorefrontListingTabs sections={listingSections} />
           </section>
 
-          <section className="grid overflow-hidden rounded-2xl border border-[#ded7c8] bg-[#fffdf8] lg:grid-cols-2">
+          <section className="grid overflow-hidden rounded-lg border border-[#ded7c8] bg-[#fffdf8] lg:grid-cols-2 lg:rounded-2xl">
             <InfoCard
               actionHref={`/store/${store.store_slug}/about`}
               actionLabel="Learn more about our farm"
@@ -192,17 +185,17 @@ function HeroPickupBadge({
 }) {
   return (
     <div
-      className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 text-xs font-semibold shadow-sm lg:min-h-10 lg:px-4 lg:text-sm ${
+      className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.72rem] font-semibold leading-tight shadow-sm sm:min-h-9 sm:gap-2 sm:px-3 sm:text-xs lg:min-h-10 lg:px-4 lg:text-sm ${
         light
-          ? "storefront-primary-color border-white/35 bg-white/90"
+          ? "border-white/25 bg-white/84 text-[#073f1e]"
           : "storefront-primary-color border-[#ddd5c7] bg-white/90"
       }`}
     >
       <StorefrontGlyph
-        className="h-4 w-4 lg:h-[18px] lg:w-[18px]"
+        className="h-4 w-4"
         src="/glyphs/map-pin.png"
       />
-      Local pickup in {location}
+      <span className="min-w-0 truncate">Local pickup in {location}</span>
     </div>
   );
 }
@@ -248,8 +241,8 @@ function HeroBackdrop({
         />
         <Image
           alt={alt}
-          className={`absolute inset-0 h-full w-full object-center ${
-            crop ? "object-contain" : "object-cover"
+          className={`absolute inset-0 h-full w-full object-cover object-center ${
+            crop ? "lg:object-contain" : ""
           }`}
           fill
           priority
@@ -264,24 +257,38 @@ function HeroBackdrop({
           }}
           unoptimized
         />
+        <div className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(90deg,rgba(28,25,23,0.68)_0%,rgba(28,25,23,0.48)_42%,rgba(28,25,23,0.12)_78%,rgba(28,25,23,0)_100%)] lg:hidden" />
         <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(90deg,rgba(28,25,23,0.46)_0%,rgba(28,25,23,0.34)_36%,rgba(28,25,23,0.04)_72%)]" />
       </>
     );
   }
 
   return (
-    <Image
-      alt={alt}
-      className={`absolute inset-0 h-full w-full object-center ${
-        crop ? "object-contain" : "object-cover"
-      }`}
-      fill
-      priority
-      sizes="(max-width: 1024px) 100vw, 70rem"
-      src={imageUrl}
-      style={cropStyle}
-      unoptimized
-    />
+    <>
+      <Image
+        alt=""
+        aria-hidden="true"
+        className="absolute inset-0 h-full w-full scale-105 object-cover object-center lg:hidden"
+        fill
+        priority
+        sizes="100vw"
+        src={imageUrl}
+        unoptimized
+      />
+      <Image
+        alt={alt}
+        className={`absolute inset-0 h-full w-full object-cover object-center ${
+          crop ? "lg:object-contain" : ""
+        }`}
+        fill
+        priority
+        sizes="(max-width: 1024px) 100vw, 70rem"
+        src={imageUrl}
+        style={cropStyle}
+        unoptimized
+      />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(90deg,rgba(28,25,23,0.68)_0%,rgba(28,25,23,0.48)_42%,rgba(28,25,23,0.14)_74%,rgba(28,25,23,0)_100%)] lg:hidden" />
+    </>
   );
 }
 
@@ -438,11 +445,11 @@ function InfoCard({
   title: string;
 }) {
   return (
-    <article className="grid gap-3 border-b border-[#ded7c8] p-6 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0 lg:p-8">
-      <div className="flex items-center gap-3">
+    <article className="grid gap-2.5 border-b border-[#ded7c8] p-4 last:border-b-0 lg:gap-3 lg:border-b-0 lg:border-r lg:p-8 lg:last:border-r-0">
+      <div className="flex items-center gap-2.5 lg:gap-3">
         <span className="storefront-primary-color">
           <StorefrontGlyph
-            className="h-11 w-11"
+            className="h-8 w-8 lg:h-11 lg:w-11"
             src={
             eyebrow === "Pickup Location"
               ? "/glyphs/map-pin.png"
@@ -453,16 +460,16 @@ function InfoCard({
         <p
           className={cx(
             storefrontSerifClass,
-            "storefront-heading-color text-xl font-bold text-stone-950",
+            "storefront-heading-color text-lg font-bold text-stone-950 lg:text-xl",
           )}
         >
           {eyebrow}
         </p>
       </div>
-      <h2 className="storefront-heading-color text-xl font-semibold text-stone-950">
+      <h2 className="storefront-heading-color text-lg font-semibold leading-tight text-stone-950 lg:text-xl">
         {title}
       </h2>
-      <p className="storefront-text-color max-w-md text-sm leading-6 text-stone-700">
+      <p className="storefront-text-color max-w-md text-sm leading-5 text-stone-700 lg:leading-6">
         {children}
       </p>
       <a

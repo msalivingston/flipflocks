@@ -126,6 +126,24 @@ export function StorefrontListingTabs({
     priceFilter !== "all" ||
     query.trim() !== "" ||
     speciesFilter !== "all";
+  const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+  const activeFilterLabels = buildActiveFilterLabels({
+    age: ageFilter,
+    availability: availabilityFilter,
+    breed: breedFilter,
+    condition: breedFilter,
+    price: priceFilter,
+    query,
+    showAgeFilter,
+    showAvailabilityFilter,
+    showBreedFilter,
+    showCategoryFilter,
+    showConditionFilter,
+    showSpeciesFilter,
+    species: speciesFilter,
+  });
+  const activeFilterCount = activeFilterLabels.length;
 
   useEffect(() => {
     function activateSectionFromId(sectionId: string) {
@@ -199,6 +217,7 @@ export function StorefrontListingTabs({
     setPriceFilter("all");
     setQuery("");
     setSpeciesFilter("all");
+    setIsCategoryMenuOpen(false);
   }
 
   function resetFilters() {
@@ -211,19 +230,19 @@ export function StorefrontListingTabs({
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-2.5 lg:gap-4">
       <div className="grid gap-3 lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-end">
         <h2
           className={cx(
             storefrontSerifClass,
-            "storefront-heading-color text-2xl font-bold leading-tight text-stone-950 sm:text-3xl lg:text-[2.0625rem]",
+            "storefront-heading-color sr-only text-2xl font-bold leading-tight text-stone-950 sm:text-3xl lg:not-sr-only lg:text-[2.0625rem]",
           )}
         >
           Shop
         </h2>
         <div
           aria-label="Storefront listing categories"
-          className="grid grid-cols-4 gap-2 border-b border-[#ddd5c7]"
+          className="hidden gap-2 border-b border-[#ddd5c7] lg:grid lg:grid-cols-4"
           role="tablist"
         >
           {sections.map((section) => {
@@ -253,14 +272,78 @@ export function StorefrontListingTabs({
         </div>
       </div>
 
+      <div className="lg:hidden">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <button
+            aria-expanded={isCategoryMenuOpen}
+            aria-haspopup="dialog"
+            className="storefront-primary-border storefront-primary-color inline-flex h-[2.625rem] min-w-0 flex-1 items-center justify-between gap-2 rounded-md border bg-white px-2.5 text-[0.88rem] font-bold shadow-[0_1px_2px_rgba(41,37,36,0.05)] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+            onClick={() => setIsCategoryMenuOpen(true)}
+            type="button"
+          >
+            <span className="inline-flex min-w-0 items-center gap-2">
+              <ListingTabIcon name={tabIconName(activeSection.label)} />
+              <span className="truncate">{activeSection.label}</span>
+            </span>
+            <span
+              aria-hidden="true"
+              className="h-2 w-2 rotate-45 border-b-2 border-r-2 border-current"
+            />
+          </button>
+          <button
+            aria-expanded={isFilterPanelOpen}
+            aria-haspopup="dialog"
+            className={cx(
+              "inline-flex h-[2.625rem] shrink-0 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[0.88rem] font-bold shadow-[0_1px_2px_rgba(41,37,36,0.05)] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2",
+              activeFilterCount > 0
+                ? "storefront-primary-button storefront-primary-border"
+                : "border-[#ddd5c7] bg-white text-stone-800",
+            )}
+            onClick={() => setIsFilterPanelOpen(true)}
+            type="button"
+          >
+            <Funnel aria-hidden="true" className="size-4" strokeWidth={2.25} />
+            Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+          </button>
+          <p className="shrink-0 self-center text-right text-[0.78rem] font-semibold leading-tight text-stone-500">
+            {filteredCards.length}{" "}
+            {filteredCards.length === 1 ? "listing" : "listings"}
+          </p>
+        </div>
+        {activeFilterLabels.length > 0 ? (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {activeFilterLabels.slice(0, 3).map((label) => (
+              <span
+                className="rounded-full border border-[#ddd5c7] bg-white px-2.5 py-1 text-xs font-semibold text-stone-700"
+                key={label}
+              >
+                {label}
+              </span>
+            ))}
+            {activeFilterLabels.length > 3 ? (
+              <span className="text-xs font-semibold text-stone-500">
+                +{activeFilterLabels.length - 3} more
+              </span>
+            ) : null}
+            <button
+              className="storefront-primary-color rounded-full px-2 py-1 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+              onClick={resetFilters}
+              type="button"
+            >
+              Reset all
+            </button>
+          </div>
+        ) : null}
+      </div>
+
       <section
         aria-labelledby={`${activeSection.id}-tab`}
-        className="scroll-mt-28"
+        className="scroll-mt-28 lg:scroll-mt-28"
         id={`${activeSection.id}-panel`}
         role="tabpanel"
       >
         {activeSection.cards.length > 0 ? (
-          <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-5">
+          <div className="grid gap-3 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-5">
             <ListingFilters
               age={ageFilter}
               showAgeFilter={showAgeFilter}
@@ -288,9 +371,10 @@ export function StorefrontListingTabs({
               onQueryChange={setQuery}
               onReset={resetFilters}
               onSpeciesChange={setSpeciesFilter}
+              className="hidden lg:block"
             />
             {filteredCards.length > 0 ? (
-              <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
+              <div className="grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
                 {filteredCards.map((card) => (
                   <ListingCard card={card} key={card.href} />
                 ))}
@@ -309,8 +393,188 @@ export function StorefrontListingTabs({
           />
         )}
       </section>
+
+      {isCategoryMenuOpen ? (
+        <MobileSheet
+          label="Choose department"
+          onClose={() => setIsCategoryMenuOpen(false)}
+          title="Shop department"
+        >
+          <div className="grid gap-2">
+            {sections.map((section) => {
+              const active = section.id === activeSection.id;
+
+              return (
+                <button
+                  aria-current={active ? "true" : undefined}
+                  className={cx(
+                    "flex min-h-12 items-center justify-between gap-3 rounded-md border px-3 text-left text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2",
+                    active
+                      ? "storefront-primary-border storefront-primary-color bg-[#f8f3ea]"
+                      : "border-[#e5decf] bg-white text-stone-800",
+                  )}
+                  key={section.id}
+                  onClick={() => changeCategory(section.id)}
+                  type="button"
+                >
+                  <span className="inline-flex min-w-0 items-center gap-2">
+                    <ListingTabIcon name={tabIconName(section.label)} />
+                    <span>{section.label}</span>
+                  </span>
+                  {active ? <span className="text-xs">Selected</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        </MobileSheet>
+      ) : null}
+
+      {isFilterPanelOpen ? (
+        <MobileSheet
+          label="Filter listings"
+          onClose={() => setIsFilterPanelOpen(false)}
+          title="Filter listings"
+        >
+          <ListingFilters
+            age={ageFilter}
+            showAgeFilter={showAgeFilter}
+            showAvailabilityFilter={showAvailabilityFilter}
+            showBreedFilter={showBreedFilter}
+            showCategoryFilter={showCategoryFilter}
+            showConditionFilter={showConditionFilter}
+            showSpeciesFilter={showSpeciesFilter}
+            availability={availabilityFilter}
+            breed={breedFilter}
+            breedOptions={breedOptions}
+            category={speciesFilter}
+            categoryOptions={categoryOptions}
+            condition={breedFilter}
+            conditionOptions={conditionOptions}
+            hasActiveFilters={hasActiveFilters}
+            price={priceFilter}
+            query={query}
+            species={speciesFilter}
+            speciesOptions={speciesOptions}
+            onAgeChange={setAgeFilter}
+            onAvailabilityChange={setAvailabilityFilter}
+            onBreedChange={setBreedFilter}
+            onPriceChange={setPriceFilter}
+            onQueryChange={setQuery}
+            onReset={resetFilters}
+            onSpeciesChange={setSpeciesFilter}
+            className="border-0 p-0 shadow-none"
+          />
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button
+              className="min-h-11 rounded-md border border-[#ddd5c7] bg-white px-3 text-sm font-bold text-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+              onClick={resetFilters}
+              type="button"
+            >
+              Reset
+            </button>
+            <button
+              className="storefront-primary-button min-h-11 rounded-md px-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+              onClick={() => setIsFilterPanelOpen(false)}
+              type="button"
+            >
+              View Results
+            </button>
+          </div>
+        </MobileSheet>
+      ) : null}
     </div>
   );
+}
+
+function MobileSheet({
+  children,
+  label,
+  onClose,
+  title,
+}: {
+  children: React.ReactNode;
+  label: string;
+  onClose: () => void;
+  title: string;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 lg:hidden">
+      <button
+        aria-label={`Close ${label}`}
+        className="absolute inset-0 cursor-default bg-stone-950/35"
+        onClick={onClose}
+        type="button"
+      />
+      <div
+        aria-label={label}
+        aria-modal="true"
+        className="absolute inset-x-0 bottom-0 max-h-[82vh] overflow-hidden rounded-t-lg border border-[#ded7c8] bg-white shadow-2xl"
+        role="dialog"
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-[#eee6d8] px-4 py-3">
+          <h3 className="storefront-heading-color text-base font-bold text-[#073f1e]">
+            {title}
+          </h3>
+          <button
+            aria-label={`Close ${label}`}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-600 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+            onClick={onClose}
+            type="button"
+          >
+            <span aria-hidden="true" className="text-2xl leading-none">
+              x
+            </span>
+          </button>
+        </div>
+        <div className="max-h-[calc(82vh-4.25rem)] overflow-y-auto px-4 py-4">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function buildActiveFilterLabels({
+  age,
+  availability,
+  breed,
+  condition,
+  price,
+  query,
+  showAgeFilter,
+  showAvailabilityFilter,
+  showBreedFilter,
+  showCategoryFilter,
+  showConditionFilter,
+  showSpeciesFilter,
+  species,
+}: {
+  age: string;
+  availability: string;
+  breed: string;
+  condition: string;
+  price: string;
+  query: string;
+  showAgeFilter: boolean;
+  showAvailabilityFilter: boolean;
+  showBreedFilter: boolean;
+  showCategoryFilter: boolean;
+  showConditionFilter: boolean;
+  showSpeciesFilter: boolean;
+  species: string;
+}) {
+  return [
+    query.trim() ? `Search: ${query.trim()}` : null,
+    showSpeciesFilter && species !== "all" ? `Species: ${species}` : null,
+    showCategoryFilter && species !== "all" ? `Category: ${species}` : null,
+    showBreedFilter && breed !== "all" ? `Breed: ${breed}` : null,
+    showConditionFilter && condition !== "all" ? `Condition: ${condition}` : null,
+    showAgeFilter && age !== "all" ? `Age: ${formatFilterLabel(age, ageRangeOptions)}` : null,
+    showAvailabilityFilter && availability !== "all"
+      ? formatFilterLabel(availability, availabilityOptions)
+      : null,
+    price !== "all" ? formatFilterLabel(price, priceOptions) : null,
+  ].filter((label): label is string => Boolean(label));
 }
 
 function ListingFilters({
@@ -320,6 +584,7 @@ function ListingFilters({
   breedOptions,
   category,
   categoryOptions,
+  className,
   condition,
   conditionOptions,
   hasActiveFilters,
@@ -347,6 +612,7 @@ function ListingFilters({
   breedOptions: string[];
   category: string;
   categoryOptions: string[];
+  className?: string;
   condition: string;
   conditionOptions: string[];
   hasActiveFilters: boolean;
@@ -369,12 +635,17 @@ function ListingFilters({
   speciesOptions: string[];
 }) {
   return (
-    <aside className="h-fit rounded-lg border border-[#e3d9c8] bg-white p-3">
+    <aside
+      className={cx(
+        "h-fit rounded-lg border border-[#e3d9c8] bg-white p-3",
+        className,
+      )}
+    >
       <div className="grid gap-2.5">
         <label className="grid gap-1 text-xs font-semibold text-stone-800">
           Search
           <input
-            className="storefront-primary-focus min-h-8 rounded-md border border-[#ddd5c7] bg-white px-2.5 text-xs font-medium normal-case tracking-normal text-stone-950 outline-none transition placeholder:text-stone-400"
+            className="storefront-primary-focus min-h-10 rounded-md border border-[#ddd5c7] bg-white px-2.5 text-sm font-medium normal-case tracking-normal text-stone-950 outline-none transition placeholder:text-stone-400 lg:min-h-8 lg:text-xs"
             id="storefront-search"
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder="Search listings"
@@ -471,8 +742,7 @@ function ListingFilters({
             onChange={onAvailabilityChange}
             options={[
               { label: "All availability", value: "all" },
-              { label: "Ready now", value: "ready_now" },
-              { label: "Reserve now", value: "reserve_now" },
+              ...availabilityOptions,
             ]}
           />
         ) : null}
@@ -483,9 +753,7 @@ function ListingFilters({
           onChange={onPriceChange}
           options={[
             { label: "Any price", value: "all" },
-            { label: "Under $10", value: "under-10" },
-            { label: "$10 to $25", value: "10-25" },
-            { label: "$25 and up", value: "25-up" },
+            ...priceOptions,
           ]}
         />
 
@@ -517,7 +785,7 @@ function FilterSelect({
     <label className="grid gap-1 text-[0.68rem] font-bold uppercase tracking-[0.06em] text-stone-700">
       {label}
       <select
-        className="storefront-primary-focus min-h-8 rounded-md border border-[#ddd5c7] bg-white px-2.5 text-xs font-medium normal-case tracking-normal text-stone-700 outline-none transition"
+        className="storefront-primary-focus min-h-10 rounded-md border border-[#ddd5c7] bg-white px-2.5 text-sm font-medium normal-case tracking-normal text-stone-700 outline-none transition lg:min-h-8 lg:text-xs"
         onChange={(event) => onChange(event.target.value)}
         value={value}
       >
@@ -533,9 +801,42 @@ function FilterSelect({
 
 function ListingCard({ card }: { card: StorefrontListingCard }) {
   return (
-    <article className="group flex flex-col overflow-hidden rounded-lg border border-[#ded7c8] bg-white transition hover:border-[#bfcfb6] hover:shadow-sm">
+    <article className="group overflow-hidden rounded-lg border border-[#e3dccf] bg-white shadow-[0_2px_10px_rgba(41,37,36,0.08)] transition hover:border-[#bfcfb6] hover:shadow-md lg:flex lg:flex-col lg:border-[#ded7c8] lg:shadow-none lg:hover:shadow-sm">
       <Link
-        className="flex flex-col focus:outline-none focus:ring-2 focus:ring-emerald-700"
+        className="grid min-w-0 grid-cols-[42%_minmax(0,1fr)] gap-2 p-2 focus:outline-none focus:ring-2 focus:ring-emerald-700 lg:hidden"
+        href={card.href}
+      >
+        <div className="relative overflow-hidden rounded-md">
+          <ListingPhoto alt={card.imageAlt} aspect="square" src={card.imageUrl} />
+        </div>
+        <div className="flex min-w-0 flex-col pr-0.5">
+          <p className="storefront-primary-color truncate text-[0.76rem] font-bold leading-tight text-emerald-700">
+            {card.meta}
+          </p>
+          <h3 className="mt-px line-clamp-2 text-[1.06rem] font-bold leading-[1.08] text-stone-950 min-[390px]:text-[1.13rem]">
+            {card.title}
+          </h3>
+          {card.description ? (
+            <p className="mt-0.5 line-clamp-2 text-[0.82rem] leading-4 text-stone-600">
+              {card.description}
+            </p>
+          ) : null}
+          <div className="mt-auto pt-1">
+            <p className="storefront-primary-color truncate text-[1.18rem] font-bold leading-tight text-[#073f1e]">
+              {card.price}
+            </p>
+            <p className="mt-px truncate text-[0.78rem] font-semibold text-stone-600">
+              {card.detail}
+            </p>
+            <span className="storefront-primary-button mt-1 inline-flex min-h-8 w-full items-center justify-center rounded-md px-3 text-[0.88rem] font-semibold transition">
+              View
+            </span>
+          </div>
+        </div>
+      </Link>
+
+      <Link
+        className="hidden flex-col focus:outline-none focus:ring-2 focus:ring-emerald-700 lg:flex"
         href={card.href}
       >
         <div className="px-3.5 pb-2 pt-3 lg:px-4 lg:pb-2.5 lg:pt-4">
@@ -686,6 +987,24 @@ const ageRangeOptions = [
   { label: "20-52 weeks", value: "20-52-weeks" },
   { label: "1 year+", value: "1-year-plus" },
 ];
+
+const availabilityOptions = [
+  { label: "Ready now", value: "ready_now" },
+  { label: "Reserve now", value: "reserve_now" },
+];
+
+const priceOptions = [
+  { label: "Under $10", value: "under-10" },
+  { label: "$10 to $25", value: "10-25" },
+  { label: "$25 and up", value: "25-up" },
+];
+
+function formatFilterLabel(
+  value: string,
+  options: Array<{ label: string; value: string }>,
+) {
+  return options.find((option) => option.value === value)?.label ?? value;
+}
 
 function matchesBatchFilters(
   card: StorefrontListingCard,

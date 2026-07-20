@@ -44,8 +44,8 @@ export function StorefrontHeaderCartLink({ storeSlug }: { storeSlug: string }) {
       className="storefront-primary-color relative inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-950 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 lg:h-11 lg:w-11"
       href={`/store/${storeSlug}/cart`}
     >
-      <StorefrontGlyph className="h-6 w-6 lg:h-7 lg:w-7" src="/glyphs/cart.png" />
-      <span className="storefront-primary-bg absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[0.68rem] font-bold leading-none text-white lg:h-6 lg:min-w-6">
+      <StorefrontGlyph className="h-5 w-5 lg:h-7 lg:w-7" src="/glyphs/cart.png" />
+      <span className="storefront-primary-bg absolute right-0 top-0 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[0.62rem] font-bold leading-none text-white lg:-right-1 lg:-top-1 lg:h-6 lg:min-w-6 lg:text-[0.68rem]">
         {count}
       </span>
     </Link>

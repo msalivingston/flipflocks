@@ -74,17 +74,17 @@ export function getStorefrontCropStyle(
 }
 
 export const storefrontHeroTypography = {
-  eyebrow: "text-xs font-semibold uppercase tracking-[0.12em] text-emerald-800",
+  eyebrow: "text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-emerald-800 lg:text-xs lg:tracking-[0.12em]",
   title:
-    `${storefrontSerifClass} mt-2 text-3xl font-normal leading-[1.05] text-stone-950 sm:text-[2.75rem] lg:text-5xl`,
-  body: "mt-3 max-w-[30rem] text-sm leading-6 text-stone-700 sm:text-base",
+    `${storefrontSerifClass} mt-1.5 text-[1.62rem] font-normal leading-[1] text-stone-950 min-[390px]:text-[1.75rem] sm:mt-2 sm:text-[2.75rem] lg:text-5xl`,
+  body: "mt-2 max-w-[15.5rem] text-[0.86rem] leading-5 text-stone-700 sm:mt-3 sm:max-w-[30rem] sm:text-base sm:leading-6",
 };
 
 export const storefrontHeroFrame = {
   aspectClass: "aspect-[10/3]",
   aspectRatio: 10 / 3,
   publicClass:
-    "relative h-[clamp(20rem,64vw,24rem)] overflow-hidden bg-white sm:h-[clamp(18.5rem,40vw,23rem)] lg:h-[clamp(18.75rem,33vw,23.25rem)]",
+    "relative mx-4 mt-3 h-[13rem] overflow-hidden rounded-lg bg-white shadow-sm min-[390px]:h-[13.35rem] sm:mx-7 sm:h-[clamp(18.5rem,40vw,23rem)] lg:mx-0 lg:mt-0 lg:h-[clamp(18.75rem,33vw,23.25rem)] lg:rounded-none lg:shadow-none",
   setupPreviewScale: 0.72,
   setupPreviewClass:
     "relative mx-auto aspect-[10/3] w-full max-w-[50rem] overflow-hidden border border-stone-200 bg-stone-100",
@@ -546,7 +546,7 @@ export function StoreLogo({
       : size === "sm"
         ? "h-12 w-12"
         : size === "lg"
-          ? "h-20 w-20 lg:h-[5.5rem] lg:w-[5.5rem]"
+          ? "h-11 w-11 lg:h-[5.5rem] lg:w-[5.5rem]"
           : "h-16 w-16";
 
   if (!store.logo_image_url) {
