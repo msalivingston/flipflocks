@@ -2,9 +2,13 @@
 
 import Link from "next/link";
 import type { Dispatch, SetStateAction } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { supabase } from "@/lib/supabase";
+import {
+  ListingShareDialog,
+  ListingShareMultiDialog,
+} from "../../_components/listing-share-dialog";
 import { PlanUpgradePrompt } from "../../_components/plan-upgrade-prompt";
 import { useSellerContext } from "../../_components/seller-context";
 import {
@@ -16,6 +20,11 @@ import {
   StatusBadge,
 } from "../../_components/seller-ui";
 import type { SellerInventoryManagementRow } from "../../_lib/seller-types";
+import {
+  buildFallbackLivePoultryShareProduct,
+  loadLivePoultryShareProducts,
+  type LivePoultryShareProduct,
+} from "../../_lib/live-poultry-share-products";
 import {
   calculateAdjustedUnitPrice,
   formatAgeAtAvailability,
@@ -177,6 +186,19 @@ export function ListingDetail({
     activeCount: 0,
     totalCount: 0,
   });
+  const [shareProducts, setShareProducts] = useState<LivePoultryShareProduct[]>([]);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [isResolvingShareProducts, setIsResolvingShareProducts] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!storeId) return;
@@ -287,6 +309,19 @@ export function ListingDetail({
   const canUseSetupTools = listing?.visibilityStatus === "hidden";
   const canUseOperationalTools = listing?.visibilityStatus === "active";
   const canUsePublicContentTools = listing?.visibilityStatus === "active";
+  const canShareLivePoultryListing =
+    listing?.batchType === "live_animals" &&
+    listing.visibilityStatus === "active" &&
+    listing.rows.some(
+      (row) =>
+        row.listing_batch_breed_id.trim() &&
+        row.listing_batch_breed_visibility_status === "active" &&
+        row.inventory_visibility_status === "active",
+    );
+  const livePoultryShareLabel =
+    getLivePoultryProductCount(listing?.rows ?? []) > 1
+      ? "Share listings"
+      : "Share listing";
   const canArchiveListing =
     listing?.visibilityStatus === "active" ||
     listing?.visibilityStatus === "hidden";
@@ -943,6 +978,44 @@ export function ListingDetail({
     setReloadKey((current) => current + 1);
   }
 
+  async function openLivePoultryShareDialog(currentListing: ListingDetailSummary) {
+    if (!seller || isResolvingShareProducts) return;
+
+    setShareProducts([]);
+    setIsShareDialogOpen(false);
+    setIsResolvingShareProducts(true);
+    setShareError(null);
+
+    const result = await loadLivePoultryShareProducts({
+      listingBatchId: currentListing.rows[0]?.listing_batch_id ?? listingBatchId,
+      storeId: seller.store_id,
+      storeName: seller.store_name,
+      storeSlug: seller.store_slug,
+    });
+
+    if (!isMountedRef.current) return;
+
+    setIsResolvingShareProducts(false);
+
+    if (!result.ok) {
+      setShareError(`Share links could not be loaded. ${result.message}`);
+      return;
+    }
+
+    if (result.products.length === 0) {
+      setShareProducts([
+        buildFallbackLivePoultryShareProduct(
+          currentListing.rows[0]?.listing_batch_id ?? listingBatchId,
+        ),
+      ]);
+      setIsShareDialogOpen(true);
+      return;
+    }
+
+    setShareProducts(result.products);
+    setIsShareDialogOpen(true);
+  }
+
   return (
     <>
       <SellerPageHeader
@@ -1209,21 +1282,40 @@ export function ListingDetail({
                           storefront without deleting photos, inventory records,
                           pricing, or notes.
                         </p>
-                        <button
-                          className="seller-secondary-button"
-                          disabled={isReturningToHidden}
-                          onClick={() => void returnListingToHidden()}
-                          type="button"
-                        >
-                          {isReturningToHidden
-                            ? isInventoryExperience
-                              ? "Hiding Inventory"
-                              : "Hiding Listing"
-                            : isInventoryExperience
-                              ? "Hide from Storefront"
-                              : "Return to Hidden"}
-                        </button>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          {canShareLivePoultryListing ? (
+                            <button
+                              className="seller-secondary-button"
+                              disabled={isResolvingShareProducts}
+                              onClick={() => void openLivePoultryShareDialog(listing)}
+                              type="button"
+                            >
+                              {isResolvingShareProducts
+                                ? "Loading share links..."
+                                : livePoultryShareLabel}
+                            </button>
+                          ) : null}
+                          <button
+                            className="seller-secondary-button"
+                            disabled={isReturningToHidden}
+                            onClick={() => void returnListingToHidden()}
+                            type="button"
+                          >
+                            {isReturningToHidden
+                              ? isInventoryExperience
+                                ? "Hiding Inventory"
+                                : "Hiding Listing"
+                              : isInventoryExperience
+                                ? "Hide from Storefront"
+                                : "Return to Hidden"}
+                          </button>
+                        </div>
                       </div>
+                      {shareError ? (
+                        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+                          {shareError}
+                        </p>
+                      ) : null}
                       <ArchiveListingAction
                         experience={experience}
                         isArchiving={isArchiving}
@@ -1300,6 +1392,30 @@ export function ListingDetail({
           </>
         ) : null}
       </main>
+      {shareProducts.length > 0 ? (
+        shareProducts.length > 1 ? (
+          <ListingShareMultiDialog
+            isStorePublic={Boolean(seller?.is_publicly_available)}
+            items={shareProducts}
+            mode="share"
+            open={isShareDialogOpen}
+            storeName={seller?.store_name ?? "your store"}
+            onClose={() => setIsShareDialogOpen(false)}
+          />
+        ) : (
+          <ListingShareDialog
+            isStorePublic={Boolean(seller?.is_publicly_available)}
+            listingTitle={shareProducts[0]?.title ?? "Live poultry listing"}
+            mode="share"
+            open={isShareDialogOpen}
+            publicPath={shareProducts[0]?.publicPath}
+            shareText={shareProducts[0]?.shareText}
+            storeName={seller?.store_name ?? "your store"}
+            summary={shareProducts[0]?.summary}
+            onClose={() => setIsShareDialogOpen(false)}
+          />
+        )
+      ) : null}
     </>
   );
 }
@@ -2555,6 +2671,20 @@ function getInventoryDetailVisibility(listing: ListingDetailSummary) {
   if (listing.visibilityStatus === "hidden") return "draft";
 
   return listing.visibilityStatus;
+}
+
+function getLivePoultryProductCount(rows: SellerInventoryManagementRow[]) {
+  return new Set(
+    rows
+      .filter(
+        (row) =>
+          row.batch_type === "live_animals" &&
+          row.listing_batch_breed_visibility_status === "active" &&
+          row.inventory_visibility_status === "active",
+      )
+      .map((row) => row.listing_batch_breed_id)
+      .filter(Boolean),
+  ).size;
 }
 
 function formatListingAvailability(listing: ListingDetailSummary) {

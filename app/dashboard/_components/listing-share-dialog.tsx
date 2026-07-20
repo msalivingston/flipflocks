@@ -239,6 +239,7 @@ export function ListingShareDialog({
 export function ListingShareMultiDialog({
   isStorePublic,
   items,
+  mode = "published",
   open,
   onClose,
   onDone,
@@ -246,6 +247,7 @@ export function ListingShareMultiDialog({
 }: {
   isStorePublic: boolean;
   items: ListingShareDialogItem[];
+  mode?: ListingShareDialogMode;
   open: boolean;
   onClose: () => void;
   onDone?: () => void;
@@ -401,6 +403,7 @@ export function ListingShareMultiDialog({
   if (!open) return null;
 
   const fallbackItem = items.find((item) => item.id === fallbackItemId) ?? null;
+  const isPublishedMode = mode === "published";
 
   return (
     <div
@@ -438,11 +441,12 @@ export function ListingShareMultiDialog({
                   className="text-2xl font-semibold leading-tight text-stone-950"
                   id={dialogTitleId}
                 >
-                  Your listings are live!
+                  {isPublishedMode ? "Your listings are live!" : "Share listings"}
                 </h2>
                 <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-700">
-                  Your live poultry listings are now published on your
-                  storefront.
+                  {isPublishedMode
+                    ? "Your live poultry listings are now published on your storefront."
+                    : "Choose a listing to view, share, or copy."}
                 </p>
               </div>
 
@@ -632,16 +636,14 @@ function PublicStoreContent({
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
-        {isPublishedMode ? (
-          <button
-            className="seller-primary-button justify-center bg-emerald-800 hover:bg-emerald-900"
-            disabled={!canSharePublicLink}
-            type="button"
-            onClick={onViewListing}
-          >
-            View listing
-          </button>
-        ) : null}
+        <button
+          className="seller-primary-button justify-center bg-emerald-800 hover:bg-emerald-900"
+          disabled={!canSharePublicLink}
+          type="button"
+          onClick={onViewListing}
+        >
+          View listing
+        </button>
         <button
           className={`justify-center ${
             isPublishedMode ? "seller-secondary-button" : "seller-primary-button"

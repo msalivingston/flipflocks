@@ -21,6 +21,10 @@ import {
   sellerMediaSelect,
   type ListingPhotoItem,
 } from "../../../_components/processed-poultry-photos";
+import {
+  buildPoultryProductShareSummary,
+  buildPoultryProductShareText,
+} from "../../../_lib/poultry-product-share-text";
 import { buildPublicListingPath } from "../../../_lib/public-listing-url";
 import type { ReferenceSpecies } from "../../../_lib/seller-types";
 import {
@@ -1523,57 +1527,6 @@ function formatCurrency(value: string) {
   }).format(Number(value || 0));
 }
 
-function buildPoultryProductShareText(
-  form: PoultryProductFormState,
-  storeName: string | null | undefined,
-) {
-  const listingTitle = stripTrailingSentencePunctuation(form.productName);
-  const sellerStoreName = stripTrailingSentencePunctuation(storeName ?? "");
-  const price = isValidMoney(form.price) ? formatCurrency(form.price) : null;
-  const priceUnit = formatPoultryProductShareUnit(form.packageSize);
-  const sentences = [
-    sellerStoreName ? `${listingTitle} from ${sellerStoreName}` : listingTitle,
-    formatPoultryProductAvailability(form),
-    price ? `${price}${priceUnit ? ` per ${priceUnit}` : ""}` : null,
-  ]
-    .filter((value): value is string => Boolean(value?.trim()))
-    .map((value) => `${stripTrailingSentencePunctuation(value)}.`);
-
-  return sentences.length > 0 ? sentences.join(" ") : null;
-}
-
-function buildPoultryProductShareSummary(form: PoultryProductFormState) {
-  const price = isValidMoney(form.price) ? formatCurrency(form.price) : null;
-  const priceUnit = formatPoultryProductShareUnit(form.packageSize);
-  const summaryParts = [
-    formatPoultryProductAvailability(form),
-    price ? `${price}${priceUnit ? ` per ${priceUnit}` : ""}` : null,
-  ].filter(Boolean);
-
-  return summaryParts.length > 0 ? summaryParts.join(" - ") : null;
-}
-
-function formatPoultryProductAvailability(form: PoultryProductFormState) {
-  const quantity = Number(form.quantityAvailable);
-
-  if (Number.isFinite(quantity) && quantity <= 0) return "Sold out";
-  if (form.availableDate) {
-    return isDateTodayOrEarlier(form.availableDate)
-      ? "Available now"
-      : `Available ${formatShareDate(form.availableDate)}`;
-  }
-
-  return null;
-}
-
-function formatPoultryProductShareUnit(packageSize: string) {
-  const unit = stripTrailingSentencePunctuation(packageSize)
-    .replace(/^per\s+/i, "")
-    .trim();
-
-  return unit || null;
-}
-
 function formatDate(value: string) {
   if (!value) return "Not selected";
 
@@ -1584,27 +1537,6 @@ function formatDate(value: string) {
   }).format(new Date(`${value.slice(0, 10)}T00:00:00`));
 }
 
-function formatShareDate(value: string) {
-  if (!value) return null;
-
-  return new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(`${value.slice(0, 10)}T00:00:00`));
-}
-
-function isDateTodayOrEarlier(value: string) {
-  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  return Number.isFinite(date.getTime()) && date <= today;
-}
-
-function stripTrailingSentencePunctuation(value: string) {
-  return value.trim().replace(/[.!?]+$/g, "");
-}
 
 function getPublishDisabledReason({
   isPublishing,

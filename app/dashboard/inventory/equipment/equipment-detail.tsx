@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { ListingShareDialog } from "../../_components/listing-share-dialog";
 import { useSellerContext } from "../../_components/seller-context";
 import {
   EmptyState,
@@ -18,6 +19,11 @@ import {
   sellerMediaSelect,
   type ListingPhotoItem,
 } from "../../_components/equipment-photos";
+import {
+  buildEquipmentShareSummary,
+  buildEquipmentShareText,
+} from "../../_lib/equipment-share-text";
+import { buildPublicListingPath } from "../../_lib/public-listing-url";
 import {
   equipmentCategories,
   equipmentConditions,
@@ -67,6 +73,7 @@ export function EquipmentInventoryDetail({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -492,6 +499,15 @@ export function EquipmentInventoryDetail({
                 {row.visibility_status === "active" ? (
                   <button
                     className="seller-secondary-button bg-white"
+                    type="button"
+                    onClick={() => setIsShareDialogOpen(true)}
+                  >
+                    Share listing
+                  </button>
+                ) : null}
+                {row.visibility_status === "active" ? (
+                  <button
+                    className="seller-secondary-button bg-white"
                     disabled={isSaving}
                     onClick={() => void updateVisibility("hidden")}
                     type="button"
@@ -530,6 +546,32 @@ export function EquipmentInventoryDetail({
           ) : null}
         </SellerCard>
       </main>
+      <ListingShareDialog
+        isStorePublic={Boolean(seller?.is_publicly_available)}
+        listingTitle={row.item_name}
+        mode="share"
+        open={isShareDialogOpen}
+        publicPath={buildPublicListingPath({
+          listingType: "equipment_supplies",
+          equipmentItemId: row.equipment_inventory_item_id,
+          storeSlug: seller?.store_slug,
+        })}
+        shareText={buildEquipmentShareText(
+          {
+            condition: row.condition,
+            itemName: row.item_name,
+            price: row.price,
+          },
+          seller?.store_name,
+        )}
+        storeName={seller?.store_name ?? "your store"}
+        summary={buildEquipmentShareSummary({
+          condition: row.condition,
+          itemName: row.item_name,
+          price: row.price,
+        })}
+        onClose={() => setIsShareDialogOpen(false)}
+      />
     </>
   );
 }

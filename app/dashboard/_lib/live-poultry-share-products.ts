@@ -26,6 +26,7 @@ type LivePoultryShareProductRow = {
 };
 
 type LoadLivePoultryShareProductsInput = {
+  listingBatchBreedId?: string | null;
   listingBatchId: string;
   storeId: string;
   storeName: string | null | undefined;
@@ -33,6 +34,7 @@ type LoadLivePoultryShareProductsInput = {
 };
 
 export async function loadLivePoultryShareProducts({
+  listingBatchBreedId,
   listingBatchId,
   storeId,
   storeName,
@@ -40,7 +42,8 @@ export async function loadLivePoultryShareProducts({
 }: LoadLivePoultryShareProductsInput): Promise<
   { ok: true; products: LivePoultryShareProduct[] } | { ok: false; message: string }
 > {
-  const { data, error } = await supabase
+  const normalizedListingBatchBreedId = listingBatchBreedId?.trim();
+  let query = supabase
     .from("seller_inventory_management")
     .select(
       "listing_batch_breed_id, breed_display_name, available_date, base_price, effective_unit_price, price_override, inventory_type, custom_inventory_label, quantity_available, listing_batch_breed_sort_order, inventory_item_sort_order, listing_batch_breed_visibility_status, inventory_visibility_status",
@@ -48,7 +51,13 @@ export async function loadLivePoultryShareProducts({
     .eq("store_id", storeId)
     .eq("listing_batch_id", listingBatchId)
     .eq("batch_type", "live_animals")
-    .eq("listing_batch_visibility_status", "active")
+    .eq("listing_batch_visibility_status", "active");
+
+  if (normalizedListingBatchBreedId) {
+    query = query.eq("listing_batch_breed_id", normalizedListingBatchBreedId);
+  }
+
+  const { data, error } = await query
     .order("listing_batch_breed_sort_order", { ascending: true })
     .order("inventory_item_sort_order", { ascending: true })
     .returns<LivePoultryShareProductRow[]>();

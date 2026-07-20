@@ -44,6 +44,10 @@ import {
   type PublishStatus,
   type SaveDraftStatus,
 } from "../../../../inventory/add-v2/live-birds/ReviewPublishCard";
+import {
+  buildHatchingEggShareSummary,
+  buildHatchingEggShareText,
+} from "../../../../_lib/hatching-egg-share-text";
 import { inputClass } from "../../../../inventory/add-v2/live-birds/constants";
 
 type HatchingEggFormState = {
@@ -155,6 +159,9 @@ export function HatchingEggsStandaloneOnePageForm({
   const [hatchingEggItemId, setHatchingEggItemId] = useState(
     initialHatchingEggItemId ?? "",
   );
+  const [hatchingEggProductId, setHatchingEggProductId] = useState<string | null>(
+    null,
+  );
   const [mediaItems, setMediaItems] = useState<ListingPhotoItem[]>([]);
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -173,6 +180,7 @@ export function HatchingEggsStandaloneOnePageForm({
   const [isStartOverDialogOpen, setIsStartOverDialogOpen] = useState(false);
   const [publishSuccessDialog, setPublishSuccessDialog] =
     useState<PublishSuccessDialogState | null>(null);
+  const [isPersistentShareOpen, setIsPersistentShareOpen] = useState(false);
   const isNavigatingAfterPublishRef = useRef(false);
 
   useEffect(() => {
@@ -430,6 +438,7 @@ export function HatchingEggsStandaloneOnePageForm({
       setHasEditedDescription(false);
       setSelectedBreedId(null);
       setHatchingEggItemId(result.data.hatching_egg_inventory_item_id);
+      setHatchingEggProductId(result.data.hatching_egg_product_id ?? null);
       setSavedFormSnapshot(getFormSnapshot(loadedForm));
       setValidationErrors([]);
       setActionError(null);
@@ -683,6 +692,7 @@ export function HatchingEggsStandaloneOnePageForm({
         if (!visibilityResult.ok) return visibilityResult;
 
         const verifiedItem = await verifySavedItem(hatchingEggItemId);
+        setHatchingEggProductId(verifiedItem?.hatching_egg_product_id ?? null);
         await loadHatchingEggMedia(hatchingEggItemId);
 
         return {
@@ -701,6 +711,7 @@ export function HatchingEggsStandaloneOnePageForm({
       }
 
       const verifiedItem = await verifySavedItem(hatchingEggItemId);
+      setHatchingEggProductId(verifiedItem?.hatching_egg_product_id ?? null);
       return {
         ok: true,
         hatchingEggItemId,
@@ -728,6 +739,7 @@ export function HatchingEggsStandaloneOnePageForm({
 
     setHatchingEggItemId(savedId);
     const verifiedItem = await verifySavedItem(savedId);
+    setHatchingEggProductId(verifiedItem?.hatching_egg_product_id ?? null);
     await loadHatchingEggMedia(savedId);
 
     return {
@@ -872,6 +884,7 @@ export function HatchingEggsStandaloneOnePageForm({
         current.speciesId,
     }));
     setHatchingEggItemId("");
+    setHatchingEggProductId(null);
     setMediaItems([]);
     setPendingPhotos([]);
     setPhotoError(null);
@@ -1149,6 +1162,18 @@ export function HatchingEggsStandaloneOnePageForm({
                       <Link className="seller-secondary-button" href="/dashboard/inventory">
                         Cancel
                       </Link>
+                      {canShareHatchingEggListing({
+                        productId: hatchingEggProductId,
+                        visibilityStatus: form.visibilityStatus,
+                      }) ? (
+                        <button
+                          className="seller-secondary-button"
+                          type="button"
+                          onClick={() => setIsPersistentShareOpen(true)}
+                        >
+                          Share listing
+                        </button>
+                      ) : null}
                       <button
                         className="seller-primary-button"
                         disabled={saveDraftStatus === "saving"}
@@ -1209,6 +1234,21 @@ export function HatchingEggsStandaloneOnePageForm({
         summary={publishSuccessDialog?.summary}
         onClose={navigateToInventoryAfterPublish}
         onDone={navigateToInventoryAfterPublish}
+      />
+      <ListingShareDialog
+        isStorePublic={Boolean(seller?.is_publicly_available)}
+        listingTitle={form.itemName.trim() || "Hatching eggs"}
+        mode="share"
+        open={isPersistentShareOpen}
+        publicPath={buildPublicListingPath({
+          listingType: "hatching_eggs",
+          productId: hatchingEggProductId,
+          storeSlug: seller?.store_slug,
+        })}
+        shareText={buildHatchingEggShareText(form, seller?.store_name)}
+        storeName={seller?.store_name ?? "your store"}
+        summary={buildHatchingEggShareSummary(form)}
+        onClose={() => setIsPersistentShareOpen(false)}
       />
     </DashboardPageContent>
   );
@@ -1807,6 +1847,19 @@ function getFormSnapshot(form: HatchingEggFormState) {
   });
 }
 
+function canShareHatchingEggListing({
+  productId,
+  visibilityStatus,
+}: {
+  productId: string | null;
+  visibilityStatus: string;
+}) {
+  return Boolean(
+    productId?.trim() &&
+      (visibilityStatus === "active" || visibilityStatus === "sold_out"),
+  );
+}
+
 function normalizeLookupText(value: string) {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
@@ -1926,47 +1979,4 @@ function formatDate(value: string) {
     month: "short",
     year: "numeric",
   }).format(new Date(`${value.slice(0, 10)}T00:00:00`));
-}
-
-function formatShareDate(value: string) {
-  if (!value) return null;
-
-  return new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(`${value.slice(0, 10)}T00:00:00`));
-}
-
-function buildHatchingEggShareText(
-  form: HatchingEggFormState,
-  storeName: string | null | undefined,
-) {
-  const listingTitle = stripTrailingSentencePunctuation(form.itemName);
-  const sellerStoreName = stripTrailingSentencePunctuation(storeName ?? "");
-  const listingLabel = /\bhatching eggs\b/i.test(listingTitle)
-    ? listingTitle
-    : `${listingTitle || "Hatching eggs"} hatching eggs`;
-  const sentences = [
-    sellerStoreName ? `${listingLabel} from ${sellerStoreName}` : listingLabel,
-    form.availableDate ? `Ready ${formatShareDate(form.availableDate)}` : null,
-    isValidMoney(form.price) ? `${formatCurrency(form.price)} per egg` : null,
-  ]
-    .filter((value): value is string => Boolean(value?.trim()))
-    .map((value) => `${stripTrailingSentencePunctuation(value)}.`);
-
-  return sentences.length > 0 ? sentences.join(" ") : null;
-}
-
-function buildHatchingEggShareSummary(form: HatchingEggFormState) {
-  const summaryParts = [
-    form.availableDate ? `Ready ${formatDate(form.availableDate)}` : null,
-    isValidMoney(form.price) ? `${formatCurrency(form.price)} per egg` : null,
-  ].filter(Boolean);
-
-  return summaryParts.length > 0 ? summaryParts.join(" - ") : null;
-}
-
-function stripTrailingSentencePunctuation(value: string) {
-  return value.trim().replace(/[.!?]+$/g, "");
 }

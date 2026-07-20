@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { ListingShareDialog } from "../../_components/listing-share-dialog";
 import { useSellerContext } from "../../_components/seller-context";
 import {
   EmptyState,
@@ -18,6 +19,11 @@ import {
   sellerMediaSelect,
   type ListingPhotoItem,
 } from "../../_components/processed-poultry-photos";
+import {
+  buildPoultryProductShareSummary,
+  buildPoultryProductShareText,
+} from "../../_lib/poultry-product-share-text";
+import { buildPublicListingPath } from "../../_lib/public-listing-url";
 import {
   formatCurrency,
   formatDate,
@@ -70,6 +76,7 @@ export function ProcessedPoultryInventoryDetail({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -531,6 +538,15 @@ export function ProcessedPoultryInventoryDetail({
                 {row.visibility_status === "active" ? (
                   <button
                     className="seller-secondary-button bg-white"
+                    type="button"
+                    onClick={() => setIsShareDialogOpen(true)}
+                  >
+                    Share listing
+                  </button>
+                ) : null}
+                {row.visibility_status === "active" ? (
+                  <button
+                    className="seller-secondary-button bg-white"
                     disabled={isSaving}
                     onClick={() => void updateVisibility("hidden")}
                     type="button"
@@ -572,6 +588,34 @@ export function ProcessedPoultryInventoryDetail({
           ) : null}
         </SellerCard>
       </main>
+      <ListingShareDialog
+        isStorePublic={Boolean(seller?.is_publicly_available)}
+        listingTitle={row.product_name}
+        mode="share"
+        open={isShareDialogOpen}
+        publicPath={buildPublicListingPath({
+          listingType: "poultry_products",
+          processedPoultryItemId: row.processed_poultry_inventory_item_id,
+          storeSlug: seller?.store_slug,
+        })}
+        shareText={buildPoultryProductShareText(
+          {
+            packageSize: row.package_size,
+            price: row.price,
+            productName: row.product_name,
+            quantityAvailable: row.quantity_available,
+          },
+          seller?.store_name,
+        )}
+        storeName={seller?.store_name ?? "your store"}
+        summary={buildPoultryProductShareSummary({
+          packageSize: row.package_size,
+          price: row.price,
+          productName: row.product_name,
+          quantityAvailable: row.quantity_available,
+        })}
+        onClose={() => setIsShareDialogOpen(false)}
+      />
     </>
   );
 }

@@ -21,6 +21,10 @@ import {
   sellerMediaSelect,
   type ListingPhotoItem,
 } from "../../../_components/equipment-photos";
+import {
+  buildEquipmentShareSummary,
+  buildEquipmentShareText,
+} from "../../../_lib/equipment-share-text";
 import { buildPublicListingPath } from "../../../_lib/public-listing-url";
 import {
   equipmentCategories,
@@ -1348,33 +1352,6 @@ function formatCurrency(value: string) {
   }).format(amount);
 }
 
-function buildEquipmentShareText(
-  form: EquipmentFormState,
-  storeName: string | null | undefined,
-) {
-  const listingTitle = stripTrailingSentencePunctuation(form.itemName);
-  const sellerStoreName = stripTrailingSentencePunctuation(storeName ?? "");
-  const price = isValidMoney(form.price) ? formatCurrency(form.price) : null;
-  const sentences = [
-    sellerStoreName ? `${listingTitle} from ${sellerStoreName}` : listingTitle,
-    form.condition ? `${form.condition} condition` : null,
-    price,
-  ]
-    .filter((value): value is string => Boolean(value?.trim()))
-    .map((value) => `${stripTrailingSentencePunctuation(value)}.`);
-
-  return sentences.length > 0 ? sentences.join(" ") : null;
-}
-
-function buildEquipmentShareSummary(form: EquipmentFormState) {
-  const summaryParts = [
-    form.condition ? `${form.condition} condition` : null,
-    isValidMoney(form.price) ? formatCurrency(form.price) : null,
-  ].filter(Boolean);
-
-  return summaryParts.length > 0 ? summaryParts.join(" - ") : null;
-}
-
 function formatDate(value: string) {
   if (!value) return "Not selected";
 
@@ -1383,8 +1360,4 @@ function formatDate(value: string) {
     month: "short",
     year: "numeric",
   }).format(new Date(`${value}T00:00:00`));
-}
-
-function stripTrailingSentencePunctuation(value: string) {
-  return value.trim().replace(/[.!?]+$/g, "");
 }
