@@ -205,18 +205,18 @@ export function StorefrontFooter({
             "url('/storefront-heroes/footer-fence-line.png')",
         }}
       />
-      <div className="relative mx-auto max-w-[70rem] px-4 py-4 sm:px-7 lg:px-5 lg:py-7">
-        <div className="storefront-text-color grid gap-5 text-sm text-[#1f2f37] sm:grid-cols-2 lg:grid-cols-[1.45fr_0.9fr_1fr_1fr] lg:gap-10">
-          <div>
+      <div className="relative mx-auto max-w-[70rem] px-4 py-3.5 sm:px-7 sm:py-4 lg:px-5 lg:py-7">
+        <div className="storefront-text-color grid gap-3.5 text-xs text-[#1f2f37] sm:grid-cols-2 sm:gap-5 sm:text-sm lg:grid-cols-[1.45fr_0.9fr_1fr_1fr] lg:gap-10">
+          <div className="min-w-0">
             <p
               className={cx(
                 storefrontSerifClass,
-                "storefront-heading-color max-w-xs text-2xl font-normal leading-[1.05] text-[#073f1e] lg:text-3xl",
+                "storefront-heading-color max-w-xs break-words text-lg font-normal leading-[1.08] text-[#073f1e] sm:text-2xl lg:text-3xl",
               )}
             >
               {store.store_name}
             </p>
-            <div className="mt-3 lg:mt-4">
+            <div className="mt-1.5 sm:mt-3 lg:mt-4">
               <FooterContactLine glyph="/glyphs/map-pin.png">
                 <span>{formatLocation(store)}</span>
               </FooterContactLine>
@@ -255,8 +255,8 @@ export function StorefrontFooter({
           </FooterColumn>
         </div>
 
-        <div className="relative mt-4 border-t border-[#d5cbb9] pt-3 lg:mt-5">
-          <div className="storefront-text-color flex items-center justify-center gap-3 text-sm font-medium text-[#1f2f37]">
+        <div className="relative mt-3 border-t border-[#d5cbb9] pt-2.5 lg:mt-5 lg:pt-3">
+          <div className="storefront-text-color flex flex-wrap items-center justify-center gap-2.5 text-xs font-medium text-[#1f2f37] sm:text-sm lg:gap-3">
             <span>Powered by</span>
             <a
               className="rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
@@ -264,7 +264,7 @@ export function StorefrontFooter({
             >
               <Image
                 alt="FlockFront"
-                className="h-[37px] w-auto object-contain"
+                className="h-7 w-auto object-contain sm:h-[37px]"
                 height={40}
                 src="/landing-page/flockfront-logo-final.png"
                 unoptimized
@@ -286,16 +286,16 @@ function FooterColumn({
   title: string;
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p
         className={cx(
           storefrontSerifClass,
-          "storefront-heading-color text-lg font-normal leading-tight text-[#073f1e] lg:text-xl",
+          "storefront-heading-color text-base font-normal leading-tight text-[#073f1e] sm:text-lg lg:text-xl",
         )}
       >
         {title}
       </p>
-      <div className="mt-2 grid gap-1.5 leading-6 text-[#1f2f37] lg:mt-3 lg:gap-2">
+      <div className="mt-1.5 grid gap-1 leading-5 text-[#1f2f37] sm:mt-2 sm:gap-1.5 sm:leading-6 lg:mt-3 lg:gap-2">
         {children}
       </div>
     </div>
@@ -310,8 +310,8 @@ function FooterContactLine({
   glyph: string;
 }) {
   return (
-    <p className="flex min-w-0 items-center gap-2.5 leading-6 lg:gap-3">
-      <StorefrontGlyph className="storefront-primary-color h-5 w-5 opacity-80 lg:h-6 lg:w-6" src={glyph} />
+    <p className="flex min-w-0 items-center gap-2 leading-5 sm:gap-2.5 sm:leading-6 lg:gap-3">
+      <StorefrontGlyph className="storefront-primary-color h-4 w-4 opacity-80 sm:h-5 sm:w-5 lg:h-6 lg:w-6" src={glyph} />
       <span className="min-w-0 break-words">{children}</span>
     </p>
   );
