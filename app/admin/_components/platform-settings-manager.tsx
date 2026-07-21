@@ -56,12 +56,19 @@ export function PlatformSettingsManager() {
     setMessage(null);
     setIsSaving(true);
 
-    const { data, error } = await supabase.rpc(
-      "admin_set_seller_signups_enabled",
-      {
-        p_enabled: nextEnabled,
-      },
-    );
+    const { data: userData } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+      .from("platform_settings")
+      .upsert(
+        {
+          boolean_value: nextEnabled,
+          setting_key: "seller_signups_enabled",
+          updated_by_user_id: userData.user?.id ?? null,
+        },
+        { onConflict: "setting_key" },
+      )
+      .select("boolean_value")
+      .single();
 
     if (error) {
       setEnabled(previousEnabled);
@@ -70,9 +77,11 @@ export function PlatformSettingsManager() {
       return;
     }
 
-    setEnabled(data !== false);
+    setEnabled(data.boolean_value !== false);
     setMessage(
-      `Saved. New seller signups are ${data === false ? "off" : "on"}.`,
+      `Saved. New seller signups are ${
+        data.boolean_value === false ? "off" : "on"
+      }.`,
     );
     setIsSaving(false);
   }
