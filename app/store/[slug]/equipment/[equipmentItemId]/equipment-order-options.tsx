@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import {
   StorefrontCartItem,
   addItemsToStorefrontCart,
@@ -36,6 +36,8 @@ export function EquipmentOrderOptions({
     isPanelHighlighted,
     showAddToCartConfirmation,
   } = useAddToCartConfirmation();
+  const mobileActionRef = useRef<HTMLDivElement | null>(null);
+  const showStickyBar = useStickyPurchaseBar(Boolean(selectedItem), mobileActionRef);
 
   function handleAddToCart() {
     if (!selectedItem) return;
@@ -47,8 +49,8 @@ export function EquipmentOrderOptions({
   }
 
   return (
-    <section className="grid gap-3">
-      <div className="overflow-hidden rounded-lg border border-[#ded7c8] bg-white">
+    <section className="grid gap-2.5">
+      <div className="hidden overflow-hidden rounded-lg border border-[#ded7c8] bg-white md:block">
         <div className="flex flex-col gap-2 border-b border-[#ded7c8] bg-[#f7faf4] px-4 py-4 sm:flex-row sm:items-center sm:gap-5">
           <h2 className="text-lg font-semibold text-stone-950">Purchase details</h2>
           <p className="text-sm leading-6 text-stone-600">
@@ -56,7 +58,7 @@ export function EquipmentOrderOptions({
           </p>
         </div>
 
-        <div className="hidden md:block">
+        <div>
           <table className="w-full table-fixed border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-[#e7decd] bg-[#fbf7ef] text-stone-950">
@@ -97,44 +99,83 @@ export function EquipmentOrderOptions({
           </table>
         </div>
 
-        <article className="grid gap-3 p-4 md:hidden">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
-                Item
-              </p>
-              <h3 className="mt-1 font-semibold text-stone-950">
-                {item.item_name}
-              </h3>
-            </div>
-            <p className="storefront-primary-color font-semibold text-[#073f1e]">
-              {formatQuantityAvailable(item.quantity_available)}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <MobileFact label="Category">{item.category}</MobileFact>
-            <MobileFact label="Condition">
-              {item.condition || "Not listed"}
-            </MobileFact>
-            <MobileFact label="Price">
-              <span className="font-semibold text-stone-950">
-                {formatCurrency(item.unit_price)}
-              </span>{" "}
-              <span className="text-stone-500">each</span>
-            </MobileFact>
-            <MobileFact label="Quantity">
-              <QuantityStepper
-                disabled={!item.can_checkout || item.quantity_available <= 0}
-                max={item.quantity_available}
-                onChange={updateQuantity}
-                value={selectedQuantity}
-              />
-            </MobileFact>
-          </div>
-        </article>
       </div>
 
-      <div className="grid gap-4 rounded-lg border border-[#ded7c8] bg-white p-4 md:grid-cols-[minmax(0,1fr)_minmax(12rem,0.45fr)_minmax(14rem,0.65fr)] md:items-center">
+      <div className="grid gap-2.5 rounded-lg border border-[#ded7c8] bg-white/95 p-3 shadow-[0_2px_12px_rgba(41,37,36,0.05)] md:hidden">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[1.08rem] font-bold leading-tight text-stone-950">Choose quantity</h2>
+            <p className="mt-0.5 text-[0.86rem] leading-5 text-stone-600">
+              {formatQuantityAvailable(item.quantity_available)} available
+            </p>
+          </div>
+          <p className="storefront-primary-color text-[1.16rem] font-bold leading-tight text-[#073f1e]">
+            {formatCurrency(item.unit_price)}
+            <span className="text-xs font-semibold text-stone-500"> each</span>
+          </p>
+        </div>
+        <div className="grid gap-2 rounded-md border border-[#eee2d2] bg-[#fffdf8] p-2.5">
+          <div className="grid grid-cols-2 gap-2 text-[0.84rem]">
+            <MobileFact label="Category">{item.category}</MobileFact>
+            {item.condition ? (
+              <MobileFact label="Condition">{item.condition}</MobileFact>
+            ) : null}
+          </div>
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <span className="text-sm font-bold text-stone-950">Quantity</span>
+            <QuantityStepper
+              disabled={!item.can_checkout || item.quantity_available <= 0}
+              max={item.quantity_available}
+              onChange={updateQuantity}
+              value={selectedQuantity}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={cx(
+          "rounded-lg md:hidden",
+          selectedItem
+            ? "grid gap-2 border border-[#dfe7d8] bg-[#f3f8ef] p-3 shadow-[0_2px_12px_rgba(41,37,36,0.05)]"
+            : "border border-transparent px-1 py-0.5",
+        )}
+        ref={mobileActionRef}
+      >
+        {selectedItem ? (
+          <>
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <p className="font-bold text-stone-950">Order summary</p>
+                <p className="mt-0.5 text-sm text-stone-600">
+                  {summary.totalQuantity} selected
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-stone-500">
+                  Total
+                </p>
+                <p className="storefront-primary-color text-[1.2rem] font-bold leading-tight text-[#073f1e]">
+                  {formatCurrency(summary.subtotal)}
+                </p>
+              </div>
+            </div>
+            <StorefrontButton
+              className="min-h-11 w-full px-5"
+              disabled={!selectedItem}
+              onClick={handleAddToCart}
+            >
+              {isButtonConfirmed ? "Added to cart" : "Add to cart"}
+            </StorefrontButton>
+          </>
+        ) : (
+          <p className="text-[0.84rem] leading-5 text-stone-500">
+            Choose a quantity to see your order total.
+          </p>
+        )}
+      </div>
+
+      <div className="hidden gap-4 rounded-lg border border-[#ded7c8] bg-white p-4 md:grid md:grid-cols-[minmax(0,1fr)_minmax(12rem,0.45fr)_minmax(14rem,0.65fr)] md:items-center">
         <div>
           <p className="font-semibold text-stone-950">Order summary</p>
           <p className="mt-1 text-sm text-stone-600">
@@ -157,6 +198,15 @@ export function EquipmentOrderOptions({
           {isButtonConfirmed ? "Added to cart" : "Add to cart"}
         </StorefrontButton>
       </div>
+
+      <MobileStickyPurchaseBar
+        buttonLabel={isButtonConfirmed ? "Added to cart" : "Add to cart"}
+        disabled={!selectedItem}
+        onAddToCart={handleAddToCart}
+        show={showStickyBar}
+        subtotal={summary.subtotal}
+        totalQuantity={summary.totalQuantity}
+      />
 
       {addedItem ? (
         <div
@@ -256,6 +306,80 @@ function MobileFact({
   );
 }
 
+function MobileStickyPurchaseBar({
+  buttonLabel,
+  disabled,
+  onAddToCart,
+  show,
+  subtotal,
+  totalQuantity,
+}: {
+  buttonLabel: string;
+  disabled: boolean;
+  onAddToCart: () => void;
+  show: boolean;
+  subtotal: number;
+  totalQuantity: number;
+}) {
+  if (!show) return null;
+
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#ded7c8] bg-white/95 px-4 py-3 shadow-[0_-8px_24px_rgba(41,37,36,0.12)] backdrop-blur md:hidden pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+      <div className="mx-auto flex max-w-[28rem] items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-semibold text-stone-600">
+            {totalQuantity} selected
+          </p>
+          <p className="storefront-primary-color text-lg font-bold leading-tight text-[#073f1e]">
+            {formatCurrency(subtotal)}
+          </p>
+        </div>
+        <StorefrontButton
+          className="min-h-11 shrink-0 px-4 text-sm"
+          disabled={disabled}
+          onClick={onAddToCart}
+        >
+          {buttonLabel}
+        </StorefrontButton>
+      </div>
+    </div>
+  );
+}
+
+function useStickyPurchaseBar(
+  enabled: boolean,
+  targetRef: RefObject<HTMLElement | null>,
+) {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    const target = targetRef.current;
+
+    if (!target || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+
+    if (!mediaQuery.matches) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setShow(!entry.isIntersecting);
+      },
+      { threshold: 0.2 },
+    );
+
+    observer.observe(target);
+
+    return () => observer.disconnect();
+  }, [enabled, targetRef]);
+
+  return enabled && show;
+}
+
 function QuantityStepper({
   disabled,
   max,
@@ -268,9 +392,9 @@ function QuantityStepper({
   value: number;
 }) {
   return (
-    <div className="inline-grid grid-cols-[2.5rem_3.25rem_2.5rem] overflow-hidden rounded-md border border-[#ded7c8] bg-white align-middle">
+    <div className="inline-grid grid-cols-[2.25rem_2.75rem_2.25rem] overflow-hidden rounded-md border border-[#ded7c8] bg-white align-middle">
       <button
-        className="flex h-10 items-center justify-center border-r border-[#ded7c8] text-lg disabled:text-stone-300"
+        className="flex h-9 items-center justify-center border-r border-[#ded7c8] text-base disabled:text-stone-300"
         disabled={disabled || value <= 0}
         onClick={() => onChange(String(value - 1))}
         type="button"
@@ -278,7 +402,7 @@ function QuantityStepper({
         -
       </button>
       <input
-        className="h-10 min-w-0 bg-white text-center text-sm focus:outline-none disabled:bg-stone-50 disabled:text-stone-400"
+        className="h-9 min-w-0 bg-white text-center text-sm focus:outline-none disabled:bg-stone-50 disabled:text-stone-400"
         disabled={disabled}
         inputMode="numeric"
         max={Math.max(0, max)}
@@ -289,7 +413,7 @@ function QuantityStepper({
         value={value}
       />
       <button
-        className="flex h-10 items-center justify-center border-l border-[#ded7c8] text-lg disabled:text-stone-300"
+        className="flex h-9 items-center justify-center border-l border-[#ded7c8] text-base disabled:text-stone-300"
         disabled={disabled || value >= max}
         onClick={() => onChange(String(value + 1))}
         type="button"

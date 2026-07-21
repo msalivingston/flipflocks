@@ -8,6 +8,7 @@ import {
   StorefrontShell,
   cx,
   formatCurrency,
+  formatLocation,
   toPublicImageUrl,
 } from "../../storefront-ui";
 import {
@@ -186,8 +187,18 @@ export default async function StorefrontEquipmentPage({
 
   return (
     <StorefrontChrome categories={categories} store={store}>
-      <StorefrontPage className="gap-7">
-        <nav className="flex flex-wrap items-center gap-2 text-sm text-stone-700">
+      <StorefrontPage className="!gap-1.5 !pb-1 !pt-3.5 lg:!gap-7 lg:!py-8">
+        <Link
+          className="storefront-primary-color mb-2.5 inline-flex min-h-6 w-fit items-center rounded-md pr-3 pt-1 text-sm font-bold leading-none text-[#073f1e] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 lg:hidden"
+          href={`/store/${store.store_slug}#shop-listings`}
+        >
+          <span aria-hidden="true" className="mr-1 text-lg leading-none">
+            ‹
+          </span>
+          Equipment & Supplies
+        </Link>
+
+        <nav className="hidden flex-wrap items-center gap-2 text-sm text-stone-700 lg:flex">
           <Link href={`/store/${store.store_slug}`}>Shop</Link>
           <span>/</span>
           <Link href={`/store/${store.store_slug}#shop-listings`}>
@@ -197,16 +208,20 @@ export default async function StorefrontEquipmentPage({
           <span className="text-stone-950">{item.item_name}</span>
         </nav>
 
-        <section className="grid gap-8 lg:grid-cols-[minmax(18rem,0.85fr)_minmax(0,1.15fr)] lg:items-start">
-          <div className="grid max-w-[28rem] gap-3 lg:max-w-none">
+        <section className="grid gap-2 lg:grid-cols-[minmax(18rem,0.85fr)_minmax(0,1.15fr)] lg:items-start lg:gap-8">
+          <div className="grid max-w-[28rem] gap-2.5 justify-self-center lg:max-w-none lg:gap-3 lg:justify-self-auto">
             <EquipmentGallery
               fallbackAlt={item.featured_image_alt_text || item.item_name}
               fallbackSrc={item.featured_image_url}
               gallery={gallery}
             />
+            <MobileEquipmentIdentity
+              item={item}
+              location={formatLocation(store)}
+            />
           </div>
 
-          <section className="grid gap-5 lg:pt-1">
+          <section className="hidden gap-5 lg:grid lg:pt-1">
             <div>
               <p className="storefront-primary-color text-xs font-bold uppercase tracking-[0.18em] text-[#073f1e]">
                 {item.category}
@@ -249,6 +264,46 @@ export default async function StorefrontEquipmentPage({
         <EquipmentOrderOptions item={item} />
       </StorefrontPage>
     </StorefrontChrome>
+  );
+}
+
+function MobileEquipmentIdentity({
+  item,
+  location,
+}: {
+  item: StorefrontEquipmentItem;
+  location: string;
+}) {
+  const meta = [item.category, item.condition ? `${item.condition} condition` : null]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <section className="grid gap-1.5 lg:hidden">
+      <p className="storefront-primary-color text-[0.72rem] font-bold uppercase tracking-[0.12em] text-[#073f1e]">
+        Equipment & Supplies
+      </p>
+      <h1
+        className={cx(
+          storefrontSerifClass,
+          "text-[1.9rem] font-bold leading-[1.03] text-stone-950",
+        )}
+      >
+        {item.item_name}
+      </h1>
+      {meta ? <p className="text-sm font-semibold text-stone-700">{meta}</p> : null}
+      {item.description ? (
+        <p className="line-clamp-2 text-[0.95rem] leading-5 text-stone-700">
+          {item.description}
+        </p>
+      ) : null}
+      <p className="storefront-primary-color text-[1.45rem] font-bold leading-tight text-[#073f1e]">
+        {formatCurrency(item.unit_price)} each
+      </p>
+      <p className="text-sm font-medium leading-5 text-stone-600">
+        {item.buyer_availability_label} · {formatQuantityAvailable(item.quantity_available)} · Pickup in {location}
+      </p>
+    </section>
   );
 }
 

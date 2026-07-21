@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
   StorefrontCartItem,
   addItemsToStorefrontCart,
@@ -90,6 +90,12 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
     isPanelHighlighted,
     showAddToCartConfirmation,
   } = useAddToCartConfirmation();
+  const mobileActionRef = useRef<HTMLDivElement | null>(null);
+  const showStickyBar = useStickyPurchaseBar(
+    summary.totalQuantity > 0,
+    mobileActionRef,
+  );
+  const minimumOrderNote = getMinimumOrderNote(product);
 
   function updateQuantity(
     inventoryItemId: string,
@@ -119,8 +125,8 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
   }
 
   return (
-    <section className="grid gap-3">
-      <div className="overflow-hidden rounded-lg border border-[#ded7c8] bg-white">
+    <section className="grid gap-2.5">
+      <div className="hidden overflow-hidden rounded-lg border border-[#ded7c8] bg-white md:block">
         <div className="flex flex-col gap-2 border-b border-[#ded7c8] bg-[#f7faf4] px-4 py-4 sm:flex-row sm:items-center sm:gap-5">
           <h2 className="text-lg font-semibold text-stone-950">
             Purchase details
@@ -132,7 +138,7 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
           </p>
         </div>
 
-        <div className="hidden md:block">
+        <div>
           <table className="w-full table-fixed border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-[#e7decd] bg-[#fbf7ef] text-stone-950">
@@ -199,43 +205,61 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
           </table>
         </div>
 
-        <div className="grid gap-0 md:hidden">
-          {visibleOptions.map((option) => {
+      </div>
+
+      <div className="grid gap-2.5 rounded-lg border border-[#ded7c8] bg-white/95 p-3 shadow-[0_2px_12px_rgba(41,37,36,0.04)] md:hidden">
+        <div>
+          <h2 className="text-[1.08rem] font-bold leading-tight text-stone-950">
+            {isHatchingEggProduct ? "Choose your eggs" : "Choose your birds"}
+          </h2>
+          <p className="mt-0.5 text-[0.86rem] leading-5 text-stone-600">
+            {isHatchingEggProduct
+              ? "Select an option and quantity to add to your order."
+              : "Select an age and quantity to add to your order."}
+          </p>
+        </div>
+
+        <div className="grid">
+          {visibleOptions.map((option, index) => {
             const selectedQuantity = getSelectedQuantity(option, quantities);
             const isAvailable = option.canCheckout && option.quantityAvailable > 0;
 
             return (
               <article
-                className="grid gap-3 border-b border-[#eee7dc] p-4 last:border-b-0"
+                className={cx(
+                  "grid gap-2.5 bg-[#fffdf8] p-2.5 transition",
+                  index > 0 ? "border-t border-[#efe5d8]" : "",
+                  selectedQuantity > 0
+                    ? "storefront-primary-border rounded-md border shadow-[0_0_0_1px_var(--storefront-heading-color)]"
+                    : "",
+                )}
                 key={option.inventoryItemId}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
-                      {isHatchingEggProduct ? "Item" : "Current age"}
-                    </p>
-                    <h3 className="mt-1 font-semibold text-stone-950">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="text-[0.96rem] font-bold leading-tight text-stone-950">
                       {option.ageLabel}
                     </h3>
+                    <p className="mt-0.5 truncate text-[0.84rem] font-semibold text-stone-700">
+                      <SexLabel label={option.typeLabel} />
+                    </p>
                   </div>
                   <ReadyPill option={option} />
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <MobileFact label={isHatchingEggProduct ? "Type" : "Sex"}>
-                    <SexLabel label={option.typeLabel} />
-                  </MobileFact>
-                  <MobileFact label="Available">
-                    <span className="storefront-primary-color font-semibold text-[#073f1e]">
+
+                <div className="flex items-end justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="storefront-primary-color text-[1rem] font-bold leading-tight text-[#073f1e]">
+                      {formatCurrency(option.unitPrice)}{" "}
+                      <span className="text-xs font-semibold text-stone-500">
+                        each
+                      </span>
+                    </p>
+                    <p className="mt-0.5 text-[0.84rem] font-semibold text-stone-600">
                       {formatQuantityAvailable(option.quantityAvailable)}
-                    </span>
-                  </MobileFact>
-                  <MobileFact label="Price">
-                    <span className="font-semibold text-stone-950">
-                      {formatCurrency(option.unitPrice)}
-                    </span>{" "}
-                    <span className="text-stone-500">each</span>
-                  </MobileFact>
-                  <MobileFact label="Quantity">
+                    </p>
+                  </div>
+                  <div className="shrink-0">
                     <QuantityStepper
                       disabled={!isAvailable}
                       max={option.quantityAvailable}
@@ -250,7 +274,7 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
                       }
                       value={selectedQuantity}
                     />
-                  </MobileFact>
+                  </div>
                 </div>
               </article>
             );
@@ -258,9 +282,56 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
         </div>
       </div>
 
-      <p className="text-sm text-stone-600">{getMinimumOrderNote(product)}</p>
+      {minimumOrderNote ? (
+        <p className="text-[0.84rem] leading-5 text-stone-600">
+          {minimumOrderNote}
+        </p>
+      ) : null}
 
-      <div className="grid gap-4 rounded-lg border border-[#ded7c8] bg-white p-4 md:grid-cols-[minmax(0,1fr)_minmax(12rem,0.45fr)_minmax(14rem,0.65fr)] md:items-center">
+      <div
+        className={cx(
+          "rounded-lg md:hidden",
+          summary.totalQuantity > 0
+            ? "grid gap-2 border border-[#dfe7d8] bg-[#f3f8ef] p-3 shadow-[0_2px_12px_rgba(41,37,36,0.05)]"
+            : "border border-transparent px-1 py-0.5",
+        )}
+        ref={mobileActionRef}
+      >
+        {summary.totalQuantity > 0 ? (
+          <>
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <p className="font-bold text-stone-950">Order summary</p>
+                <p className="mt-0.5 text-sm text-stone-600">
+                  {getOrderSummaryText(summary.totalQuantity)}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-stone-500">
+                  Total
+                </p>
+                <p className="storefront-primary-color text-[1.2rem] font-bold leading-tight text-[#073f1e]">
+                  {formatCurrency(summary.subtotal)}
+                </p>
+              </div>
+            </div>
+            <StorefrontButton
+              className="min-h-11 w-full gap-2 px-5"
+              disabled={summary.totalQuantity <= 0}
+              onClick={handleAddToCart}
+            >
+              <StorefrontGlyph className="h-5 w-5" src="/glyphs/cart.png" />
+              {getAddToCartButtonLabel(isButtonConfirmed)}
+            </StorefrontButton>
+          </>
+        ) : (
+          <p className="text-[0.84rem] leading-5 text-stone-500">
+            Choose quantities to see your order total.
+          </p>
+        )}
+      </div>
+
+      <div className="hidden gap-4 rounded-lg border border-[#ded7c8] bg-white p-4 md:grid md:grid-cols-[minmax(0,1fr)_minmax(12rem,0.45fr)_minmax(14rem,0.65fr)] md:items-center">
         <div>
           <p className="font-semibold text-stone-950">Order summary</p>
           <p className="mt-1 text-sm text-stone-600">
@@ -282,6 +353,15 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
           {getAddToCartButtonLabel(isButtonConfirmed)}
         </StorefrontButton>
       </div>
+
+      <MobileStickyPurchaseBar
+        buttonLabel={getAddToCartButtonLabel(isButtonConfirmed)}
+        disabled={summary.totalQuantity <= 0}
+        onAddToCart={handleAddToCart}
+        show={showStickyBar}
+        subtotal={summary.subtotal}
+        totalQuantity={summary.totalQuantity}
+      />
 
       {addedItems && addedSummary ? (
         <div
@@ -364,21 +444,79 @@ function TableCell({
   return <td className={cx("px-4 py-4 align-middle", className)}>{children}</td>;
 }
 
-function MobileFact({
-  children,
-  label,
+function MobileStickyPurchaseBar({
+  buttonLabel,
+  disabled,
+  onAddToCart,
+  show,
+  subtotal,
+  totalQuantity,
 }: {
-  children: React.ReactNode;
-  label: string;
+  buttonLabel: string;
+  disabled: boolean;
+  onAddToCart: () => void;
+  show: boolean;
+  subtotal: number;
+  totalQuantity: number;
 }) {
+  if (!show) return null;
+
   return (
-    <div className="min-w-0">
-      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
-        {label}
-      </p>
-      <div className="mt-1 min-w-0 text-stone-800">{children}</div>
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#ded7c8] bg-white/95 px-4 py-3 shadow-[0_-8px_24px_rgba(41,37,36,0.12)] backdrop-blur md:hidden pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+      <div className="mx-auto flex max-w-[28rem] items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-semibold text-stone-600">
+            {totalQuantity} selected
+          </p>
+          <p className="storefront-primary-color text-lg font-bold leading-tight text-[#073f1e]">
+            {formatCurrency(subtotal)}
+          </p>
+        </div>
+        <StorefrontButton
+          className="min-h-11 shrink-0 gap-2 px-4 text-sm"
+          disabled={disabled}
+          onClick={onAddToCart}
+        >
+          <StorefrontGlyph className="h-4 w-4" src="/glyphs/cart.png" />
+          {buttonLabel}
+        </StorefrontButton>
+      </div>
     </div>
   );
+}
+
+function useStickyPurchaseBar(
+  enabled: boolean,
+  targetRef: RefObject<HTMLElement | null>,
+) {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    const target = targetRef.current;
+
+    if (!target || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+
+    if (!mediaQuery.matches) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setShow(!entry.isIntersecting);
+      },
+      { threshold: 0.2 },
+    );
+
+    observer.observe(target);
+
+    return () => observer.disconnect();
+  }, [enabled, targetRef]);
+
+  return enabled && show;
 }
 
 function QuantityStepper({
@@ -398,9 +536,9 @@ function QuantityStepper({
   const nextDecrement = value <= min ? 0 : value - 1;
 
   return (
-    <div className="inline-grid grid-cols-[2.5rem_3.25rem_2.5rem] overflow-hidden rounded-md border border-[#ded7c8] bg-white align-middle">
+    <div className="inline-grid grid-cols-[2.25rem_2.75rem_2.25rem] overflow-hidden rounded-md border border-[#ded7c8] bg-white align-middle">
       <button
-        className="flex h-10 items-center justify-center border-r border-[#ded7c8] text-lg disabled:text-stone-300"
+        className="flex h-9 items-center justify-center border-r border-[#ded7c8] text-base disabled:text-stone-300"
         disabled={disabled || value <= 0}
         onClick={() => onChange(String(nextDecrement))}
         type="button"
@@ -408,7 +546,7 @@ function QuantityStepper({
         -
       </button>
       <input
-        className="h-10 min-w-0 bg-white text-center text-sm focus:outline-none disabled:bg-stone-50 disabled:text-stone-400"
+        className="h-9 min-w-0 bg-white text-center text-sm focus:outline-none disabled:bg-stone-50 disabled:text-stone-400"
         disabled={disabled}
         inputMode="numeric"
         max={Math.max(0, max)}
@@ -419,7 +557,7 @@ function QuantityStepper({
         value={value}
       />
       <button
-        className="flex h-10 items-center justify-center border-l border-[#ded7c8] text-lg disabled:text-stone-300"
+        className="flex h-9 items-center justify-center border-l border-[#ded7c8] text-base disabled:text-stone-300"
         disabled={disabled || value >= max}
         onClick={() => onChange(String(nextIncrement))}
         type="button"
@@ -440,7 +578,7 @@ function ReadyPill({ option }: { option: StorefrontProduct["options"][number] })
   return (
     <span
       className={cx(
-        "inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-sm font-semibold",
+        "inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[0.72rem] font-semibold leading-5",
         isReadyNow
           ? "border-emerald-300 bg-emerald-50 text-emerald-800"
           : "border-[#ded7c8] bg-white text-stone-800",
@@ -521,7 +659,7 @@ function getMinimumOrderNote(product: StorefrontProduct) {
     return `Minimum order: ${match[1].trim()}`;
   }
 
-  return "Minimum order: No minimum listed.";
+  return null;
 }
 
 function getOrderSummaryText(selectedQuantity: number) {

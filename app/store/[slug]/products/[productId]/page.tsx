@@ -132,8 +132,18 @@ export default async function StorefrontProductPage({
 
   return (
     <StorefrontChrome categories={categories} store={store}>
-      <StorefrontPage className="gap-7">
-        <nav className="flex flex-wrap items-center gap-2 text-sm text-stone-700">
+      <StorefrontPage className="!gap-1.5 !pb-1 !pt-3.5 lg:!gap-7 lg:!py-8">
+        <Link
+          className="storefront-primary-color mb-2.5 inline-flex min-h-6 w-fit items-center rounded-md pr-3 pt-1 text-sm font-bold leading-none text-[#073f1e] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 lg:hidden"
+          href={`/store/${store.store_slug}#shop-listings`}
+        >
+          <span aria-hidden="true" className="mr-1 text-lg leading-none">
+            ‹
+          </span>
+          {isHatchingEggProduct ? "Hatching Eggs" : "Live Birds"}
+        </Link>
+
+        <nav className="hidden flex-wrap items-center gap-2 text-sm text-stone-700 lg:flex">
           <Link href={`/store/${store.store_slug}`}>Shop</Link>
           <span>/</span>
           <Link href={`/store/${store.store_slug}#shop-listings`}>
@@ -145,16 +155,19 @@ export default async function StorefrontProductPage({
           <span className="text-stone-950">{product.name}</span>
         </nav>
 
-        <section className="grid gap-8 lg:grid-cols-[minmax(18rem,0.85fr)_minmax(0,1.15fr)] lg:items-start">
-          <div className="grid max-w-[28rem] gap-3 lg:max-w-none">
+        <section className="grid gap-2 lg:grid-cols-[minmax(18rem,0.85fr)_minmax(0,1.15fr)] lg:items-start lg:gap-8">
+          <div className="grid max-w-[28rem] gap-2.5 justify-self-center lg:max-w-none lg:gap-3 lg:justify-self-auto">
             <ProductGallery
               fallbackAlt={product.imageAlt || product.name}
               fallbackSrc={product.imageUrl}
               gallery={gallery}
             />
+            <MobileProductIdentity
+              product={product}
+            />
           </div>
 
-          <section className="grid gap-5 lg:pt-1">
+          <section className="hidden gap-5 lg:grid lg:pt-1">
             <div>
               <p className="storefront-primary-color text-xs font-bold uppercase tracking-[0.18em] text-[#073f1e]">
                 {product.speciesName}
@@ -200,6 +213,34 @@ export default async function StorefrontProductPage({
         <ProductOrderOptions product={product} />
       </StorefrontPage>
     </StorefrontChrome>
+  );
+}
+
+function MobileProductIdentity({ product }: { product: StorefrontProduct }) {
+  const description = formatProductDescription(product.description);
+
+  return (
+    <section className="grid gap-1.5 lg:hidden">
+      <p className="storefront-primary-color text-[0.72rem] font-bold uppercase tracking-[0.12em] text-[#073f1e]">
+        {product.speciesName}
+      </p>
+      <h1
+        className={cx(
+          storefrontSerifClass,
+          "text-[1.9rem] font-bold leading-[1.03] text-stone-950",
+        )}
+      >
+        {product.name}
+      </h1>
+      {description ? (
+        <p className="line-clamp-2 text-[0.95rem] leading-5 text-stone-700">
+          {description}
+        </p>
+      ) : null}
+      <p className="storefront-primary-color text-[1.45rem] font-bold leading-tight text-[#073f1e]">
+        {product.pricingLabel ? `${product.pricingLabel} each` : "See options"}
+      </p>
+    </section>
   );
 }
 
