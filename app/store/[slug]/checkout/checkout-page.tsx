@@ -119,6 +119,7 @@ const initialForm: BuyerForm = {
 };
 
 const emptyCartItems: StorefrontCart["items"] = [];
+const placeOrderDisabledForDemo = true;
 
 export function CheckoutPage({ store }: { store: StorefrontHome }) {
   const router = useRouter();
@@ -290,7 +291,8 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
     isChecking ||
     isLoadingPickupOptions ||
     checkoutItems.length === 0 ||
-    summary?.is_checkout_available === false;
+    summary?.is_checkout_available === false ||
+    (activeStep === "review" && placeOrderDisabledForDemo);
 
   useEffect(() => {
     if (cart === null || checkoutItems.length === 0) {
@@ -478,6 +480,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
 
   function handleReviewSubmit() {
     setErrorMessage(null);
+    if (placeOrderDisabledForDemo) return;
     if (!validateContactStep()) return;
     if (!validateFulfillmentStep()) return;
 
@@ -492,6 +495,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
 
   async function submitOrder() {
     setErrorMessage(null);
+    if (placeOrderDisabledForDemo) return;
 
     if (checkoutItems.length === 0) {
       setErrorMessage("Your cart is empty.");
@@ -1262,6 +1266,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
               <StorefrontButton
                 className="mt-3 min-h-10 w-full"
                 disabled={
+                  placeOrderDisabledForDemo ||
                   isSubmitting ||
                   isChecking ||
                   isLoadingPickupOptions ||

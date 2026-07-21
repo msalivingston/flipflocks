@@ -12,6 +12,7 @@ export const metadata: Metadata = {
 };
 
 const placeholderHref = "#";
+const demoStoreHref = "/store/meadowgate-poultry";
 
 const benefits = [
   {
@@ -213,6 +214,12 @@ export default async function Home() {
               tool&mdash;so you can stop chasing messages and focus on raising
               healthy birds.
             </p>
+            <PlaceholderLink
+              className="mt-5 inline-flex min-h-11 items-center justify-center rounded-md bg-white px-6 text-[17px] font-bold text-[#0e4a2d] shadow-sm shadow-black/15 transition hover:bg-[#f5f1e8] md:mt-6"
+              href={demoStoreHref}
+            >
+              Demo Store
+            </PlaceholderLink>
           </div>
         </div>
       </section>
