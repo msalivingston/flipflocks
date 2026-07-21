@@ -106,7 +106,7 @@ export function StorefrontHomeContent({
           />
           <div className="relative z-10 mx-auto h-full max-w-[70rem] px-4 sm:px-7">
             <div
-              className={`flex h-full max-w-[16.5rem] flex-col justify-center gap-2.5 sm:max-w-[32rem] sm:gap-4 lg:max-w-[36rem] ${heroTextColor}`}
+              className={`flex h-full max-w-[16.5rem] flex-col justify-center gap-2.5 [text-shadow:0_1px_10px_rgba(0,0,0,0.42)] sm:max-w-[32rem] sm:gap-4 lg:max-w-[36rem] lg:[text-shadow:none] ${heroTextColor}`}
             >
               <div>
                 <p
@@ -223,6 +223,7 @@ function HeroBackdrop({
   }
 
   const cropStyle = getStorefrontCropStyle(crop);
+  const mobileCropStyle = getMobileHeroCropStyle(crop);
   const imageUrl = toPublicImageUrl(src);
 
   if (layout === "right") {
@@ -241,7 +242,17 @@ function HeroBackdrop({
         />
         <Image
           alt={alt}
-          className={`absolute inset-0 h-full w-full object-cover object-center ${
+          className="absolute inset-0 h-full w-full object-cover object-center lg:hidden"
+          fill
+          priority
+          sizes="100vw"
+          src={imageUrl}
+          style={mobileCropStyle}
+          unoptimized
+        />
+        <Image
+          alt={alt}
+          className={`absolute inset-0 hidden h-full w-full object-cover object-center lg:block ${
             crop ? "lg:object-contain" : ""
           }`}
           fill
@@ -257,7 +268,7 @@ function HeroBackdrop({
           }}
           unoptimized
         />
-        <div className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(90deg,rgba(28,25,23,0.68)_0%,rgba(28,25,23,0.48)_42%,rgba(28,25,23,0.12)_78%,rgba(28,25,23,0)_100%)] lg:hidden" />
+        <div className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(90deg,rgba(28,25,23,0.8)_0%,rgba(28,25,23,0.64)_42%,rgba(28,25,23,0.28)_78%,rgba(28,25,23,0.08)_100%)] lg:hidden" />
         <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(90deg,rgba(28,25,23,0.46)_0%,rgba(28,25,23,0.34)_36%,rgba(28,25,23,0.04)_72%)]" />
       </>
     );
@@ -265,21 +276,21 @@ function HeroBackdrop({
 
   return (
     <>
-      <Image
-        alt=""
-        aria-hidden="true"
-        className="absolute inset-0 h-full w-full scale-105 object-cover object-center lg:hidden"
-        fill
-        priority
-        sizes="100vw"
-        src={imageUrl}
-        unoptimized
-      />
-      <Image
-        alt={alt}
-        className={`absolute inset-0 h-full w-full object-cover object-center ${
-          crop ? "lg:object-contain" : ""
-        }`}
+        <Image
+          alt={alt}
+          className="absolute inset-0 h-full w-full object-cover object-center lg:hidden"
+          fill
+          priority
+          sizes="100vw"
+          src={imageUrl}
+          style={mobileCropStyle}
+          unoptimized
+        />
+        <Image
+          alt={alt}
+          className={`absolute inset-0 hidden h-full w-full object-cover object-center lg:block ${
+            crop ? "lg:object-contain" : ""
+          }`}
         fill
         priority
         sizes="(max-width: 1024px) 100vw, 70rem"
@@ -287,9 +298,25 @@ function HeroBackdrop({
         style={cropStyle}
         unoptimized
       />
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(90deg,rgba(28,25,23,0.68)_0%,rgba(28,25,23,0.48)_42%,rgba(28,25,23,0.14)_74%,rgba(28,25,23,0)_100%)] lg:hidden" />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(90deg,rgba(28,25,23,0.8)_0%,rgba(28,25,23,0.64)_42%,rgba(28,25,23,0.3)_74%,rgba(28,25,23,0.08)_100%)] lg:hidden" />
     </>
   );
+}
+
+function getMobileHeroCropStyle(crop: StorefrontHeroCropMetadata | null) {
+  if (!crop) return undefined;
+
+  const zoom = Number.isFinite(crop.zoom) && crop.zoom > 0 ? crop.zoom : 1;
+  const x = Number.isFinite(crop.x) ? Math.round(crop.x * 0.82) : 0;
+  const y = Number.isFinite(crop.y) ? Math.round(crop.y * 0.82) : 0;
+  const rotation = [0, 90, 180, 270].includes(crop.rotation)
+    ? crop.rotation
+    : 0;
+
+  return {
+    transform: `translate(${x}px, ${y}px) scale(${zoom * 1.22}) rotate(${rotation}deg)`,
+    transformOrigin: "center center",
+  };
 }
 
 function buildListingSections({
