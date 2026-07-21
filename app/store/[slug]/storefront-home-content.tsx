@@ -115,7 +115,7 @@ export function StorefrontHomeContent({
                   Local farm storefront
                 </p>
                 <h1
-                  className={`${storefrontHeroTypography.title} line-clamp-2 ${heroTextColor}`}
+                  className={`${storefrontHeroTypography.title} -mb-2 line-clamp-2 pb-2 ${heroTextColor}`}
                 >
                   {heroTitle}
                 </h1>
@@ -187,7 +187,7 @@ function HeroPickupBadge({
     <div
       className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.72rem] font-semibold leading-tight shadow-sm sm:min-h-9 sm:gap-2 sm:px-3 sm:text-xs lg:min-h-10 lg:px-4 lg:text-sm ${
         light
-          ? "border-white/25 bg-white/84 text-[#073f1e]"
+          ? "border-white/35 bg-stone-950/28 text-white shadow-none backdrop-blur-[1px] lg:border-white/25 lg:bg-white/84 lg:text-[#073f1e] lg:shadow-sm"
           : "storefront-primary-color border-[#ddd5c7] bg-white/90"
       }`}
     >
