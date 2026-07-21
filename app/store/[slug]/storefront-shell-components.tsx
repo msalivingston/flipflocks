@@ -28,11 +28,13 @@ export function StorefrontChrome({
   categories,
   children,
   checkoutMode = false,
+  footerVariant = "default",
   store,
 }: {
   categories: StorefrontCategoryAvailability;
   children: React.ReactNode;
   checkoutMode?: boolean;
+  footerVariant?: "default" | "about";
   store: StorefrontHome;
 }) {
   const theme = {
@@ -47,7 +49,11 @@ export function StorefrontChrome({
       {checkoutMode ? <StorefrontCheckoutHeader store={store} /> : null}
       <StorefrontHeader className={checkoutMode ? "hidden lg:block" : undefined} store={store} />
       {children}
-      <StorefrontFooter categories={categories} store={store} />
+      <StorefrontFooter
+        categories={categories}
+        mobileVariant={footerVariant}
+        store={store}
+      />
     </StorefrontShell>
   );
 }
@@ -188,12 +194,15 @@ export function StorefrontTrustStrip({
 
 export function StorefrontFooter({
   categories,
+  mobileVariant = "default",
   store,
 }: {
   categories: StorefrontCategoryAvailability;
+  mobileVariant?: "default" | "about";
   store: StorefrontHome;
 }) {
   const shopLinks = getStorefrontFooterShopLinks(store.store_slug, categories);
+  const isAboutFooter = mobileVariant === "about";
 
   return (
     <footer className="relative overflow-hidden border-t border-[#e4dccb] bg-[#fbf6ec]">
@@ -205,7 +214,15 @@ export function StorefrontFooter({
             "url('/storefront-heroes/footer-fence-line.png')",
         }}
       />
-      <div className="relative mx-auto max-w-[70rem] px-4 py-3.5 sm:px-7 sm:py-4 lg:px-5 lg:py-7">
+      {isAboutFooter ? (
+        <CompactAboutFooter categories={categories} store={store} />
+      ) : null}
+      <div
+        className={cx(
+          "relative mx-auto max-w-[70rem] px-4 py-3.5 sm:px-7 sm:py-4 lg:px-5 lg:py-7",
+          isAboutFooter && "hidden lg:block",
+        )}
+      >
         <div className="storefront-text-color grid gap-3.5 text-xs text-[#1f2f37] sm:grid-cols-2 sm:gap-5 sm:text-sm lg:grid-cols-[1.45fr_0.9fr_1fr_1fr] lg:gap-10">
           <div className="min-w-0">
             <p
@@ -275,6 +292,65 @@ export function StorefrontFooter({
         </div>
       </div>
     </footer>
+  );
+}
+
+function CompactAboutFooter({
+  categories,
+  store,
+}: {
+  categories: StorefrontCategoryAvailability;
+  store: StorefrontHome;
+}) {
+  const links = [
+    { href: `/store/${store.store_slug}/about`, label: "About" },
+    { href: `/store/${store.store_slug}#shop-listings`, label: "Shop" },
+    { href: `/store/${store.store_slug}/policies`, label: "Policies" },
+    ...getStorefrontFooterShopLinks(store.store_slug, categories),
+  ];
+
+  return (
+    <div className="relative mx-auto px-5 pb-20 pt-4 sm:px-7 lg:hidden">
+      <div className="rounded-lg border border-[#e4dccb] bg-[#fffaf0]/80 px-4 py-4">
+        <p
+          className={cx(
+            storefrontSerifClass,
+            "storefront-heading-color break-words text-xl font-normal leading-tight text-[#073f1e]",
+          )}
+        >
+          {store.store_name}
+        </p>
+        <div className="storefront-text-color mt-1 grid gap-1 text-sm leading-5 text-[#1f2f37]">
+          <p>{formatLocation(store)}</p>
+          {store.public_email ? (
+            <a
+              className="break-all"
+              href={`mailto:${store.public_email}`}
+            >
+              {store.public_email}
+            </a>
+          ) : null}
+          {store.public_phone ? (
+            <a href={`tel:${store.public_phone}`}>{store.public_phone}</a>
+          ) : null}
+          {!store.public_phone && !store.public_email ? (
+            <p>Seller contact follows after checkout.</p>
+          ) : null}
+        </div>
+        <div className="mt-3 border-t border-[#d5cbb9] pt-2">
+          <nav className="storefront-primary-color flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm font-medium text-[#073f1e]">
+            {links.map((link) => (
+              <Link href={link.href} key={`${link.href}-${link.label}`}>
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+          <p className="storefront-text-color mt-2 text-xs text-[#1f2f37]/75">
+            &copy; 2025 {store.store_name}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 

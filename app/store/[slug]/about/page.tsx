@@ -84,11 +84,15 @@ export default async function StorefrontAboutPage({
   const aboutHeading = store.store_tagline?.trim() || store.store_name;
 
   return (
-    <StorefrontChrome categories={chromeResult.categories} store={store}>
+    <StorefrontChrome
+      categories={chromeResult.categories}
+      footerVariant="about"
+      store={store}
+    >
       <main className="bg-[#fffaf0] text-[#2f2d26]">
-        <div className="mx-auto grid max-w-[70rem] gap-4 px-5 py-7 sm:px-7 lg:gap-4 lg:py-8">
+        <div className="mx-auto grid max-w-[70rem] gap-4 px-5 py-4 sm:px-7 lg:gap-4 lg:py-8">
           <section className="relative flow-root">
-            <div className="relative mb-6 min-h-[16rem] lg:float-right lg:mb-6 lg:ml-10 lg:w-[58%]">
+            <div className="relative -mx-5 mb-4 min-h-0 sm:-mx-7 lg:mx-0 lg:float-right lg:mb-6 lg:ml-10 lg:min-h-[16rem] lg:w-[58%]">
               <Image
                 alt=""
                 aria-hidden="true"
@@ -99,7 +103,7 @@ export default async function StorefrontAboutPage({
                 width={1024}
               />
               {aboutPhoto ? (
-                <div className="relative mx-auto aspect-[1.58/1] w-full max-w-[calc(94%-35px)] overflow-hidden rounded-lg bg-white/40 shadow-sm">
+                <div className="relative mx-auto aspect-[1.58/1] w-full overflow-hidden rounded-b-[2rem] bg-white/40 shadow-sm lg:max-w-[calc(94%-35px)] lg:rounded-lg">
                   <Image
                     alt={aboutPhoto.alt_text || `${store.store_name} farm photo`}
                     className={`absolute inset-0 h-full w-full object-center ${
@@ -114,47 +118,47 @@ export default async function StorefrontAboutPage({
                   />
                 </div>
               ) : (
-                <div className="mx-auto flex aspect-[1.58/1] w-full max-w-[calc(94%-35px)] items-center justify-center rounded-lg border border-dashed border-[#d8cebd] bg-white/55 px-6 text-center text-sm font-semibold text-stone-500">
+                <div className="mx-auto flex aspect-[1.58/1] w-full items-center justify-center rounded-b-[2rem] border border-dashed border-[#d8cebd] bg-white/55 px-6 text-center text-sm font-semibold text-stone-500 lg:max-w-[calc(94%-35px)] lg:rounded-lg">
                   Farm photo coming soon
                 </div>
               )}
             </div>
-            <div className="relative pl-14 lg:pl-16">
-              <div className="mb-2">
+            <div className="relative text-center lg:pl-16 lg:text-left">
+              <div className="mb-1 lg:mb-2">
                 <Image
                   alt=""
                   aria-hidden="true"
-                  className="absolute -left-[9px] -top-6 h-16 w-20 object-contain opacity-80"
+                  className="absolute -left-[9px] -top-6 hidden h-16 w-20 object-contain opacity-80 lg:block"
                   height={128}
                   src={aboutAssets.leaves}
                   unoptimized
                   width={128}
                 />
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#596747]">
-                  About the farm
+                <p className="storefront-primary-color text-xs font-bold uppercase tracking-[0.2em] text-[#073f1e]">
+                  ABOUT US
                 </p>
               </div>
               <h1
                 className={cx(
                   storefrontSerifClass,
-                  "storefront-heading-color mt-3 max-w-lg text-4xl font-normal leading-[1] text-[#34442f] sm:text-5xl",
+                  "storefront-heading-color mx-auto mt-1 max-w-[20rem] text-[2rem] font-normal leading-[1.04] text-[#34442f] sm:max-w-lg sm:text-5xl lg:mx-0 lg:mt-3 lg:text-5xl",
                 )}
               >
                 {aboutHeading}
               </h1>
-              <div className="relative mt-3 h-8 text-[#cbbd96]">
-                <span className="absolute left-0 top-1/2 h-px w-60 max-w-[64%] -translate-y-1/2 bg-current" />
+              <div className="relative mx-auto mt-2 h-6 max-w-[10rem] text-[#cbbd96] lg:mx-0 lg:mt-3 lg:h-8 lg:max-w-none">
+                <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-current lg:left-0 lg:right-auto lg:w-60 lg:max-w-[64%]" />
                 <Image
                   alt=""
                   aria-hidden="true"
-                  className="absolute left-[calc(16.25rem-10px)] top-1/2 h-14 w-14 -translate-y-1/2 object-contain opacity-80"
+                  className="absolute left-1/2 top-1/2 h-9 w-9 -translate-x-1/2 -translate-y-1/2 bg-[#fffaf0] object-contain px-1 opacity-80 lg:left-[calc(16.25rem-10px)] lg:h-14 lg:w-14 lg:translate-x-0 lg:px-0"
                   height={128}
                   src={aboutAssets.hen}
                   unoptimized
                   width={128}
                 />
               </div>
-              <div className="storefront-text-color mt-3 space-y-3 text-base leading-[1.55] text-[#36342e]">
+              <div className="storefront-text-color mx-auto mt-2 max-w-[36rem] text-base leading-[1.55] text-[#36342e] lg:mx-0 lg:mt-3 lg:space-y-3">
                 {paragraphs.map((paragraph) => (
                   <p key={paragraph}>{paragraph}</p>
                 ))}
@@ -162,9 +166,9 @@ export default async function StorefrontAboutPage({
             </div>
           </section>
 
-          <DecorativeDivider />
+          <DecorativeDivider className="hidden lg:grid" />
 
-          <section className="relative overflow-hidden rounded-lg border border-[#ece1c7] bg-[#f6f1df] px-5 py-3 shadow-sm sm:px-8">
+          <section className="relative overflow-hidden rounded-lg border border-[#ece1c7] bg-[#f6f1df] px-4 py-3 shadow-sm sm:px-8 lg:px-5">
             <Image
               alt=""
               aria-hidden="true"
@@ -187,7 +191,7 @@ export default async function StorefrontAboutPage({
               <blockquote
                 className={cx(
                   storefrontSerifClass,
-                  "storefront-heading-color flex-1 text-center text-[1.375rem] font-normal leading-tight text-[#48583a] sm:text-[1.75rem]",
+                  "storefront-heading-color flex-1 text-center text-[1.1rem] font-normal leading-tight text-[#48583a] sm:text-[1.75rem]",
                 )}
               >
                 &ldquo;{quote}&rdquo;
@@ -209,9 +213,9 @@ export default async function StorefrontAboutPage({
   );
 }
 
-function DecorativeDivider() {
+function DecorativeDivider({ className }: { className?: string }) {
   return (
-    <div className="relative grid grid-cols-[minmax(0,1fr)_3.5rem_minmax(0,1fr)] items-center py-0">
+    <div className={cx("relative grid grid-cols-[minmax(0,1fr)_3.5rem_minmax(0,1fr)] items-center py-0", className)}>
       <div className="relative h-6 overflow-hidden">
         <Image
           alt=""
