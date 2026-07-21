@@ -1,6 +1,15 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import {
+  FormEvent,
+  forwardRef,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { publicSupabase } from "@/lib/public-supabase";
 import {
@@ -26,8 +35,10 @@ import {
   StorefrontPage,
   StorefrontSummaryCard,
   StorefrontTextarea,
+  cx,
   formatCurrency,
   formatDate,
+  toPublicImageUrl,
 } from "../storefront-ui";
 
 type BuyerForm = {
@@ -48,6 +59,7 @@ type BuyerForm = {
 };
 
 type FulfillmentMethod = "pickup" | "delivery";
+type CheckoutStep = "contact" | "fulfillment" | "review";
 
 type CheckoutSummary = {
   is_checkout_available: boolean;
@@ -128,6 +140,19 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState<SuccessState | null>(null);
+  const [activeStep, setActiveStep] = useState<CheckoutStep>("contact");
+  const [completedSteps, setCompletedSteps] = useState<
+    Record<CheckoutStep, boolean>
+  >({
+    contact: false,
+    fulfillment: false,
+    review: false,
+  });
+  const [isMobileOrderSummaryOpen, setIsMobileOrderSummaryOpen] =
+    useState(false);
+  const contactStepRef = useRef<HTMLElement | null>(null);
+  const fulfillmentStepRef = useRef<HTMLElement | null>(null);
+  const reviewStepRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -240,6 +265,32 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
       : null;
   const selectedDeliveryFee = selectedDeliveryOption?.price_amount ?? 0;
   const estimatedTotal = itemSubtotal + selectedDeliveryFee;
+  const selectedPickupOption =
+    form.fulfillmentMethod === "pickup" && usesManualPickupOptions
+      ? pickupOptions.find(
+          (option) => option.pickup_option_id === form.pickupOptionId,
+        ) ?? null
+      : null;
+  const activeStepActionLabel =
+    activeStep === "contact"
+      ? "Continue to pickup"
+      : activeStep === "fulfillment"
+        ? "Continue to review"
+        : isSubmitting
+          ? "Placing order..."
+          : "Place order";
+  const activeStepAction =
+    activeStep === "contact"
+      ? handleContactContinue
+      : activeStep === "fulfillment"
+        ? handleFulfillmentContinue
+        : handleReviewSubmit;
+  const activeStepDisabled =
+    isSubmitting ||
+    isChecking ||
+    isLoadingPickupOptions ||
+    checkoutItems.length === 0 ||
+    summary?.is_checkout_available === false;
 
   useEffect(() => {
     if (cart === null || checkoutItems.length === 0) {
@@ -325,8 +376,121 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
     setErrorMessage(null);
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function focusCheckoutField(name: keyof BuyerForm) {
+    window.setTimeout(() => {
+      const field = document.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+        `[name="${name}"]`,
+      );
+      field?.focus();
+      field?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 0);
+  }
+
+  function scrollStepIntoView(step: CheckoutStep) {
+    const ref =
+      step === "contact"
+        ? contactStepRef
+        : step === "fulfillment"
+          ? fulfillmentStepRef
+          : reviewStepRef;
+
+    window.setTimeout(() => {
+      ref.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }, 0);
+  }
+
+  function openStep(step: CheckoutStep) {
+    setActiveStep(step);
+    scrollStepIntoView(step);
+  }
+
+  function validateContactStep() {
+    const requiredFields: Array<keyof BuyerForm> = [
+      "buyerFirstName",
+      "buyerLastName",
+      "buyerEmail",
+      "buyerPhone",
+    ];
+    const missingField = requiredFields.find((field) => !form[field].trim());
+
+    if (missingField) {
+      setErrorMessage("Please complete your contact information.");
+      setActiveStep("contact");
+      focusCheckoutField(missingField);
+      return false;
+    }
+
+    return true;
+  }
+
+  function validateFulfillmentStep() {
+    if (
+      form.fulfillmentMethod === "pickup" &&
+      usesManualPickupOptions &&
+      !form.pickupOptionId
+    ) {
+      setErrorMessage("Please choose a pickup option.");
+      setActiveStep("fulfillment");
+      focusCheckoutField("pickupOptionId");
+      return false;
+    }
+
+    if (form.fulfillmentMethod === "delivery") {
+      if (!form.deliveryOptionId) {
+        setErrorMessage("Please choose a delivery option.");
+        setActiveStep("fulfillment");
+        focusCheckoutField("deliveryOptionId");
+        return false;
+      }
+
+      const missingAddressField = (
+        ["addressLine1", "city", "state", "postalCode"] as Array<keyof BuyerForm>
+      ).find((field) => !form[field].trim());
+
+      if (missingAddressField) {
+        setErrorMessage("Please complete your delivery address.");
+        setActiveStep("fulfillment");
+        focusCheckoutField(missingAddressField);
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function handleContactContinue() {
+    setErrorMessage(null);
+    if (!validateContactStep()) return;
+
+    setCompletedSteps((current) => ({ ...current, contact: true }));
+    setActiveStep("fulfillment");
+    scrollStepIntoView("fulfillment");
+  }
+
+  function handleFulfillmentContinue() {
+    setErrorMessage(null);
+    if (!validateFulfillmentStep()) return;
+
+    setCompletedSteps((current) => ({ ...current, fulfillment: true }));
+    setActiveStep("review");
+    scrollStepIntoView("review");
+  }
+
+  function handleReviewSubmit() {
+    setErrorMessage(null);
+    if (!validateContactStep()) return;
+    if (!validateFulfillmentStep()) return;
+
+    setCompletedSteps((current) => ({
+      ...current,
+      contact: true,
+      fulfillment: true,
+      review: true,
+    }));
+    void submitOrder();
+  }
+
+  async function submitOrder() {
     setErrorMessage(null);
 
     if (checkoutItems.length === 0) {
@@ -412,6 +576,11 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
     }
   }
 
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await submitOrder();
+  }
+
   if (success) {
     return (
       <StorefrontPage size="narrow" className="py-10">
@@ -440,8 +609,8 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
   }
 
   return (
-    <StorefrontPage className="gap-4">
-      <div className="rounded-xl border border-[#ded7c8] bg-white p-4">
+    <StorefrontPage className="gap-4 pb-28 lg:pb-8">
+      <div className="hidden rounded-xl border border-[#ded7c8] bg-white p-4 lg:block">
         <p className="storefront-primary-color text-xs font-semibold uppercase tracking-[0.12em] text-emerald-800">
           Checkout
         </p>
@@ -470,7 +639,374 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
           </StorefrontButton>
         </CheckoutPanel>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[1fr_21rem] lg:items-start">
+        <>
+        <div className="grid gap-3 lg:hidden">
+          <section>
+            <h1 className="text-[2.15rem] font-bold leading-tight text-stone-950">
+              Checkout
+            </h1>
+            <p className="mt-1 text-base text-stone-600">{store.store_name}</p>
+          </section>
+
+          <CheckoutProgress
+            activeStep={activeStep}
+            completedSteps={completedSteps}
+            onStepSelect={openStep}
+          />
+
+          <MobileOrderSummary
+            cartItems={cartItems}
+            estimatedTotal={estimatedTotal}
+            isOpen={isMobileOrderSummaryOpen}
+            onToggle={() =>
+              setIsMobileOrderSummaryOpen((current) => !current)
+            }
+            storeSlug={store.store_slug}
+            totalQuantity={cartSummary.totalQuantity}
+          />
+
+          <MobileCheckoutStep
+            index={1}
+            isComplete={completedSteps.contact}
+            isOpen={activeStep === "contact"}
+            onToggle={() => openStep("contact")}
+            ref={contactStepRef}
+            summary={getContactSummary(form)}
+            title="Contact information"
+          >
+            <p className="text-base leading-6 text-stone-600">
+              We&apos;ll use this to send your order updates.
+            </p>
+            <div className="mt-4 grid gap-3">
+              <div className="grid gap-3 min-[380px]:grid-cols-2">
+                <TextField
+                  autoComplete="given-name"
+                  label="First name"
+                  name="buyerFirstName"
+                  onChange={(value) => updateField("buyerFirstName", value)}
+                  value={form.buyerFirstName}
+                />
+                <TextField
+                  autoComplete="family-name"
+                  label="Last name"
+                  name="buyerLastName"
+                  onChange={(value) => updateField("buyerLastName", value)}
+                  value={form.buyerLastName}
+                />
+              </div>
+              <TextField
+                autoComplete="email"
+                label="Email"
+                name="buyerEmail"
+                onChange={(value) => updateField("buyerEmail", value)}
+                type="email"
+                value={form.buyerEmail}
+              />
+              <TextField
+                autoComplete="tel"
+                label="Phone"
+                name="buyerPhone"
+                onChange={(value) => updateField("buyerPhone", value)}
+                type="tel"
+                value={form.buyerPhone}
+              />
+              <TextArea
+                label="Notes for seller (optional)"
+                name="buyerNotes"
+                onChange={(value) => updateField("buyerNotes", value)}
+                required={false}
+                value={form.buyerNotes}
+              />
+              {errorMessage && activeStep === "contact" ? (
+                <MobileError>{errorMessage}</MobileError>
+              ) : null}
+              <StorefrontButton
+                className="min-h-12 w-full text-base"
+                onClick={handleContactContinue}
+              >
+                Continue to pickup
+              </StorefrontButton>
+            </div>
+          </MobileCheckoutStep>
+
+          <MobileCheckoutStep
+            index={2}
+            isComplete={completedSteps.fulfillment}
+            isOpen={activeStep === "fulfillment"}
+            onToggle={() => openStep("fulfillment")}
+            ref={fulfillmentStepRef}
+            summary={getFulfillmentSummary({
+              deliveryOption: selectedDeliveryOption,
+              form,
+              pickupOption: selectedPickupOption,
+              usesManualPickupOptions,
+            })}
+            title="Pickup or delivery"
+          >
+            <p className="text-base leading-6 text-stone-600">
+              Choose how you&apos;d like to receive your order.
+            </p>
+            <div className="mt-4 grid gap-3">
+              {deliveryAvailable ? (
+                <div className="grid gap-2">
+                  <FulfillmentChoice
+                    checked={form.fulfillmentMethod === "pickup"}
+                    description="The farm will confirm the exact pickup time and instructions by email."
+                    label="Pickup"
+                    onChange={() => chooseFulfillmentMethod("pickup")}
+                  />
+                  <FulfillmentChoice
+                    checked={form.fulfillmentMethod === "delivery"}
+                    description="Choose one of this seller's delivery options."
+                    label="Delivery"
+                    onChange={() => chooseFulfillmentMethod("delivery")}
+                  />
+                </div>
+              ) : (
+                <div className="rounded-lg border border-[#e7decd] bg-[#fffdf8] p-3">
+                  <p className="font-bold text-stone-950">Pickup</p>
+                  <p className="mt-1 text-sm leading-5 text-stone-600">
+                    The farm will confirm the exact pickup time and instructions by email.
+                  </p>
+                </div>
+              )}
+
+              {form.fulfillmentMethod === "pickup" &&
+              usesManualPickupOptions ? (
+                <label className="grid gap-1.5 text-sm font-bold text-stone-900">
+                  Pickup choice
+                  <select
+                    className="min-h-11 rounded-md border border-[#ded7c8] bg-white px-3 text-base text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                    disabled={isLoadingPickupOptions}
+                    name="pickupOptionId"
+                    onChange={(event) =>
+                      updateField("pickupOptionId", event.target.value)
+                    }
+                    required
+                    value={form.pickupOptionId}
+                  >
+                    <option value="">
+                      {isLoadingPickupOptions
+                        ? "Loading pickup choices..."
+                        : "Choose a pickup option"}
+                    </option>
+                    {pickupOptions.map((option) => (
+                      <option
+                        key={option.pickup_option_id}
+                        value={option.pickup_option_id}
+                      >
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+
+              {form.fulfillmentMethod === "delivery" ? (
+                <>
+                  <label className="grid gap-1.5 text-sm font-bold text-stone-900">
+                    Delivery option
+                    <select
+                      className="min-h-11 rounded-md border border-[#ded7c8] bg-white px-3 text-base text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                      name="deliveryOptionId"
+                      onChange={(event) =>
+                        updateField("deliveryOptionId", event.target.value)
+                      }
+                      required
+                      value={form.deliveryOptionId}
+                    >
+                      <option value="">Choose a delivery option</option>
+                      {deliveryOptions.map((option) => (
+                        <option
+                          key={option.delivery_option_id}
+                          value={option.delivery_option_id}
+                        >
+                          {formatDeliveryOptionLabel(option)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <TextField
+                    autoComplete="address-line1"
+                    label="Address line 1"
+                    name="addressLine1"
+                    onChange={(value) => updateField("addressLine1", value)}
+                    value={form.addressLine1}
+                  />
+                  <TextField
+                    autoComplete="address-line2"
+                    label="Address line 2"
+                    name="addressLine2"
+                    onChange={(value) => updateField("addressLine2", value)}
+                    required={false}
+                    value={form.addressLine2}
+                  />
+                  <TextField
+                    autoComplete="address-level2"
+                    label="City"
+                    name="city"
+                    onChange={(value) => updateField("city", value)}
+                    value={form.city}
+                  />
+                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
+                    <TextField
+                      autoComplete="address-level1"
+                      label="State"
+                      maxLength={40}
+                      name="state"
+                      onChange={(value) => updateField("state", value)}
+                      value={form.state}
+                    />
+                    <TextField
+                      autoComplete="postal-code"
+                      label="ZIP"
+                      maxLength={20}
+                      name="postalCode"
+                      onChange={(value) => updateField("postalCode", value)}
+                      value={form.postalCode}
+                    />
+                  </div>
+                </>
+              ) : null}
+
+              {form.fulfillmentMethod === "pickup" &&
+              store.pickup_method === "notes" ? (
+                <TextArea
+                  label="Pickup notes"
+                  name="pickupNote"
+                  onChange={(value) => updateField("pickupNote", value)}
+                  required={false}
+                  value={form.pickupNote}
+                />
+              ) : null}
+
+              <details className="rounded-lg bg-[#fbf7ef] px-3 py-2 text-sm leading-5 text-stone-600">
+                <summary className="cursor-pointer font-bold text-stone-900">
+                  View policies
+                </summary>
+                <div className="mt-2 grid gap-2 whitespace-pre-line">
+                  <p>{store.pickup_instructions || "Pickup details coming soon."}</p>
+                  {store.pickup_policy ? <p>{store.pickup_policy}</p> : null}
+                  {store.cancellation_policy ? (
+                    <p>{store.cancellation_policy}</p>
+                  ) : null}
+                </div>
+              </details>
+
+              {pickupOptionsError ? (
+                <MobileError>
+                  Pickup choices could not load. Please refresh and try again.
+                </MobileError>
+              ) : null}
+              {errorMessage && activeStep === "fulfillment" ? (
+                <MobileError>{errorMessage}</MobileError>
+              ) : null}
+              <StorefrontButton
+                className="min-h-12 w-full text-base"
+                onClick={handleFulfillmentContinue}
+              >
+                Continue to review
+              </StorefrontButton>
+            </div>
+          </MobileCheckoutStep>
+
+          <MobileCheckoutStep
+            index={3}
+            isComplete={completedSteps.review}
+            isOpen={activeStep === "review"}
+            onToggle={() => openStep("review")}
+            ref={reviewStepRef}
+            summary="Confirm your details and place your order."
+            title="Review your order"
+          >
+            <div className="grid gap-3">
+              <ReviewBlock title="Contact" onEdit={() => openStep("contact")}>
+                <p>{getContactSummary(form) || "Contact details needed"}</p>
+                {form.buyerPhone ? <p>{form.buyerPhone}</p> : null}
+              </ReviewBlock>
+              <ReviewBlock
+                title={form.fulfillmentMethod === "delivery" ? "Delivery" : "Pickup"}
+                onEdit={() => openStep("fulfillment")}
+              >
+                <p>
+                  {getFulfillmentSummary({
+                    deliveryOption: selectedDeliveryOption,
+                    form,
+                    pickupOption: selectedPickupOption,
+                    usesManualPickupOptions,
+                  }) || "Fulfillment details needed"}
+                </p>
+              </ReviewBlock>
+              <div className="rounded-lg border border-[#eee5d6] bg-[#fffdf8] p-3">
+                <p className="font-bold text-stone-950">Order</p>
+                <div className="mt-2 grid gap-2">
+                  {cartItems.map((item) => (
+                    <div className="text-sm" key={cartItemKey(item)}>
+                      <div className="flex justify-between gap-3">
+                        <p className="font-semibold text-stone-950">
+                          {item.productName}
+                        </p>
+                        <p className="font-semibold text-stone-950">
+                          {formatCurrency(item.unitPrice * item.quantity)}
+                        </p>
+                      </div>
+                      <p className="text-stone-600">
+                        {item.quantity} x {item.optionLabel} ·{" "}
+                        {formatCurrency(item.unitPrice)} each
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <dl className="mt-3 grid gap-1.5 border-t border-[#e7decd] pt-3 text-sm">
+                  <SummaryRow
+                    label="Subtotal"
+                    value={formatCurrency(itemSubtotal)}
+                  />
+                  {selectedDeliveryOption ? (
+                    <SummaryRow
+                      label="Delivery"
+                      value={formatDeliveryPrice(selectedDeliveryOption.price_amount)}
+                    />
+                  ) : null}
+                  <SummaryRow
+                    label="Total"
+                    value={formatCurrency(estimatedTotal)}
+                  />
+                </dl>
+              </div>
+              <div className="rounded-lg bg-[#f3f8ef] p-3 text-sm leading-6 text-stone-700">
+                <p className="font-bold text-stone-950">
+                  No payment is collected online.
+                </p>
+                <p>You will pay the seller according to their store policies.</p>
+                <p>You will receive an email confirmation after placing your order.</p>
+              </div>
+              {summaryMessage ? (
+                <MobileError>{toBuyerOrderError(summaryMessage)}</MobileError>
+              ) : null}
+              {errorMessage && activeStep === "review" ? (
+                <MobileError>{errorMessage}</MobileError>
+              ) : null}
+              <StorefrontButton
+                className="min-h-12 w-full text-base"
+                disabled={activeStepDisabled}
+                onClick={handleReviewSubmit}
+              >
+                {isSubmitting ? "Placing order..." : "Place order"}
+              </StorefrontButton>
+            </div>
+          </MobileCheckoutStep>
+
+          <MobileStickyCheckoutBar
+            actionLabel={activeStepActionLabel}
+            disabled={activeStepDisabled}
+            itemCount={cartSummary.totalQuantity}
+            onAction={activeStepAction}
+            total={estimatedTotal}
+          />
+        </div>
+
+        <div className="hidden gap-4 lg:grid lg:grid-cols-[1fr_21rem] lg:items-start">
           <form
             className="rounded-xl border border-[#ded7c8] bg-white p-4"
             id="storefront-checkout-form"
@@ -776,6 +1312,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
             </StorefrontSummaryCard>
           </aside>
         </div>
+        </>
       )}
     </StorefrontPage>
   );
@@ -786,6 +1323,274 @@ function CheckoutPanel({ children }: { children: React.ReactNode }) {
     <StorefrontCard>
       {children}
     </StorefrontCard>
+  );
+}
+
+function CheckoutProgress({
+  activeStep,
+  completedSteps,
+  onStepSelect,
+}: {
+  activeStep: CheckoutStep;
+  completedSteps: Record<CheckoutStep, boolean>;
+  onStepSelect: (step: CheckoutStep) => void;
+}) {
+  const steps: Array<{ id: CheckoutStep; index: number; label: string }> = [
+    { id: "contact", index: 1, label: "Contact" },
+    { id: "fulfillment", index: 2, label: "Pickup" },
+    { id: "review", index: 3, label: "Review" },
+  ];
+
+  return (
+    <ol className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 text-sm">
+      {steps.map((step, index) => {
+        const isActive = activeStep === step.id;
+        const isComplete = completedSteps[step.id];
+
+        return (
+          <li
+            aria-current={isActive ? "step" : undefined}
+            className="contents"
+            key={step.id}
+          >
+            <button
+              aria-label={`Go to ${step.label} step${isComplete ? ", completed" : ""}`}
+              className="flex min-h-10 min-w-0 items-center justify-center gap-1.5 rounded-md px-1 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+              onClick={() => onStepSelect(step.id)}
+              type="button"
+            >
+              <span
+                className={cx(
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-bold",
+                  isActive
+                    ? "storefront-primary-button border-transparent text-white"
+                    : isComplete
+                      ? "storefront-primary-color border-emerald-700 bg-emerald-50 text-[#073f1e]"
+                      : "border-[#d7d0c4] bg-white text-stone-600",
+                )}
+              >
+                {step.index}
+              </span>
+              <span
+                className={cx(
+                  "truncate font-semibold",
+                  isActive || isComplete ? "text-stone-950" : "text-stone-600",
+                )}
+              >
+                {step.label}
+              </span>
+            </button>
+            {index < steps.length - 1 ? (
+              <div className="h-px w-6 bg-[#d7d0c4]" aria-hidden="true" />
+            ) : null}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function MobileOrderSummary({
+  cartItems,
+  estimatedTotal,
+  isOpen,
+  onToggle,
+  storeSlug,
+  totalQuantity,
+}: {
+  cartItems: StorefrontCartItem[];
+  estimatedTotal: number;
+  isOpen: boolean;
+  onToggle: () => void;
+  storeSlug: string;
+  totalQuantity: number;
+}) {
+  const firstItem = cartItems[0] ?? null;
+
+  return (
+    <section className="rounded-xl border border-[#ded7c8] bg-white p-3 shadow-[0_2px_12px_rgba(41,37,36,0.04)]">
+      <button
+        aria-expanded={isOpen}
+        className="flex min-h-14 w-full items-center gap-3 text-left"
+        onClick={onToggle}
+        type="button"
+      >
+        {firstItem?.imageUrl ? (
+          <Image
+            alt=""
+            className="h-14 w-14 rounded-md object-cover"
+            height={96}
+            src={toPublicImageUrl(firstItem.imageUrl)}
+            unoptimized
+            width={96}
+          />
+        ) : (
+          <div className="h-14 w-14 rounded-md bg-[#f4eee3]" />
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block text-lg font-bold text-stone-950">
+            Your order · {formatCurrency(estimatedTotal)}
+          </span>
+          <span className="block text-sm text-stone-600">
+            {totalQuantity} item{totalQuantity === 1 ? "" : "s"}
+          </span>
+        </span>
+        <span className="storefront-primary-color text-sm font-bold text-[#073f1e]">
+          {isOpen ? "Hide" : "View"}
+        </span>
+      </button>
+      {isOpen ? (
+        <div className="mt-3 grid gap-2 border-t border-[#eee5d6] pt-3">
+          {cartItems.map((item) => (
+            <div className="text-sm" key={cartItemKey(item)}>
+              <div className="flex justify-between gap-3">
+                <p className="font-semibold text-stone-950">
+                  {item.productName}
+                </p>
+                <p className="font-semibold text-stone-950">
+                  {formatCurrency(item.unitPrice * item.quantity)}
+                </p>
+              </div>
+              <p className="text-stone-600">
+                {item.quantity} x {item.optionLabel}
+              </p>
+            </div>
+          ))}
+          <Link
+            className="storefront-primary-color mt-1 w-fit rounded-md text-sm font-bold text-[#073f1e] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+            href={`/store/${storeSlug}/cart`}
+          >
+            Edit cart
+          </Link>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+const MobileCheckoutStep = forwardRef<
+  HTMLElement,
+  {
+    children: React.ReactNode;
+    index: number;
+    isComplete: boolean;
+    isOpen: boolean;
+    onToggle: () => void;
+    summary: string;
+    title: string;
+  }
+>(function MobileCheckoutStep(
+  { children, index, isComplete, isOpen, onToggle, summary, title },
+  ref,
+) {
+  return (
+    <section
+      className="rounded-xl border border-[#ded7c8] bg-white p-3 shadow-[0_2px_12px_rgba(41,37,36,0.04)]"
+      ref={ref}
+    >
+      <button
+        aria-expanded={isOpen}
+        className="flex w-full items-start gap-3 text-left"
+        onClick={onToggle}
+        type="button"
+      >
+        <span
+          className={cx(
+            "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-base font-bold",
+            isOpen
+              ? "storefront-primary-button border-transparent text-white"
+              : isComplete
+                ? "storefront-primary-color border-emerald-700 bg-emerald-50 text-[#073f1e]"
+                : "border-[#d7d0c4] bg-white text-stone-600",
+          )}
+        >
+          {index}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[1.35rem] font-bold leading-tight text-stone-950">
+            {title}
+          </span>
+          <span className="mt-1 line-clamp-2 block text-base leading-6 text-stone-600">
+            {isOpen ? summary : summary || "Not completed yet"}
+          </span>
+        </span>
+        <span aria-hidden="true" className="pt-1 text-xl text-stone-950">
+          {isOpen ? "⌃" : "⌄"}
+        </span>
+      </button>
+      {isOpen ? <div className="mt-4">{children}</div> : null}
+    </section>
+  );
+});
+
+function ReviewBlock({
+  children,
+  onEdit,
+  title,
+}: {
+  children: React.ReactNode;
+  onEdit: () => void;
+  title: string;
+}) {
+  return (
+    <section className="rounded-lg border border-[#eee5d6] bg-[#fffdf8] p-3 text-sm leading-6 text-stone-700">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-bold text-stone-950">{title}</p>
+        <button
+          className="storefront-primary-color rounded-md text-sm font-bold text-[#073f1e] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+          onClick={onEdit}
+          type="button"
+        >
+          Edit
+        </button>
+      </div>
+      <div className="mt-1">{children}</div>
+    </section>
+  );
+}
+
+function MobileStickyCheckoutBar({
+  actionLabel,
+  disabled,
+  itemCount,
+  onAction,
+  total,
+}: {
+  actionLabel: string;
+  disabled: boolean;
+  itemCount: number;
+  onAction: () => void;
+  total: number;
+}) {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#ded7c8] bg-white/95 px-4 py-3 shadow-[0_-8px_24px_rgba(41,37,36,0.14)] backdrop-blur lg:hidden pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+      <div className="mx-auto grid max-w-[28rem] grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)] items-center gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-stone-600">Total</p>
+          <p className="storefront-primary-color text-2xl font-bold leading-tight text-[#073f1e]">
+            {formatCurrency(total)}
+          </p>
+          <p className="text-xs text-stone-500">
+            {itemCount} item{itemCount === 1 ? "" : "s"}
+          </p>
+        </div>
+        <StorefrontButton
+          className="min-h-12 w-full px-3 text-base"
+          disabled={disabled}
+          onClick={onAction}
+        >
+          {actionLabel}
+        </StorefrontButton>
+      </div>
+    </div>
+  );
+}
+
+function MobileError({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-800">
+      {children}
+    </div>
   );
 }
 
@@ -826,6 +1631,7 @@ function FulfillmentChoice({
 }
 
 function TextField({
+  autoComplete,
   label,
   maxLength,
   name,
@@ -834,6 +1640,7 @@ function TextField({
   type = "text",
   value,
 }: {
+  autoComplete?: string;
   label: string;
   maxLength?: number;
   name: string;
@@ -843,10 +1650,11 @@ function TextField({
   value: string;
 }) {
   return (
-    <StorefrontLabel className="min-w-0 gap-1 text-xs">
+    <StorefrontLabel className="min-w-0 gap-1.5 text-sm lg:gap-1 lg:text-xs">
       {label}
       <StorefrontInput
-        className="min-h-9 w-full min-w-0 py-1 text-sm"
+        autoComplete={autoComplete}
+        className="min-h-11 w-full min-w-0 py-2 text-base lg:min-h-9 lg:py-1 lg:text-sm"
         maxLength={maxLength}
         name={name}
         onChange={(event) => onChange(event.target.value)}
@@ -862,21 +1670,24 @@ function TextArea({
   label,
   name,
   onChange,
+  required = false,
   value,
 }: {
   label: string;
   name: string;
   onChange: (value: string) => void;
+  required?: boolean;
   value: string;
 }) {
   return (
-    <StorefrontLabel className="gap-1 text-xs">
+    <StorefrontLabel className="gap-1.5 text-sm lg:gap-1 lg:text-xs">
       {label}
       <StorefrontTextarea
-        className="min-h-16 py-1 text-sm"
+        className="min-h-24 py-2 text-base lg:min-h-16 lg:py-1 lg:text-sm"
         maxLength={2000}
         name={name}
         onChange={(event) => onChange(event.target.value)}
+        required={required}
         value={value}
       />
     </StorefrontLabel>
@@ -890,6 +1701,46 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
       <dd className="font-semibold text-stone-950">{value}</dd>
     </div>
   );
+}
+
+function getContactSummary(form: BuyerForm) {
+  const name = [form.buyerFirstName.trim(), form.buyerLastName.trim()]
+    .filter(Boolean)
+    .join(" ");
+  const details = [name, form.buyerEmail.trim()].filter(Boolean);
+
+  return details.join(" · ");
+}
+
+function getFulfillmentSummary({
+  deliveryOption,
+  form,
+  pickupOption,
+  usesManualPickupOptions,
+}: {
+  deliveryOption: StorefrontDeliveryOption | null;
+  form: BuyerForm;
+  pickupOption: StorefrontPickupOption | null;
+  usesManualPickupOptions: boolean;
+}) {
+  if (form.fulfillmentMethod === "delivery") {
+    const address = [form.city.trim(), form.state.trim()].filter(Boolean).join(", ");
+    return [
+      "Delivery",
+      deliveryOption?.name ?? null,
+      address || null,
+      deliveryOption ? formatDeliveryPrice(deliveryOption.price_amount) : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  return [
+    "Pickup",
+    usesManualPickupOptions ? pickupOption?.label ?? null : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function formatDeliveryOptionLabel(option: StorefrontDeliveryOption) {

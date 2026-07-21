@@ -41,7 +41,7 @@ export default async function StorefrontCheckoutRoute({
   }
 
   return (
-    <StorefrontChrome categories={categories} store={store}>
+    <StorefrontChrome categories={categories} checkoutMode store={store}>
       <CheckoutPage store={store} />
     </StorefrontChrome>
   );

@@ -27,10 +27,12 @@ type TrustStripItem = {
 export function StorefrontChrome({
   categories,
   children,
+  checkoutMode = false,
   store,
 }: {
   categories: StorefrontCategoryAvailability;
   children: React.ReactNode;
+  checkoutMode?: boolean;
   store: StorefrontHome;
 }) {
   const theme = {
@@ -42,16 +44,23 @@ export function StorefrontChrome({
 
   return (
     <StorefrontShell theme={theme}>
-      <StorefrontHeader store={store} />
+      {checkoutMode ? <StorefrontCheckoutHeader store={store} /> : null}
+      <StorefrontHeader className={checkoutMode ? "hidden lg:block" : undefined} store={store} />
       {children}
       <StorefrontFooter categories={categories} store={store} />
     </StorefrontShell>
   );
 }
 
-export function StorefrontHeader({ store }: { store: StorefrontHome }) {
+export function StorefrontHeader({
+  className,
+  store,
+}: {
+  className?: string;
+  store: StorefrontHome;
+}) {
   return (
-    <header className="storefront-top-menu border-b border-[#e7e0d2] bg-white">
+    <header className={cx("storefront-top-menu border-b border-[#e7e0d2] bg-white", className)}>
       <div className="mx-auto grid max-w-[70rem] grid-cols-[minmax(0,1fr)_auto] gap-x-2.5 px-3 py-2.5 sm:px-7 lg:min-h-[6rem] lg:grid-cols-[minmax(24rem,1fr)_auto_auto] lg:items-center lg:gap-3 lg:px-7 lg:py-2.5">
         <Link
           className="flex min-w-0 items-center gap-2.5 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 lg:gap-4"
@@ -104,6 +113,41 @@ export function StorefrontHeader({ store }: { store: StorefrontHome }) {
           </Link>
           <StorefrontHeaderCartLink storeSlug={store.store_slug} />
           <StorefrontMobileMenu storeSlug={store.store_slug} />
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function StorefrontCheckoutHeader({ store }: { store: StorefrontHome }) {
+  return (
+    <header className="storefront-top-menu border-b border-[#e7e0d2] bg-white lg:hidden">
+      <div className="mx-auto grid max-w-[70rem] grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-2.5">
+        <Link
+          className="storefront-primary-color inline-flex min-h-10 items-center gap-1 rounded-md text-sm font-bold text-[#073f1e] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+          href={`/store/${store.store_slug}/cart`}
+        >
+          <span aria-hidden="true" className="text-xl leading-none">
+            ‹
+          </span>
+          Back to cart
+        </Link>
+        <Link
+          className="flex min-w-0 items-center gap-2 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+          href={`/store/${store.store_slug}`}
+        >
+          <StoreLogo store={store} />
+          <span
+            className={cx(
+              storefrontSerifClass,
+              "storefront-heading-color max-w-[8.5rem] truncate text-lg font-normal leading-tight text-[#073f1e]",
+            )}
+          >
+            {store.store_name}
+          </span>
+        </Link>
+        <div className="justify-self-end">
+          <StorefrontHeaderCartLink storeSlug={store.store_slug} />
         </div>
       </div>
     </header>
