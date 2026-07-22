@@ -31,8 +31,11 @@ import {
 } from "../_components/photo-crop-editor";
 import {
   cx,
+  getMobileStorefrontHeroCropStyle,
+  getStorefrontThemeStyle,
   storefrontButtonClass,
   storefrontHeroFrame,
+  storefrontHeroMobilePreviewTypography,
   storefrontHeroTypography,
 } from "@/app/store/[slug]/storefront-ui";
 import {
@@ -2046,6 +2049,12 @@ export function StoreAdmin() {
                 storeName={form.store_name || "Your farm"}
                 tagline={form.store_tagline}
                 heroSubheading={form.hero_subheading}
+                theme={{
+                  fontPair: form.storefront_font_pair,
+                  headingColor: form.storefront_heading_color,
+                  textColor: form.storefront_text_color,
+                  topMenuColor: form.storefront_top_menu_color,
+                }}
               />
             ) : null}
 
@@ -2988,6 +2997,7 @@ function PhotosTab({
   onUpload,
   storeName,
   tagline,
+  theme,
 }: {
   aboutPhoto: StoreMediaItem | null;
   heroSubheading: string;
@@ -3003,6 +3013,12 @@ function PhotosTab({
   onUpload: (role: StoreMediaRole, files: FileList | null) => void;
   storeName: string;
   tagline: string;
+  theme: {
+    fontPair: StorefrontFontPairId;
+    headingColor: string;
+    textColor: string;
+    topMenuColor: string;
+  };
 }) {
   const [openSection, setOpenSection] =
     useState<ImagesAccordionId | "none">("none");
@@ -3078,6 +3094,7 @@ function PhotosTab({
           storeName={storeName}
           tagline={tagline}
           heroSubheading={heroSubheading}
+          theme={theme}
         />
       </StoreSetupAccordionSection>
 
@@ -3188,6 +3205,7 @@ function HeroPhotoSection({
   onUpload,
   storeName,
   tagline,
+  theme,
 }: {
   heroSubheading: string;
   heroImage: StoreMediaItem | null;
@@ -3199,6 +3217,12 @@ function HeroPhotoSection({
   onUpload: (files: FileList | null) => void;
   storeName: string;
   tagline: string;
+  theme: {
+    fontPair: StorefrontFontPairId;
+    headingColor: string;
+    textColor: string;
+    topMenuColor: string;
+  };
 }) {
   const [layout, setLayout] = useState<HeroLayout>(
     normalizeHeroLayout(heroImage?.hero_layout),
@@ -3278,6 +3302,9 @@ function HeroPhotoSection({
     heroImage?.source_type === "storefront_hero_library"
       ? heroImage.source_image_url ?? heroImage.public_url
       : null;
+  const themeStyle = getStorefrontThemeStyle(theme);
+  const heroTitle = tagline || storeName;
+  const previewSubheading = previewStoreText(heroSubheading);
 
   return (
     <section className="grid gap-3">
@@ -3329,103 +3356,50 @@ function HeroPhotoSection({
             </div>
           </div>
 
-          <div
-            className={storefrontHeroFrame.setupPreviewClass}
-            onPointerCancel={endDrag}
-            onPointerDown={beginDrag}
-            onPointerMove={moveImage}
-            onPointerUp={endDrag}
-          >
+          <div className="grid gap-2">
+            <p className="text-sm font-semibold text-stone-800">
+              Desktop Hero Preview
+            </p>
             <div
-              className="absolute left-0 top-0 h-[calc(100%/var(--hero-preview-scale))] w-[calc(100%/var(--hero-preview-scale))] origin-top-left scale-[var(--hero-preview-scale)]"
-              style={
-                {
-                  "--hero-preview-scale": storefrontHeroFrame.setupPreviewScale,
-                } as CSSProperties
-              }
+              className={storefrontHeroFrame.setupPreviewClass}
+              onPointerCancel={endDrag}
+              onPointerDown={beginDrag}
+              onPointerMove={moveImage}
+              onPointerUp={endDrag}
             >
-              {layout === "right" ? (
-                <Image
-                  alt=""
-                  aria-hidden="true"
-                  className="h-full w-full scale-110 select-none object-cover blur-2xl saturate-110"
-                  draggable={false}
-                  fill
-                  sizes="(max-width: 1280px) 100vw, 760px"
-                  src={imageUrl}
-                  style={{
-                    filter: "blur(26px) brightness(0.62) saturate(1.12)",
-                  }}
-                  unoptimized
-                />
-              ) : null}
-              <Image
-                alt={heroImage?.alt_text || "Storefront hero preview"}
-                className="h-full w-full select-none object-contain object-center"
-                draggable={false}
-                fill
-                sizes="(max-width: 1280px) 100vw, 760px"
-                src={imageUrl}
-                style={{
-                  ...(heroImage ? getCropImageStyle(draftCrop) : {}),
-                  transformOrigin: "center center",
-                  ...(layout === "right"
-                    ? {
-                        WebkitMaskImage:
-                          "linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.2) 18%, black 34%, black 100%)",
-                        maskImage:
-                          "linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.2) 18%, black 34%, black 100%)",
-                      }
-                    : {}),
-                }}
-                unoptimized
-              />
-              <HeroFade layout={layout} />
               <div
-                className={`relative z-10 flex h-full max-w-lg flex-col justify-center gap-5 p-5 sm:p-7 ${
-                  layout === "right" ? "text-white" : "text-black"
-                }`}
+                className={cx(
+                  storefrontFontVariablesClass,
+                  "buyer-storefront absolute left-0 top-0 h-[calc(100%/var(--hero-preview-scale))] w-[calc(100%/var(--hero-preview-scale))] origin-top-left scale-[var(--hero-preview-scale)]",
+                )}
+                style={
+                  {
+                    ...themeStyle,
+                    "--hero-preview-scale": storefrontHeroFrame.setupPreviewScale,
+                  } as CSSProperties
+                }
               >
-                <div>
-                  <p
-                    className={cx(
-                      storefrontHeroTypography.eyebrow,
-                      layout === "right" ? "text-white" : "text-black",
-                    )}
-                  >
-                    Local farm storefront
-                  </p>
-                  <h4
-                    className={cx(
-                      storefrontHeroTypography.title,
-                      layout === "right" ? "text-white" : "text-black",
-                    )}
-                  >
-                    {tagline || storeName}
-                  </h4>
-                  <p
-                    className={cx(
-                      storefrontHeroTypography.body,
-                      layout === "right" ? "text-white" : "text-black",
-                    )}
-                  >
-                    {previewStoreText(heroSubheading)}
-                  </p>
+                <HeroPreviewBackdrop
+                  crop={draftCrop}
+                  imageAlt={heroImage?.alt_text || "Storefront hero preview"}
+                  imageUrl={imageUrl}
+                  layout={layout}
+                  mode="desktop"
+                  useCrop={Boolean(heroImage)}
+                />
+                <HeroPreviewContent
+                  heroSubheading={previewSubheading}
+                  heroTitle={heroTitle}
+                  layout={layout}
+                  mode="desktop"
+                />
+              </div>
+              {heroImage ? (
+                <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full bg-stone-950/70 px-3 py-1 text-xs font-semibold text-white">
+                  Drag to reposition
                 </div>
-                <span
-                  className={storefrontButtonClass({
-                    className: "mt-3 w-fit min-h-12 px-6 text-xl",
-                  })}
-                >
-                  Shop
-                </span>
-              </div>
+              ) : null}
             </div>
-            {heroImage ? (
-              <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full bg-stone-950/70 px-3 py-1 text-xs font-semibold text-white">
-                Drag to reposition
-              </div>
-            ) : null}
           </div>
 
           <div className="grid gap-2">
@@ -3483,10 +3457,187 @@ function HeroPhotoSection({
               </div>
             </div>
           </div>
+
+          <div className="grid gap-2 pt-1">
+            <p className="text-sm font-semibold text-stone-800">
+              Mobile Hero Preview
+            </p>
+            <div
+              className={cx(
+                storefrontFontVariablesClass,
+                "buyer-storefront relative mx-auto h-[13.35rem] w-full max-w-[390px] overflow-hidden rounded-lg bg-white shadow-sm [container-type:inline-size]",
+              )}
+              style={themeStyle}
+            >
+              <HeroPreviewBackdrop
+                crop={draftCrop}
+                imageAlt={heroImage?.alt_text || "Storefront hero preview"}
+                imageUrl={imageUrl}
+                layout={layout}
+                mode="mobile"
+                useCrop={Boolean(heroImage)}
+              />
+              <HeroPreviewContent
+                heroSubheading={previewSubheading}
+                heroTitle={heroTitle}
+                layout={layout}
+                mode="mobile"
+              />
+            </div>
+          </div>
         </div>
 
       </div>
     </section>
+  );
+}
+
+function HeroPreviewBackdrop({
+  crop,
+  imageAlt,
+  imageUrl,
+  layout,
+  mode,
+  useCrop,
+}: {
+  crop: PhotoCropMetadata;
+  imageAlt: string;
+  imageUrl: string;
+  layout: HeroLayout;
+  mode: "desktop" | "mobile";
+  useCrop: boolean;
+}) {
+  const isMobile = mode === "mobile";
+  const imageStyle = useCrop
+    ? isMobile
+      ? getMobileStorefrontHeroCropStyle(crop)
+      : getCropImageStyle(crop)
+    : undefined;
+
+  return (
+    <>
+      {layout === "right" ? (
+        <Image
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full scale-110 select-none object-cover blur-2xl saturate-110"
+          draggable={false}
+          fill
+          sizes={isMobile ? "390px" : "(max-width: 1280px) 100vw, 760px"}
+          src={imageUrl}
+          style={{
+            filter: "blur(26px) brightness(0.62) saturate(1.12)",
+          }}
+          unoptimized
+        />
+      ) : null}
+      <Image
+        alt={imageAlt}
+        className={cx(
+          "absolute inset-0 h-full w-full select-none object-center",
+          isMobile ? "object-cover" : "object-contain",
+        )}
+        draggable={false}
+        fill
+        sizes={isMobile ? "390px" : "(max-width: 1280px) 100vw, 760px"}
+        src={imageUrl}
+        style={{
+          ...imageStyle,
+          transformOrigin: "center center",
+          ...(!isMobile && layout === "right"
+            ? {
+                WebkitMaskImage:
+                  "linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.2) 18%, black 34%, black 100%)",
+                maskImage:
+                  "linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.2) 18%, black 34%, black 100%)",
+              }
+            : {}),
+        }}
+        unoptimized
+      />
+      {isMobile ? (
+        <div
+          className={cx(
+            "pointer-events-none absolute inset-0 z-[1]",
+            layout === "right"
+              ? "bg-[linear-gradient(90deg,rgba(28,25,23,0.8)_0%,rgba(28,25,23,0.64)_42%,rgba(28,25,23,0.28)_78%,rgba(28,25,23,0.08)_100%)]"
+              : "bg-[linear-gradient(90deg,rgba(28,25,23,0.8)_0%,rgba(28,25,23,0.64)_42%,rgba(28,25,23,0.3)_74%,rgba(28,25,23,0.08)_100%)]",
+          )}
+        />
+      ) : (
+        <HeroFade layout={layout} />
+      )}
+    </>
+  );
+}
+
+function HeroPreviewContent({
+  heroSubheading,
+  heroTitle,
+  layout,
+  mode,
+}: {
+  heroSubheading: string;
+  heroTitle: string;
+  layout: HeroLayout;
+  mode: "desktop" | "mobile";
+}) {
+  const isMobile = mode === "mobile";
+  const heroTextColor = isMobile
+    ? "text-white"
+    : layout === "right"
+      ? "text-white"
+      : "text-black";
+  const typography = isMobile
+    ? storefrontHeroMobilePreviewTypography
+    : storefrontHeroTypography;
+
+  return (
+    <div className="relative z-10 mx-auto h-full max-w-[70rem] px-4 sm:px-7">
+      <div
+        className={cx(
+          "flex h-full flex-col justify-center [text-shadow:0_1px_10px_rgba(0,0,0,0.42)]",
+          isMobile
+            ? "max-w-[16.5rem] gap-2.5"
+            : "max-w-[36rem] gap-4 [text-shadow:none]",
+          heroTextColor,
+        )}
+      >
+        <div>
+          <p className={cx(typography.eyebrow, heroTextColor)}>
+            Local farm storefront
+          </p>
+          <h4
+            className={cx(
+              typography.title,
+              "-mb-2 line-clamp-2 pb-2",
+              heroTextColor,
+            )}
+          >
+            {heroTitle}
+          </h4>
+          <p
+            className={cx(
+              typography.body,
+              "line-clamp-2",
+              heroTextColor,
+            )}
+          >
+            {heroSubheading}
+          </p>
+        </div>
+        <span
+          className={storefrontButtonClass({
+            className: cx(
+              "mt-1 w-fit min-h-10 px-5 text-base sm:mt-3 sm:min-h-12 sm:px-6 sm:text-xl",
+              isMobile ? "" : "lg:min-h-[3.25rem] lg:px-7 lg:!text-[1.45rem]",
+            ),
+          })}
+        >
+          Shop
+        </span>
+      </div>
+    </div>
   );
 }
 

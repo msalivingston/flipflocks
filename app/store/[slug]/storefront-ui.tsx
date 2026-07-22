@@ -73,11 +73,37 @@ export function getStorefrontCropStyle(
   };
 }
 
+export function getMobileStorefrontHeroCropStyle(
+  crop: StorefrontCropMetadata | null | undefined,
+) {
+  if (!crop) return undefined;
+
+  const zoom = Number.isFinite(crop.zoom) && crop.zoom > 0 ? crop.zoom : 1;
+  const x = Number.isFinite(crop.x) ? Math.round(crop.x * 0.82) : 0;
+  const y = Number.isFinite(crop.y) ? Math.round(crop.y * 0.82) : 0;
+  const rotation = [0, 90, 180, 270].includes(crop.rotation)
+    ? crop.rotation
+    : 0;
+
+  return {
+    transform: `translate(${x}px, ${y}px) scale(${zoom * 1.22}) rotate(${rotation}deg)`,
+    transformOrigin: "center center",
+  };
+}
+
 export const storefrontHeroTypography = {
   eyebrow: "text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-emerald-800 lg:text-xs lg:tracking-[0.12em]",
   title:
     `${storefrontSerifClass} mt-1.5 text-[1.62rem] font-normal leading-[1] text-stone-950 min-[390px]:text-[1.75rem] sm:mt-2 sm:text-[2.75rem] lg:text-5xl`,
   body: "mt-2 max-w-[15.5rem] text-[0.86rem] leading-5 text-stone-700 sm:mt-3 sm:max-w-[30rem] sm:text-base sm:leading-6",
+};
+
+export const storefrontHeroMobilePreviewTypography = {
+  eyebrow:
+    "text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-emerald-800",
+  title:
+    `${storefrontSerifClass} mt-1.5 text-[1.62rem] font-normal leading-[1] text-stone-950 [@container(min-width:390px)]:text-[1.75rem]`,
+  body: "mt-2 max-w-[15.5rem] text-[0.86rem] leading-5 text-stone-700",
 };
 
 export const storefrontHeroFrame = {

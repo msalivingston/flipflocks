@@ -5,6 +5,7 @@ import {
   cx,
   formatCurrency,
   formatLocation,
+  getMobileStorefrontHeroCropStyle,
   getStorefrontCropStyle,
   StorefrontGlyph,
   storefrontButtonClass,
@@ -223,7 +224,7 @@ function HeroBackdrop({
   }
 
   const cropStyle = getStorefrontCropStyle(crop);
-  const mobileCropStyle = getMobileHeroCropStyle(crop);
+  const mobileCropStyle = getMobileStorefrontHeroCropStyle(crop);
   const imageUrl = toPublicImageUrl(src);
 
   if (layout === "right") {
@@ -301,22 +302,6 @@ function HeroBackdrop({
       <div className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(90deg,rgba(28,25,23,0.8)_0%,rgba(28,25,23,0.64)_42%,rgba(28,25,23,0.3)_74%,rgba(28,25,23,0.08)_100%)] lg:hidden" />
     </>
   );
-}
-
-function getMobileHeroCropStyle(crop: StorefrontHeroCropMetadata | null) {
-  if (!crop) return undefined;
-
-  const zoom = Number.isFinite(crop.zoom) && crop.zoom > 0 ? crop.zoom : 1;
-  const x = Number.isFinite(crop.x) ? Math.round(crop.x * 0.82) : 0;
-  const y = Number.isFinite(crop.y) ? Math.round(crop.y * 0.82) : 0;
-  const rotation = [0, 90, 180, 270].includes(crop.rotation)
-    ? crop.rotation
-    : 0;
-
-  return {
-    transform: `translate(${x}px, ${y}px) scale(${zoom * 1.22}) rotate(${rotation}deg)`,
-    transformOrigin: "center center",
-  };
 }
 
 function buildListingSections({
