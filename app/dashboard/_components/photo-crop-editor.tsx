@@ -124,10 +124,13 @@ export function PhotoCropEditor({
           </button>
         </div>
 
-        <div className="grid min-h-0 flex-1 gap-2 overflow-hidden p-3">
+        <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-3 pb-5">
           <div
-            className="relative mx-auto w-full max-w-[300px] cursor-move touch-none overflow-hidden rounded-md border border-stone-300 bg-stone-100 sm:max-w-[320px]"
-            style={{ aspectRatio: crop.aspect }}
+            className="relative mx-auto cursor-move touch-none overflow-hidden rounded-md border border-stone-300 bg-stone-100"
+            style={{
+              aspectRatio: crop.aspect,
+              width: "min(100%, clamp(220px, calc(100vh - 380px), 410px))",
+            }}
             onPointerCancel={endDrag}
             onPointerDown={beginDrag}
             onPointerMove={moveImage}
@@ -146,7 +149,7 @@ export function PhotoCropEditor({
             <div className="pointer-events-none absolute inset-0 border-2 border-white/90 shadow-[inset_0_0_0_9999px_rgba(0,0,0,0.08)]" />
           </div>
 
-          <label className="mx-auto grid w-full max-w-[320px] gap-1 text-sm font-semibold text-stone-700">
+          <label className="mx-auto mt-3 grid w-full max-w-[320px] gap-1 text-sm font-semibold text-stone-700">
             Zoom
             <input
               className="accent-emerald-800"

@@ -223,7 +223,7 @@ export function StorefrontFooter({
           isAboutFooter && "hidden lg:block",
         )}
       >
-        <div className="storefront-text-color grid gap-3.5 text-xs text-[#1f2f37] sm:grid-cols-2 sm:gap-5 sm:text-sm lg:grid-cols-[1.45fr_0.9fr_1fr_1fr] lg:gap-10">
+        <div className="storefront-text-color grid gap-3.5 text-xs text-[#1f2f37] sm:grid-cols-2 sm:gap-5 sm:text-sm lg:grid-cols-[minmax(0,1.45fr)_minmax(7rem,0.7fr)_minmax(8rem,0.8fr)_minmax(17rem,1.35fr)] lg:gap-8">
           <div className="min-w-0">
             <p
               className={cx(
@@ -388,7 +388,7 @@ function FooterContactLine({
   return (
     <p className="flex min-w-0 items-center gap-2 leading-5 sm:gap-2.5 sm:leading-6 lg:gap-3">
       <StorefrontGlyph className="storefront-primary-color h-4 w-4 opacity-80 sm:h-5 sm:w-5 lg:h-6 lg:w-6" src={glyph} />
-      <span className="min-w-0 break-words">{children}</span>
+      <span className="min-w-0 break-words lg:break-normal">{children}</span>
     </p>
   );
 }

@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpDown, Funnel, MoreHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -292,6 +293,13 @@ const inventoryProductTabs: Array<{ id: InventoryProductTab; label: string }> = 
   { id: "equipment", label: "Equipment & Supplies" },
 ];
 
+const inventoryTabParamValues: Record<string, InventoryProductTab> = {
+  equipment: "equipment",
+  hatching_eggs: "hatching_eggs",
+  live_poultry: "live_poultry",
+  processed_poultry: "processed_poultry",
+};
+
 const defaultTabFilters: Record<InventoryProductTab, InventoryTabFilters> = {
   live_poultry: {
     species: "all",
@@ -345,6 +353,8 @@ const defaultTabFilters: Record<InventoryProductTab, InventoryTabFilters> = {
 
 export function InventoryManagement() {
   const { seller } = useSellerContext();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [rows, setRows] = useState<InventoryRow[]>([]);
   const [equipmentRows, setEquipmentRows] = useState<EquipmentInventoryRow[]>([]);
   const [processedPoultryRows, setProcessedPoultryRows] = useState<
@@ -368,8 +378,6 @@ export function InventoryManagement() {
     Record<string, string>
   >({});
   const [draftPrices, setDraftPrices] = useState<Record<string, string>>({});
-  const [activeTab, setActiveTab] =
-    useState<InventoryProductTab>("live_poultry");
   const [filtersByTab, setFiltersByTab] =
     useState<Record<InventoryProductTab, InventoryTabFilters>>(
       defaultTabFilters,
@@ -397,6 +405,8 @@ export function InventoryManagement() {
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const isMountedRef = useRef(true);
   const isShareResolvingRef = useRef(false);
+  const activeTab =
+    inventoryTabParamValues[searchParams.get("tab") ?? ""] ?? "live_poultry";
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -405,6 +415,20 @@ export function InventoryManagement() {
       isMountedRef.current = false;
     };
   }, []);
+
+  function changeInventoryTab(tab: InventoryProductTab) {
+    setSelectedItemIds([]);
+    setSaveError(null);
+    setSuccessMessage(null);
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set("tab", tab);
+    const query = nextParams.toString();
+
+    router.push(query ? `/dashboard/inventory?${query}` : "/dashboard/inventory", {
+      scroll: false,
+    });
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -1489,12 +1513,7 @@ export function InventoryManagement() {
       <InventoryProductTabs
         activeTab={activeTab}
         tabs={visibleTabs}
-        onChange={(tab) => {
-          setActiveTab(tab);
-          setSelectedItemIds([]);
-          setSaveError(null);
-          setSuccessMessage(null);
-        }}
+        onChange={changeInventoryTab}
       />
 
       <SellerCard className="p-3">

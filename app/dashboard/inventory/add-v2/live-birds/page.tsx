@@ -203,6 +203,12 @@ export function LiveBirdsListingForm({
   >(null);
   const [publishSuccessDialog, setPublishSuccessDialog] =
     useState<LivePoultryPublishSuccessDialogState | null>(null);
+  const [shareDialogProducts, setShareDialogProducts] = useState<
+    LivePoultryShareProduct[]
+  >([]);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [isResolvingShareProducts, setIsResolvingShareProducts] =
+    useState(false);
   const isNavigatingAfterPublishRef = useRef(false);
   const [isStartOverDialogOpen, setIsStartOverDialogOpen] = useState(false);
   const [pendingNavigationHref, setPendingNavigationHref] = useState<
@@ -1720,7 +1726,49 @@ export function LiveBirdsListingForm({
 
     isNavigatingAfterPublishRef.current = true;
     setPublishSuccessDialog(null);
-    router.push("/dashboard/inventory");
+    router.push("/dashboard/inventory?tab=live_poultry");
+  }
+
+  function backToInventory() {
+    if (
+      hasMeaningfulUnsavedChanges &&
+      !window.confirm("Leave without saving this Live Birds listing?")
+    ) {
+      return;
+    }
+
+    router.push("/dashboard/inventory?tab=live_poultry");
+  }
+
+  async function openLivePoultryShareDialog() {
+    if (!seller?.store_id || !draftId || isResolvingShareProducts) return;
+
+    setShareDialogProducts([]);
+    setIsShareDialogOpen(false);
+    setIsResolvingShareProducts(true);
+    setEditSaveMessage(null);
+
+    const result = await loadLivePoultryShareProducts({
+      listingBatchId: draftId,
+      storeId: seller.store_id,
+      storeName: seller.store_name,
+      storeSlug: seller.store_slug,
+    });
+
+    setIsResolvingShareProducts(false);
+
+    if (!result.ok) {
+      setEditSaveStatus("error");
+      setEditSaveMessage(`Share links could not be loaded. ${result.message}`);
+      return;
+    }
+
+    setShareDialogProducts(
+      result.products.length > 0
+        ? result.products
+        : [buildFallbackLivePoultryShareProduct(draftId)],
+    );
+    setIsShareDialogOpen(true);
   }
 
   function resetNewFormState({
@@ -1819,7 +1867,16 @@ export function LiveBirdsListingForm({
         <header className="mb-5">
           <Link
             className="inline-flex min-h-11 items-center text-base font-bold text-emerald-800 underline-offset-4 hover:underline sm:min-h-0 sm:text-sm sm:font-semibold"
-            href={isEditMode ? "/dashboard/inventory" : "/dashboard/inventory/add-v2"}
+            href={
+              isEditMode
+                ? "/dashboard/inventory?tab=live_poultry"
+                : "/dashboard/inventory/add-v2"
+            }
+            onClick={(event) => {
+              if (!isEditMode || !hasMeaningfulUnsavedChanges) return;
+              if (window.confirm("Leave without saving this Live Birds listing?")) return;
+              event.preventDefault();
+            }}
           >
             {isEditMode ? "Inventory" : "Inventory / Add Inventory"}
           </Link>
@@ -1843,12 +1900,13 @@ export function LiveBirdsListingForm({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {isEditMode ? (
-                <Link
+                <button
                   className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-3 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-9 sm:text-sm sm:font-semibold"
-                  href="/dashboard/inventory"
+                  type="button"
+                  onClick={backToInventory}
                 >
-                  Cancel
-                </Link>
+                  Back to Inventory
+                </button>
               ) : (
                 <button
                   className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-3 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-9 sm:text-sm sm:font-semibold"
@@ -1984,13 +2042,16 @@ export function LiveBirdsListingForm({
               {isEditMode ? (
                 <EditModeActionsCard
                   disabledReason={editSaveDisabledReason}
+                  isSharing={isResolvingShareProducts}
                   message={
                     hasMeaningfulUnsavedChanges &&
                     editSaveStatus === "success"
                       ? null
                       : editSaveMessage
                   }
+                  onBack={backToInventory}
                   onSave={handleSaveEdit}
+                  onShare={() => void openLivePoultryShareDialog()}
                   status={editSaveStatus}
                 />
               ) : (
@@ -2104,6 +2165,30 @@ export function LiveBirdsListingForm({
             summary={publishSuccessDialog.products[0]?.summary}
             onClose={navigateToInventoryAfterPublish}
             onDone={navigateToInventoryAfterPublish}
+          />
+        )
+      ) : null}
+      {shareDialogProducts.length > 0 ? (
+        shareDialogProducts.length > 1 ? (
+          <ListingShareMultiDialog
+            isStorePublic={Boolean(seller?.is_publicly_available)}
+            items={shareDialogProducts}
+            mode="share"
+            open={isShareDialogOpen}
+            storeName={seller?.store_name ?? "your store"}
+            onClose={() => setIsShareDialogOpen(false)}
+          />
+        ) : (
+          <ListingShareDialog
+            isStorePublic={Boolean(seller?.is_publicly_available)}
+            listingTitle={shareDialogProducts[0]?.title ?? "Live poultry listing"}
+            mode="share"
+            open={isShareDialogOpen}
+            publicPath={shareDialogProducts[0]?.publicPath}
+            shareText={shareDialogProducts[0]?.shareText}
+            storeName={seller?.store_name ?? "your store"}
+            summary={shareDialogProducts[0]?.summary}
+            onClose={() => setIsShareDialogOpen(false)}
           />
         )
       ) : null}
@@ -2248,13 +2333,19 @@ function StartOverDialog({
 
 function EditModeActionsCard({
   disabledReason,
+  isSharing,
   message,
+  onBack,
   onSave,
+  onShare,
   status,
 }: {
   disabledReason: string | null;
+  isSharing: boolean;
   message: string | null;
+  onBack: () => void;
   onSave: () => void;
+  onShare: () => void;
   status: EditSaveStatus;
 }) {
   const isSaving = status === "saving";
@@ -2287,12 +2378,21 @@ function EditModeActionsCard({
           </p>
         ) : null}
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <Link
+          <button
             className="inline-flex min-h-12 items-center justify-center rounded-md border border-stone-300 bg-white px-5 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-10 sm:text-sm sm:font-semibold"
-            href="/dashboard/inventory"
+            type="button"
+            onClick={onBack}
           >
-            Cancel
-          </Link>
+            Back to Inventory
+          </button>
+          <button
+            className="inline-flex min-h-12 items-center justify-center rounded-md border border-stone-300 bg-white px-5 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60 sm:min-h-10 sm:text-sm sm:font-semibold"
+            disabled={isSharing}
+            type="button"
+            onClick={onShare}
+          >
+            {isSharing ? "Opening..." : "Share listing"}
+          </button>
           <button
             className="inline-flex min-h-12 items-center justify-center rounded-md bg-emerald-800 px-5 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-emerald-800/45 sm:min-h-10 sm:text-sm sm:font-semibold"
             disabled={isDisabled}

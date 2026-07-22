@@ -9,6 +9,7 @@ import { playDustySuccessSound } from "@/lib/success-sound";
 import { supabase } from "@/lib/supabase";
 import { ListingShareDialog } from "../../../_components/listing-share-dialog";
 import { PhotoManager, type DashboardPhoto } from "../../../_components/photo-manager";
+import type { PhotoCropMetadata } from "../../../_components/photo-crop-editor";
 import { PlanUpgradePrompt } from "../../../_components/plan-upgrade-prompt";
 import { useSellerContext } from "../../../_components/seller-context";
 import {
@@ -66,6 +67,7 @@ type EquipmentRpcResult = {
 };
 
 type PendingPhoto = {
+  cropMetadata?: PhotoCropMetadata | null;
   file: File;
   id: string;
   url: string;
@@ -148,6 +150,7 @@ export function EquipmentSuppliesOnePageForm({
   const [isStartOverDialogOpen, setIsStartOverDialogOpen] = useState(false);
   const [publishSuccessDialog, setPublishSuccessDialog] =
     useState<PublishSuccessDialogState | null>(null);
+  const [isPersistentShareOpen, setIsPersistentShareOpen] = useState(false);
   const isNavigatingAfterPublishRef = useRef(false);
   const isEditMode = Boolean(initialEquipmentItemId);
 
@@ -161,22 +164,23 @@ export function EquipmentSuppliesOnePageForm({
   const activePhotoCount = activeSavedPhotoCount + pendingPhotos.length;
   const itemDetailsComplete = validateItemDetails(form).length === 0;
   const descriptionComplete = form.description.trim().length > 0;
-  const saveDraftDisabledReason =
-    saveDraftStatus === "saving" ||
-    publishStatus === "publishing" ||
-    publishSuccessDialog
-      ? "Save already in progress."
-      : null;
-  const publishDisabledReason = getPublishDisabledReason({
-    isPublishing: publishStatus === "publishing" || Boolean(publishSuccessDialog),
-    itemDetailsComplete,
-  });
   const hasUnsavedChanges =
     pendingPhotos.length > 0 ||
     (savedFormSnapshot !== null
       ? formSnapshot !== savedFormSnapshot
       : hasStartedForm(form));
-
+  const saveDraftDisabledReason =
+    saveDraftStatus === "saving" ||
+    publishStatus === "publishing" ||
+    publishSuccessDialog
+      ? "Save already in progress."
+      : isEditMode && !hasUnsavedChanges
+        ? "No unsaved changes."
+      : null;
+  const publishDisabledReason = getPublishDisabledReason({
+    isPublishing: publishStatus === "publishing" || Boolean(publishSuccessDialog),
+    itemDetailsComplete,
+  });
   useEffect(() => {
     pendingPhotosRef.current = pendingPhotos;
   }, [pendingPhotos]);
@@ -425,6 +429,21 @@ export function EquipmentSuppliesOnePageForm({
     );
   }
 
+  function savePendingPhotoCrop(
+    photo: DashboardPhoto,
+    crop: PhotoCropMetadata | null,
+  ) {
+    setPendingPhotos((current) =>
+      current.map((item) =>
+        item.id === photo.id ? { ...item, cropMetadata: crop } : item,
+      ),
+    );
+    setSaveDraftStatus("idle");
+    setPublishStatus("idle");
+    setActionMessage(null);
+    setActionError(null);
+  }
+
   async function uploadPendingPhotos(
     currentEquipmentItemId: string,
   ): Promise<{ ok: true } | { ok: false; message: string }> {
@@ -483,7 +502,29 @@ export function EquipmentSuppliesOnePageForm({
         };
       }
 
-      if (data?.media) uploadedMedia.push(data.media);
+      if (data?.media) {
+        if (pendingPhoto.cropMetadata) {
+          const { error: cropError } = await supabase.rpc(
+            "seller_update_media_crop",
+            {
+              p_crop_metadata: pendingPhoto.cropMetadata,
+              p_media_link_id: data.media.media_link_id,
+            },
+          );
+
+          if (cropError) {
+            return {
+              ok: false,
+              message: "The photo was uploaded, but its crop was not saved.",
+            };
+          }
+        }
+
+        uploadedMedia.push({
+          ...data.media,
+          crop_metadata: pendingPhoto.cropMetadata ?? data.media.crop_metadata,
+        });
+      }
     }
 
     pendingPhotos.forEach((photo) => URL.revokeObjectURL(photo.url));
@@ -644,7 +685,18 @@ export function EquipmentSuppliesOnePageForm({
 
     isNavigatingAfterPublishRef.current = true;
     setPublishSuccessDialog(null);
-    router.push("/dashboard/inventory");
+    router.push("/dashboard/inventory?tab=equipment");
+  }
+
+  function backToInventory() {
+    if (
+      hasUnsavedChanges &&
+      !window.confirm("Leave without saving this equipment item?")
+    ) {
+      return;
+    }
+
+    router.push("/dashboard/inventory?tab=equipment");
   }
 
   function resetForm() {
@@ -702,7 +754,16 @@ export function EquipmentSuppliesOnePageForm({
         <header className="mb-5">
           <Link
             className="inline-flex min-h-11 items-center text-base font-bold text-emerald-800 underline-offset-4 hover:underline sm:min-h-0 sm:text-sm sm:font-semibold"
-            href={isEditMode ? "/dashboard/inventory" : "/dashboard/inventory/add-v2"}
+            href={
+              isEditMode
+                ? "/dashboard/inventory?tab=equipment"
+                : "/dashboard/inventory/add-v2"
+            }
+            onClick={(event) => {
+              if (!isEditMode || !hasUnsavedChanges) return;
+              if (window.confirm("Leave without saving this equipment item?")) return;
+              event.preventDefault();
+            }}
           >
             {isEditMode ? "Inventory" : "Inventory / Add Inventory"}
           </Link>
@@ -717,9 +778,13 @@ export function EquipmentSuppliesOnePageForm({
             </div>
             <div className="flex flex-wrap gap-2 lg:justify-end">
               {isEditMode ? (
-                <Link className="seller-secondary-button bg-white" href="/dashboard/inventory">
-                  Cancel
-                </Link>
+                <button
+                  className="seller-secondary-button bg-white"
+                  type="button"
+                  onClick={backToInventory}
+                >
+                  Back to Inventory
+                </button>
               ) : (
                 <button
                   className="seller-secondary-button bg-white"
@@ -863,6 +928,7 @@ export function EquipmentSuppliesOnePageForm({
                 photoError={photoError}
                 removePendingPhoto={removePendingPhoto}
                 reorderPendingPhotos={reorderPendingPhotos}
+                savePendingPhotoCrop={savePendingPhotoCrop}
                 storeId={storeId}
                 onReload={() => {
                   if (equipmentItemId) void loadEquipmentMedia(equipmentItemId);
@@ -914,8 +980,27 @@ export function EquipmentSuppliesOnePageForm({
                 ) : null}
 
                 <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
+                  {isEditMode ? (
+                    <>
+                      <button
+                        className="seller-secondary-button"
+                        type="button"
+                        onClick={backToInventory}
+                      >
+                        Back to Inventory
+                      </button>
+                      <button
+                        className="seller-secondary-button"
+                        disabled={!equipmentItemId}
+                        type="button"
+                        onClick={() => setIsPersistentShareOpen(true)}
+                      >
+                        Share listing
+                      </button>
+                    </>
+                  ) : null}
                   <SaveDraftButton
-                    canSaveDraft
+                    canSaveDraft={!saveDraftDisabledReason}
                     idleLabel={isEditMode ? "Save Changes" : undefined}
                     onSaveDraft={() => void handleSaveDraft()}
                     saveDraftDisabledReason={saveDraftDisabledReason}
@@ -989,6 +1074,21 @@ export function EquipmentSuppliesOnePageForm({
         onClose={navigateToInventoryAfterPublish}
         onDone={navigateToInventoryAfterPublish}
       />
+      <ListingShareDialog
+        isStorePublic={Boolean(seller?.is_publicly_available)}
+        listingTitle={form.itemName.trim() || "Equipment or supply item"}
+        mode="share"
+        open={isPersistentShareOpen}
+        publicPath={buildPublicListingPath({
+          listingType: "equipment_supplies",
+          equipmentItemId,
+          storeSlug: seller?.store_slug,
+        })}
+        shareText={buildEquipmentShareText(form, seller?.store_name)}
+        storeName={seller?.store_name ?? "your store"}
+        summary={buildEquipmentShareSummary(form)}
+        onClose={() => setIsPersistentShareOpen(false)}
+      />
     </DashboardPageContent>
   );
 }
@@ -1001,6 +1101,7 @@ function EquipmentPhotos({
   photoError,
   removePendingPhoto,
   reorderPendingPhotos,
+  savePendingPhotoCrop,
   storeId,
   onReload,
 }: {
@@ -1011,6 +1112,10 @@ function EquipmentPhotos({
   photoError: string | null;
   removePendingPhoto: (photo: PendingPhoto) => void;
   reorderPendingPhotos: (photos: DashboardPhoto[]) => void;
+  savePendingPhotoCrop: (
+    photo: DashboardPhoto,
+    crop: PhotoCropMetadata | null,
+  ) => void;
   storeId: string;
   onReload: () => void;
 }) {
@@ -1039,6 +1144,7 @@ function EquipmentPhotos({
       photoError={photoError}
       removePendingPhoto={removePendingPhoto}
       reorderPendingPhotos={reorderPendingPhotos}
+      savePendingPhotoCrop={savePendingPhotoCrop}
     />
   );
 }
@@ -1049,17 +1155,23 @@ function PendingEquipmentPhotos({
   photoError,
   removePendingPhoto,
   reorderPendingPhotos,
+  savePendingPhotoCrop,
 }: {
   addPendingPhotos: (files: FileList | null) => void;
   pendingPhotos: PendingPhoto[];
   photoError: string | null;
   removePendingPhoto: (photo: PendingPhoto) => void;
   reorderPendingPhotos: (photos: DashboardPhoto[]) => void;
+  savePendingPhotoCrop: (
+    photo: DashboardPhoto,
+    crop: PhotoCropMetadata | null,
+  ) => void;
 }) {
   const photos = pendingPhotos.map((photo, index) => ({
     filename: photo.file.name,
     id: photo.id,
     label: photo.file.name || `Pending photo ${index + 1}`,
+    cropMetadata: photo.cropMetadata ?? null,
     sortOrder: index,
     url: photo.url,
   }));
@@ -1071,7 +1183,6 @@ function PendingEquipmentPhotos({
     <div className="space-y-2">
       <PhotoManager
         acceptedTypes={acceptedPendingImageTypes}
-        allowCropEdit={false}
         canManage
         description="Manage the photos buyers see for this listing. The first photo will be the featured storefront photo."
         emptyDescription="Add clear photos so buyers can recognize this item."
@@ -1089,8 +1200,8 @@ function PendingEquipmentPhotos({
           if (pendingPhoto) removePendingPhoto(pendingPhoto);
         }}
         onReorderPhotos={reorderPendingPhotos}
-        onResetCrop={() => undefined}
-        onSaveCrop={() => undefined}
+        onResetCrop={(photo) => savePendingPhotoCrop(photo, null)}
+        onSaveCrop={(photo, crop) => savePendingPhotoCrop(photo, crop)}
         onSetFeaturedPhoto={(photo) => {
           const index = pendingPhotos.findIndex((item) => item.id === photo.id);
           if (index <= 0) return;
@@ -1149,8 +1260,8 @@ function EquipmentSummarySidebar({
 
       <SidebarCard title="Ready to Publish">
         <div className="space-y-3">
-          <ChecklistItem complete={photoCount > 0} label="Photos" />
           <ChecklistItem complete={itemDetailsComplete} label="Item Details" />
+          <ChecklistItem complete={photoCount > 0} label="Photos" />
           <ChecklistItem complete={descriptionComplete} label="Description" />
         </div>
         <p className="mt-5 text-sm leading-6 text-stone-600">

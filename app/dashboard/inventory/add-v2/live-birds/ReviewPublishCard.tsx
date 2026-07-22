@@ -119,7 +119,7 @@ function FinalActionStatus({
     text: string;
   }>;
   const visibleDisabledReason =
-    publishStatus === "success"
+    publishStatus === "success" || publishStatus === "publishing"
       ? null
       : saveDraftDisabledReason ?? publishDisabledReason;
 

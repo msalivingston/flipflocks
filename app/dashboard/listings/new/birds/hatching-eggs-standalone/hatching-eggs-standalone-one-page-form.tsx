@@ -11,6 +11,7 @@ import {
   PhotoManager,
   type DashboardPhoto,
 } from "../../../../_components/photo-manager";
+import type { PhotoCropMetadata } from "../../../../_components/photo-crop-editor";
 import { ListingShareDialog } from "../../../../_components/listing-share-dialog";
 import { PlanUpgradePrompt } from "../../../../_components/plan-upgrade-prompt";
 import { useSellerContext } from "../../../../_components/seller-context";
@@ -99,6 +100,7 @@ type HatchingEggGroupRow = {
 };
 
 type PendingPhoto = {
+  cropMetadata?: PhotoCropMetadata | null;
   file: File;
   id: string;
   url: string;
@@ -547,6 +549,21 @@ export function HatchingEggsStandaloneOnePageForm({
     );
   }
 
+  function savePendingPhotoCrop(
+    photo: DashboardPhoto,
+    crop: PhotoCropMetadata | null,
+  ) {
+    setPendingPhotos((current) =>
+      current.map((item) =>
+        item.id === photo.id ? { ...item, cropMetadata: crop } : item,
+      ),
+    );
+    setSaveDraftStatus("idle");
+    setPublishStatus("idle");
+    setActionMessage(null);
+    setActionError(null);
+  }
+
   async function uploadPendingPhotos(
     currentHatchingEggItemId: string,
   ): Promise<{ ok: true } | { ok: false; message: string }> {
@@ -605,7 +622,29 @@ export function HatchingEggsStandaloneOnePageForm({
         };
       }
 
-      if (data?.media) uploadedMedia.push(data.media);
+      if (data?.media) {
+        if (pendingPhoto.cropMetadata) {
+          const { error: cropError } = await supabase.rpc(
+            "seller_update_media_crop",
+            {
+              p_crop_metadata: pendingPhoto.cropMetadata,
+              p_media_link_id: data.media.media_link_id,
+            },
+          );
+
+          if (cropError) {
+            return {
+              ok: false,
+              message: "The photo was uploaded, but its crop was not saved.",
+            };
+          }
+        }
+
+        uploadedMedia.push({
+          ...data.media,
+          crop_metadata: pendingPhoto.cropMetadata ?? data.media.crop_metadata,
+        });
+      }
     }
 
     pendingPhotos.forEach((photo) => URL.revokeObjectURL(photo.url));
@@ -789,7 +828,6 @@ export function HatchingEggsStandaloneOnePageForm({
     setSavedFormSnapshot(getFormSnapshot(form));
     setSaveDraftStatus("success");
     setActionMessage(isEditMode ? "Changes saved." : "Draft saved.");
-    router.push("/dashboard/inventory");
   }
 
   async function handlePublish() {
@@ -869,7 +907,18 @@ export function HatchingEggsStandaloneOnePageForm({
 
     isNavigatingAfterPublishRef.current = true;
     setPublishSuccessDialog(null);
-    router.push("/dashboard/inventory");
+    router.push("/dashboard/inventory?tab=hatching_eggs");
+  }
+
+  function backToInventory() {
+    if (
+      hasUnsavedChanges &&
+      !window.confirm("Leave without saving this hatching egg item?")
+    ) {
+      return;
+    }
+
+    router.push("/dashboard/inventory?tab=hatching_eggs");
   }
 
   function resetForm() {
@@ -938,7 +987,16 @@ export function HatchingEggsStandaloneOnePageForm({
         <header className="mb-5">
           <Link
             className="inline-flex min-h-11 items-center text-base font-bold text-emerald-800 underline-offset-4 hover:underline sm:min-h-0 sm:text-sm sm:font-semibold"
-            href={isEditMode ? "/dashboard/inventory" : "/dashboard/inventory/add-v2"}
+            href={
+              isEditMode
+                ? "/dashboard/inventory?tab=hatching_eggs"
+                : "/dashboard/inventory/add-v2"
+            }
+            onClick={(event) => {
+              if (!isEditMode || !hasUnsavedChanges) return;
+              if (window.confirm("Leave without saving this hatching egg item?")) return;
+              event.preventDefault();
+            }}
           >
             {isEditMode ? "Inventory" : "Inventory / Add Inventory"}
           </Link>
@@ -1090,6 +1148,7 @@ export function HatchingEggsStandaloneOnePageForm({
                   photoError={photoError}
                   removePendingPhoto={removePendingPhoto}
                   reorderPendingPhotos={reorderPendingPhotos}
+                  savePendingPhotoCrop={savePendingPhotoCrop}
                   storeId={storeId}
                   onReload={() => {
                     if (hatchingEggItemId) {
@@ -1159,13 +1218,14 @@ export function HatchingEggsStandaloneOnePageForm({
                   />
                   {isEditMode ? (
                     <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
-                      <Link className="seller-secondary-button" href="/dashboard/inventory">
-                        Cancel
-                      </Link>
-                      {canShareHatchingEggListing({
-                        productId: hatchingEggProductId,
-                        visibilityStatus: form.visibilityStatus,
-                      }) ? (
+                      <button
+                        className="seller-secondary-button"
+                        type="button"
+                        onClick={backToInventory}
+                      >
+                        Back to Inventory
+                      </button>
+                      {hatchingEggProductId ? (
                         <button
                           className="seller-secondary-button"
                           type="button"
@@ -1176,7 +1236,7 @@ export function HatchingEggsStandaloneOnePageForm({
                       ) : null}
                       <button
                         className="seller-primary-button"
-                        disabled={saveDraftStatus === "saving"}
+                        disabled={saveDraftStatus === "saving" || !hasUnsavedChanges}
                         type="button"
                         onClick={handleSaveDraft}
                       >
@@ -1263,6 +1323,7 @@ function HatchingEggPhotos({
   photoError,
   removePendingPhoto,
   reorderPendingPhotos,
+  savePendingPhotoCrop,
   storeId,
 }: {
   addPendingPhotos: (files: FileList | null) => void;
@@ -1273,6 +1334,10 @@ function HatchingEggPhotos({
   photoError: string | null;
   removePendingPhoto: (photo: PendingPhoto) => void;
   reorderPendingPhotos: (photos: DashboardPhoto[]) => void;
+  savePendingPhotoCrop: (
+    photo: DashboardPhoto,
+    crop: PhotoCropMetadata | null,
+  ) => void;
   storeId: string;
 }) {
   if (!hatchingEggItemId) {
@@ -1283,6 +1348,7 @@ function HatchingEggPhotos({
         photoError={photoError}
         removePendingPhoto={removePendingPhoto}
         reorderPendingPhotos={reorderPendingPhotos}
+        savePendingPhotoCrop={savePendingPhotoCrop}
       />
     );
   }
@@ -1311,12 +1377,17 @@ function PendingHatchingEggPhotos({
   photoError,
   removePendingPhoto,
   reorderPendingPhotos,
+  savePendingPhotoCrop,
 }: {
   addPendingPhotos: (files: FileList | null) => void;
   pendingPhotos: PendingPhoto[];
   photoError: string | null;
   removePendingPhoto: (photo: PendingPhoto) => void;
   reorderPendingPhotos: (photos: DashboardPhoto[]) => void;
+  savePendingPhotoCrop: (
+    photo: DashboardPhoto,
+    crop: PhotoCropMetadata | null,
+  ) => void;
 }) {
   const dashboardPhotos = pendingPhotos.map((photo, index) => ({
     altText: photo.file.name,
@@ -1324,6 +1395,7 @@ function PendingHatchingEggPhotos({
     height: null,
     id: photo.id,
     label: photo.file.name || `Pending photo ${index + 1}`,
+    cropMetadata: photo.cropMetadata ?? null,
     sortOrder: index,
     url: photo.url,
     width: null,
@@ -1333,7 +1405,6 @@ function PendingHatchingEggPhotos({
     <div className="space-y-3">
       <PhotoManager
         acceptedTypes={acceptedPendingImageTypes}
-        allowCropEdit={false}
         canManage
         description="Manage the photos buyers see for this hatching egg item. The first photo will be the featured photo."
         emptyDescription="Add photos now. They will be saved when you save or publish this item."
@@ -1358,8 +1429,8 @@ function PendingHatchingEggPhotos({
           if (pendingPhoto) removePendingPhoto(pendingPhoto);
         }}
         onReorderPhotos={reorderPendingPhotos}
-        onResetCrop={() => undefined}
-        onSaveCrop={() => undefined}
+        onResetCrop={(photo) => savePendingPhotoCrop(photo, null)}
+        onSaveCrop={(photo, crop) => savePendingPhotoCrop(photo, crop)}
         onSetFeaturedPhoto={(photo) => {
           const nextPhotos = [
             photo,
@@ -1607,8 +1678,8 @@ function HatchingEggReadinessCard({
   return (
     <SidebarCard title="Ready to Publish">
       <div className="space-y-3">
-        <ChecklistRow complete={photoCount > 0} label="Photos" />
         <ChecklistRow complete={detailsComplete} label="Item Details" />
+        <ChecklistRow complete={photoCount > 0} label="Photos" />
         <ChecklistRow complete={descriptionComplete} label="Description" />
       </div>
       <p
@@ -1845,19 +1916,6 @@ function getFormSnapshot(form: HatchingEggFormState) {
     speciesId: form.speciesId,
     visibilityStatus: form.visibilityStatus,
   });
-}
-
-function canShareHatchingEggListing({
-  productId,
-  visibilityStatus,
-}: {
-  productId: string | null;
-  visibilityStatus: string;
-}) {
-  return Boolean(
-    productId?.trim() &&
-      (visibilityStatus === "active" || visibilityStatus === "sold_out"),
-  );
 }
 
 function normalizeLookupText(value: string) {
