@@ -299,11 +299,11 @@ const heroLayoutOptions: Array<{
   value: HeroLayout;
 }> = [
   {
-    label: "Full Width Photo",
+    label: "Left Fade Light",
     value: "full",
   },
   {
-    label: "Left Fade",
+    label: "Left Fade Dark",
     value: "right",
   },
 ];
@@ -3025,7 +3025,7 @@ function PhotosTab({
   const heroLayout = normalizeHeroLayout(heroImage?.hero_layout);
   const heroLayoutLabel =
     heroLayoutOptions.find((option) => option.value === heroLayout)?.label ??
-    "Full Width Photo";
+    "Left Fade Light";
   const heroPositionSummary = heroImage
     ? isDefaultHeroPosition(heroImage)
       ? "Default position"
@@ -3314,11 +3314,26 @@ function HeroPhotoSection({
           and intro text.
         </p>
         <button
-          className="w-fit text-sm font-semibold text-emerald-800 transition hover:text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+          aria-expanded={showTips}
+          className="inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-emerald-800 transition hover:text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
           onClick={() => setShowTips((value) => !value)}
           type="button"
         >
-          {showTips ? "Hide image tips" : "Image tips"}
+          Image tips
+          <svg
+            aria-hidden="true"
+            className={`size-4 transition-transform ${showTips ? "rotate-180" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M6 9l6 6 6-6"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+            />
+          </svg>
         </button>
         {showTips ? (
           <TipsPanel
@@ -3357,9 +3372,15 @@ function HeroPhotoSection({
           </div>
 
           <div className="grid gap-2">
-            <p className="text-sm font-semibold text-stone-800">
-              Desktop Hero Preview
-            </p>
+            <div className="grid gap-1">
+              <p className="text-sm font-semibold text-stone-800">
+                Desktop Hero Preview
+              </p>
+              <p className="text-xs font-medium leading-4 text-stone-500">
+                Preview shown at a typical desktop width. Text wrapping and
+                image crop may vary slightly by screen size.
+              </p>
+            </div>
             <div
               className={storefrontHeroFrame.setupPreviewClass}
               onPointerCancel={endDrag}
@@ -3831,11 +3852,26 @@ function AboutPhotoSection({
           Shown with your farm story on the About section of your storefront.
         </p>
         <button
-          className="w-fit text-sm font-semibold text-emerald-800 transition hover:text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+          aria-expanded={showTips}
+          className="inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-emerald-800 transition hover:text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
           onClick={() => setShowTips((value) => !value)}
           type="button"
         >
-          {showTips ? "Hide image tips" : "Image tips"}
+          Image tips
+          <svg
+            aria-hidden="true"
+            className={`size-4 transition-transform ${showTips ? "rotate-180" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M6 9l6 6 6-6"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+            />
+          </svg>
         </button>
         {showTips ? (
           <TipsPanel
