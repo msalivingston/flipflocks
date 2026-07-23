@@ -1910,9 +1910,16 @@ export function LiveBirdsListingForm({
   }
 
   return (
-    <DashboardPageContent className="bg-stone-50/60">
+    <>
+    <MobileLiveBirdsTaskHeader
+      disabled={Boolean(saveDraftDisabledReason) || saveDraftStatus === "saving"}
+      isEditMode={isEditMode}
+      onSaveDraft={handleSaveDraft}
+      saveDraftStatus={saveDraftStatus}
+    />
+    <DashboardPageContent className="bg-stone-50/60 max-sm:px-4 max-sm:py-4 max-sm:pb-24">
       <div className="max-w-7xl">
-        <header className="mb-5">
+        <header className="mb-5 max-sm:hidden">
           <Link
             className="inline-flex min-h-11 items-center text-base font-bold text-emerald-800 underline-offset-4 hover:underline sm:min-h-0 sm:text-sm sm:font-semibold"
             href={
@@ -2243,6 +2250,48 @@ export function LiveBirdsListingForm({
         )
       ) : null}
     </DashboardPageContent>
+    </>
+  );
+}
+
+function MobileLiveBirdsTaskHeader({
+  disabled,
+  isEditMode,
+  onSaveDraft,
+  saveDraftStatus,
+}: {
+  disabled: boolean;
+  isEditMode: boolean;
+  onSaveDraft: () => void;
+  saveDraftStatus: SaveDraftStatus;
+}) {
+  if (isEditMode) return null;
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-stone-200/80 bg-white pt-[env(safe-area-inset-top)] shadow-[0_1px_8px_rgba(67,55,38,0.06)] sm:hidden">
+      <div className="grid min-h-14 grid-cols-[1fr_auto_1fr] items-center gap-2 px-4">
+        <Link
+          className="inline-flex min-h-11 items-center text-base font-semibold text-emerald-900"
+          href="/dashboard/inventory"
+        >
+          <span aria-hidden="true" className="mr-1 text-2xl leading-none">
+            ‹
+          </span>
+          Inventory
+        </Link>
+        <h1 className="text-center text-base font-bold text-stone-950">
+          Add Live Birds
+        </h1>
+        <button
+          className="justify-self-end rounded-md px-1 text-base font-semibold text-emerald-900 disabled:text-stone-400"
+          disabled={disabled || saveDraftStatus === "success"}
+          type="button"
+          onClick={onSaveDraft}
+        >
+          {saveDraftStatus === "saving" ? "Saving..." : "Save draft"}
+        </button>
+      </div>
+    </header>
   );
 }
 

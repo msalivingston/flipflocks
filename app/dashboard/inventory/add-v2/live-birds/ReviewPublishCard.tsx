@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { disabledButtonClass } from "./constants";
 import { SectionCard } from "./SectionCard";
 import type { SaveDraftPreflightResult } from "./saveDraftPreflight";
@@ -30,12 +33,10 @@ export function ReviewPublishCard({
   stepLocked?: boolean;
   validationIssues: PublishValidationIssue[];
 }) {
-  return (
-    <SectionCard
-      className={stepLocked ? "opacity-60" : ""}
-      step="4"
-      title="Ready to publish?"
-    >
+  const [mobileExpanded, setMobileExpanded] = useState(false);
+
+  function renderContent() {
+    return (
       <div className="space-y-4 sm:space-y-6">
         <div className="space-y-2 sm:space-y-3">
           <p className="text-base leading-7 text-stone-700">
@@ -75,7 +76,48 @@ export function ReviewPublishCard({
           />
         </div>
       </div>
-    </SectionCard>
+    );
+  }
+
+  return (
+    <>
+      <section
+        className={`rounded-xl border border-transparent bg-white p-4 shadow-sm sm:hidden ${
+          stepLocked ? "opacity-60" : ""
+        }`}
+      >
+        <button
+          aria-expanded={mobileExpanded}
+          className="flex min-h-11 w-full items-center gap-3 text-left"
+          type="button"
+          onClick={() => setMobileExpanded((expanded) => !expanded)}
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900">
+            4
+          </span>
+          <span className="min-w-0 flex-1 text-xl font-bold text-stone-950">
+            Ready to publish?
+          </span>
+          <DisclosureChevron expanded={mobileExpanded} />
+        </button>
+        {mobileExpanded ? (
+          <div className="mt-3">{renderContent()}</div>
+        ) : (
+          <p className="mt-3 text-base leading-7 text-stone-700">
+            Review the details above, then publish when everything looks right.
+          </p>
+        )}
+      </section>
+      <div className="hidden sm:block">
+        <SectionCard
+          className={stepLocked ? "opacity-60" : ""}
+          step="4"
+          title="Ready to publish?"
+        >
+          {renderContent()}
+        </SectionCard>
+      </div>
+    </>
   );
 }
 
@@ -189,6 +231,17 @@ function PreflightList({
         ))}
       </ul>
     </div>
+  );
+}
+
+function DisclosureChevron({ expanded = false }: { expanded?: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`h-2.5 w-2.5 shrink-0 border-b-2 border-r-2 border-emerald-800/80 ${
+        expanded ? "rotate-45" : "-rotate-45"
+      }`}
+    />
   );
 }
 

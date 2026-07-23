@@ -56,6 +56,10 @@ export function SellerAppShell({ children }: { children: React.ReactNode }) {
 function SellerShellContent({ children }: { children: React.ReactNode }) {
   const { seller, isLoading, error, reload } = useSellerContext();
   const router = useRouter();
+  const pathname = usePathname();
+  const isFocusedLiveBirdsForm =
+    pathname === "/dashboard/inventory/add-v2/live-birds" ||
+    pathname.startsWith("/dashboard/inventory/add-v2/live-birds/");
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -150,7 +154,11 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-h-screen min-w-0 flex-col">
-        <header className="sticky top-0 z-30 border-b border-stone-200/80 bg-white lg:hidden">
+        <header
+          className={`sticky top-0 z-30 border-b border-stone-200/80 bg-white lg:hidden ${
+            isFocusedLiveBirdsForm ? "hidden" : ""
+          }`}
+        >
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
               <Link className="shrink-0" href="/dashboard">
@@ -180,13 +188,21 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="min-w-0 flex-1 overflow-x-clip pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+        <main
+          className={`min-w-0 flex-1 overflow-x-clip lg:pb-0 ${
+            isFocusedLiveBirdsForm
+              ? "pb-[calc(2rem+env(safe-area-inset-bottom))]"
+              : "pb-[calc(6.5rem+env(safe-area-inset-bottom))]"
+          }`}
+        >
           {children}
         </main>
 
         <nav
           aria-label="Seller navigation"
-          className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-200/80 bg-white pb-[calc(env(safe-area-inset-bottom)+0.35rem)] shadow-[0_-8px_20px_rgba(67,55,38,0.08)] lg:hidden"
+          className={`fixed inset-x-0 bottom-0 z-30 border-t border-stone-200/80 bg-white pb-[calc(env(safe-area-inset-bottom)+0.35rem)] shadow-[0_-8px_20px_rgba(67,55,38,0.08)] lg:hidden ${
+            isFocusedLiveBirdsForm ? "hidden" : ""
+          }`}
         >
           <div className="overflow-x-auto px-2 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="flex gap-1">

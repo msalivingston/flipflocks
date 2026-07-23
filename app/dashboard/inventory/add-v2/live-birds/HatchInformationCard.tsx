@@ -1,4 +1,7 @@
+"use client";
+
 import Image from "next/image";
+import { useState } from "react";
 import { inputClass } from "./constants";
 import { SectionCard } from "./SectionCard";
 import type { AgeAtAvailabilityResult, SpeciesOption } from "./types";
@@ -34,8 +37,15 @@ export function HatchInformationCard({
   speciesOptions: SpeciesOption[];
   usingFallbackSpecies: boolean;
 }) {
-  return (
-    <SectionCard step="1" title="Hatch details">
+  const isComplete = Boolean(
+    species.label.trim() && hatchDate.trim() && availableDate.trim(),
+  );
+  const [mobileExpanded, setMobileExpanded] = useState(false);
+  const isMobileExpanded = !isComplete || mobileExpanded;
+
+  function renderBody() {
+    return (
+      <>
       <p className="text-base leading-7 text-stone-600">
         {introText ??
           "All birds added here should share the same hatch date. Start a separate listing for birds from another hatch."}
@@ -67,15 +77,87 @@ export function HatchInformationCard({
           }
         />
       </div>
-      <div
-        className={`mt-4 rounded-md border px-4 py-3 text-base font-semibold leading-7 ${
-          ageAtAvailability.status === "warning"
-            ? "border-amber-200 bg-amber-50 text-amber-800"
-            : "border-emerald-200 bg-emerald-50 text-emerald-900"
-        }`}
-      >
-        {ageAtAvailability.message}
+      <AgeMessage ageAtAvailability={ageAtAvailability} />
+      <ReferenceMessages
+        referenceError={referenceError}
+        referenceLoading={referenceLoading}
+        usingFallbackSpecies={usingFallbackSpecies}
+      />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <section className="rounded-xl border border-transparent bg-white p-4 shadow-sm sm:hidden">
+        <button
+          aria-expanded={isMobileExpanded}
+          className="flex min-h-11 w-full items-center gap-3 text-left"
+          type="button"
+          onClick={() => setMobileExpanded((expanded) => !expanded)}
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900">
+            1
+          </span>
+          <span className="min-w-0 flex-1 text-xl font-bold text-stone-950">
+            Hatch details
+          </span>
+          {isComplete ? <CompleteIconLabel /> : null}
+          <DisclosureChevron expanded={isMobileExpanded} />
+        </button>
+        {!isMobileExpanded && isComplete ? (
+          <div className="mt-4 space-y-3">
+            <div className="grid gap-3 min-[380px]:grid-cols-2">
+              <DateSummary label="Hatch date" value={formatMobileDate(hatchDate)} />
+              <DateSummary
+                label="Available date"
+                value={formatMobileDate(availableDate)}
+              />
+            </div>
+            <AgeMessage ageAtAvailability={ageAtAvailability} />
+          </div>
+        ) : (
+          <div className="mt-3">{renderBody()}</div>
+        )}
+      </section>
+      <div className="hidden sm:block">
+        <SectionCard step="1" title="Hatch details">
+          {renderBody()}
+        </SectionCard>
       </div>
+    </>
+  );
+}
+
+function AgeMessage({
+  ageAtAvailability,
+}: {
+  ageAtAvailability: AgeAtAvailabilityResult;
+}) {
+  return (
+    <div
+      className={`mt-4 rounded-md border px-4 py-3 text-base font-semibold leading-7 ${
+        ageAtAvailability.status === "warning"
+          ? "border-amber-200 bg-amber-50 text-amber-800"
+          : "border-emerald-200 bg-emerald-50 text-emerald-900"
+      }`}
+    >
+      {ageAtAvailability.message}
+    </div>
+  );
+}
+
+function ReferenceMessages({
+  referenceError,
+  referenceLoading,
+  usingFallbackSpecies,
+}: {
+  referenceError: string | null;
+  referenceLoading: boolean;
+  usingFallbackSpecies: boolean;
+}) {
+  return (
+    <>
       {referenceLoading ? (
         <p className="mt-3 text-base font-semibold leading-7 text-stone-500">
           Loading species and breed profile options...
@@ -93,8 +175,56 @@ export function HatchInformationCard({
           are available.
         </p>
       ) : null}
-    </SectionCard>
+    </>
   );
+}
+
+function DateSummary({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-stone-100 bg-stone-50 px-3 py-2">
+      <Image src="/glyphs/calendar.png" alt="" width={18} height={18} />
+      <div>
+        <p className="text-sm font-semibold text-stone-600">{label}</p>
+        <p className="text-base font-bold text-stone-950">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function CompleteIconLabel() {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-emerald-800">
+      <span
+        aria-hidden="true"
+        className="block h-2.5 w-1.5 rotate-45 border-b-2 border-r-2 border-emerald-700"
+      />
+      Complete
+    </span>
+  );
+}
+
+function DisclosureChevron({ expanded = false }: { expanded?: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`h-2.5 w-2.5 shrink-0 border-b-2 border-r-2 border-emerald-800/80 ${
+        expanded ? "rotate-45" : "-rotate-45"
+      }`}
+    />
+  );
+}
+
+function formatMobileDate(value: string) {
+  if (!value) return "Not selected";
+  const date = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 }
 
 function SpeciesField({

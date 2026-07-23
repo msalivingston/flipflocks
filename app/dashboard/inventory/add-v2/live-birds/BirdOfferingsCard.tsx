@@ -118,6 +118,7 @@ export function BirdOfferingsCard({
                 removeOffering={removeOffering}
                 scrollToOfferingId={scrollToOfferingId}
                 storeId={storeId}
+                toggleOfferingExpanded={toggleOfferingExpanded}
                 updateBreedDescription={updateBreedDescription}
                 updateOffering={updateOffering}
                 updateOfferingBreed={updateOfferingBreed}
@@ -140,15 +141,18 @@ export function BirdOfferingsCard({
         </div>
       ) : null}
 
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+      <div className="mt-3 flex flex-col gap-2 sm:mt-4 sm:flex-row sm:flex-wrap sm:items-center">
         <button
-          className="inline-flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-800 px-4 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
+          className="inline-flex min-h-12 w-full items-center justify-center rounded-md border border-emerald-800 bg-white px-4 text-base font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:border-stone-200 disabled:bg-stone-100 disabled:text-stone-400 sm:min-h-10 sm:w-auto sm:border-emerald-800 sm:bg-emerald-800 sm:text-sm sm:font-semibold sm:text-white sm:hover:bg-emerald-900"
           disabled={isLocked}
           onClick={addOffering}
           type="button"
         >
           + Add different birds from this hatch
         </button>
+        <p className="text-base font-medium leading-7 text-stone-500 sm:order-last sm:w-full">
+          Use this for another breed, sex/type, quantity, or current price.
+        </p>
         {!groupsReviewMode ? (
           <button
             className="inline-flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-800 px-4 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
@@ -160,9 +164,6 @@ export function BirdOfferingsCard({
           </button>
         ) : null}
       </div>
-      <p className="mt-2 text-base font-medium leading-7 text-stone-500">
-        Use this for another breed, sex, quantity, or current price.
-      </p>
     </SectionCard>
   );
 }
@@ -180,6 +181,7 @@ function ExpandedOfferingCard({
   removeOffering,
   scrollToOfferingId,
   storeId,
+  toggleOfferingExpanded,
   updateBreedDescription,
   updateOffering,
   updateOfferingBreed,
@@ -199,6 +201,7 @@ function ExpandedOfferingCard({
   removeOffering: (offeringId: string) => void;
   scrollToOfferingId: string | null;
   storeId: string;
+  toggleOfferingExpanded: (offeringId: string) => void;
   updateBreedDescription: (offeringId: string, description: string) => void;
   updateOffering: (
     offeringId: string,
@@ -210,7 +213,7 @@ function ExpandedOfferingCard({
   plan: PlanCapabilities;
 }) {
   const selectedBreedOption = findSelectedBreedOption(breedOptions, offering);
-  const title = getBirdsForSaleTitle(offering, index);
+  const title = getBirdsForSaleTitle(offering);
   const summary = getBirdsForSaleSummary(offering);
   const cardRef = useRef<HTMLDivElement>(null);
   const breedMediaItems = offering.sellerBreedProfileId
@@ -227,8 +230,11 @@ function ExpandedOfferingCard({
   useEffect(() => {
     if (scrollToOfferingId !== offering.id) return;
 
-    cardRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    cardRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
     window.setTimeout(() => {
+      if (window.matchMedia("(max-width: 639px)").matches) {
+        window.scrollBy({ top: -72, behavior: "smooth" });
+      }
       cardRef.current
         ?.querySelector<HTMLElement>('[data-live-birds-offering-field="breed"]')
         ?.focus({ preventScroll: true });
@@ -253,7 +259,7 @@ function ExpandedOfferingCard({
 
   return (
     <div
-      className="rounded-xl border border-transparent bg-stone-50/70 shadow-none sm:rounded-lg sm:border-emerald-200 sm:bg-white sm:shadow-sm"
+      className="scroll-mt-20 rounded-xl border border-emerald-200 bg-white shadow-sm sm:rounded-lg sm:bg-white"
       ref={cardRef}
     >
       <div className="flex items-start justify-between gap-3 border-b border-stone-100 px-0 py-3 sm:border-emerald-100 sm:px-4">
@@ -276,6 +282,30 @@ function ExpandedOfferingCard({
               removeOffering={removeOffering}
             />
           ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-2 sm:hidden">
+          <EntryStatus offering={offering} />
+          {canRemove ? (
+            <details className="relative">
+              <summary className="flex size-10 cursor-pointer list-none items-center justify-center rounded-md text-lg font-bold text-stone-500 focus:outline-none focus:ring-2 focus:ring-emerald-700/20">
+                ...
+              </summary>
+              <div className="absolute right-0 z-20 mt-1 rounded-md border border-stone-200 bg-white p-2 shadow-lg">
+                <RemoveOfferingControl
+                  offeringId={offering.id}
+                  removeOffering={removeOffering}
+                />
+              </div>
+            </details>
+          ) : null}
+          <button
+            aria-label="Collapse bird entry"
+            className="flex size-10 items-center justify-center rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+            type="button"
+            onClick={() => toggleOfferingExpanded(offering.id)}
+          >
+            <DisclosureChevron expanded />
+          </button>
         </div>
       </div>
 
@@ -414,14 +444,6 @@ function ExpandedOfferingCard({
         ) : null}
       </div>
       ) : null}
-      {canRemove ? (
-        <div className="flex justify-end px-0 pb-3 sm:hidden">
-          <RemoveOfferingControl
-            offeringId={offering.id}
-            removeOffering={removeOffering}
-          />
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -441,8 +463,9 @@ function CollapsedOfferingRow({
   removeOffering: (offeringId: string) => void;
   toggleOfferingExpanded: (offeringId: string) => void;
 }) {
-  const title = getBirdsForSaleTitle(offering, index);
+  const title = getBirdsForSaleTitle(offering);
   const summary = getBirdsForSaleSummary(offering);
+  const mobileSummary = getBirdsForSaleMobileSummary(offering);
 
   return (
     <div
@@ -452,9 +475,9 @@ function CollapsedOfferingRow({
           : "border-transparent sm:border-stone-200"
       }`}
     >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+      <div className="flex items-start gap-3 text-sm sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-2">
         <button
-          className="flex min-h-12 min-w-0 flex-1 items-center gap-3 text-left"
+          className="flex min-h-12 min-w-0 flex-1 items-start gap-3 text-left sm:items-center"
           type="button"
           onClick={() => toggleOfferingExpanded(offering.id)}
         >
@@ -463,25 +486,41 @@ function CollapsedOfferingRow({
             <span className="break-words text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">
               {title}
             </span>
-            <span className="text-sm font-medium text-stone-500">
+            <span className="hidden text-sm font-medium text-stone-500 sm:block">
               {summary}
+            </span>
+            <span className="text-sm font-medium leading-5 text-stone-600 sm:hidden">
+              {mobileSummary.lineOne}
+            </span>
+            <span className="text-sm font-medium leading-5 text-stone-600 sm:hidden">
+              {mobileSummary.lineTwo}
             </span>
           </span>
         </button>
         <EntryStatus offering={offering} />
         <button
-          className={`${mutedTextActionClass} ml-auto transition hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2`}
+          className={`${mutedTextActionClass} ml-auto hidden transition hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2 sm:inline-flex`}
           type="button"
           onClick={() => toggleOfferingExpanded(offering.id)}
         >
           Edit
         </button>
         {canRemove ? (
-          <RemoveOfferingControl
-            offeringId={offering.id}
-            removeOffering={removeOffering}
-          />
+          <span className="hidden sm:inline-flex">
+            <RemoveOfferingControl
+              offeringId={offering.id}
+              removeOffering={removeOffering}
+            />
+          </span>
         ) : null}
+        <button
+          aria-label="Expand bird entry"
+          className="flex size-10 shrink-0 items-center justify-center rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:hidden"
+          type="button"
+          onClick={() => toggleOfferingExpanded(offering.id)}
+        >
+          <DisclosureChevron />
+        </button>
       </div>
       {hasDuplicateCombination ? (
         <p className="mt-2 text-base font-semibold text-amber-800">
@@ -628,7 +667,9 @@ function NumberField({
         ) : null}
         <input
           className={`${inputClass} ${prefix ? "pl-8" : ""}`}
+          inputMode={prefix ? "decimal" : "numeric"}
           min="0"
+          step={prefix ? "0.01" : "1"}
           type="number"
           value={value}
           onChange={(event) => onChange(event.target.value)}
@@ -730,7 +771,9 @@ function EntryStatus({ offering }: { offering: BirdOffering }) {
           className="block h-2.5 w-1.5 rotate-45 border-b-2 border-r-2 border-emerald-700"
         />
       ) : null}
-      {complete ? "Complete" : "Unfinished"}
+      <span className={complete ? "hidden sm:inline" : ""}>
+        {complete ? "Complete" : "Unfinished"}
+      </span>
     </span>
   );
 }
@@ -755,7 +798,7 @@ function findSelectedBreedOption(
   );
 }
 
-function getBirdsForSaleTitle(offering: BirdOffering, index: number) {
+function getBirdsForSaleTitle(offering: BirdOffering) {
   const breed = offering.breed.trim();
   const soldAs = offering.soldAs.trim();
 
@@ -765,7 +808,7 @@ function getBirdsForSaleTitle(offering: BirdOffering, index: number) {
 
   if (breed) return breed;
 
-  return `Bird entry #${index + 1}`;
+  return "New bird entry";
 }
 
 function getBirdsForSaleSummary(offering: BirdOffering) {
@@ -784,6 +827,21 @@ function getBirdsForSaleSummary(offering: BirdOffering) {
     `${quantity} available`,
     `${formatCurrency(price)} each`,
   ].join(" · ");
+}
+
+function getBirdsForSaleMobileSummary(offering: BirdOffering) {
+  const breed = offering.breed.trim();
+  const soldAs = offering.soldAs.trim();
+  const quantity = getNumberInputValue(offering.quantity);
+  const price = getNumberInputValue(offering.price);
+
+  return {
+    lineOne: breed && soldAs ? `${breed} - ${soldAs}` : "Finish bird details",
+    lineTwo:
+      quantity > 0 && price > 0
+        ? `${quantity} available - ${formatCurrency(price)} each`
+        : "",
+  };
 }
 
 function getBreedContentStatus({

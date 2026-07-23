@@ -1,3 +1,6 @@
+ "use client";
+
+import { useState } from "react";
 import { inputClass } from "./constants";
 import { PlanUpgradePrompt } from "../../../_components/plan-upgrade-prompt";
 import {
@@ -25,14 +28,10 @@ export function AgeBasedPriceChangesCard({
   const issues = getPriceAdjustmentIssues({ offerings, priceAdjustment });
   const stopPriceLabel =
     priceAdjustment.direction === "increase" ? "Maximum price" : "Minimum price";
+  const [mobileExpanded, setMobileExpanded] = useState(priceAdjustment.enabled);
 
-  return (
-    <SectionCard
-      badge="Optional"
-      className={stepLocked ? "opacity-60" : ""}
-      step="3"
-      title="Raise or lower prices over time"
-    >
+  function renderContent() {
+    return (
       <div className="space-y-3 sm:space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -120,7 +119,64 @@ export function AgeBasedPriceChangesCard({
           </div>
         ) : null}
       </div>
-    </SectionCard>
+    );
+  }
+
+  return (
+    <>
+      <section
+        className={`rounded-xl border border-transparent bg-white p-4 shadow-sm sm:hidden ${
+          stepLocked ? "opacity-60" : ""
+        }`}
+      >
+        <button
+          aria-expanded={mobileExpanded}
+          className="flex min-h-11 w-full items-start gap-3 text-left"
+          type="button"
+          onClick={() => setMobileExpanded((expanded) => !expanded)}
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900">
+            3
+          </span>
+          <span className="min-w-0 flex-1 text-xl font-bold leading-6 text-stone-950">
+            Raise or lower prices over time
+          </span>
+          <span className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-sm font-semibold text-stone-600">
+            Optional
+          </span>
+          <DisclosureChevron expanded={mobileExpanded} />
+        </button>
+        {mobileExpanded ? (
+          <div className="mt-3">{renderContent()}</div>
+        ) : (
+          <p className="mt-3 text-base font-medium leading-7 text-stone-600">
+            {introText ??
+              "Set future price changes to automatically update prices as your birds get older."}
+          </p>
+        )}
+      </section>
+      <div className="hidden sm:block">
+        <SectionCard
+          badge="Optional"
+          className={stepLocked ? "opacity-60" : ""}
+          step="3"
+          title="Raise or lower prices over time"
+        >
+          {renderContent()}
+        </SectionCard>
+      </div>
+    </>
+  );
+}
+
+function DisclosureChevron({ expanded = false }: { expanded?: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`mt-1 h-2.5 w-2.5 shrink-0 border-b-2 border-r-2 border-emerald-800/80 ${
+        expanded ? "rotate-45" : "-rotate-45"
+      }`}
+    />
   );
 }
 
