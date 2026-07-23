@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import type { MouseEvent } from "react";
+import { useRef, useState } from "react";
 import { inputClass } from "./constants";
 import { SectionCard } from "./SectionCard";
 import type { AgeAtAvailabilityResult, SpeciesOption } from "./types";
@@ -40,59 +41,64 @@ export function HatchInformationCard({
   const isComplete = Boolean(
     species.label.trim() && hatchDate.trim() && availableDate.trim(),
   );
-  const [mobileExpanded, setMobileExpanded] = useState(false);
+  const [mobileExpanded, setMobileExpanded] = useState(true);
   const isMobileExpanded = !isComplete || mobileExpanded;
 
   function renderBody() {
     return (
-      <>
-      <p className="text-base leading-7 text-stone-600">
-        {introText ??
-          "All birds added here should share the same hatch date. Start a separate listing for birds from another hatch."}
-      </p>
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        <SpeciesField
-          disabled={speciesReadOnly}
-          fieldId="species"
-          options={speciesOptions}
-          value={species}
-          onChange={setSpecies}
-        />
-        <DateField
-          fieldId="hatchDate"
-          glyph="/glyphs/calendar.png"
-          label="Hatch date"
-          value={hatchDate}
-          onChange={setHatchDate}
-        />
-        <DateField
-          fieldId="availableDate"
-          glyph="/glyphs/calendar.png"
-          label="Available date (earliest pickup)"
-          value={availableDate}
-          onChange={setAvailableDate}
-          helpText={
-            availableDateHelpText ??
-            "The earliest date buyers can receive these birds."
-          }
+      <div className="space-y-4 sm:space-y-0">
+        <div>
+          <p className="text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">
+            When did these birds hatch?
+          </p>
+          <p className="mt-2 text-base leading-7 text-stone-600">
+            {introText ??
+              "All birds added here should share the same hatch date. Start a separate listing for birds from another hatch."}
+          </p>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <SpeciesField
+            disabled={speciesReadOnly}
+            fieldId="species"
+            options={speciesOptions}
+            value={species}
+            onChange={setSpecies}
+          />
+          <DateField
+            fieldId="hatchDate"
+            glyph="/glyphs/calendar.png"
+            label="Hatch date"
+            value={hatchDate}
+            onChange={setHatchDate}
+          />
+          <DateField
+            fieldId="availableDate"
+            glyph="/glyphs/calendar.png"
+            label="Available date (earliest pickup)"
+            value={availableDate}
+            onChange={setAvailableDate}
+            helpText={
+              availableDateHelpText ??
+              "The earliest date buyers can receive these birds."
+            }
+          />
+        </div>
+        <AgeMessage ageAtAvailability={ageAtAvailability} />
+        <ReferenceMessages
+          referenceError={referenceError}
+          referenceLoading={referenceLoading}
+          usingFallbackSpecies={usingFallbackSpecies}
         />
       </div>
-      <AgeMessage ageAtAvailability={ageAtAvailability} />
-      <ReferenceMessages
-        referenceError={referenceError}
-        referenceLoading={referenceLoading}
-        usingFallbackSpecies={usingFallbackSpecies}
-      />
-      </>
     );
   }
 
   return (
     <>
-      <section className="rounded-xl border border-transparent bg-white p-4 shadow-sm sm:hidden">
+      <section className="rounded-xl border border-transparent bg-white p-5 shadow-sm sm:hidden">
         <button
           aria-expanded={isMobileExpanded}
-          className="flex min-h-11 w-full items-center gap-3 text-left"
+          className="flex min-h-12 w-full items-center gap-3 text-left"
           type="button"
           onClick={() => setMobileExpanded((expanded) => !expanded)}
         >
@@ -103,6 +109,9 @@ export function HatchInformationCard({
             Hatch details
           </span>
           {isComplete ? <CompleteIconLabel /> : null}
+          {!isMobileExpanded && isComplete ? (
+            <span className="text-sm font-semibold text-emerald-900">Edit</span>
+          ) : null}
           <DisclosureChevron expanded={isMobileExpanded} />
         </button>
         {!isMobileExpanded && isComplete ? (
@@ -315,12 +324,21 @@ function DateField({
   onChange: (value: string) => void;
   value: string;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function openPicker(event: MouseEvent<HTMLSpanElement>) {
+    if (event.target === inputRef.current) return;
+
+    inputRef.current?.focus();
+    inputRef.current?.showPicker?.();
+  }
+
   return (
     <label>
       <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
         {label}
       </span>
-      <span className="relative block">
+      <span className="relative block cursor-pointer" onClick={openPicker}>
         <Image
           className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
           src={glyph}
@@ -329,6 +347,7 @@ function DateField({
           height={18}
         />
         <input
+          ref={inputRef}
           className={`${inputClass} pl-10`}
           data-live-birds-field={fieldId}
           type="date"

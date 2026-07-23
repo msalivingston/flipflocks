@@ -82,7 +82,7 @@ export function ReviewPublishCard({
   return (
     <>
       <section
-        className={`rounded-xl border border-transparent bg-white p-4 shadow-sm sm:hidden ${
+        className={`rounded-xl border border-transparent bg-white p-5 shadow-sm sm:hidden ${
           stepLocked ? "opacity-60" : ""
         }`}
       >

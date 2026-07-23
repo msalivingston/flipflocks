@@ -1915,9 +1915,10 @@ export function LiveBirdsListingForm({
       disabled={Boolean(saveDraftDisabledReason) || saveDraftStatus === "saving"}
       isEditMode={isEditMode}
       onSaveDraft={handleSaveDraft}
+      onStartOver={() => setIsStartOverDialogOpen(true)}
       saveDraftStatus={saveDraftStatus}
     />
-    <DashboardPageContent className="bg-stone-50/60 max-sm:px-4 max-sm:py-4 max-sm:pb-24">
+    <DashboardPageContent className="bg-stone-50/60 max-sm:px-4 max-sm:py-5 max-sm:pb-24">
       <div className="max-w-7xl">
         <header className="mb-5 max-sm:hidden">
           <Link
@@ -2020,7 +2021,7 @@ export function LiveBirdsListingForm({
             className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]"
             key={formResetKey}
           >
-            <main className="space-y-4">
+            <main className="space-y-4 max-sm:space-y-6">
               {isEditMode && birdsForSaleGroupCount > 1 ? (
                 <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-base font-semibold leading-7 text-sky-900">
                   This listing includes multiple bird entries. Hatch date and
@@ -2086,6 +2087,7 @@ export function LiveBirdsListingForm({
                 <AgeBasedPriceChangesCard
                   offerings={offerings}
                   priceAdjustment={priceAdjustment}
+                  availableDate={availableDate}
                   locked={!plan.ageBasedPricingEnabled}
                   stepLocked={birdsForSaleStepLocked}
                   updatePriceAdjustment={updatePriceAdjustment}
@@ -2258,11 +2260,13 @@ function MobileLiveBirdsTaskHeader({
   disabled,
   isEditMode,
   onSaveDraft,
+  onStartOver,
   saveDraftStatus,
 }: {
   disabled: boolean;
   isEditMode: boolean;
   onSaveDraft: () => void;
+  onStartOver: () => void;
   saveDraftStatus: SaveDraftStatus;
 }) {
   if (isEditMode) return null;
@@ -2282,14 +2286,33 @@ function MobileLiveBirdsTaskHeader({
         <h1 className="text-center text-base font-bold text-stone-950">
           Add Live Birds
         </h1>
-        <button
-          className="justify-self-end rounded-md px-1 text-base font-semibold text-emerald-900 disabled:text-stone-400"
-          disabled={disabled || saveDraftStatus === "success"}
-          type="button"
-          onClick={onSaveDraft}
-        >
-          {saveDraftStatus === "saving" ? "Saving..." : "Save draft"}
-        </button>
+        <div className="flex justify-self-end items-center gap-1">
+          <button
+            className="rounded-md px-1 text-base font-semibold text-emerald-900 disabled:text-stone-400"
+            disabled={disabled || saveDraftStatus === "success"}
+            type="button"
+            onClick={onSaveDraft}
+          >
+            {saveDraftStatus === "saving" ? "Saving..." : "Save draft"}
+          </button>
+          <details className="relative">
+            <summary
+              aria-label="More actions"
+              className="flex size-10 cursor-pointer list-none items-center justify-center rounded-md text-xl font-bold text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+            >
+              ...
+            </summary>
+            <div className="absolute right-0 z-50 mt-1 min-w-36 rounded-md border border-stone-200 bg-white p-2 shadow-lg">
+              <button
+                className="flex min-h-10 w-full items-center rounded-md px-3 text-left text-base font-semibold text-stone-700 hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                type="button"
+                onClick={onStartOver}
+              >
+                Start over
+              </button>
+            </div>
+          </details>
+        </div>
       </div>
     </header>
   );

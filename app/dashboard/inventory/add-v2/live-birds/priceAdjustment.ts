@@ -147,3 +147,149 @@ export function formatPriceAdjustmentSummary(value: PriceAdjustmentState) {
 
   return `Start at the listed price when available. Then ${verb} by $${amount} ${cadence}, ${stopPhrase}.`;
 }
+
+export function getPriceAdjustmentExample({
+  availableDate,
+  offerings,
+  priceAdjustment,
+}: {
+  availableDate: string;
+  offerings: BirdOffering[];
+  priceAdjustment: PriceAdjustmentState;
+}) {
+  if (!priceAdjustment.enabled) return null;
+
+  const issues = getPriceAdjustmentIssues({ offerings, priceAdjustment });
+  if (issues.length > 0) return null;
+
+  const amount = Number(priceAdjustment.amount);
+  const intervalWeeks = Number(priceAdjustment.intervalWeeks);
+  const stopPrice =
+    priceAdjustment.direction === "increase"
+      ? Number(priceAdjustment.maxPrice)
+      : Number(priceAdjustment.minPrice);
+  const futureDate = addWeeksToDate(availableDate, intervalWeeks);
+
+  if (
+    !Number.isFinite(amount) ||
+    !Number.isInteger(intervalWeeks) ||
+    intervalWeeks <= 0 ||
+    !Number.isFinite(stopPrice)
+  ) {
+    return null;
+  }
+
+  const pricedOfferings = offerings
+    .map((offering) => {
+      const price = Number(offering.price);
+
+      if (!Number.isFinite(price) || price <= 0) return null;
+
+      return {
+        label: getOfferingExampleLabel(offering),
+        nextPrice: applyOnePriceAdjustment({
+          amount,
+          direction: priceAdjustment.direction,
+          price,
+          stopPrice,
+        }),
+        price,
+      };
+    })
+    .filter(Boolean) as Array<{
+      label: string;
+      nextPrice: number;
+      price: number;
+    }>;
+
+  if (pricedOfferings.length === 0 || !futureDate) return null;
+
+  const uniquePrices = new Set(
+    pricedOfferings.map((offering) => offering.price.toFixed(2)),
+  );
+
+  return {
+    direction: priceAdjustment.direction,
+    intervalLabel: intervalWeeks === 1 ? "every week" : `every ${intervalWeeks} weeks`,
+    line:
+      uniquePrices.size === 1
+        ? `Starting at ${formatCurrency(pricedOfferings[0].price)}, the price will ${priceAdjustment.direction} by ${formatCurrency(amount)} ${intervalWeeks === 1 ? "every week" : `every ${intervalWeeks} weeks`} ${getStopPhrase(priceAdjustment.direction, stopPrice)}.`
+        : `Prices will ${priceAdjustment.direction} by ${formatCurrency(amount)} ${intervalWeeks === 1 ? "every week" : `every ${intervalWeeks} weeks`} ${getStopPhrase(priceAdjustment.direction, stopPrice)}.`,
+    resultDate: formatDate(futureDate),
+    results:
+      uniquePrices.size === 1
+        ? [
+            `On ${formatDate(futureDate)}, these birds will be ${formatCurrency(
+              pricedOfferings[0].nextPrice,
+            )} each.`,
+          ]
+        : pricedOfferings.map(
+            (offering) =>
+              `${offering.label}: ${formatCurrency(offering.price)} -> ${formatCurrency(
+                offering.nextPrice,
+              )} on ${formatDate(futureDate)}`,
+          ),
+  };
+}
+
+function getStopPhrase(
+  direction: PriceAdjustmentState["direction"],
+  stopPrice: number,
+) {
+  return direction === "increase"
+    ? `up to ${formatCurrency(stopPrice)}`
+    : `down to ${formatCurrency(stopPrice)}`;
+}
+
+function applyOnePriceAdjustment({
+  amount,
+  direction,
+  price,
+  stopPrice,
+}: {
+  amount: number;
+  direction: PriceAdjustmentState["direction"];
+  price: number;
+  stopPrice: number;
+}) {
+  if (direction === "increase") return Math.min(price + amount, stopPrice);
+
+  return Math.max(price - amount, stopPrice);
+}
+
+function addWeeksToDate(value: string, weeks: number) {
+  if (!value) return null;
+
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+
+  date.setDate(date.getDate() + weeks * 7);
+
+  return date;
+}
+
+function getOfferingExampleLabel(offering: BirdOffering) {
+  const breed = offering.breed.trim();
+  const soldAs = offering.soldAs.trim();
+
+  if (breed && soldAs) return `${breed} ${soldAs.toLowerCase()}`;
+  if (breed) return breed;
+
+  return "Bird entry";
+}
+
+function formatDate(value: Date) {
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "long",
+  }).format(value);
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    maximumFractionDigits: 2,
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+    style: "currency",
+  }).format(value);
+}

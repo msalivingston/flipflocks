@@ -1,16 +1,18 @@
- "use client";
+"use client";
 
 import { useState } from "react";
 import { inputClass } from "./constants";
 import { PlanUpgradePrompt } from "../../../_components/plan-upgrade-prompt";
 import {
   formatPriceAdjustmentSummary,
+  getPriceAdjustmentExample,
   getPriceAdjustmentIssues,
 } from "./priceAdjustment";
 import { SectionCard } from "./SectionCard";
 import type { BirdOffering, PriceAdjustmentState } from "./types";
 
 export function AgeBasedPriceChangesCard({
+  availableDate,
   introText,
   offerings,
   priceAdjustment,
@@ -18,6 +20,7 @@ export function AgeBasedPriceChangesCard({
   updatePriceAdjustment,
   locked = false,
 }: {
+  availableDate: string;
   introText?: string;
   offerings: BirdOffering[];
   priceAdjustment: PriceAdjustmentState;
@@ -26,6 +29,11 @@ export function AgeBasedPriceChangesCard({
   locked?: boolean;
 }) {
   const issues = getPriceAdjustmentIssues({ offerings, priceAdjustment });
+  const example = getPriceAdjustmentExample({
+    availableDate,
+    offerings,
+    priceAdjustment,
+  });
   const stopPriceLabel =
     priceAdjustment.direction === "increase" ? "Maximum price" : "Minimum price";
   const [mobileExpanded, setMobileExpanded] = useState(priceAdjustment.enabled);
@@ -35,6 +43,9 @@ export function AgeBasedPriceChangesCard({
       <div className="space-y-3 sm:space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
+            <p className="text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">
+              How should the price change over time?
+            </p>
             <p className="text-base font-medium leading-7 text-stone-600">
               {introText ??
                 "Set future price changes to automatically update prices as your birds get older."}
@@ -65,7 +76,7 @@ export function AgeBasedPriceChangesCard({
 
         {priceAdjustment.enabled && !locked && !stepLocked ? (
           <div className="space-y-3 rounded-lg border border-transparent bg-stone-50/70 p-0 sm:space-y-4 sm:border-stone-200 sm:p-4">
-            <div className="grid gap-3 lg:grid-cols-[minmax(260px,1.35fr)_1fr_1fr_1fr]">
+            <div className="grid gap-3 sm:gap-4 lg:grid-cols-[minmax(260px,1.35fr)_1fr_1fr_1fr]">
               <PriceDirectionToggle
                 direction={priceAdjustment.direction}
                 onChange={(direction) =>
@@ -115,6 +126,16 @@ export function AgeBasedPriceChangesCard({
             >
               {formatPriceAdjustmentSummary(priceAdjustment)}
             </p>
+            {example ? (
+              <div className="rounded-md border border-stone-200 bg-white px-3 py-2 text-sm font-medium leading-6 text-stone-600">
+                <p>{example.line}</p>
+                <div className="mt-1 space-y-1">
+                  {example.results.map((result) => (
+                    <p key={result}>{result}</p>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
           </div>
         ) : null}
@@ -125,7 +146,7 @@ export function AgeBasedPriceChangesCard({
   return (
     <>
       <section
-        className={`rounded-xl border border-transparent bg-white p-4 shadow-sm sm:hidden ${
+        className={`rounded-xl border border-transparent bg-white p-5 shadow-sm sm:hidden ${
           stepLocked ? "opacity-60" : ""
         }`}
       >
@@ -147,7 +168,7 @@ export function AgeBasedPriceChangesCard({
           <DisclosureChevron expanded={mobileExpanded} />
         </button>
         {mobileExpanded ? (
-          <div className="mt-3">{renderContent()}</div>
+          <div className="mt-4">{renderContent()}</div>
         ) : (
           <p className="mt-3 text-base font-medium leading-7 text-stone-600">
             {introText ??

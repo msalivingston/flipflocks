@@ -82,13 +82,22 @@ export function BirdOfferingsCard({
       step="2"
       title="Birds for sale"
     >
-      <p
-        className={`text-base leading-7 ${
-          isLocked ? "text-stone-400" : "text-stone-600"
-        }`}
-      >
-        Enter the total number of birds that share the same breed, sex/type, and price. Add a separate entry for anything different.
-      </p>
+      <div>
+        <p
+          className={`text-base font-bold text-stone-950 sm:text-sm sm:font-semibold ${
+            isLocked ? "text-stone-400" : ""
+          }`}
+        >
+          What birds are you selling from this hatch?
+        </p>
+        <p
+          className={`mt-2 text-base leading-7 ${
+            isLocked ? "text-stone-400" : "text-stone-600"
+          }`}
+        >
+          Enter the total number of birds that share the same breed, sex/type, and price. Add a separate entry for anything different.
+        </p>
+      </div>
       {breedOptionsMessage ? (
         <p className="mt-4 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-base font-semibold leading-7 text-stone-600">
           {breedOptionsMessage}
@@ -101,7 +110,7 @@ export function BirdOfferingsCard({
         </p>
       ) : null}
       {!isLocked ? (
-        <div className="mt-3 space-y-3 sm:mt-4">
+        <div className="mt-4 space-y-4 sm:mt-4 sm:space-y-3">
           {offerings.map((offering, index) =>
             offering.expanded ? (
               <ExpandedOfferingCard
@@ -141,14 +150,14 @@ export function BirdOfferingsCard({
         </div>
       ) : null}
 
-      <div className="mt-3 flex flex-col gap-2 sm:mt-4 sm:flex-row sm:flex-wrap sm:items-center">
+      <div className="mt-5 flex flex-col gap-2 sm:mt-4 sm:flex-row sm:flex-wrap sm:items-center">
         <button
           className="inline-flex min-h-12 w-full items-center justify-center rounded-md border border-emerald-800 bg-white px-4 text-base font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:border-stone-200 disabled:bg-stone-100 disabled:text-stone-400 sm:min-h-10 sm:w-auto sm:border-emerald-800 sm:bg-emerald-800 sm:text-sm sm:font-semibold sm:text-white sm:hover:bg-emerald-900"
           disabled={isLocked}
           onClick={addOffering}
           type="button"
         >
-          + Add different birds from this hatch
+          + Add more birds from this hatch date
         </button>
         <p className="text-base font-medium leading-7 text-stone-500 sm:order-last sm:w-full">
           Use this for another breed, sex/type, quantity, or current price.
@@ -262,7 +271,7 @@ function ExpandedOfferingCard({
       className="scroll-mt-20 rounded-xl border border-emerald-200 bg-white shadow-sm sm:rounded-lg sm:bg-white"
       ref={cardRef}
     >
-      <div className="flex items-start justify-between gap-3 border-b border-stone-100 px-0 py-3 sm:border-emerald-100 sm:px-4">
+      <div className="flex items-start justify-between gap-3 border-b border-stone-100 px-0 py-4 sm:border-emerald-100 sm:px-4 sm:py-3">
         <div className="flex min-w-0 flex-1 items-start gap-3 text-left">
           <EntryIndex index={index} />
           <span className="min-w-0">
@@ -309,62 +318,66 @@ function ExpandedOfferingCard({
         </div>
       </div>
 
-      <div className="grid gap-3 px-0 py-4 sm:gap-4 sm:px-4 sm:py-4 lg:grid-cols-4">
-        <div>
+      <div className="grid gap-0 px-0 py-5 sm:gap-4 sm:px-4 sm:py-4 lg:grid-cols-4">
+        <div className="space-y-4 border-b border-stone-100 pb-5 sm:contents sm:border-0 sm:pb-0">
+          <div>
+            <SelectField
+              disabled={isEditMode && Boolean(offering.inventoryItemId)}
+              fieldName="breed"
+              label="Breed"
+              options={breedOptions}
+              value={offering.breed}
+              selectedBreedId={offering.breedId ?? null}
+              selectedId={offering.sellerBreedProfileId}
+              onChange={(option) => updateOfferingBreed(offering.id, option)}
+            />
+            <button
+              className="mt-2 inline-flex whitespace-nowrap text-left text-sm font-semibold text-emerald-800 underline-offset-4 transition hover:text-emerald-950 hover:underline disabled:cursor-not-allowed disabled:text-stone-400 disabled:no-underline"
+              disabled={!canAddCustomBreed}
+              title={canAddCustomBreed ? undefined : "Select a species first."}
+              type="button"
+              onClick={() => onOpenCustomBreedModal(offering.id)}
+            >
+              + Add Custom Breed
+            </button>
+          </div>
           <SelectField
-            disabled={isEditMode && Boolean(offering.inventoryItemId)}
-            fieldName="breed"
-            label="Breed"
-            options={breedOptions}
-            value={offering.breed}
-            selectedBreedId={offering.breedId ?? null}
-            selectedId={offering.sellerBreedProfileId}
-            onChange={(option) => updateOfferingBreed(offering.id, option)}
+            label="Sold as (sex/type)"
+            options={soldAsOptions.map((option) => ({
+              id: option,
+              label: option,
+              speciesId: null,
+              breedId: null,
+              catalogImageUrl: null,
+              catalogDescription: null,
+              sellerPhotoUrl: null,
+              sellerDescription: null,
+              source: "fallback",
+            }))}
+            value={offering.soldAs}
+            selectedBreedId={null}
+            selectedId={offering.soldAs}
+            disabledOptionLabels={
+              plan.flockGroupListingsEnabled ? [] : ["Flock"]
+            }
+            onChange={(option) =>
+              updateOffering(offering.id, { soldAs: option.label })
+            }
           />
-          <button
-            className="mt-2 inline-flex whitespace-nowrap text-left text-sm font-semibold text-emerald-800 underline-offset-4 transition hover:text-emerald-950 hover:underline disabled:cursor-not-allowed disabled:text-stone-400 disabled:no-underline"
-            disabled={!canAddCustomBreed}
-            title={canAddCustomBreed ? undefined : "Select a species first."}
-            type="button"
-            onClick={() => onOpenCustomBreedModal(offering.id)}
-          >
-            + Add Custom Breed
-          </button>
         </div>
-        <SelectField
-          label="Sold as (sex/type)"
-          options={soldAsOptions.map((option) => ({
-            id: option,
-            label: option,
-            speciesId: null,
-            breedId: null,
-            catalogImageUrl: null,
-            catalogDescription: null,
-            sellerPhotoUrl: null,
-            sellerDescription: null,
-            source: "fallback",
-          }))}
-          value={offering.soldAs}
-          selectedBreedId={null}
-          selectedId={offering.soldAs}
-          disabledOptionLabels={
-            plan.flockGroupListingsEnabled ? [] : ["Flock"]
-          }
-          onChange={(option) =>
-            updateOffering(offering.id, { soldAs: option.label })
-          }
-        />
-        <NumberField
-          label="Quantity available"
-          value={offering.quantity}
-          onChange={(value) => updateOffering(offering.id, { quantity: value })}
-        />
-        <NumberField
-          label="Price per bird"
-          prefix="$"
-          value={offering.price}
-          onChange={(value) => updateOffering(offering.id, { price: value })}
-        />
+        <div className="mt-5 grid gap-4 sm:contents">
+          <NumberField
+            label="Quantity available"
+            value={offering.quantity}
+            onChange={(value) => updateOffering(offering.id, { quantity: value })}
+          />
+          <NumberField
+            label="Price per bird"
+            prefix="$"
+            value={offering.price}
+            onChange={(value) => updateOffering(offering.id, { price: value })}
+          />
+        </div>
       </div>
       {!plan.flockGroupListingsEnabled ? (
         <PlanUpgradePrompt
@@ -381,7 +394,7 @@ function ExpandedOfferingCard({
       ) : null}
 
       {hasBreed ? (
-      <div className="border-t border-stone-100 px-0 py-3 sm:border-stone-200 sm:px-4 sm:py-3">
+      <div className="border-t border-stone-100 px-0 py-4 sm:border-stone-200 sm:px-4 sm:py-3">
         <button
           className="flex min-h-12 w-full items-center justify-between gap-3 rounded-md border border-stone-200 bg-white px-3 py-3 text-left shadow-sm transition hover:border-emerald-800/30 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-0"
           type="button"
