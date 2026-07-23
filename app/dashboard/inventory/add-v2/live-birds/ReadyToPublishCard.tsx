@@ -27,31 +27,31 @@ export function ReadyToPublishCard({
   const readyToPublish = areAllReadinessChecksComplete(readiness);
 
   return (
-    <SidebarCard title="Ready to Publish">
+    <SidebarCard title="Ready to publish">
       <div className="space-y-3">
         <ChecklistRow
           complete={readiness.hatchInformationComplete}
-          label="Hatch information complete"
+          label="Hatch details complete"
         />
         <ChecklistRow
           complete={readiness.birdOfferingsAdded}
-          label="Birds for Sale added"
+          label="Birds added"
         />
         <ChecklistRow
           complete={readiness.birdQuantitiesEntered}
-          label="Quantities entered"
+          label="Quantities complete"
         />
         <ChecklistRow
           complete={readiness.pricingEntered}
-          label="Pricing entered"
+          label="Prices complete"
         />
         <ChecklistRow
           complete={readiness.buyerContentComplete}
-          label="Buyer content complete"
+          label="Buyer details complete"
         />
       </div>
       <p
-        className={`mt-5 rounded-md border px-3 py-2 text-base font-semibold sm:text-sm ${
+        className={`mt-5 rounded-md border px-3 py-2 text-base font-semibold leading-7 ${
           readyToPublish
             ? "border-emerald-200 bg-emerald-50 text-emerald-800"
             : "border-stone-200 bg-stone-50 text-stone-600"
@@ -86,7 +86,7 @@ function ChecklistRow({
   label: string;
 }) {
   return (
-    <div className="flex items-center gap-3 text-base font-medium text-stone-700 sm:text-sm">
+    <div className="flex items-center gap-3 text-base font-medium text-stone-700">
       <span
         className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full sm:h-5 sm:w-5 ${
           complete

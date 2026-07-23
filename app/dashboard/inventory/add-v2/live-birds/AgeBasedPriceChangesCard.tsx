@@ -31,22 +31,14 @@ export function AgeBasedPriceChangesCard({
       badge="Optional"
       className={stepLocked ? "opacity-60" : ""}
       step="3"
-      title="Age-based price changes"
+      title="Raise or lower prices over time"
     >
       <div className="space-y-3 sm:space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-base font-medium leading-7 text-stone-600 sm:text-sm sm:leading-6">
+            <p className="text-base font-medium leading-7 text-stone-600">
               {introText ??
-                "Automatically raise or lower prices after the available date."}
-            </p>
-            <p className="mt-1 text-sm font-medium leading-6 text-stone-500">
-              Price changes begin after the first available date. The starting
-              price remains in effect when the birds first become available.
-            </p>
-            <p className="mt-1 text-sm font-medium leading-6 text-stone-500">
-              Applies to every Birds for Sale group in this hatch. Buyers only
-              see the current price.
+                "Set future price changes to automatically update prices as your birds get older."}
             </p>
           </div>
           <button
@@ -116,7 +108,7 @@ export function AgeBasedPriceChangesCard({
             </div>
 
             <p
-              className={`rounded-md border px-3 py-2 text-sm font-semibold ${
+              className={`rounded-md border px-3 py-2 text-base font-semibold leading-7 ${
                 issues.length > 0
                   ? "border-amber-200 bg-amber-50 text-amber-900"
                   : "border-emerald-200 bg-emerald-50 text-emerald-900"

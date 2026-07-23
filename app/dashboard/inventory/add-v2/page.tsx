@@ -155,7 +155,7 @@ function InventoryOptionCard({ option }: { option: InventoryOption }) {
             </span>
           )}
         </div>
-        <p className="mt-2 text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
+        <p className="mt-2 text-base leading-8 text-stone-600">
           {option.description}
         </p>
       </div>

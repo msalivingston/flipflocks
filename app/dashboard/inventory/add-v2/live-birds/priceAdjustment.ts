@@ -115,7 +115,7 @@ export function getPriceAdjustmentIssues({
 }
 
 export function formatPriceAdjustmentSummary(value: PriceAdjustmentState) {
-  if (!value.enabled) return "Age-based price changes are off.";
+  if (!value.enabled) return "Price changes are off.";
 
   const verb = value.direction === "increase" ? "increase" : "decrease";
   const stopPrice =

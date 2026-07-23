@@ -38,10 +38,10 @@ export function ReviewPublishCard({
     >
       <div className="space-y-4 sm:space-y-6">
         <div className="space-y-2 sm:space-y-3">
-          <p className="text-base leading-7 text-stone-700 sm:text-sm sm:leading-6">
+          <p className="text-base leading-7 text-stone-700">
             Review the details above, then publish when everything looks right.
           </p>
-          <p className="text-base leading-7 text-stone-500 sm:text-sm sm:leading-6">
+          <p className="text-base leading-7 text-stone-500">
             Published birds will appear in your storefront inventory.
           </p>
         </div>
@@ -128,7 +128,7 @@ function FinalActionStatus({
     validationIssues.length === 0
   ) {
     return (
-      <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-base font-semibold text-emerald-800 sm:text-sm">
+      <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-base font-semibold leading-7 text-emerald-800">
         Everything is ready to publish.
       </p>
     );
@@ -138,7 +138,7 @@ function FinalActionStatus({
     <div className="space-y-2">
       {messages.map((message) => (
         <p
-          className={`rounded-md border px-3 py-2 text-base font-semibold sm:text-sm ${getStatusMessageClass(
+          className={`rounded-md border px-3 py-2 text-base font-semibold leading-7 ${getStatusMessageClass(
             message.status,
           )}`}
           key={message.key}
@@ -147,7 +147,7 @@ function FinalActionStatus({
         </p>
       ))}
       {visibleDisabledReason && validationIssues.length === 0 ? (
-        <p className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-base font-semibold text-stone-700 sm:text-sm">
+        <p className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-base font-semibold leading-7 text-stone-700">
           {visibleDisabledReason}
         </p>
       ) : null}
@@ -169,9 +169,9 @@ function PreflightList({
   onValidationIssueClick?: (issue: PublishValidationIssue) => void;
 }) {
   return (
-    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-base text-amber-900 sm:text-sm">
+    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-base text-amber-900">
       <p className="font-semibold">Finish these details before publishing:</p>
-      <ul className="mt-2 space-y-1 text-sm font-medium leading-6">
+      <ul className="mt-2 space-y-1 text-base font-medium leading-7">
         {items.map((item) => (
           <li key={item.id}>
             {onValidationIssueClick ? (

@@ -1,5 +1,6 @@
 import { mapSoldAsToInventoryType } from "./payloadPreview";
 import { getPriceAdjustmentIssues } from "./priceAdjustment";
+import { isBirdsForSaleGroupStarted } from "./helpers";
 import type { BirdOffering, PriceAdjustmentState, SpeciesOption } from "./types";
 
 export type SaveDraftPreflightResult = {
@@ -82,13 +83,14 @@ function getDateIssues({
 
 function getOfferingIssues(offerings: BirdOffering[]) {
   const issues: string[] = [];
+  const startedOfferings = offerings.filter(isBirdsForSaleGroupStarted);
 
-  if (offerings.length === 0) {
-    return ["Add at least one bird group."];
+  if (startedOfferings.length === 0) {
+    return ["Add at least one bird entry."];
   }
 
-  offerings.forEach((offering, index) => {
-    const label = `Group ${index + 1}`;
+  startedOfferings.forEach((offering, index) => {
+    const label = `Entry ${index + 1}`;
     const quantity = Number(offering.quantity);
     const price = Number(offering.price);
 
@@ -113,7 +115,7 @@ function getOfferingIssues(offerings: BirdOffering[]) {
 
   return [
     ...issues,
-    ...getDuplicateCombinationIssues(offerings),
+    ...getDuplicateCombinationIssues(startedOfferings),
   ];
 }
 
@@ -130,7 +132,7 @@ function getDuplicateCombinationIssues(offerings: BirdOffering[]) {
     const combinationKey = `${offering.sellerBreedProfileId}:${inventoryType}`;
     offeringLabelsByCombination.set(combinationKey, [
       ...(offeringLabelsByCombination.get(combinationKey) ?? []),
-      `Group ${index + 1}`,
+      `Entry ${index + 1}`,
     ]);
   });
 
@@ -152,13 +154,14 @@ function getPreflightWarnings({
   usingFallbackSpecies: boolean;
 }) {
   const warnings: string[] = [];
+  const startedOfferings = offerings.filter(isBirdsForSaleGroupStarted);
 
-  if (offerings.some((offering) => Number(offering.quantity) === 0)) {
-    warnings.push("One or more groups have quantity 0.");
+  if (startedOfferings.some((offering) => Number(offering.quantity) === 0)) {
+    warnings.push("One or more entries have quantity 0.");
   }
 
-  if (offerings.some((offering) => Number(offering.price) === 0)) {
-    warnings.push("One or more groups have price 0.");
+  if (startedOfferings.some((offering) => Number(offering.price) === 0)) {
+    warnings.push("One or more entries have price 0.");
   }
 
   if (usingFallbackSpecies) {

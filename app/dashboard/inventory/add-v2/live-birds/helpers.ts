@@ -29,7 +29,7 @@ export function getAgeAtAvailability(
   }
 
   return {
-    message: `Age at availability: ${formatInventoryAgeLabel(diffDays)}`,
+    message: `These birds will be ${formatInventoryAgeLabel(diffDays)} when available.`,
     status: "ready",
   };
 }
@@ -51,7 +51,8 @@ export function getReadinessChecks({
     parsedHatchDate !== null &&
     parsedAvailableDate !== null &&
     getDateDifferenceDays(parsedHatchDate, parsedAvailableDate) >= 0;
-  const birdOfferingsAdded = offerings.some(isBirdsForSaleGroupStarted);
+  const startedOfferings = offerings.filter(isBirdsForSaleGroupStarted);
+  const birdOfferingsAdded = startedOfferings.length > 0;
 
   return {
     hatchInformationComplete:
@@ -62,15 +63,17 @@ export function getReadinessChecks({
     birdOfferingsAdded,
     birdQuantitiesEntered:
       birdOfferingsAdded &&
-      offerings.every(
+      startedOfferings.every(
         (offering) => getNumberInputValue(offering.quantity) > 0,
       ),
     pricingEntered:
       birdOfferingsAdded &&
-      offerings.every((offering) => getNumberInputValue(offering.price) > 0),
+      startedOfferings.every(
+        (offering) => getNumberInputValue(offering.price) > 0,
+      ),
     buyerContentComplete:
       birdOfferingsAdded &&
-      offerings.every(
+      startedOfferings.every(
         (offering) =>
           offering.breed.trim().length > 0 &&
           offering.soldAs.trim().length > 0,

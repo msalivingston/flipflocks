@@ -45,6 +45,7 @@ import {
   getBirdsForSaleGroupCount,
   getNumberInputValue,
   getReadinessChecks,
+  isBirdsForSaleGroupStarted,
 } from "./helpers";
 import { HatchInformationCard } from "./HatchInformationCard";
 import {
@@ -1014,25 +1015,30 @@ export function LiveBirdsListingForm({
     setOfferings((currentOfferings) => [
       ...currentOfferings.map((offering) => ({
         ...offering,
-        expanded: groupsReviewMode ? false : offering.expanded,
+        expanded: false,
       })),
       {
         ...createBlankOffering(offeringId),
-        expanded: groupsReviewMode,
+        expanded: true,
       },
     ]);
     setGroupsReviewMode(false);
-
-    if (groupsReviewMode) {
-      setScrollToOfferingId(offeringId);
-    }
+    setScrollToOfferingId(offeringId);
   }
 
   function finishAddingGroups() {
     setGroupsReviewMode(true);
     setOfferings((currentOfferings) =>
-      currentOfferings.map((offering) => ({ ...offering, expanded: false })),
+      pruneUntouchedOfferings(currentOfferings).map((offering) => ({
+        ...offering,
+        expanded: false,
+      })),
     );
+    window.setTimeout(() => {
+      document
+        .querySelector<HTMLElement>('[data-live-birds-section="price-changes"]')
+        ?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }, 0);
   }
 
   function focusPublishValidationIssue(issue: PublishValidationIssue) {
@@ -1104,10 +1110,16 @@ export function LiveBirdsListingForm({
     });
   }
 
-  async function saveBreedDescriptionsToLibrary({ storeId }: { storeId: string }) {
+  async function saveBreedDescriptionsToLibrary({
+    offeringsToSave = offerings,
+    storeId,
+  }: {
+    offeringsToSave?: BirdOffering[];
+    storeId: string;
+  }) {
     const descriptionsByProfileId = new Map<string, string>();
 
-    offerings.forEach((offering) => {
+    offeringsToSave.forEach((offering) => {
       if (!offering.sellerBreedProfileId) return;
 
       if (!descriptionsByProfileId.has(offering.sellerBreedProfileId)) {
@@ -1214,14 +1226,16 @@ export function LiveBirdsListingForm({
   }
 
   async function createHiddenDraft({
+    offeringsToSave = offerings,
     storeId,
   }: {
+    offeringsToSave?: BirdOffering[];
     storeId: string;
   }): Promise<{ ok: true; listingBatchId: string } | { ok: false; message: string }> {
     const payload = buildCreateLiveBirdsDraftPayload({
       availableDate,
       hatchDate,
-      offerings,
+      offerings: offeringsToSave,
       species,
       storeId,
     });
@@ -1230,7 +1244,10 @@ export function LiveBirdsListingForm({
       return { ok: false, message: "The draft payload could not be prepared." };
     }
 
-    const descriptionResult = await saveBreedDescriptionsToLibrary({ storeId });
+    const descriptionResult = await saveBreedDescriptionsToLibrary({
+      offeringsToSave,
+      storeId,
+    });
 
     if (!descriptionResult.ok) {
       return {
@@ -1273,9 +1290,11 @@ export function LiveBirdsListingForm({
 
   async function updateHiddenDraft({
     draftId,
+    offeringsToSave = offerings,
     storeId,
   }: {
     draftId: string;
+    offeringsToSave?: BirdOffering[];
     storeId: string;
   }): Promise<{ ok: true; listingBatchId: string } | { ok: false; message: string }> {
     const draftRowsResult = await loadListingRows({
@@ -1298,7 +1317,10 @@ export function LiveBirdsListingForm({
       };
     }
 
-    const descriptionResult = await saveBreedDescriptionsToLibrary({ storeId });
+    const descriptionResult = await saveBreedDescriptionsToLibrary({
+      offeringsToSave,
+      storeId,
+    });
 
     if (!descriptionResult.ok) {
       return {
@@ -1307,7 +1329,7 @@ export function LiveBirdsListingForm({
       };
     }
 
-    const basePrice = getBasePriceForOfferings(offerings);
+    const basePrice = getBasePriceForOfferings(offeringsToSave);
     const batchResult = await supabase.rpc("seller_update_listing_batch", {
       p_listing_batch_id: draftId,
       p_origin_date: hatchDate,
@@ -1328,7 +1350,7 @@ export function LiveBirdsListingForm({
       basePrice,
       currentRows,
       draftId,
-      offerings,
+      offerings: offeringsToSave,
     });
 
     if (!synced.ok) {
@@ -1527,14 +1549,16 @@ export function LiveBirdsListingForm({
 
   async function saveCurrentHiddenDraft({
     draftId,
+    offeringsToSave,
     storeId,
   }: {
     draftId: string | null;
+    offeringsToSave: BirdOffering[];
     storeId: string;
   }) {
     return draftId
-      ? updateHiddenDraft({ draftId, storeId })
-      : createHiddenDraft({ storeId });
+      ? updateHiddenDraft({ draftId, offeringsToSave, storeId })
+      : createHiddenDraft({ offeringsToSave, storeId });
   }
 
   async function saveDraftFromCurrentForm({
@@ -1563,11 +1587,18 @@ export function LiveBirdsListingForm({
       };
     }
 
+    const offeringsToSave = pruneUntouchedOfferings(offerings);
+
+    if (offeringsToSave.length !== offerings.length) {
+      setOfferings(offeringsToSave);
+    }
+
     setSaveDraftStatus("saving");
     setSaveDraftMessage(null);
 
     const saveResult = await saveCurrentHiddenDraft({
       draftId: currentSavedDraftId,
+      offeringsToSave,
       storeId: seller.store_id,
     });
 
@@ -1590,7 +1621,17 @@ export function LiveBirdsListingForm({
       "Draft saved. You can find it in Saved drafts at the bottom of the Add Inventory page until it is published.",
     );
 
-    setSavedFormSnapshot(currentFormSnapshot);
+    setSavedFormSnapshot(
+      getLiveBirdsFormSnapshot({
+        availableDate,
+        hatchDate,
+        offerings: offeringsToSave,
+        priceAdjustment: plan.ageBasedPricingEnabled
+          ? priceAdjustment
+          : defaultPriceAdjustment,
+        species,
+      }),
+    );
 
     return {
       ok: true as const,
@@ -1656,12 +1697,19 @@ export function LiveBirdsListingForm({
       return;
     }
 
+    const offeringsToSave = pruneUntouchedOfferings(offerings);
+
+    if (offeringsToSave.length !== offerings.length) {
+      setOfferings(offeringsToSave);
+    }
+
     setPublishStatus("publishing");
     setPublishMessage(null);
     setSaveDraftMessage(null);
 
     const saveResult = await saveCurrentHiddenDraft({
       draftId: currentSavedDraftId,
+      offeringsToSave,
       storeId: seller.store_id,
     });
 
@@ -1881,24 +1929,24 @@ export function LiveBirdsListingForm({
             {isEditMode ? "Inventory" : "Inventory / Add Inventory"}
           </Link>
           <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div>
+            <div className="min-w-0 lg:flex-1">
               <h1 className="text-3xl font-semibold text-stone-950">
                 {isEditMode ? "Edit Live Birds Listing" : "Add Live Birds"}
               </h1>
-              <p className="mt-2 max-w-3xl text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
+              <p className="mt-2 max-w-3xl text-base leading-7 text-stone-600">
                 {isEditMode
-                  ? "Update the hatch information, bird groups, pricing, and buyer content for this listing."
-                  : "Add birds from one hatch date, then create one or more groups for sale."}
+                  ? "Update the hatch details, bird entries, pricing, and buyer content for this listing."
+                  : "Add birds from one hatch date. Create a separate entry when the breed, sex/type, quantity, or current price is different."}
               </p>
               {!isEditMode && isLoadedDraft ? (
-                <p className="mt-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold leading-6 text-sky-800">
+                <p className="mt-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-base font-semibold leading-7 text-sky-800">
                   {isPublished
                     ? "Published to storefront."
                     : "Draft loaded. Save draft updates this saved draft."}
                 </p>
               ) : null}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap lg:shrink-0">
               {isEditMode ? (
                 <button
                   className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-3 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-9 sm:text-sm sm:font-semibold"
@@ -1946,7 +1994,7 @@ export function LiveBirdsListingForm({
         </header>
 
         {draftLoading ? (
-          <div className="rounded-xl border border-transparent bg-white px-5 py-8 text-base font-semibold text-stone-600 shadow-none sm:rounded-lg sm:border-stone-200 sm:text-sm sm:shadow-sm">
+          <div className="rounded-xl border border-transparent bg-white px-5 py-8 text-base font-semibold text-stone-600 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm">
             {isEditMode ? "Loading Live Birds listing..." : "Loading saved draft..."}
           </div>
         ) : draftLoadError ? (
@@ -1956,7 +2004,7 @@ export function LiveBirdsListingForm({
                 ? "Live Birds listing could not be loaded"
                 : "Draft could not be loaded"}
             </h2>
-            <p className="mt-2 text-base leading-7 text-red-800 sm:text-sm sm:leading-6">
+            <p className="mt-2 text-base leading-7 text-red-800">
               {draftLoadError}
             </p>
           </div>
@@ -1967,9 +2015,9 @@ export function LiveBirdsListingForm({
           >
             <main className="space-y-4">
               {isEditMode && birdsForSaleGroupCount > 1 ? (
-                <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold leading-6 text-sky-900">
-                  This listing includes multiple bird groups. Hatch date and
-                  available date apply to all groups in this listing.
+                <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-base font-semibold leading-7 text-sky-900">
+                  This listing includes multiple bird entries. Hatch date and
+                  available date apply to all birds in this listing.
                 </p>
               ) : null}
               <HatchInformationCard
@@ -1987,7 +2035,7 @@ export function LiveBirdsListingForm({
                 usingFallbackSpecies={usingFallbackSpecies}
                 availableDateHelpText={
                   isEditMode
-                    ? "This available date applies to every bird group in this listing."
+                    ? "This available date applies to every bird entry in this listing."
                     : undefined
                 }
                 introText={
@@ -2023,22 +2071,24 @@ export function LiveBirdsListingForm({
                 mode={mode}
               />
               {breedPhotoActionMessage ? (
-                <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold leading-6 text-emerald-900">
+                <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-base font-semibold leading-7 text-emerald-900">
                   {breedPhotoActionMessage}
                 </p>
               ) : null}
-              <AgeBasedPriceChangesCard
-                offerings={offerings}
-                priceAdjustment={priceAdjustment}
-                locked={!plan.ageBasedPricingEnabled}
-                stepLocked={birdsForSaleStepLocked}
-                updatePriceAdjustment={updatePriceAdjustment}
-                introText={
-                  isEditMode
-                    ? "These price changes apply to this listing."
-                    : undefined
-                }
-              />
+              <div data-live-birds-section="price-changes">
+                <AgeBasedPriceChangesCard
+                  offerings={offerings}
+                  priceAdjustment={priceAdjustment}
+                  locked={!plan.ageBasedPricingEnabled}
+                  stepLocked={birdsForSaleStepLocked}
+                  updatePriceAdjustment={updatePriceAdjustment}
+                  introText={
+                    isEditMode
+                      ? "These price changes apply to this listing."
+                      : undefined
+                  }
+                />
+              </div>
               {isEditMode ? (
                 <EditModeActionsCard
                   disabledReason={editSaveDisabledReason}
@@ -2306,7 +2356,7 @@ function StartOverDialog({
     >
       <div className="w-full max-w-md rounded-lg border border-stone-200 bg-white p-5 shadow-xl">
         <h2 className="text-lg font-semibold text-stone-950">Start over?</h2>
-        <p className="mt-2 text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
+        <p className="mt-2 text-base leading-7 text-stone-600">
           This will clear the information on this page. Saved drafts will not be
           deleted.
         </p>
@@ -2358,8 +2408,8 @@ function EditModeActionsCard({
           <h2 className="text-lg font-semibold text-stone-950">
             Ready to save?
           </h2>
-          <p className="mt-1 text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
-            Save listing-level details and updates to existing bird groups.
+          <p className="mt-1 text-base leading-7 text-stone-600">
+            Save listing-level details and updates to existing bird entries.
           </p>
         </div>
         {message ? (
@@ -2373,7 +2423,7 @@ function EditModeActionsCard({
             {message}
           </p>
         ) : disabledReason ? (
-          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-6 text-amber-800">
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-base font-semibold leading-7 text-amber-800">
             {disabledReason}
           </p>
         ) : null}
@@ -2425,7 +2475,7 @@ function EditModeSidebarCard({
     <SidebarCard title="Ready to Save">
       {message ? (
         <p
-          className={`rounded-md border px-3 py-2 text-base font-semibold sm:text-sm ${
+          className={`rounded-md border px-3 py-2 text-base font-semibold leading-7 ${
             status === "error"
               ? "border-red-200 bg-red-50 text-red-800"
               : "border-emerald-200 bg-emerald-50 text-emerald-900"
@@ -2434,11 +2484,11 @@ function EditModeSidebarCard({
           {message}
         </p>
       ) : disabledReason ? (
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-base font-semibold text-amber-800 sm:text-sm">
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-base font-semibold leading-7 text-amber-800">
           {disabledReason}
         </p>
       ) : (
-        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-base font-semibold text-emerald-900 sm:text-sm">
+        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-base font-semibold leading-7 text-emerald-900">
           Ready to save.
         </p>
       )}
@@ -2479,7 +2529,7 @@ function UnsavedNavigationDialog({
         <h2 className="text-lg font-semibold text-stone-950">
           Save this draft?
         </h2>
-        <p className="mt-2 text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
+        <p className="mt-2 text-base leading-7 text-stone-600">
           This inventory has not been saved. Save it as a draft before leaving?
         </p>
         {message ? (
@@ -2488,7 +2538,7 @@ function UnsavedNavigationDialog({
           </p>
         ) : null}
         {!canSaveDraft ? (
-          <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold leading-6 text-amber-800">
+          <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-base font-semibold leading-7 text-amber-800">
             This draft needs a few more details before it can be saved.
           </p>
         ) : null}
@@ -2593,11 +2643,11 @@ function getEditSaveBlockingIssues({
   }
 
   if (offerings.length === 0) {
-    issues.push("This listing needs at least one bird group.");
+    issues.push("This listing needs at least one bird entry.");
   }
 
   offerings.forEach((offering, index) => {
-    const label = `Group ${index + 1}`;
+    const label = `Entry ${index + 1}`;
     const quantity = Number(offering.quantity);
     const price = Number(offering.price);
 
@@ -2649,7 +2699,7 @@ function getDuplicateEditOfferingIssues(offerings: BirdOffering[]) {
     const combinationKey = `${offering.sellerBreedProfileId}:${inventoryType}`;
     offeringLabelsByCombination.set(combinationKey, [
       ...(offeringLabelsByCombination.get(combinationKey) ?? []),
-      `Group ${index + 1}`,
+      `Entry ${index + 1}`,
     ]);
   });
 
@@ -2730,13 +2780,13 @@ function getEditCurrentRowsValidationIssue({
         offering.inventoryItemId && !activeInventoryIds.has(offering.inventoryItemId),
     )
   ) {
-    return "Adding groups to an existing listing is coming soon.";
+    return "Adding entries to an existing listing is coming soon.";
   }
 
   if (
     activeRows.some((row) => !offeringInventoryIds.has(row.inventory_item_id))
   ) {
-    return "Group removal is not available yet.";
+    return "Entry removal is not available yet.";
   }
 
   for (const offering of offerings) {
@@ -2801,14 +2851,14 @@ async function syncExistingEditOfferings({
     if (!offering.sellerBreedProfileId) {
       return {
         ok: false,
-        message: `Group ${index + 1} is missing a breed.`,
+        message: `Entry ${index + 1} is missing a breed.`,
       };
     }
 
     if (inventoryType === "unknown") {
       return {
         ok: false,
-        message: `Select how the birds in Group ${index + 1} will be sold.`,
+        message: `Select how the birds in Entry ${index + 1} will be sold.`,
       };
     }
 
@@ -2836,7 +2886,7 @@ async function syncExistingEditOfferings({
         if (!listingBatchBreedId) {
           return {
             ok: false,
-            message: `Group ${index + 1} could not be prepared.`,
+            message: `Entry ${index + 1} could not be prepared.`,
           };
         }
 
@@ -2888,7 +2938,7 @@ async function syncExistingEditOfferings({
     if (!currentRow) {
       return {
         ok: false,
-        message: "This group is not currently active on the listing.",
+        message: "This entry is not currently active on the listing.",
       };
     }
 
@@ -2898,7 +2948,7 @@ async function syncExistingEditOfferings({
     ) {
       return {
         ok: false,
-        message: "Changing a group's breed is coming soon.",
+        message: "Changing an entry's breed is coming soon.",
       };
     }
 
@@ -2941,6 +2991,10 @@ function getActiveInventoryRows(rows: DraftInventoryRow[]) {
       row.inventory_visibility_status === "active" &&
       row.listing_batch_breed_visibility_status === "active",
   );
+}
+
+function pruneUntouchedOfferings(offerings: BirdOffering[]) {
+  return offerings.filter(isBirdsForSaleGroupStarted);
 }
 
 function parseDateValue(value: string) {
@@ -2996,7 +3050,7 @@ async function syncDraftOfferings({
     if (!offering.sellerBreedProfileId) {
       return {
         ok: false,
-        message: `Select a breed for Group ${index + 1}.`,
+        message: `Select a breed for Entry ${index + 1}.`,
       };
     }
 
@@ -3008,7 +3062,7 @@ async function syncDraftOfferings({
     if (inventoryType === "unknown") {
       return {
         ok: false,
-        message: `Select how the birds in Group ${index + 1} will be sold.`,
+        message: `Select how the birds in Entry ${index + 1} will be sold.`,
       };
     }
 
@@ -3035,7 +3089,7 @@ async function syncDraftOfferings({
       if (!listingBatchBreedId) {
         return {
           ok: false,
-          message: "The group could not be prepared.",
+          message: "The entry could not be prepared.",
         };
       }
 
@@ -3298,6 +3352,7 @@ function getPublishValidationIssues({
   species: SpeciesOption;
 }): PublishValidationIssue[] {
   const issues: PublishValidationIssue[] = [];
+  const startedOfferings = offerings.filter(isBirdsForSaleGroupStarted);
   const parsedHatchDate = parseDateValue(hatchDate);
   const parsedAvailableDate = parseDateValue(availableDate);
 
@@ -3337,16 +3392,16 @@ function getPublishValidationIssues({
     });
   }
 
-  if (offerings.length === 0) {
+  if (startedOfferings.length === 0) {
     issues.push({
       id: "missing-groups",
-      message: "Add at least one bird group.",
+      message: "Add at least one bird entry.",
       target: { type: "hatch", field: "species" },
     });
   }
 
-  offerings.forEach((offering, index) => {
-    const groupLabel = `Group ${index + 1}`;
+  startedOfferings.forEach((offering, index) => {
+    const groupLabel = `Entry ${index + 1}`;
     const target = { type: "offering", offeringId: offering.id } as const;
     const quantity = Number(offering.quantity);
     const price = Number(offering.price);
@@ -3418,8 +3473,11 @@ function getPublishValidationIssues({
 
   return [
     ...issues,
-    ...getDuplicatePublishValidationIssues(offerings),
-    ...getPriceAdjustmentIssues({ offerings, priceAdjustment }).map(
+    ...getDuplicatePublishValidationIssues(startedOfferings),
+    ...getPriceAdjustmentIssues({
+      offerings: startedOfferings,
+      priceAdjustment,
+    }).map(
       (message, index) => ({
         id: `price-adjustment-${index}`,
         message,
@@ -3467,7 +3525,7 @@ function getDuplicatePublishValidationIssues(
     const combinationKey = `${offering.sellerBreedProfileId}:${inventoryType}`;
     offeringLabelsByCombination.set(combinationKey, [
       ...(offeringLabelsByCombination.get(combinationKey) ?? []),
-      { label: `Group ${index + 1}`, offeringId: offering.id },
+      { label: `Entry ${index + 1}`, offeringId: offering.id },
     ]);
   });
 
@@ -3477,7 +3535,7 @@ function getDuplicatePublishValidationIssues(
       id: `duplicate-group-${index}`,
       message: `${formatGroupLabelList(
         offeringLabels.map((offeringLabel) => offeringLabel.label),
-      )} use the same breed and sale type. Update one group before publishing.`,
+      )} use the same breed and sale type. Update one entry before publishing.`,
       target: {
         type: "offering",
         offeringId: offeringLabels[0]?.offeringId ?? "",
