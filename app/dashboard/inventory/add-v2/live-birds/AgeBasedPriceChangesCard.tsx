@@ -128,8 +128,7 @@ export function AgeBasedPriceChangesCard({
             </p>
             {example ? (
               <div className="rounded-md border border-stone-200 bg-white px-3 py-2 text-sm font-medium leading-6 text-stone-600">
-                <p>{example.line}</p>
-                <div className="mt-1 space-y-1">
+                <div className="space-y-1">
                   {example.results.map((result) => (
                     <p key={result}>{result}</p>
                   ))}

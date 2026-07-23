@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import type { MouseEvent } from "react";
 import { useRef, useState } from "react";
 import { inputClass } from "./constants";
 import { SectionCard } from "./SectionCard";
@@ -324,32 +323,47 @@ function DateField({
   onChange: (value: string) => void;
   value: string;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const buttonText = value
+    ? formatMobileDate(value)
+    : label === "Hatch date"
+      ? "Choose hatch date"
+      : "Choose available date";
 
-  function openPicker(event: MouseEvent<HTMLSpanElement>) {
-    if (event.target === inputRef.current) return;
+  function openDatePicker() {
+    const input = dateInputRef.current;
 
-    inputRef.current?.focus();
-    inputRef.current?.showPicker?.();
+    if (!input) return;
+
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+      return;
+    }
+
+    input.focus();
+    input.click();
   }
 
   return (
-    <label>
+    <label className="block min-w-0">
       <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
         {label}
       </span>
-      <span className="relative block cursor-pointer" onClick={openPicker}>
-        <Image
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
-          src={glyph}
-          alt=""
-          width={18}
-          height={18}
-        />
+      <span className="relative block w-full max-w-full min-w-0">
+        <button
+          className={`${inputClass} flex w-full max-w-full min-w-0 items-center gap-3 pl-3 text-left`}
+          type="button"
+          onClick={openDatePicker}
+        >
+          <Image src={glyph} alt="" width={18} height={18} />
+          <span className="block min-w-0 truncate">{buttonText}</span>
+        </button>
         <input
-          ref={inputRef}
-          className={`${inputClass} pl-10`}
+          ref={dateInputRef}
+          aria-label={label}
+          className="sr-only"
           data-live-birds-field={fieldId}
+          tabIndex={-1}
           type="date"
           value={value}
           onChange={(event) => onChange(event.target.value)}

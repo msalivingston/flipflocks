@@ -268,10 +268,10 @@ function ExpandedOfferingCard({
 
   return (
     <div
-      className="scroll-mt-20 rounded-xl border border-emerald-200 bg-white shadow-sm sm:rounded-lg sm:bg-white"
+      className="scroll-mt-20 overflow-hidden rounded-xl border border-emerald-200 bg-white shadow-sm sm:rounded-lg sm:bg-white"
       ref={cardRef}
     >
-      <div className="flex items-start justify-between gap-3 border-b border-stone-100 px-0 py-4 sm:border-emerald-100 sm:px-4 sm:py-3">
+      <div className="flex items-start justify-between gap-3 border-b border-stone-100 px-4 py-4 sm:border-emerald-100 sm:px-4 sm:py-3">
         <div className="flex min-w-0 flex-1 items-start gap-3 text-left">
           <EntryIndex index={index} />
           <span className="min-w-0">
@@ -318,7 +318,7 @@ function ExpandedOfferingCard({
         </div>
       </div>
 
-      <div className="grid gap-0 px-0 py-5 sm:gap-4 sm:px-4 sm:py-4 lg:grid-cols-4">
+      <div className="grid gap-0 px-4 py-5 sm:gap-4 sm:px-4 sm:py-4 lg:grid-cols-4">
         <div className="space-y-4 border-b border-stone-100 pb-5 sm:contents sm:border-0 sm:pb-0">
           <div>
             <SelectField
@@ -394,7 +394,7 @@ function ExpandedOfferingCard({
       ) : null}
 
       {hasBreed ? (
-      <div className="border-t border-stone-100 px-0 py-4 sm:border-stone-200 sm:px-4 sm:py-3">
+      <div className="border-t border-stone-100 px-4 py-4 sm:border-stone-200 sm:px-4 sm:py-3">
         <button
           className="flex min-h-12 w-full items-center justify-between gap-3 rounded-md border border-stone-200 bg-white px-3 py-3 text-left shadow-sm transition hover:border-emerald-800/30 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-0"
           type="button"
@@ -598,7 +598,7 @@ function SelectField({
   });
 
   return (
-    <label>
+    <label className="block min-w-0">
       <span className="mb-1.5 block text-sm font-bold leading-5 text-stone-700 sm:font-semibold sm:text-stone-600">
         {label}
       </span>
@@ -668,7 +668,7 @@ function NumberField({
   value: string;
 }) {
   return (
-    <label>
+    <label className="block min-w-0">
       <span className="mb-1.5 block text-sm font-bold leading-5 text-stone-700 sm:font-semibold sm:text-stone-600">
         {label}
       </span>

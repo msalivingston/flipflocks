@@ -207,38 +207,29 @@ export function getPriceAdjustmentExample({
   const uniquePrices = new Set(
     pricedOfferings.map((offering) => offering.price.toFixed(2)),
   );
+  const availableDateLabel = formatDate(new Date(`${availableDate}T00:00:00`));
+  const intervalLabel =
+    intervalWeeks === 1 ? "1 week" : `${intervalWeeks} weeks`;
 
   return {
-    direction: priceAdjustment.direction,
-    intervalLabel: intervalWeeks === 1 ? "every week" : `every ${intervalWeeks} weeks`,
-    line:
-      uniquePrices.size === 1
-        ? `Starting at ${formatCurrency(pricedOfferings[0].price)}, the price will ${priceAdjustment.direction} by ${formatCurrency(amount)} ${intervalWeeks === 1 ? "every week" : `every ${intervalWeeks} weeks`} ${getStopPhrase(priceAdjustment.direction, stopPrice)}.`
-        : `Prices will ${priceAdjustment.direction} by ${formatCurrency(amount)} ${intervalWeeks === 1 ? "every week" : `every ${intervalWeeks} weeks`} ${getStopPhrase(priceAdjustment.direction, stopPrice)}.`,
-    resultDate: formatDate(futureDate),
     results:
       uniquePrices.size === 1
         ? [
-            `On ${formatDate(futureDate)}, these birds will be ${formatCurrency(
+            `Your starting price on ${availableDateLabel} is ${formatCurrency(
+              pricedOfferings[0].price,
+            )}. After ${intervalLabel}, it will be ${formatCurrency(
               pricedOfferings[0].nextPrice,
-            )} each.`,
+            )}.`,
           ]
         : pricedOfferings.map(
             (offering) =>
-              `${offering.label}: ${formatCurrency(offering.price)} -> ${formatCurrency(
+              `${offering.label}: Your starting price on ${availableDateLabel} is ${formatCurrency(
+                offering.price,
+              )}. After ${intervalLabel}, it will be ${formatCurrency(
                 offering.nextPrice,
-              )} on ${formatDate(futureDate)}`,
+              )}.`,
           ),
   };
-}
-
-function getStopPhrase(
-  direction: PriceAdjustmentState["direction"],
-  stopPrice: number,
-) {
-  return direction === "increase"
-    ? `up to ${formatCurrency(stopPrice)}`
-    : `down to ${formatCurrency(stopPrice)}`;
 }
 
 function applyOnePriceAdjustment({

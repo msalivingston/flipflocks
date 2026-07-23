@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { disabledButtonClass } from "./constants";
 import { SectionCard } from "./SectionCard";
 import type { SaveDraftPreflightResult } from "./saveDraftPreflight";
@@ -33,8 +32,6 @@ export function ReviewPublishCard({
   stepLocked?: boolean;
   validationIssues: PublishValidationIssue[];
 }) {
-  const [mobileExpanded, setMobileExpanded] = useState(false);
-
   function renderContent() {
     return (
       <div className="space-y-4 sm:space-y-6">
@@ -86,27 +83,15 @@ export function ReviewPublishCard({
           stepLocked ? "opacity-60" : ""
         }`}
       >
-        <button
-          aria-expanded={mobileExpanded}
-          className="flex min-h-11 w-full items-center gap-3 text-left"
-          type="button"
-          onClick={() => setMobileExpanded((expanded) => !expanded)}
-        >
+        <div className="flex min-h-11 w-full items-center gap-3 text-left">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900">
             4
           </span>
           <span className="min-w-0 flex-1 text-xl font-bold text-stone-950">
             Ready to publish?
           </span>
-          <DisclosureChevron expanded={mobileExpanded} />
-        </button>
-        {mobileExpanded ? (
-          <div className="mt-3">{renderContent()}</div>
-        ) : (
-          <p className="mt-3 text-base leading-7 text-stone-700">
-            Review the details above, then publish when everything looks right.
-          </p>
-        )}
+        </div>
+        <div className="mt-3">{renderContent()}</div>
       </section>
       <div className="hidden sm:block">
         <SectionCard
@@ -231,17 +216,6 @@ function PreflightList({
         ))}
       </ul>
     </div>
-  );
-}
-
-function DisclosureChevron({ expanded = false }: { expanded?: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`h-2.5 w-2.5 shrink-0 border-b-2 border-r-2 border-emerald-800/80 ${
-        expanded ? "rotate-45" : "-rotate-45"
-      }`}
-    />
   );
 }
 
