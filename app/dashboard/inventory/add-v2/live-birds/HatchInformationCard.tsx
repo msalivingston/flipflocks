@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { inputClass } from "./constants";
 import { SectionCard } from "./SectionCard";
 import type { AgeAtAvailabilityResult, SpeciesOption } from "./types";
@@ -65,14 +65,12 @@ export function HatchInformationCard({
           />
           <DateField
             fieldId="hatchDate"
-            glyph="/glyphs/calendar.png"
             label="Hatch date"
             value={hatchDate}
             onChange={setHatchDate}
           />
           <DateField
             fieldId="availableDate"
-            glyph="/glyphs/calendar.png"
             label="Available date (earliest pickup)"
             value={availableDate}
             onChange={setAvailableDate}
@@ -310,65 +308,29 @@ function getSpeciesOptionValue(option: SpeciesOption) {
 
 function DateField({
   fieldId,
-  glyph,
   helpText,
   label,
   onChange,
   value,
 }: {
   fieldId: string;
-  glyph: string;
   helpText?: string;
   label: string;
   onChange: (value: string) => void;
   value: string;
 }) {
-  const dateInputRef = useRef<HTMLInputElement>(null);
-  const buttonText = value
-    ? formatMobileDate(value)
-    : label === "Hatch date"
-      ? "Choose hatch date"
-      : "Choose available date";
-
-  function openDatePicker() {
-    const input = dateInputRef.current;
-
-    if (!input) return;
-
-    if (typeof input.showPicker === "function") {
-      input.showPicker();
-      return;
-    }
-
-    input.focus();
-    input.click();
-  }
-
   return (
     <label className="block min-w-0">
       <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
         {label}
       </span>
-      <span className="relative block w-full max-w-full min-w-0">
-        <button
-          className={`${inputClass} flex w-full max-w-full min-w-0 items-center gap-3 pl-3 text-left`}
-          type="button"
-          onClick={openDatePicker}
-        >
-          <Image src={glyph} alt="" width={18} height={18} />
-          <span className="block min-w-0 truncate">{buttonText}</span>
-        </button>
-        <input
-          ref={dateInputRef}
-          aria-label={label}
-          className="sr-only"
-          data-live-birds-field={fieldId}
-          tabIndex={-1}
-          type="date"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      </span>
+      <input
+        className={`${inputClass} block w-full max-w-full min-w-0`}
+        data-live-birds-field={fieldId}
+        type="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
       {helpText ? (
         <span className="mt-1.5 block text-base font-medium leading-6 text-stone-500">
           {helpText}
