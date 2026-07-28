@@ -7,16 +7,16 @@ export default function SellerOrdersPage() {
     <>
       <SellerPageHeader
         title="Orders"
-        description="Review pickup requests by status and open each order for next steps."
         action={
           <Link
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-emerald-800 px-4 text-sm font-bold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
+            className="absolute right-5 top-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-emerald-800 px-4 text-sm font-bold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 lg:static xl:min-h-10"
             href="/dashboard/orders/new"
           >
             <span aria-hidden="true" className="text-xl leading-none">
               +
             </span>
-            Create manual order
+            <span className="xl:hidden">New Order</span>
+            <span className="hidden xl:inline">Create manual order</span>
           </Link>
         }
       />

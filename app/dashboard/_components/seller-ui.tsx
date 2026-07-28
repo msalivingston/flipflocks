@@ -14,7 +14,7 @@ export function SellerPageHeader({
   action,
 }: SellerPageHeaderProps) {
   return (
-    <header className="flex flex-col gap-4 border-b border-stone-200 bg-white px-5 py-5 sm:px-7 lg:flex-row lg:items-center lg:justify-between">
+    <header className="relative flex flex-col gap-4 border-b border-stone-200 bg-white px-5 py-5 sm:px-7 lg:flex-row lg:items-center lg:justify-between">
       <div className="min-w-0">
         {eyebrow ? (
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-emerald-700">

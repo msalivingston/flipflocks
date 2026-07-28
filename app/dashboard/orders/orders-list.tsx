@@ -841,16 +841,14 @@ export function OrdersList() {
                 />
                 <input
                   className="seller-form-field min-h-12 rounded-lg"
-                  placeholder={`Search ${
-                    archiveView === "archived" ? "Archived" : "Current"
-                  } orders by buyer, order #, phone, item, or pickup notes`}
+                  placeholder="Search..."
                   style={{ paddingLeft: "3.5rem" }}
                   type="search"
                   value={searchQuery}
                   onChange={(event) => updateSearchQuery(event.target.value)}
                 />
               </label>
-              <label>
+              <label className="hidden xl:block">
                 <span className="sr-only">Sort orders</span>
                 <select
                   className="seller-form-field min-h-12 rounded-lg font-medium"
@@ -866,7 +864,20 @@ export function OrdersList() {
               </label>
             </div>
 
-            <div className="flex items-center gap-3 pb-1">
+            <MobileOrderFilters
+              archiveView={archiveView}
+              filter={filter}
+              pickupOptionFilter={pickupOptionFilter}
+              pickupOptions={pickupOptions}
+              showPickupOptionFilter={showPickupOptionFilter}
+              sort={sort}
+              onArchiveViewChange={updateArchiveView}
+              onFilterChange={updateFilter}
+              onPickupOptionChange={updatePickupOptionFilter}
+              onSortChange={setSort}
+            />
+
+            <div className="hidden items-center gap-3 pb-1 xl:flex">
               <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <OrderLifecycleFilters
                   counts={activeFilterCounts}
@@ -882,13 +893,15 @@ export function OrdersList() {
               />
             </div>
 
-            {showPickupOptionFilter ? (
-              <PickupOptionFilterControl
-                options={pickupOptions}
-                value={pickupOptionFilter}
-                onChange={updatePickupOptionFilter}
-              />
-            ) : null}
+            <div className="hidden xl:block">
+              {showPickupOptionFilter ? (
+                <PickupOptionFilterControl
+                  options={pickupOptions}
+                  value={pickupOptionFilter}
+                  onChange={updatePickupOptionFilter}
+                />
+              ) : null}
+            </div>
           </div>
         </SellerCard>
 
@@ -1091,8 +1104,36 @@ function OrdersTableCard({
   }, [isPartiallySelected]);
 
   return (
-    <SellerCard className="overflow-hidden rounded-2xl border-stone-200/80 shadow-[0_16px_38px_rgba(46,39,25,0.05)]">
-      <div className="flex flex-col gap-3 border-b border-stone-200/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <SellerCard className="overflow-visible rounded-2xl border-stone-200/80 shadow-[0_16px_38px_rgba(46,39,25,0.05)]">
+      <div className="border-b border-stone-200/80 px-4 py-3 xl:hidden">
+        <div>
+          <p className="text-base font-bold text-stone-950">Orders</p>
+          <p className="mt-0.5 text-sm text-stone-500">
+            {orders.length} {pluralize(orders.length, "order")}
+          </p>
+        </div>
+      </div>
+
+      {selectedVisibleCount > 0 ? (
+        <MobileBulkActions
+          allVisibleSelected={allVisibleSelected}
+          archiveView={archiveView}
+          isBulkActionSaving={isBulkActionSaving}
+          isBulkActionsMenuOpen={isBulkActionsMenuOpen}
+          isBulkPrintLoading={isBulkPrintLoading}
+          selectedCount={selectedVisibleCount}
+          onBulkActionsOpenChange={onBulkActionsOpenChange}
+          onOpenBulkArchive={onOpenBulkArchive}
+          onOpenBulkFulfillment={onOpenBulkFulfillment}
+          onOpenBulkMarkPaid={onOpenBulkMarkPaid}
+          onOpenBulkUnarchive={onOpenBulkUnarchive}
+          onOpenPickupSummary={onOpenPickupSummary}
+          onPrintSelectedOrders={onPrintSelectedOrders}
+          onToggleSelectAll={onToggleSelectAll}
+        />
+      ) : null}
+
+      <div className="hidden flex-col gap-3 border-b border-stone-200/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between xl:flex">
         <label className="flex min-h-12 items-center gap-3 text-base font-semibold text-stone-950 sm:min-h-10 sm:text-sm sm:font-medium">
           <input
             ref={selectAllRef}
@@ -1202,6 +1243,109 @@ function ManualOrderCreatedDialog({
             OK
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function MobileBulkActions({
+  allVisibleSelected,
+  archiveView,
+  isBulkActionSaving,
+  isBulkActionsMenuOpen,
+  isBulkPrintLoading,
+  selectedCount,
+  onBulkActionsOpenChange,
+  onOpenBulkArchive,
+  onOpenBulkFulfillment,
+  onOpenBulkMarkPaid,
+  onOpenBulkUnarchive,
+  onOpenPickupSummary,
+  onPrintSelectedOrders,
+  onToggleSelectAll,
+}: {
+  allVisibleSelected: boolean;
+  archiveView: OrderArchiveView;
+  isBulkActionSaving: boolean;
+  isBulkActionsMenuOpen: boolean;
+  isBulkPrintLoading: boolean;
+  selectedCount: number;
+  onBulkActionsOpenChange: (isOpen: boolean) => void;
+  onOpenBulkArchive: () => void;
+  onOpenBulkFulfillment: () => void;
+  onOpenBulkMarkPaid: () => void;
+  onOpenBulkUnarchive: () => void;
+  onOpenPickupSummary: () => void;
+  onPrintSelectedOrders: () => void;
+  onToggleSelectAll: () => void;
+}) {
+  const actionsDisabled = selectedCount === 0 || isBulkActionSaving;
+
+  return (
+    <div className="flex items-center gap-2 border-b border-stone-200/80 bg-[#fbfaf6] px-3 py-2.5 xl:hidden">
+      <button
+        aria-pressed={allVisibleSelected}
+        className="min-h-11 shrink-0 rounded-lg px-2 text-sm font-bold text-stone-600 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+        type="button"
+        onClick={onToggleSelectAll}
+      >
+        {selectedCount} selected
+      </button>
+      <div className="ml-auto flex min-w-0 items-center gap-1.5">
+        <button
+          className="min-h-11 rounded-lg border border-emerald-200 bg-white px-3 text-sm font-bold text-emerald-800 disabled:cursor-not-allowed disabled:opacity-45"
+          disabled={actionsDisabled}
+          type="button"
+          onClick={onOpenBulkMarkPaid}
+        >
+          Mark Paid
+        </button>
+        <button
+          className="min-h-11 rounded-lg border border-emerald-200 bg-white px-3 text-sm font-bold text-emerald-800 disabled:cursor-not-allowed disabled:opacity-45"
+          disabled={actionsDisabled}
+          type="button"
+          onClick={onOpenBulkFulfillment}
+        >
+          Mark Fulfilled
+        </button>
+        <details
+          className="relative"
+          open={isBulkActionsMenuOpen}
+          onToggle={(event) =>
+            onBulkActionsOpenChange(event.currentTarget.open)
+          }
+        >
+          <summary
+            aria-label="More bulk actions"
+            className={`flex size-11 cursor-pointer list-none items-center justify-center rounded-lg border border-emerald-200 bg-white text-xl font-bold text-emerald-800 ${
+              actionsDisabled ? "pointer-events-none opacity-45" : ""
+            }`}
+          >
+            <span aria-hidden="true">&hellip;</span>
+          </summary>
+          <div className="absolute right-0 z-30 mt-2 w-56 rounded-xl border border-stone-200 bg-white p-2 shadow-[0_18px_40px_rgba(46,39,25,0.16)]">
+            <QuickBulkActionButton
+              glyph="/glyphs/clipboard.png"
+              label="Pickup Summary"
+              onClick={onOpenPickupSummary}
+            />
+            <QuickBulkActionButton
+              disabled={isBulkPrintLoading}
+              glyph="/glyphs/printer.png"
+              label={isBulkPrintLoading ? "Loading print..." : "Print orders"}
+              onClick={onPrintSelectedOrders}
+            />
+            <QuickBulkActionButton
+              glyph="/glyphs/shopping-bag.png"
+              label={archiveView === "active" ? "Archive" : "Unarchive"}
+              onClick={
+                archiveView === "active"
+                  ? onOpenBulkArchive
+                  : onOpenBulkUnarchive
+              }
+            />
+          </div>
+        </details>
       </div>
     </div>
   );
@@ -2278,7 +2422,29 @@ function OrderRow({
 
   return (
     <article className="bg-white transition hover:bg-[#fffdf8]">
-      <div className="grid gap-3 px-4 py-3 xl:hidden">
+      <div className="xl:hidden">
+        <div className="grid min-h-28 grid-cols-[auto_minmax(0,1fr)] gap-3 border-b border-stone-200/80 px-4 py-3.5">
+          <label className="flex min-h-12 items-center">
+            <span className="sr-only">Select order {order.order_number}</span>
+            <input
+              aria-label={`Select order ${order.order_number}`}
+              checked={isSelected}
+              className="size-6 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
+              type="checkbox"
+              onChange={onToggleSelection}
+            />
+          </label>
+
+          <Link
+            className="min-w-0 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+            href={`/dashboard/orders/${order.order_id}`}
+          >
+            <MobileOrderRowContent order={order} />
+          </Link>
+        </div>
+      </div>
+
+      <div className="hidden">
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3">
           <label className="flex min-h-12 items-start pt-1">
             <input
@@ -2512,6 +2678,34 @@ function OrderRow({
   );
 }
 
+function MobileOrderRowContent({ order }: { order: SellerOrderRow }) {
+  const status = getCombinedOrderStatus(order);
+
+  return (
+    <div className="min-w-0">
+      <p className="text-sm font-medium text-stone-500">
+        {formatShortDate(order.created_at)}
+      </p>
+      <div className="mt-1 flex min-w-0 items-baseline justify-between gap-4">
+        <p className="truncate text-lg font-bold leading-6 text-stone-950">
+          {formatCustomerName(order)}
+        </p>
+        <p className="shrink-0 text-base font-extrabold text-stone-950">
+          {formatCurrency(order.total_amount)}
+        </p>
+      </div>
+      <p className="mt-0.5 text-sm font-medium text-stone-600">
+        #{order.order_number} <span className="px-1 text-stone-400">&bull;</span>{" "}
+        {formatOrderItems(order)}
+      </p>
+      <div className="mt-2 flex items-center gap-2">
+        <CombinedOrderStatusBadge status={status} />
+        {order.archived_at ? <OrderArchivedBadge /> : null}
+      </div>
+    </div>
+  );
+}
+
 function OrderItemsQuickview({ items }: { items: SellerOrderItemRow[] }) {
   if (items.length === 0) {
     return (
@@ -2552,6 +2746,102 @@ function OrderItemsQuickview({ items }: { items: SellerOrderItemRow[] }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function MobileOrderFilters({
+  archiveView,
+  filter,
+  pickupOptionFilter,
+  pickupOptions,
+  showPickupOptionFilter,
+  sort,
+  onArchiveViewChange,
+  onFilterChange,
+  onPickupOptionChange,
+  onSortChange,
+}: {
+  archiveView: OrderArchiveView;
+  filter: OrderFilter;
+  pickupOptionFilter: PickupOptionFilter;
+  pickupOptions: PickupOption[];
+  showPickupOptionFilter: boolean;
+  sort: OrderSort;
+  onArchiveViewChange: (value: OrderArchiveView) => void;
+  onFilterChange: (value: OrderFilter) => void;
+  onPickupOptionChange: (value: string) => void;
+  onSortChange: (value: OrderSort) => void;
+}) {
+  const statusValue = archiveView === "archived" ? "archived" : filter;
+
+  return (
+    <div className="grid gap-3 xl:hidden">
+      <div className="grid grid-cols-2 gap-3">
+        <label className="min-w-0 rounded-xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
+          <span className="block text-sm font-bold text-stone-700">Status</span>
+          <select
+            className="mt-1 min-h-8 w-full bg-transparent text-base font-normal text-stone-950 outline-none"
+            value={statusValue}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+
+              if (nextValue === "archived") {
+                onArchiveViewChange("archived");
+                return;
+              }
+
+              onFilterChange(nextValue as OrderFilter);
+            }}
+          >
+            <option value="all">Current</option>
+            <option value="ready_for_pickup">Ready for pickup</option>
+            <option value="completed">Completed</option>
+            <option value="canceled">Canceled</option>
+            <option value="archived">Archived</option>
+          </select>
+        </label>
+
+        <label className="min-w-0 rounded-xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
+          <span className="block text-sm font-bold text-stone-700">Sort</span>
+          <select
+            className="mt-1 min-h-8 w-full bg-transparent text-base font-normal text-stone-950 outline-none"
+            value={sort}
+            onChange={(event) => onSortChange(event.target.value as OrderSort)}
+          >
+            {orderSortOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <label className="flex min-h-20 items-center gap-3 rounded-xl border border-[#e8e1d4] bg-[#fffdf8] px-4 py-3 shadow-sm">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-50">
+          <Image src="/glyphs/calendar.png" alt="" width={20} height={20} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-base font-bold text-stone-950">
+            Pickup Option
+          </span>
+          <span className="sr-only">Choose a pickup option</span>
+          <select
+            className="mt-0.5 min-h-8 w-full bg-transparent text-base font-medium text-stone-800 outline-none disabled:text-stone-500"
+            disabled={!showPickupOptionFilter}
+            value={showPickupOptionFilter ? pickupOptionFilter : "__all__"}
+            onChange={(event) => onPickupOptionChange(event.target.value)}
+          >
+            <option value="__all__">All pickup options</option>
+            {pickupOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </span>
+      </label>
     </div>
   );
 }
