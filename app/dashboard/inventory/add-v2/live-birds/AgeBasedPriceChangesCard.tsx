@@ -52,7 +52,7 @@ export function AgeBasedPriceChangesCard({
             </p>
             <p className="text-base font-medium leading-7 text-stone-600">
               {introText ??
-                "Set future price changes to automatically update prices as your birds get older."}
+                "Automatically raise or lower prices on the schedule you choose."}
             </p>
           </div>
           <button
@@ -131,8 +131,11 @@ export function AgeBasedPriceChangesCard({
               {formatPriceAdjustmentSummary(priceAdjustment)}
             </p>
             {example ? (
-              <div className="rounded-md border border-stone-200 bg-white px-3 py-2 text-sm font-medium leading-6 text-stone-600">
-                <div className="space-y-1">
+              <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+                <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">
+                  Preview
+                </p>
+                <div className="mt-2 space-y-2 text-sm font-medium leading-6 text-stone-600">
                   {example.results.map((result) => (
                     <p key={result}>{result}</p>
                   ))}
@@ -191,7 +194,7 @@ export function AgeBasedPriceChangesCard({
         ) : (
           <p className="mt-3 text-base font-medium leading-7 text-stone-600">
             {priceAdjustment.enabled
-              ? formatPriceAdjustmentSummary(priceAdjustment)
+              ? getCompactPriceAdjustmentSummary(priceAdjustment)
               : "Automatically raise or lower prices on the schedule you choose."}
           </p>
         )}
@@ -235,35 +238,63 @@ function PriceDirectionToggle({
       <p className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
         Price direction
       </p>
-      <button
-        aria-label={
-          isIncrease
-            ? "Switch to decrease over time"
-            : "Switch to increase over time"
-        }
-        aria-pressed={isIncrease}
-        className="group flex min-h-12 w-full items-center justify-start gap-3 rounded-md px-1 text-left transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10"
-        type="button"
-        onClick={() => onChange(isIncrease ? "decrease" : "increase")}
+      <div
+        className="grid min-h-12 grid-cols-2 overflow-hidden rounded-lg border border-stone-300 bg-white p-1"
+        role="group"
+        aria-label="Price direction"
       >
-        <span
-          className={`text-base font-bold transition sm:text-sm sm:font-semibold ${
-            isIncrease ? "text-emerald-800" : "text-stone-400"
+        <button
+          aria-pressed={isIncrease}
+          className={`rounded-md px-3 text-sm font-bold transition-all focus:outline-none focus:ring-2 focus:ring-emerald-700 ${
+            isIncrease
+              ? "bg-emerald-800 text-white shadow-sm"
+              : "text-stone-600 hover:bg-stone-50"
           }`}
+          type="button"
+          onClick={() => onChange("increase")}
         >
           Increase
-        </span>
-        <SwitchTrack enabled={isIncrease} />
-        <span
-          className={`text-base font-bold transition sm:text-sm sm:font-semibold ${
-            isIncrease ? "text-stone-400" : "text-emerald-800"
+        </button>
+        <button
+          aria-pressed={!isIncrease}
+          className={`rounded-md px-3 text-sm font-bold transition-all focus:outline-none focus:ring-2 focus:ring-emerald-700 ${
+            !isIncrease
+              ? "bg-emerald-800 text-white shadow-sm"
+              : "text-stone-600 hover:bg-stone-50"
           }`}
+          type="button"
+          onClick={() => onChange("decrease")}
         >
           Decrease
-        </span>
-      </button>
+        </button>
+      </div>
     </div>
   );
+}
+
+function getCompactPriceAdjustmentSummary(value: PriceAdjustmentState) {
+  if (!value.enabled) return "No automatic price changes";
+
+  const amount = Number(value.amount);
+  const weeks = Number(value.intervalWeeks);
+  const stopPrice =
+    value.direction === "increase" ? Number(value.maxPrice) : Number(value.minPrice);
+
+  if (
+    !Number.isFinite(amount) ||
+    amount <= 0 ||
+    !Number.isFinite(weeks) ||
+    weeks <= 0 ||
+    !Number.isFinite(stopPrice)
+  ) {
+    return formatPriceAdjustmentSummary(value);
+  }
+
+  const direction = value.direction === "increase" ? "Increasing" : "Decreasing";
+  const cadence = weeks === 1 ? "week" : `${weeks} weeks`;
+  const boundary = value.direction === "increase" ? "Max" : "Min";
+
+  return `${direction} $${amount}/${cadence} • ${boundary} $${stopPrice}`;
 }
 
 function SwitchTrack({ enabled }: { enabled: boolean }) {

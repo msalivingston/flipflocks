@@ -76,6 +76,7 @@ export function BirdOfferingsCard({
   mode?: "create" | "edit";
 }) {
   const birdsForSaleGroupCount = getBirdsForSaleGroupCount(offerings);
+  const mobileSummary = getOfferingsMobileSummary(offerings);
   const plan = getPlanCapabilities(planKey);
   const isEditMode = mode === "edit";
   const isLocked = Boolean(stepLocked);
@@ -95,11 +96,7 @@ export function BirdOfferingsCard({
         <MobileLiveBirdsArtwork className="size-16 rounded-full" name="hen" />
       }
       mobileExpanded={mobileActive}
-      mobileSummary={
-        birdsForSaleGroupCount === 1
-          ? "1 bird group added"
-          : `${birdsForSaleGroupCount} bird groups added`
-      }
+      mobileSummary={mobileSummary}
       onMobileToggle={onMobileOpen}
       step="2"
       title="Birds for Sale"
@@ -290,7 +287,7 @@ function ExpandedOfferingCard({
 
   return (
     <div
-      className="scroll-mt-20 overflow-hidden rounded-xl border border-emerald-200 bg-white shadow-sm sm:rounded-lg sm:bg-white"
+      className="scroll-mt-20 overflow-hidden rounded-xl border border-emerald-500 border-l-4 bg-emerald-50/30 shadow-[0_8px_24px_rgba(21,128,61,0.12)] sm:rounded-lg sm:border-l sm:bg-white"
       ref={cardRef}
     >
       <div className="flex items-start justify-between gap-3 border-b border-stone-100 px-4 py-4 sm:border-emerald-100 sm:px-4 sm:py-3">
@@ -745,6 +742,7 @@ function BreedPhotoPanel({
             mode="public-content"
             storeId={storeId}
             title="Breed photo"
+            mobileCompact
             onReload={onBreedPhotosChanged}
           />
         ) : (
@@ -877,6 +875,35 @@ function getBirdsForSaleMobileSummary(offering: BirdOffering) {
         ? `${quantity} available - ${formatCurrency(price)} each`
         : "",
   };
+}
+
+function getOfferingsMobileSummary(offerings: BirdOffering[]) {
+  const startedOfferings = offerings.filter((offering) => {
+    return (
+      offering.breed.trim() ||
+      offering.soldAs.trim() ||
+      getNumberInputValue(offering.quantity) > 0 ||
+      getNumberInputValue(offering.price) > 0
+    );
+  });
+  const groupCount = startedOfferings.length;
+  const birdCount = startedOfferings.reduce(
+    (total, offering) => total + getNumberInputValue(offering.quantity),
+    0,
+  );
+  const prices = startedOfferings
+    .map((offering) => getNumberInputValue(offering.price))
+    .filter((price) => price > 0);
+  const averagePrice =
+    prices.length > 0
+      ? prices.reduce((total, price) => total + price, 0) / prices.length
+      : 0;
+
+  if (groupCount === 0) return "No bird groups added";
+
+  return `${groupCount} ${groupCount === 1 ? "group" : "groups"} • ${birdCount} ${
+    birdCount === 1 ? "bird" : "birds"
+  }${averagePrice > 0 ? ` • Avg ${formatCurrency(averagePrice)}` : ""}`;
 }
 
 function getBreedContentStatus({

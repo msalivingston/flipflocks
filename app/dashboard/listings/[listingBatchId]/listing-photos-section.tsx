@@ -84,6 +84,7 @@ export function ListingPhotosSection({
   onReload,
   storeId,
   title = "Photos",
+  mobileCompact = false,
 }: {
   canManage: boolean;
   description?: string;
@@ -96,6 +97,7 @@ export function ListingPhotosSection({
   onReload: () => void;
   storeId: string;
   title?: string;
+  mobileCompact?: boolean;
 }) {
   const mediaEntityId = entityId ?? listingBatchId;
   const [localMediaItems, setLocalMediaItems] =
@@ -422,6 +424,7 @@ export function ListingPhotosSection({
         photos={dashboardPhotos}
         removePhotoContext={removePhotoContext}
         title={title}
+        mobileCompact={mobileCompact}
         onAddPhotos={(files) => void uploadPhotos(files)}
         onRemovePhoto={(photo) => {
           const listingPhoto = orderedPhotos.find(

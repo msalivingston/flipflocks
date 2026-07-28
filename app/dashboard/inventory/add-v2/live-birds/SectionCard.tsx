@@ -27,7 +27,9 @@ export function SectionCard({
 
   return (
     <section
-      className={`rounded-2xl border border-stone-200 bg-white p-5 shadow-none transition-colors sm:rounded-lg sm:p-5 sm:shadow-sm ${className}`}
+      className={`rounded-2xl border border-stone-200 bg-white shadow-none transition-all duration-200 sm:rounded-lg sm:p-5 sm:shadow-sm ${
+        hasMobileDisclosure && !mobileExpanded ? "p-3.5" : "p-5"
+      } ${className}`}
     >
       <button
         aria-expanded={hasMobileDisclosure ? mobileExpanded : undefined}
@@ -39,11 +41,20 @@ export function SectionCard({
         onClick={onMobileToggle}
       >
         {mobileArtwork ? (
-          <span className="sm:hidden">{mobileArtwork}</span>
+          <span
+            className={`transition-transform duration-200 sm:hidden ${
+              mobileExpanded ? "" : "scale-75"
+            }`}
+          >
+            {mobileArtwork}
+          </span>
         ) : null}
         <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900 max-sm:bg-emerald-800 max-sm:text-white sm:size-8 sm:text-sm">
           {mobileComplete ? (
-            <span aria-label="Complete" className="text-lg">
+            <span
+              aria-label="Complete"
+              className="animate-[live-birds-check_240ms_ease-out] text-lg"
+            >
               ✓
             </span>
           ) : (
@@ -68,7 +79,7 @@ export function SectionCard({
         ) : null}
       </button>
       {!mobileExpanded && mobileSummary ? (
-        <div className="mt-2 text-sm font-medium leading-5 text-stone-600 sm:hidden">
+        <div className="mt-1 pl-11 text-sm font-medium leading-5 text-stone-600 sm:hidden">
           {mobileSummary}
         </div>
       ) : null}

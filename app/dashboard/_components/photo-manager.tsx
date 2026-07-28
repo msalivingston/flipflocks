@@ -47,6 +47,7 @@ export function PhotoManager({
   photos,
   removePhotoContext = "item",
   title = "Photos",
+  mobileCompact = false,
 }: {
   acceptedTypes: readonly string[];
   canManage: boolean;
@@ -71,6 +72,7 @@ export function PhotoManager({
   photos: DashboardPhoto[];
   removePhotoContext?: string;
   title?: string;
+  mobileCompact?: boolean;
 }) {
   const headingId = useId();
   const [draftPhotos, setDraftPhotos] = useState(photos);
@@ -309,7 +311,13 @@ export function PhotoManager({
         ) : null}
 
         {featuredPhoto ? (
-          <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.9fr)]">
+          <div
+            className={`mt-4 grid gap-3 ${
+              mobileCompact
+                ? "grid-cols-[minmax(0,1.25fr)_minmax(6.5rem,0.75fr)] lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.9fr)]"
+                : "lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.9fr)]"
+            }`}
+          >
             <PhotoTile
               canManage={canManage}
               canMoveBack={false}
@@ -320,6 +328,7 @@ export function PhotoManager({
               photo={featuredPhoto}
               registerTile={setTileRef}
               variant="featured"
+              mobileCompact={mobileCompact}
               onBeginDrag={beginDrag}
               onEdit={
                 allowCropEdit
@@ -347,7 +356,11 @@ export function PhotoManager({
                 setOpenMenuId(null);
               }}
             />
-            <div className="grid grid-cols-2 content-start gap-3">
+            <div
+              className={`grid content-start gap-3 ${
+                mobileCompact ? "grid-cols-1" : "grid-cols-2"
+              }`}
+            >
               {secondaryPhotos.map((photo, index) => (
                 <PhotoTile
                   canManage={canManage}
@@ -358,6 +371,7 @@ export function PhotoManager({
                   photo={photo}
                   registerTile={setTileRef}
                   variant="secondary"
+                  mobileCompact={mobileCompact}
                   onBeginDrag={beginDrag}
                   onEdit={
                     allowCropEdit
@@ -395,6 +409,7 @@ export function PhotoManager({
                   key={`add-photo-${index}`}
                   maxFileSizeMb={maxFileSizeMb}
                   onAddPhotos={onAddPhotos}
+                  mobileFillHeight={mobileCompact}
                 />
               ))}
             </div>
@@ -470,6 +485,7 @@ function PhotoTile({
   photo,
   registerTile,
   variant,
+  mobileCompact,
 }: {
   canManage: boolean;
   canMoveBack: boolean;
@@ -489,6 +505,7 @@ function PhotoTile({
   photo: DashboardPhoto;
   registerTile: (photoId: string, node: HTMLElement | null) => void;
   variant: "featured" | "secondary";
+  mobileCompact: boolean;
 }) {
   return (
     <figure
@@ -534,7 +551,9 @@ function PhotoTile({
           <>
             <button
               aria-label={`Remove ${photo.filename || photo.label}`}
-              className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full border border-white/70 bg-white/90 text-sm font-bold leading-none text-stone-700 shadow-sm transition hover:bg-white hover:text-red-700"
+              className={`absolute right-2 top-2 size-7 items-center justify-center rounded-full border border-white/70 bg-white/90 text-sm font-bold leading-none text-stone-700 shadow-sm transition hover:bg-white hover:text-red-700 ${
+                mobileCompact ? "hidden sm:flex" : "flex"
+              }`}
               data-photo-action
               type="button"
               onClick={onRemove}
@@ -542,7 +561,11 @@ function PhotoTile({
             >
               x
             </button>
-            <div className="absolute bottom-2 right-2 flex items-center gap-1">
+            <div
+              className={`absolute bottom-2 right-2 items-center gap-1 ${
+                mobileCompact ? "hidden sm:flex" : "flex"
+              }`}
+            >
               {onEdit ? (
                 <button
                   aria-label={`Edit crop for ${photo.filename || photo.label}`}
@@ -576,6 +599,28 @@ function PhotoTile({
           </>
         ) : null}
       </div>
+      {canManage && mobileCompact ? (
+        <div className="flex items-center gap-2 p-2 sm:hidden">
+          {onEdit ? (
+            <button
+              className="min-h-9 flex-1 rounded-md border border-emerald-800/30 bg-white px-2 text-xs font-bold text-emerald-900"
+              type="button"
+              onClick={onEdit}
+            >
+              Edit photo
+            </button>
+          ) : null}
+          <button
+            aria-expanded={isMenuOpen}
+            aria-label={`Photo actions for ${photo.filename || photo.label}`}
+            className="flex size-9 items-center justify-center rounded-md border border-stone-200 bg-white text-sm font-bold text-stone-700"
+            type="button"
+            onClick={onMenuToggle}
+          >
+            ...
+          </button>
+        </div>
+      ) : null}
       {canManage && isMenuOpen ? (
         <div
           className="absolute bottom-12 right-2 z-30 grid min-w-40 gap-1 rounded-lg border border-stone-200 bg-white p-2 text-sm shadow-lg"
@@ -725,15 +770,21 @@ function AddPhotoTile({
   acceptedTypes,
   isUploading,
   maxFileSizeMb,
+  mobileFillHeight = false,
   onAddPhotos,
 }: {
   acceptedTypes: readonly string[];
   isUploading: boolean;
   maxFileSizeMb: number;
+  mobileFillHeight?: boolean;
   onAddPhotos: (files: FileList | null) => void;
 }) {
   return (
-    <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-stone-300 bg-stone-50 px-3 text-center text-sm transition hover:border-emerald-700 hover:bg-emerald-50">
+    <label
+      className={`flex cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-stone-300 bg-stone-50 px-3 text-center text-sm transition hover:border-emerald-700 hover:bg-emerald-50 ${
+        mobileFillHeight ? "h-full min-h-32 sm:aspect-square" : "aspect-square"
+      }`}
+    >
       <Image
         alt=""
         className="size-6 opacity-60"

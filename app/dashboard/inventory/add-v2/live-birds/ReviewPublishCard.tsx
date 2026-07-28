@@ -40,6 +40,17 @@ export function ReviewPublishCard({
   function renderContent() {
     return (
       <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col items-center py-3 text-center sm:hidden">
+          <span
+            aria-hidden="true"
+            className="flex size-20 animate-[live-birds-check_280ms_ease-out] items-center justify-center rounded-full bg-emerald-800 text-4xl font-bold text-white shadow-[0_10px_30px_rgba(6,95,70,0.2)]"
+          >
+            ✓
+          </span>
+          <p className="mt-4 text-xl font-bold text-stone-950">
+            Everything looks good!
+          </p>
+        </div>
         <div className="space-y-2 sm:space-y-3">
           <p className="text-base leading-7 text-stone-700">
             Review the details above, then publish when everything looks right.
@@ -110,8 +121,9 @@ export function ReviewPublishCard({
         {mobileActive ? (
           <div className="mt-3">{renderContent()}</div>
         ) : (
-          <p className="mt-2 text-sm font-medium leading-5 text-stone-600">
-            Review and publish when you&apos;re ready.
+          <p className="mt-1 flex items-center gap-2 pl-11 text-sm font-semibold leading-5 text-emerald-800">
+            <span aria-hidden="true">✓</span>
+            Everything ready to publish
           </p>
         )}
       </section>
@@ -336,7 +348,7 @@ export function PublishInventoryButton({
 
   return (
     <button
-      className="inline-flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-800 px-5 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
+      className="inline-flex min-h-14 w-full items-center justify-center rounded-xl bg-emerald-800 px-6 text-lg font-bold text-white shadow-[0_8px_22px_rgba(6,95,70,0.2)] transition-all hover:-translate-y-0.5 hover:bg-emerald-900 active:translate-y-0 active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:w-auto sm:rounded-md sm:px-5 sm:text-sm sm:font-semibold"
       onClick={onReviewPublish}
       type="button"
     >

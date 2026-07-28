@@ -2152,10 +2152,10 @@ export function LiveBirdsListingForm({
               {showDeveloperSavePreview ? (
                 <SavePreviewCard payloadPreview={savePayloadPreview} />
               ) : null}
-              {!isEditMode ? (
-                <div className="flex items-center gap-5 rounded-2xl bg-white px-5 py-6 shadow-sm sm:hidden">
+              {!isEditMode && mobileActiveStep === 4 ? (
+                <div className="flex items-center gap-4 rounded-2xl bg-white px-4 py-5 shadow-sm sm:hidden">
                   <MobileLiveBirdsArtwork
-                    className="h-24 w-28 rounded-xl"
+                    className="h-20 w-24 rounded-xl opacity-80"
                     name="nest"
                   />
                   <div className="min-w-0">
@@ -2310,19 +2310,19 @@ function MobileLiveBirdsTaskHeader({
 
   return (
     <header className="sticky top-0 z-40 border-b border-stone-200/80 bg-white pt-[env(safe-area-inset-top)] shadow-[0_1px_8px_rgba(67,55,38,0.06)] sm:hidden">
-      <div className="grid min-h-16 grid-cols-[3rem_1fr_3.75rem] items-center gap-2 px-4">
+      <div className="grid min-h-13 grid-cols-[2.5rem_1fr_3.5rem] items-center gap-1 px-3">
         <Link
           aria-label="Back to inventory"
-          className="inline-flex size-11 items-center justify-start text-3xl text-stone-950"
+          className="inline-flex size-9 items-center justify-start text-2xl text-stone-950"
           href="/dashboard/inventory"
         >
           <span aria-hidden="true">←</span>
         </Link>
         <div className="min-w-0 text-center">
-          <h1 className="truncate text-xl font-bold text-stone-950">
+          <h1 className="truncate text-lg font-bold text-stone-950">
             Add Live Birds
           </h1>
-          <p className="mt-0.5 text-xs font-semibold text-stone-500">
+          <p className="text-[11px] font-semibold leading-4 text-stone-500">
             <span className="text-emerald-800">Step {currentStep} of 4</span>
             <span aria-hidden="true"> &nbsp;•&nbsp; </span>
             About 2 minutes
@@ -2330,7 +2330,7 @@ function MobileLiveBirdsTaskHeader({
         </div>
         <div className="flex justify-self-end items-center">
           <button
-            className="min-h-11 text-right text-sm font-bold leading-4 text-stone-950 disabled:text-stone-400"
+            className="min-h-9 text-right text-xs font-bold leading-4 text-stone-950 disabled:text-stone-400"
             disabled={disabled || saveDraftStatus === "success"}
             type="button"
             onClick={onSaveDraft}
@@ -2339,7 +2339,7 @@ function MobileLiveBirdsTaskHeader({
           </button>
         </div>
       </div>
-      <div className="px-5 pb-4 pt-3">
+      <div className="px-5 pb-2 pt-1.5">
         <div
           aria-label={`Step ${currentStep} of 4`}
           aria-valuemax={4}
@@ -2350,7 +2350,7 @@ function MobileLiveBirdsTaskHeader({
         >
           <span
             aria-hidden="true"
-            className="absolute left-[12.5%] right-[12.5%] top-5 h-0.5 bg-stone-200"
+            className="absolute left-[12.5%] right-[12.5%] top-4 h-px bg-stone-200"
           />
           {[
             ["Hatch", "Details"],
@@ -2365,7 +2365,7 @@ function MobileLiveBirdsTaskHeader({
               <div className="relative flex flex-col items-center" key={step}>
                 <span
                   aria-hidden="true"
-                  className={`z-10 flex size-10 items-center justify-center rounded-full border text-sm font-bold transition-colors ${
+                  className={`z-10 flex size-8 items-center justify-center rounded-full border text-xs font-bold transition-all duration-200 ${
                     active || complete
                       ? "border-emerald-800 bg-emerald-800 text-white"
                       : "border-stone-300 bg-white text-stone-500"
@@ -2374,7 +2374,7 @@ function MobileLiveBirdsTaskHeader({
                   {step}
                 </span>
                 <span
-                  className={`mt-2 text-center text-xs font-semibold leading-4 ${
+                  className={`mt-1 text-center text-[10px] font-semibold leading-3 ${
                     active ? "text-stone-950" : "text-stone-600"
                   }`}
                 >
@@ -2391,7 +2391,7 @@ function MobileLiveBirdsTaskHeader({
           })}
         </div>
         <button
-          className="mx-auto mt-2 block min-h-8 text-xs font-semibold text-stone-500 underline-offset-4 hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-700"
+          className="ml-auto mt-0.5 block min-h-6 text-[10px] font-semibold text-emerald-800 underline-offset-4 hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-700"
           type="button"
           onClick={onStartOver}
         >

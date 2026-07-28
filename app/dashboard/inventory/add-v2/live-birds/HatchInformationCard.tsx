@@ -130,15 +130,14 @@ export function HatchInformationCard({
           <DisclosureChevron expanded={isMobileExpanded} />
         </button>
         {!isMobileExpanded && isComplete ? (
-          <div className="mt-4 space-y-3">
-            <div className="grid gap-3 min-[380px]:grid-cols-2">
-              <DateSummary label="Hatch date" value={formatMobileDate(hatchDate)} />
-              <DateSummary
-                label="Available date"
-                value={formatMobileDate(availableDate)}
-              />
-            </div>
-            <AgeMessage ageAtAvailability={ageAtAvailability} />
+          <div className="mt-2 pl-11 text-sm leading-5 text-stone-600">
+            <p>
+              {formatMobileDate(hatchDate)} <span aria-hidden="true">→</span>{" "}
+              {formatMobileDate(availableDate)}
+            </p>
+            <p className="mt-0.5 font-medium">
+              {formatCompactAgeMessage(ageAtAvailability.message)}
+            </p>
           </div>
         ) : (
           <div className="relative mt-3">
@@ -221,18 +220,6 @@ function ReferenceMessages({
   );
 }
 
-function DateSummary({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start gap-2 rounded-md border border-stone-100 bg-stone-50 px-3 py-2">
-      <Image src="/glyphs/calendar.png" alt="" width={18} height={18} />
-      <div>
-        <p className="text-sm font-semibold text-stone-600">{label}</p>
-        <p className="text-base font-bold text-stone-950">{value}</p>
-      </div>
-    </div>
-  );
-}
-
 function CompleteIconLabel() {
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-emerald-800">
@@ -267,6 +254,12 @@ function formatMobileDate(value: string) {
     month: "short",
     year: "numeric",
   }).format(date);
+}
+
+function formatCompactAgeMessage(message: string) {
+  return message
+    .replace(/^These birds will be /, "")
+    .replace(/ when available\.$/, " old at pickup");
 }
 
 function SpeciesField({
