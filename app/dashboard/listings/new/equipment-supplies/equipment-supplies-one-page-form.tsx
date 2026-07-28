@@ -158,6 +158,10 @@ export function EquipmentSuppliesOnePageForm({
   const [desktopHighestUnlockedStep, setDesktopHighestUnlockedStep] = useState<
     1 | 2 | 3
   >(isEditMode ? 3 : 1);
+  const [mobileActiveStep, setMobileActiveStep] = useState<1 | 2 | 3>(1);
+  const [mobileHighestUnlockedStep, setMobileHighestUnlockedStep] = useState<
+    1 | 2 | 3
+  >(isEditMode ? 3 : 1);
 
   const formSnapshot = useMemo(() => getFormSnapshot(form), [form]);
   const activeSavedPhotoCount = mediaItems.filter(
@@ -719,6 +723,8 @@ export function EquipmentSuppliesOnePageForm({
     setPublishStatus("idle");
     setDesktopActiveStep(1);
     setDesktopHighestUnlockedStep(1);
+    setMobileActiveStep(1);
+    setMobileHighestUnlockedStep(1);
     setIsStartOverDialogOpen(false);
   }
 
@@ -756,9 +762,22 @@ export function EquipmentSuppliesOnePageForm({
   }
 
   return (
-    <DashboardPageContent className="bg-stone-50/60">
+    <>
+    <MobileEquipmentTaskHeader
+      currentStep={mobileActiveStep}
+      disabled={
+        saveDraftStatus === "saving" ||
+        (isEditMode ? !hasUnsavedChanges : Boolean(saveDraftDisabledReason))
+      }
+      isEditMode={isEditMode}
+      saveDraftStatus={saveDraftStatus}
+      onBack={backToInventory}
+      onSaveDraft={() => void handleSaveDraft()}
+      onStartOver={() => setIsStartOverDialogOpen(true)}
+    />
+    <DashboardPageContent className="bg-stone-50/60 max-lg:px-4 max-lg:py-5 max-lg:pb-24">
       <div className="mx-auto max-w-[1150px]">
-        <header className="mb-5">
+        <header className="mb-5 max-lg:hidden">
           <Link
             className="inline-flex min-h-11 items-center text-base font-bold text-emerald-800 underline-offset-4 hover:underline sm:min-h-0 sm:text-sm sm:font-semibold"
             href={
@@ -833,7 +852,52 @@ export function EquipmentSuppliesOnePageForm({
           <ErrorState title="Equipment could not load" message={loadError} />
         ) : (
         <>
-        <div className="grid gap-5 lg:hidden">
+        <div className="lg:hidden">
+          <MobileEquipmentWorkflow
+            actionError={actionError}
+            actionMessage={actionMessage}
+            activePhotoCount={activePhotoCount}
+            activeStep={mobileActiveStep}
+            addPendingPhotos={addPendingPhotos}
+            descriptionComplete={descriptionComplete}
+            equipmentItemId={equipmentItemId}
+            form={form}
+            hasUnsavedChanges={hasUnsavedChanges}
+            highestUnlockedStep={mobileHighestUnlockedStep}
+            isEditMode={isEditMode}
+            itemDetailsComplete={itemDetailsComplete}
+            mediaItems={mediaItems}
+            pendingPhotos={pendingPhotos}
+            photoError={photoError}
+            publishDisabledReason={publishDisabledReason}
+            publishStatus={publishStatus}
+            removePendingPhoto={removePendingPhoto}
+            reorderPendingPhotos={reorderPendingPhotos}
+            saveDraftDisabledReason={saveDraftDisabledReason}
+            saveDraftStatus={saveDraftStatus}
+            savePendingPhotoCrop={savePendingPhotoCrop}
+            storeId={storeId}
+            validationErrors={validationErrors}
+            onBackToInventory={backToInventory}
+            onFormUpdate={updateForm}
+            onOpenPersistentShare={() => setIsPersistentShareOpen(true)}
+            onPublish={() => void handlePublish()}
+            onReloadPhotos={() => {
+              if (equipmentItemId) void loadEquipmentMedia(equipmentItemId);
+            }}
+            onSaveDraft={() => void handleSaveDraft()}
+            onStepContinue={(step) => {
+              const nextStep = Math.min(3, step + 1) as 1 | 2 | 3;
+              setMobileHighestUnlockedStep((currentStep) =>
+                currentStep < nextStep ? nextStep : currentStep,
+              );
+              setMobileActiveStep(nextStep);
+            }}
+            onStepOpen={setMobileActiveStep}
+          />
+        </div>
+        {false ? (
+        <div className="hidden">
           <main className="space-y-4">
             <SectionCard step="1" title="Item Details">
               <div className="grid gap-4">
@@ -992,7 +1056,10 @@ export function EquipmentSuppliesOnePageForm({
                 </div>
 
                 {actionError ? (
-                  <ErrorState title="Equipment was not saved" message={actionError} />
+                  <ErrorState
+                    title="Equipment was not saved"
+                    message={actionError ?? ""}
+                  />
                 ) : null}
                 {actionMessage ? (
                   <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
@@ -1049,6 +1116,7 @@ export function EquipmentSuppliesOnePageForm({
             />
           </aside>
         </div>
+        ) : null}
         <DesktopEquipmentWorkflow
           actionError={actionError}
           actionMessage={actionMessage}
@@ -1160,6 +1228,590 @@ export function EquipmentSuppliesOnePageForm({
         onClose={() => setIsPersistentShareOpen(false)}
       />
     </DashboardPageContent>
+    </>
+  );
+}
+
+function MobileEquipmentWorkflow({
+  actionError,
+  actionMessage,
+  activePhotoCount,
+  activeStep,
+  addPendingPhotos,
+  descriptionComplete,
+  equipmentItemId,
+  form,
+  hasUnsavedChanges,
+  highestUnlockedStep,
+  isEditMode,
+  itemDetailsComplete,
+  mediaItems,
+  onBackToInventory,
+  onFormUpdate,
+  onOpenPersistentShare,
+  onPublish,
+  onReloadPhotos,
+  onSaveDraft,
+  onStepContinue,
+  onStepOpen,
+  pendingPhotos,
+  photoError,
+  publishDisabledReason,
+  publishStatus,
+  removePendingPhoto,
+  reorderPendingPhotos,
+  saveDraftDisabledReason,
+  saveDraftStatus,
+  savePendingPhotoCrop,
+  storeId,
+  validationErrors,
+}: {
+  actionError: string | null;
+  actionMessage: string | null;
+  activePhotoCount: number;
+  activeStep: 1 | 2 | 3;
+  addPendingPhotos: (files: FileList | null) => void;
+  descriptionComplete: boolean;
+  equipmentItemId: string;
+  form: EquipmentFormState;
+  hasUnsavedChanges: boolean;
+  highestUnlockedStep: 1 | 2 | 3;
+  isEditMode: boolean;
+  itemDetailsComplete: boolean;
+  mediaItems: ListingPhotoItem[];
+  onBackToInventory: () => void;
+  onFormUpdate: (updates: Partial<EquipmentFormState>) => void;
+  onOpenPersistentShare: () => void;
+  onPublish: () => void;
+  onReloadPhotos: () => void;
+  onSaveDraft: () => void;
+  onStepContinue: (step: 1 | 2) => void;
+  onStepOpen: (step: 1 | 2 | 3) => void;
+  pendingPhotos: PendingPhoto[];
+  photoError: string | null;
+  publishDisabledReason: string | null;
+  publishStatus: PublishStatus;
+  removePendingPhoto: (photo: PendingPhoto) => void;
+  reorderPendingPhotos: (photos: DashboardPhoto[]) => void;
+  saveDraftDisabledReason: string | null;
+  saveDraftStatus: SaveDraftStatus;
+  savePendingPhotoCrop: (
+    photo: DashboardPhoto,
+    crop: PhotoCropMetadata | null,
+  ) => void;
+  storeId: string;
+  validationErrors: string[];
+}) {
+  return (
+    <main className="space-y-3">
+      <MobileEquipmentSection
+        active={activeStep === 1}
+        complete={highestUnlockedStep > 1}
+        step={1}
+        summary={
+          <>
+            <p className="font-semibold text-stone-700">
+              {form.itemName.trim() || "Item not named"}
+            </p>
+            <p>
+              {form.category || "Category not selected"}{" "}
+              <span aria-hidden="true">•</span>{" "}
+              {form.quantityAvailable.trim() || "0"} available{" "}
+              <span aria-hidden="true">•</span>{" "}
+              {isValidMoney(form.price) ? formatCurrency(form.price) : "$0.00"}
+            </p>
+          </>
+        }
+        title="Item Details"
+        onOpen={() => onStepOpen(1)}
+      >
+        <div className="relative">
+          <Image
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-2 -top-4 h-24 w-28 object-contain opacity-90"
+            height={96}
+            src="/illustrations/equipment-supplies-desktop.png"
+            width={112}
+          />
+          <div className="max-w-[60%]">
+            <p className="text-base font-bold leading-6 text-stone-950">
+              Tell buyers about this item
+            </p>
+            <p className="mt-2 text-base leading-7 text-stone-600">
+              Add the category, condition, availability, quantity, and price.
+            </p>
+          </div>
+          <div className="mt-5 grid gap-4">
+            <CompactField label="Item Name">
+              <input
+                className={inputClass}
+                placeholder="Enter item name"
+                value={form.itemName}
+                onChange={(event) =>
+                  onFormUpdate({ itemName: event.target.value })
+                }
+              />
+            </CompactField>
+            <CompactField label="Category">
+              <select
+                className={inputClass}
+                value={form.category}
+                onChange={(event) =>
+                  onFormUpdate({ category: event.target.value })
+                }
+              >
+                <option value="">Choose category</option>
+                {equipmentCategories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </CompactField>
+            <CompactField label="Condition">
+              <select
+                className={inputClass}
+                value={form.condition}
+                onChange={(event) =>
+                  onFormUpdate({ condition: event.target.value })
+                }
+              >
+                <option value="">Not specified</option>
+                {equipmentConditions.map((condition) => (
+                  <option key={condition} value={condition}>
+                    {condition}
+                  </option>
+                ))}
+              </select>
+            </CompactField>
+            <CompactField label="Available Date">
+              <span className="relative block min-w-0 overflow-hidden rounded-md">
+                <input
+                  className={`${inputClass} block w-full min-w-0 appearance-none pr-11 text-left [-webkit-appearance:none] [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0`}
+                  type="date"
+                  value={form.availableDate}
+                  onChange={(event) =>
+                    onFormUpdate({ availableDate: event.target.value })
+                  }
+                />
+                <Image
+                  alt=""
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 object-contain"
+                  height={18}
+                  src="/glyphs/calendar.png"
+                  width={18}
+                />
+              </span>
+            </CompactField>
+            <CompactField label="Quantity Available">
+              <input
+                className={inputClass}
+                min="0"
+                placeholder="Enter quantity"
+                step="1"
+                type="number"
+                value={form.quantityAvailable}
+                onChange={(event) =>
+                  onFormUpdate({ quantityAvailable: event.target.value })
+                }
+              />
+            </CompactField>
+            <CompactField label="Price">
+              <div className="flex overflow-hidden rounded-md border border-stone-300 bg-white focus-within:border-emerald-700 focus-within:ring-2 focus-within:ring-emerald-700/20">
+                <span className="flex items-center border-r border-stone-200 bg-stone-50 px-3 text-stone-600">
+                  $
+                </span>
+                <input
+                  className="min-h-11 w-full border-0 bg-transparent px-3 text-base text-stone-950 outline-none placeholder:text-stone-400"
+                  min="0"
+                  placeholder="0.00"
+                  step="0.01"
+                  type="number"
+                  value={form.price}
+                  onChange={(event) =>
+                    onFormUpdate({ price: event.target.value })
+                  }
+                />
+              </div>
+            </CompactField>
+          </div>
+          <div
+            className={`mt-5 rounded-lg border px-4 py-3 text-sm font-semibold leading-6 ${
+              itemDetailsComplete
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                : "border-amber-200 bg-amber-50 text-amber-900"
+            }`}
+          >
+            {itemDetailsComplete
+              ? `${form.quantityAvailable} item${
+                  form.quantityAvailable === "1" ? "" : "s"
+                } will be available ${formatDate(form.availableDate)}.`
+              : "Complete the required item details to continue."}
+          </div>
+          <ValidationMessage errors={validationErrors} />
+          <button
+            className="mt-5 inline-flex min-h-13 w-full items-center justify-center gap-3 rounded-xl bg-emerald-800 px-5 text-base font-bold text-white shadow-sm transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+            disabled={!itemDetailsComplete}
+            type="button"
+            onClick={() => onStepContinue(1)}
+          >
+            Continue to next step
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </MobileEquipmentSection>
+
+      <MobileEquipmentSection
+        active={activeStep === 2}
+        complete={highestUnlockedStep > 2}
+        disabled={highestUnlockedStep < 2}
+        step={2}
+        summary={
+          <p>
+            {activePhotoCount} photo{activePhotoCount === 1 ? "" : "s"}{" "}
+            <span aria-hidden="true">•</span>{" "}
+            {descriptionComplete ? "Description added" : "Description optional"}
+          </p>
+        }
+        title="Photos & Description"
+        onOpen={() => onStepOpen(2)}
+      >
+        <div className="space-y-5">
+          <EquipmentPhotos
+            addPendingPhotos={addPendingPhotos}
+            desktopCompact
+            equipmentItemId={equipmentItemId}
+            mediaItems={mediaItems}
+            pendingPhotos={pendingPhotos}
+            photoError={photoError}
+            removePendingPhoto={removePendingPhoto}
+            reorderPendingPhotos={reorderPendingPhotos}
+            savePendingPhotoCrop={savePendingPhotoCrop}
+            storeId={storeId}
+            onReload={onReloadPhotos}
+          />
+          <div className="border-t border-stone-200 pt-5">
+            <h3 className="text-lg font-bold text-stone-950">Description</h3>
+            <label className="mt-4 block">
+              <span className="mb-1.5 block text-base font-bold text-stone-700">
+                Storefront description
+              </span>
+              <textarea
+                className={`${inputClass} min-h-40 resize-y py-3 leading-6`}
+                maxLength={descriptionMaxLength}
+                placeholder="Share item details, pickup notes, condition, dimensions, compatibility, or anything buyers should know."
+                value={form.description}
+                onChange={(event) =>
+                  onFormUpdate({ description: event.target.value })
+                }
+              />
+            </label>
+            <p className="mt-2 text-sm font-medium text-stone-500">
+              {form.description.length} / {descriptionMaxLength}
+            </p>
+          </div>
+          <button
+            className="inline-flex min-h-13 w-full items-center justify-center rounded-xl bg-emerald-800 px-5 text-base font-bold text-white shadow-sm transition active:scale-[0.99]"
+            type="button"
+            onClick={() => onStepContinue(2)}
+          >
+            Done editing
+          </button>
+        </div>
+      </MobileEquipmentSection>
+
+      <MobileEquipmentSection
+        active={activeStep === 3}
+        complete={itemDetailsComplete && !publishDisabledReason}
+        disabled={highestUnlockedStep < 3}
+        headerArtwork={
+          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-amber-50">
+            <Image
+              alt=""
+              aria-hidden="true"
+              className="size-12 object-contain"
+              height={48}
+              src="/illustrations/equipment-supplies-desktop.png"
+              width={48}
+            />
+          </span>
+        }
+        step={3}
+        summary={
+          <p className="font-semibold text-emerald-800">
+            {itemDetailsComplete
+              ? "Everything ready to publish"
+              : "Review and publish when ready"}
+          </p>
+        }
+        title="Ready to Publish"
+        onOpen={() => onStepOpen(3)}
+      >
+        <div className="space-y-5">
+          <div className="flex flex-col items-center py-2 text-center">
+            <span
+              aria-hidden="true"
+              className={`flex size-20 items-center justify-center rounded-full text-4xl font-bold text-white shadow-[0_10px_30px_rgba(6,95,70,0.2)] ${
+                itemDetailsComplete ? "bg-emerald-800" : "bg-amber-600"
+              }`}
+            >
+              {itemDetailsComplete ? "✓" : "!"}
+            </span>
+            <p className="mt-4 text-xl font-bold text-stone-950">
+              {itemDetailsComplete
+                ? "Everything looks good!"
+                : "A few details remain"}
+            </p>
+            <p className="mt-2 text-base leading-7 text-stone-600">
+              Review the summary, then publish your item.
+            </p>
+          </div>
+          {actionError ? (
+            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+              {actionError}
+            </p>
+          ) : null}
+          {actionMessage ? (
+            <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
+              {actionMessage}
+            </p>
+          ) : null}
+          <ValidationMessage errors={validationErrors} />
+          {isEditMode ? (
+            <div className="flex flex-col gap-3">
+              <button
+                className="seller-primary-button"
+                disabled={saveDraftStatus === "saving" || !hasUnsavedChanges}
+                type="button"
+                onClick={onSaveDraft}
+              >
+                {saveDraftStatus === "saving" ? "Saving..." : "Save Changes"}
+              </button>
+              {equipmentItemId ? (
+                <button
+                  className="seller-secondary-button"
+                  type="button"
+                  onClick={onOpenPersistentShare}
+                >
+                  Share listing
+                </button>
+              ) : null}
+              <button
+                className="seller-secondary-button"
+                type="button"
+                onClick={onBackToInventory}
+              >
+                Back to Inventory
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col-reverse gap-3">
+              <SaveDraftButton
+                canSaveDraft={!saveDraftDisabledReason}
+                desktopFullWidth
+                onSaveDraft={onSaveDraft}
+                saveDraftDisabledReason={saveDraftDisabledReason}
+                saveDraftStatus={saveDraftStatus}
+              />
+              <PublishInventoryButton
+                desktopFullWidth
+                onReviewPublish={onPublish}
+                publishDisabledReason={publishDisabledReason}
+                publishStatus={publishStatus}
+              />
+            </div>
+          )}
+          <EquipmentDesktopSummary
+            activePhotoCount={activePhotoCount}
+            form={form}
+          />
+        </div>
+      </MobileEquipmentSection>
+    </main>
+  );
+}
+
+function MobileEquipmentSection({
+  active,
+  children,
+  complete = false,
+  disabled = false,
+  headerArtwork,
+  onOpen,
+  step,
+  summary,
+  title,
+}: {
+  active: boolean;
+  children: ReactNode;
+  complete?: boolean;
+  disabled?: boolean;
+  headerArtwork?: ReactNode;
+  onOpen: () => void;
+  step: 1 | 2 | 3;
+  summary: ReactNode;
+  title: string;
+}) {
+  return (
+    <section
+      className={`rounded-2xl border p-5 transition-all duration-200 ${
+        disabled
+          ? "border-stone-200 bg-white opacity-60"
+          : active
+            ? "border-emerald-200 bg-emerald-50/60 shadow-[0_6px_20px_rgba(31,42,32,0.07)]"
+            : "border-stone-200 bg-white shadow-sm"
+      }`}
+    >
+      <button
+        aria-expanded={active}
+        className="flex min-h-11 w-full items-center gap-3 text-left disabled:cursor-not-allowed"
+        disabled={disabled}
+        type="button"
+        onClick={onOpen}
+      >
+        {headerArtwork}
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-800 text-sm font-bold text-white">
+          {step}
+        </span>
+        <span className="min-w-0 flex-1 text-xl font-bold text-stone-950">
+          {title}
+        </span>
+        {complete ? (
+          <span className="text-xs font-bold text-emerald-800">✓ Complete</span>
+        ) : null}
+        {!disabled ? (
+          <span
+            aria-hidden="true"
+            className={`h-2.5 w-2.5 shrink-0 border-b-2 border-r-2 border-emerald-800/80 transition-transform ${
+              active ? "rotate-45" : "-rotate-45"
+            }`}
+          />
+        ) : null}
+      </button>
+      {active && !disabled ? (
+        <div className="mt-4">{children}</div>
+      ) : (
+        <div className="mt-2 pl-11 text-sm font-medium leading-5 text-stone-600">
+          {summary}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MobileEquipmentTaskHeader({
+  currentStep,
+  disabled,
+  isEditMode,
+  onBack,
+  onSaveDraft,
+  onStartOver,
+  saveDraftStatus,
+}: {
+  currentStep: 1 | 2 | 3;
+  disabled: boolean;
+  isEditMode: boolean;
+  onBack: () => void;
+  onSaveDraft: () => void;
+  onStartOver: () => void;
+  saveDraftStatus: SaveDraftStatus;
+}) {
+  const steps = [
+    ["Item", "Details"],
+    ["Photos &", "Description"],
+    ["Ready to", "Publish"],
+  ] as const;
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-stone-200/80 bg-white pt-[env(safe-area-inset-top)] shadow-[0_1px_8px_rgba(67,55,38,0.06)] lg:hidden">
+      <div className="grid min-h-13 grid-cols-[2.5rem_1fr_3.75rem] items-center gap-1 px-3">
+        <button
+          aria-label="Back to inventory"
+          className="inline-flex size-9 items-center justify-start text-2xl text-stone-950"
+          type="button"
+          onClick={onBack}
+        >
+          <span aria-hidden="true">←</span>
+        </button>
+        <div className="min-w-0 text-center">
+          <h1 className="truncate text-lg font-bold text-stone-950">
+            {isEditMode ? "Edit Equipment & Supplies" : "Add Equipment & Supplies"}
+          </h1>
+          <p className="text-[11px] font-semibold leading-4 text-stone-500">
+            <span className="text-emerald-800">Step {currentStep} of 3</span>
+            <span aria-hidden="true"> &nbsp;•&nbsp; </span>
+            About 2 minutes
+          </p>
+        </div>
+        <button
+          className="min-h-9 text-right text-xs font-bold leading-4 text-stone-950 disabled:text-stone-400"
+          disabled={disabled || saveDraftStatus === "success"}
+          type="button"
+          onClick={onSaveDraft}
+        >
+          {saveDraftStatus === "saving"
+            ? "Saving..."
+            : isEditMode
+              ? "Save"
+              : "Save draft"}
+        </button>
+      </div>
+      <div className="px-5 pb-2 pt-1.5">
+        <div
+          aria-label={`Step ${currentStep} of 3`}
+          aria-valuemax={3}
+          aria-valuemin={1}
+          aria-valuenow={currentStep}
+          className="relative grid grid-cols-3"
+          role="progressbar"
+        >
+          <span
+            aria-hidden="true"
+            className="absolute left-[16.67%] right-[16.67%] top-4 h-px bg-stone-200"
+          />
+          {steps.map(([firstLine, secondLine], index) => {
+            const step = (index + 1) as 1 | 2 | 3;
+            const active = step === currentStep;
+            const complete = step < currentStep;
+
+            return (
+              <div className="relative flex flex-col items-center" key={step}>
+                <span
+                  aria-hidden="true"
+                  className={`z-10 flex size-8 items-center justify-center rounded-full border text-xs font-bold transition-all duration-200 ${
+                    active || complete
+                      ? "border-emerald-800 bg-emerald-800 text-white"
+                      : "border-stone-300 bg-white text-stone-500"
+                  }`}
+                >
+                  {step}
+                </span>
+                <span
+                  className={`mt-1 text-center text-[10px] font-semibold leading-3 ${
+                    active ? "text-stone-950" : "text-stone-600"
+                  }`}
+                >
+                  {firstLine}
+                  <br />
+                  {secondLine}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        {!isEditMode ? (
+          <button
+            className="ml-auto mt-0.5 block min-h-6 text-[10px] font-semibold text-emerald-800 underline-offset-4 hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-700"
+            type="button"
+            onClick={onStartOver}
+          >
+            Start over
+          </button>
+        ) : null}
+      </div>
+    </header>
   );
 }
 
