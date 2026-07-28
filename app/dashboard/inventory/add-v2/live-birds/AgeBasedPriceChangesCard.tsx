@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { inputClass } from "./constants";
 import { PlanUpgradePrompt } from "../../../_components/plan-upgrade-prompt";
 import {
@@ -9,6 +8,7 @@ import {
   getPriceAdjustmentIssues,
 } from "./priceAdjustment";
 import { SectionCard } from "./SectionCard";
+import { MobileLiveBirdsArtwork } from "./MobileLiveBirdsArtwork";
 import type { BirdOffering, PriceAdjustmentState } from "./types";
 
 export function AgeBasedPriceChangesCard({
@@ -19,6 +19,9 @@ export function AgeBasedPriceChangesCard({
   stepLocked = false,
   updatePriceAdjustment,
   locked = false,
+  mobileActive = false,
+  onMobileContinue,
+  onMobileOpen,
 }: {
   availableDate: string;
   introText?: string;
@@ -27,6 +30,9 @@ export function AgeBasedPriceChangesCard({
   stepLocked?: boolean;
   updatePriceAdjustment: (updates: Partial<PriceAdjustmentState>) => void;
   locked?: boolean;
+  mobileActive?: boolean;
+  onMobileContinue: () => void;
+  onMobileOpen: () => void;
 }) {
   const issues = getPriceAdjustmentIssues({ offerings, priceAdjustment });
   const example = getPriceAdjustmentExample({
@@ -36,8 +42,6 @@ export function AgeBasedPriceChangesCard({
   });
   const stopPriceLabel =
     priceAdjustment.direction === "increase" ? "Maximum price" : "Minimum price";
-  const [mobileExpanded, setMobileExpanded] = useState(priceAdjustment.enabled);
-
   function renderContent() {
     return (
       <div className="space-y-3 sm:space-y-4">
@@ -145,33 +149,50 @@ export function AgeBasedPriceChangesCard({
   return (
     <>
       <section
-        className={`rounded-xl border border-transparent bg-white p-5 shadow-sm sm:hidden ${
-          stepLocked ? "opacity-60" : ""
+        className={`rounded-2xl border p-5 transition-colors sm:hidden ${
+          stepLocked
+            ? "border-stone-200 bg-white opacity-60"
+            : mobileActive
+              ? "border-emerald-200 bg-emerald-50/60 shadow-[0_6px_20px_rgba(31,42,32,0.07)]"
+              : "border-stone-200 bg-white"
         }`}
       >
         <button
-          aria-expanded={mobileExpanded}
+          aria-expanded={mobileActive}
           className="flex min-h-11 w-full items-start gap-3 text-left"
           type="button"
-          onClick={() => setMobileExpanded((expanded) => !expanded)}
+          onClick={() => {
+            onMobileOpen();
+          }}
         >
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900">
+          <MobileLiveBirdsArtwork className="size-16 rounded-full" name="price" />
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-800 text-sm font-bold text-white">
             3
           </span>
           <span className="min-w-0 flex-1 text-xl font-bold leading-6 text-stone-950">
-            Raise or lower prices over time
+            Automatic price changes
           </span>
           <span className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-sm font-semibold text-stone-600">
             Optional
           </span>
-          <DisclosureChevron expanded={mobileExpanded} />
+          <DisclosureChevron expanded={mobileActive} />
         </button>
-        {mobileExpanded ? (
-          <div className="mt-4">{renderContent()}</div>
+        {mobileActive ? (
+          <div className="mt-4">
+            {renderContent()}
+            <button
+              className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-emerald-800 px-5 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+              type="button"
+              onClick={onMobileContinue}
+            >
+              Continue
+            </button>
+          </div>
         ) : (
           <p className="mt-3 text-base font-medium leading-7 text-stone-600">
-            {introText ??
-              "Set future price changes to automatically update prices as your birds get older."}
+            {priceAdjustment.enabled
+              ? formatPriceAdjustmentSummary(priceAdjustment)
+              : "Automatically raise or lower prices on the schedule you choose."}
           </p>
         )}
       </section>
@@ -180,7 +201,7 @@ export function AgeBasedPriceChangesCard({
           badge="Optional"
           className={stepLocked ? "opacity-60" : ""}
           step="3"
-          title="Raise or lower prices over time"
+          title="Automatic price changes"
         >
           {renderContent()}
         </SectionCard>

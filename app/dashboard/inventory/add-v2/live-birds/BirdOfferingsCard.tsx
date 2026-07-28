@@ -18,6 +18,7 @@ import {
 } from "../../../listings/[listingBatchId]/listing-photos-section";
 import { toDisplayImageUrl } from "../../../breeds/breed-data";
 import { SectionCard } from "./SectionCard";
+import { MobileLiveBirdsArtwork } from "./MobileLiveBirdsArtwork";
 import type { BirdOffering, BreedOption } from "./types";
 
 export function BirdOfferingsCard({
@@ -28,8 +29,10 @@ export function BirdOfferingsCard({
   canAddCustomBreed,
   duplicateOfferingIds,
   groupsReviewMode,
+  mobileActive,
   offerings,
   onDoneAddingGroups,
+  onMobileOpen,
   onOpenCustomBreedModal,
   prepareBreedPhotoProfile,
   removeOffering,
@@ -51,8 +54,10 @@ export function BirdOfferingsCard({
   canAddCustomBreed: boolean;
   duplicateOfferingIds: Set<string>;
   groupsReviewMode: boolean;
+  mobileActive: boolean;
   offerings: BirdOffering[];
   onDoneAddingGroups: () => void;
+  onMobileOpen: () => void;
   onOpenCustomBreedModal: (offeringId: string) => void;
   prepareBreedPhotoProfile: (offeringId: string) => void;
   removeOffering: (offeringId: string) => void;
@@ -78,9 +83,26 @@ export function BirdOfferingsCard({
   return (
     <SectionCard
       badge={`${birdsForSaleGroupCount} added`}
-      className={isLocked ? "opacity-60" : ""}
+      className={
+        isLocked
+          ? "max-sm:border-stone-200 max-sm:opacity-60"
+          : mobileActive
+            ? "max-sm:border-emerald-200 max-sm:bg-emerald-50/60 max-sm:shadow-[0_6px_20px_rgba(31,42,32,0.07)]"
+            : "max-sm:border-stone-200"
+      }
+      mobileComplete={groupsReviewMode}
+      mobileArtwork={
+        <MobileLiveBirdsArtwork className="size-16 rounded-full" name="hen" />
+      }
+      mobileExpanded={mobileActive}
+      mobileSummary={
+        birdsForSaleGroupCount === 1
+          ? "1 bird group added"
+          : `${birdsForSaleGroupCount} bird groups added`
+      }
+      onMobileToggle={onMobileOpen}
       step="2"
-      title="Birds for sale"
+      title="Birds for Sale"
     >
       <div>
         <p

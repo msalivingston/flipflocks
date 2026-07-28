@@ -4,24 +4,53 @@ export function SectionCard({
   badge,
   children,
   className = "",
+  mobileComplete = false,
+  mobileArtwork,
+  mobileExpanded,
+  mobileSummary,
+  onMobileToggle,
   step,
   title,
 }: {
   badge?: string;
   children: ReactNode;
   className?: string;
+  mobileComplete?: boolean;
+  mobileArtwork?: ReactNode;
+  mobileExpanded?: boolean;
+  mobileSummary?: ReactNode;
+  onMobileToggle?: () => void;
   step: string;
   title: string;
 }) {
+  const hasMobileDisclosure = typeof mobileExpanded === "boolean";
+
   return (
     <section
-      className={`rounded-xl border border-transparent bg-white p-5 shadow-none sm:rounded-lg sm:border-stone-200 sm:p-5 sm:shadow-sm ${className}`}
+      className={`rounded-2xl border border-stone-200 bg-white p-5 shadow-none transition-colors sm:rounded-lg sm:p-5 sm:shadow-sm ${className}`}
     >
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900 sm:size-8 sm:text-sm">
-          {step}
+      <button
+        aria-expanded={hasMobileDisclosure ? mobileExpanded : undefined}
+        className={`flex w-full flex-wrap items-center gap-3 text-left sm:pointer-events-none ${
+          hasMobileDisclosure ? "" : "pointer-events-none"
+        }`}
+        disabled={!hasMobileDisclosure}
+        type="button"
+        onClick={onMobileToggle}
+      >
+        {mobileArtwork ? (
+          <span className="sm:hidden">{mobileArtwork}</span>
+        ) : null}
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900 max-sm:bg-emerald-800 max-sm:text-white sm:size-8 sm:text-sm">
+          {mobileComplete ? (
+            <span aria-label="Complete" className="text-lg">
+              ✓
+            </span>
+          ) : (
+            step
+          )}
         </span>
-        <h2 className="text-xl font-bold text-stone-950 sm:text-lg sm:font-semibold">
+        <h2 className="min-w-0 flex-1 text-xl font-bold text-stone-950 sm:flex-none sm:text-lg sm:font-semibold">
           {title}
         </h2>
         {badge ? (
@@ -29,8 +58,27 @@ export function SectionCard({
             {badge}
           </span>
         ) : null}
+        {hasMobileDisclosure ? (
+          <span
+            aria-hidden="true"
+            className={`ml-auto h-2.5 w-2.5 shrink-0 border-b-2 border-r-2 border-emerald-800/80 transition-transform sm:hidden ${
+              mobileExpanded ? "rotate-45" : "-rotate-45"
+            }`}
+          />
+        ) : null}
+      </button>
+      {!mobileExpanded && mobileSummary ? (
+        <div className="mt-2 text-sm font-medium leading-5 text-stone-600 sm:hidden">
+          {mobileSummary}
+        </div>
+      ) : null}
+      <div
+        className={`mt-3 sm:mt-4 ${
+          hasMobileDisclosure && !mobileExpanded ? "hidden sm:block" : ""
+        }`}
+      >
+        {children}
       </div>
-      <div className="mt-3 sm:mt-4">{children}</div>
     </section>
   );
 }

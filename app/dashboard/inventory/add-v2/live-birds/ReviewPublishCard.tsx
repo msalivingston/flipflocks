@@ -4,10 +4,12 @@ import { disabledButtonClass } from "./constants";
 import { SectionCard } from "./SectionCard";
 import type { SaveDraftPreflightResult } from "./saveDraftPreflight";
 import type { PublishValidationIssue } from "./types";
+import { MobileLiveBirdsArtwork } from "./MobileLiveBirdsArtwork";
 
 export function ReviewPublishCard({
   onValidationIssueClick,
   onSaveDraft,
+  onMobileOpen,
   onReviewPublish,
   publishDisabledReason,
   publishMessage,
@@ -17,10 +19,12 @@ export function ReviewPublishCard({
   saveDraftPreflight,
   saveDraftStatus,
   stepLocked = false,
+  mobileActive = false,
   validationIssues,
 }: {
   onValidationIssueClick?: (issue: PublishValidationIssue) => void;
   onSaveDraft: () => void;
+  onMobileOpen: () => void;
   onReviewPublish: () => void;
   publishDisabledReason: string | null;
   publishMessage: string | null;
@@ -30,6 +34,7 @@ export function ReviewPublishCard({
   saveDraftPreflight: SaveDraftPreflightResult;
   saveDraftStatus: SaveDraftStatus;
   stepLocked?: boolean;
+  mobileActive?: boolean;
   validationIssues: PublishValidationIssue[];
 }) {
   function renderContent() {
@@ -79,19 +84,36 @@ export function ReviewPublishCard({
   return (
     <>
       <section
-        className={`rounded-xl border border-transparent bg-white p-5 shadow-sm sm:hidden ${
-          stepLocked ? "opacity-60" : ""
+        className={`rounded-2xl border p-5 transition-colors sm:hidden ${
+          stepLocked
+            ? "border-stone-200 bg-white opacity-60"
+            : mobileActive
+              ? "border-emerald-200 bg-emerald-50/60 shadow-[0_6px_20px_rgba(31,42,32,0.07)]"
+              : "border-stone-200 bg-white"
         }`}
       >
-        <div className="flex min-h-11 w-full items-center gap-3 text-left">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900">
+        <button
+          aria-expanded={mobileActive}
+          className="flex min-h-11 w-full items-center gap-3 text-left"
+          type="button"
+          onClick={onMobileOpen}
+        >
+          <MobileLiveBirdsArtwork className="size-16 rounded-full" name="ready" />
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-800 text-sm font-bold text-white">
             4
           </span>
           <span className="min-w-0 flex-1 text-xl font-bold text-stone-950">
-            Ready to publish?
+            Ready to Publish
           </span>
-        </div>
-        <div className="mt-3">{renderContent()}</div>
+          <DisclosureChevron expanded={mobileActive} />
+        </button>
+        {mobileActive ? (
+          <div className="mt-3">{renderContent()}</div>
+        ) : (
+          <p className="mt-2 text-sm font-medium leading-5 text-stone-600">
+            Review and publish when you&apos;re ready.
+          </p>
+        )}
       </section>
       <div className="hidden sm:block">
         <SectionCard
@@ -103,6 +125,17 @@ export function ReviewPublishCard({
         </SectionCard>
       </div>
     </>
+  );
+}
+
+function DisclosureChevron({ expanded }: { expanded: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`h-2.5 w-2.5 shrink-0 border-b-2 border-r-2 border-emerald-800/80 transition-transform ${
+        expanded ? "rotate-45" : "-rotate-45"
+      }`}
+    />
   );
 }
 

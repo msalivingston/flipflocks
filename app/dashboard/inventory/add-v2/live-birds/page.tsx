@@ -65,6 +65,7 @@ import type { PublishStatus, SaveDraftStatus } from "./ReviewPublishCard";
 import { getSaveDraftPreflight } from "./saveDraftPreflight";
 import { SavePreviewCard } from "./SavePreviewCard";
 import { SidebarCard } from "./SidebarCard";
+import { MobileLiveBirdsArtwork } from "./MobileLiveBirdsArtwork";
 import type {
   BirdOffering,
   BreedOption,
@@ -231,6 +232,7 @@ export function LiveBirdsListingForm({
     null,
   );
   const [groupsReviewMode, setGroupsReviewMode] = useState(false);
+  const [mobileActiveStep, setMobileActiveStep] = useState<1 | 2 | 3 | 4>(1);
   const [customBreedOfferingId, setCustomBreedOfferingId] = useState<
     string | null
   >(null);
@@ -1846,6 +1848,7 @@ export function LiveBirdsListingForm({
     setOfferings(nextOfferings);
     nextOfferingId.current = initialOfferings.length + 1;
     setGroupsReviewMode(false);
+    setMobileActiveStep(1);
     setPriceAdjustment(defaultPriceAdjustment);
     setBreedPhotoActionMessage(null);
     setSaveDraftMessage(null);
@@ -1912,6 +1915,7 @@ export function LiveBirdsListingForm({
   return (
     <>
     <MobileLiveBirdsTaskHeader
+      currentStep={mobileActiveStep}
       disabled={Boolean(saveDraftDisabledReason) || saveDraftStatus === "saving"}
       isEditMode={isEditMode}
       onSaveDraft={handleSaveDraft}
@@ -2021,7 +2025,7 @@ export function LiveBirdsListingForm({
             className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]"
             key={formResetKey}
           >
-            <main className="space-y-4 max-sm:space-y-6">
+            <main className="space-y-4 max-sm:space-y-3">
               {isEditMode && birdsForSaleGroupCount > 1 ? (
                 <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-base font-semibold leading-7 text-sky-900">
                   This listing includes multiple bird entries. Hatch date and
@@ -2051,6 +2055,9 @@ export function LiveBirdsListingForm({
                     ? "Use a separate listing for birds with a different hatch date."
                     : undefined
                 }
+                mobileActive={mobileActiveStep === 1}
+                onMobileContinue={() => setMobileActiveStep(2)}
+                onMobileOpen={() => setMobileActiveStep(1)}
               />
               <BirdOfferingsCard
                 addOffering={addOffering}
@@ -2060,8 +2067,16 @@ export function LiveBirdsListingForm({
                 canAddCustomBreed={Boolean(species.id)}
                 duplicateOfferingIds={duplicateOfferingIds}
                 groupsReviewMode={groupsReviewMode}
+                mobileActive={mobileActiveStep === 2}
                 offerings={offerings}
-                onDoneAddingGroups={finishAddingGroups}
+                onDoneAddingGroups={() => {
+                  finishAddingGroups();
+                  setMobileActiveStep(3);
+                }}
+                onMobileOpen={() => {
+                  setGroupsReviewMode(false);
+                  setMobileActiveStep(2);
+                }}
                 onOpenCustomBreedModal={openCustomBreedModal}
                 prepareBreedPhotoProfile={(offeringId) =>
                   void prepareBreedPhotoProfile(offeringId)
@@ -2089,6 +2104,9 @@ export function LiveBirdsListingForm({
                   priceAdjustment={priceAdjustment}
                   availableDate={availableDate}
                   locked={!plan.ageBasedPricingEnabled}
+                  mobileActive={mobileActiveStep === 3}
+                  onMobileContinue={() => setMobileActiveStep(4)}
+                  onMobileOpen={() => setMobileActiveStep(3)}
                   stepLocked={birdsForSaleStepLocked}
                   updatePriceAdjustment={updatePriceAdjustment}
                   introText={
@@ -2115,6 +2133,8 @@ export function LiveBirdsListingForm({
                 />
               ) : (
                 <ReviewPublishCard
+                  mobileActive={mobileActiveStep === 4}
+                  onMobileOpen={() => setMobileActiveStep(4)}
                   onValidationIssueClick={focusPublishValidationIssue}
                   onSaveDraft={handleSaveDraft}
                   onReviewPublish={handleReviewPublish}
@@ -2131,6 +2151,21 @@ export function LiveBirdsListingForm({
               )}
               {showDeveloperSavePreview ? (
                 <SavePreviewCard payloadPreview={savePayloadPreview} />
+              ) : null}
+              {!isEditMode ? (
+                <div className="flex items-center gap-5 rounded-2xl bg-white px-5 py-6 shadow-sm sm:hidden">
+                  <MobileLiveBirdsArtwork
+                    className="h-24 w-28 rounded-xl"
+                    name="nest"
+                  />
+                  <div className="min-w-0">
+                    <p className="text-xl font-bold text-stone-950">Almost there!</p>
+                    <p className="mt-1 text-base leading-6 text-stone-600">
+                      Once published, your birds will appear in your storefront
+                      inventory.
+                    </p>
+                  </div>
+                </div>
               ) : null}
             </main>
 
@@ -2257,12 +2292,14 @@ export function LiveBirdsListingForm({
 }
 
 function MobileLiveBirdsTaskHeader({
+  currentStep,
   disabled,
   isEditMode,
   onSaveDraft,
   onStartOver,
   saveDraftStatus,
 }: {
+  currentStep: 1 | 2 | 3 | 4;
   disabled: boolean;
   isEditMode: boolean;
   onSaveDraft: () => void;
@@ -2273,46 +2310,93 @@ function MobileLiveBirdsTaskHeader({
 
   return (
     <header className="sticky top-0 z-40 border-b border-stone-200/80 bg-white pt-[env(safe-area-inset-top)] shadow-[0_1px_8px_rgba(67,55,38,0.06)] sm:hidden">
-      <div className="grid min-h-14 grid-cols-[1fr_auto_1fr] items-center gap-2 px-4">
+      <div className="grid min-h-16 grid-cols-[3rem_1fr_3.75rem] items-center gap-2 px-4">
         <Link
-          className="inline-flex min-h-11 items-center text-base font-semibold text-emerald-900"
+          aria-label="Back to inventory"
+          className="inline-flex size-11 items-center justify-start text-3xl text-stone-950"
           href="/dashboard/inventory"
         >
-          <span aria-hidden="true" className="mr-1 text-2xl leading-none">
-            ‹
-          </span>
-          Inventory
+          <span aria-hidden="true">←</span>
         </Link>
-        <h1 className="text-center text-base font-bold text-stone-950">
-          Add Live Birds
-        </h1>
-        <div className="flex justify-self-end items-center gap-1">
+        <div className="min-w-0 text-center">
+          <h1 className="truncate text-xl font-bold text-stone-950">
+            Add Live Birds
+          </h1>
+          <p className="mt-0.5 text-xs font-semibold text-stone-500">
+            <span className="text-emerald-800">Step {currentStep} of 4</span>
+            <span aria-hidden="true"> &nbsp;•&nbsp; </span>
+            About 2 minutes
+          </p>
+        </div>
+        <div className="flex justify-self-end items-center">
           <button
-            className="rounded-md px-1 text-base font-semibold text-emerald-900 disabled:text-stone-400"
+            className="min-h-11 text-right text-sm font-bold leading-4 text-stone-950 disabled:text-stone-400"
             disabled={disabled || saveDraftStatus === "success"}
             type="button"
             onClick={onSaveDraft}
           >
             {saveDraftStatus === "saving" ? "Saving..." : "Save draft"}
           </button>
-          <details className="relative">
-            <summary
-              aria-label="More actions"
-              className="flex size-10 cursor-pointer list-none items-center justify-center rounded-md text-xl font-bold text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
-            >
-              ...
-            </summary>
-            <div className="absolute right-0 z-50 mt-1 min-w-36 rounded-md border border-stone-200 bg-white p-2 shadow-lg">
-              <button
-                className="flex min-h-10 w-full items-center rounded-md px-3 text-left text-base font-semibold text-stone-700 hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
-                type="button"
-                onClick={onStartOver}
-              >
-                Start over
-              </button>
-            </div>
-          </details>
         </div>
+      </div>
+      <div className="px-5 pb-4 pt-3">
+        <div
+          aria-label={`Step ${currentStep} of 4`}
+          aria-valuemax={4}
+          aria-valuemin={1}
+          aria-valuenow={currentStep}
+          className="relative grid grid-cols-4"
+          role="progressbar"
+        >
+          <span
+            aria-hidden="true"
+            className="absolute left-[12.5%] right-[12.5%] top-5 h-0.5 bg-stone-200"
+          />
+          {[
+            ["Hatch", "Details"],
+            ["Birds for", "Sale"],
+            ["Price", "Changes"],
+            ["Publish", ""],
+          ].map(([firstLine, secondLine], index) => {
+            const step = index + 1;
+            const active = step === currentStep;
+            const complete = step < currentStep;
+            return (
+              <div className="relative flex flex-col items-center" key={step}>
+                <span
+                  aria-hidden="true"
+                  className={`z-10 flex size-10 items-center justify-center rounded-full border text-sm font-bold transition-colors ${
+                    active || complete
+                      ? "border-emerald-800 bg-emerald-800 text-white"
+                      : "border-stone-300 bg-white text-stone-500"
+                  }`}
+                >
+                  {step}
+                </span>
+                <span
+                  className={`mt-2 text-center text-xs font-semibold leading-4 ${
+                    active ? "text-stone-950" : "text-stone-600"
+                  }`}
+                >
+                  {firstLine}
+                  {secondLine ? (
+                    <>
+                      <br />
+                      {secondLine}
+                    </>
+                  ) : null}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <button
+          className="mx-auto mt-2 block min-h-8 text-xs font-semibold text-stone-500 underline-offset-4 hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-700"
+          type="button"
+          onClick={onStartOver}
+        >
+          Start over
+        </button>
       </div>
     </header>
   );

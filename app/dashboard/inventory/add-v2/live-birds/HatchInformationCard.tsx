@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { inputClass } from "./constants";
+import { MobileLiveBirdsArtwork } from "./MobileLiveBirdsArtwork";
 import { SectionCard } from "./SectionCard";
 import type { AgeAtAvailabilityResult, SpeciesOption } from "./types";
 
@@ -12,6 +13,9 @@ export function HatchInformationCard({
   availableDateHelpText,
   hatchDate,
   introText,
+  mobileActive,
+  onMobileContinue,
+  onMobileOpen,
   referenceError,
   referenceLoading,
   setAvailableDate,
@@ -27,6 +31,9 @@ export function HatchInformationCard({
   availableDateHelpText?: string;
   hatchDate: string;
   introText?: string;
+  mobileActive: boolean;
+  onMobileContinue: () => void;
+  onMobileOpen: () => void;
   referenceError: string | null;
   referenceLoading: boolean;
   setAvailableDate: (value: string) => void;
@@ -41,12 +48,12 @@ export function HatchInformationCard({
     species.label.trim() && hatchDate.trim() && availableDate.trim(),
   );
   const [mobileExpanded, setMobileExpanded] = useState(true);
-  const isMobileExpanded = !isComplete || mobileExpanded;
+  const isMobileExpanded = mobileActive && (!isComplete || mobileExpanded);
 
   function renderBody() {
     return (
-      <div className="space-y-4 sm:space-y-0">
-        <div>
+      <div className="space-y-5 sm:space-y-0">
+        <div className="max-sm:pr-24">
           <p className="text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">
             When did these birds hatch?
           </p>
@@ -55,7 +62,7 @@ export function HatchInformationCard({
               "All birds added here should share the same hatch date. Start a separate listing for birds from another hatch."}
           </p>
         </div>
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-5 lg:grid-cols-3">
           <SpeciesField
             disabled={speciesReadOnly}
             fieldId="species"
@@ -92,18 +99,29 @@ export function HatchInformationCard({
 
   return (
     <>
-      <section className="rounded-xl border border-transparent bg-white p-5 shadow-sm sm:hidden">
+      <section
+        className={`rounded-2xl border p-5 transition-colors sm:hidden ${
+          mobileActive
+            ? "border-emerald-200 bg-emerald-50/60 shadow-[0_6px_20px_rgba(31,42,32,0.07)]"
+            : "border-stone-200 bg-white"
+        }`}
+      >
         <button
           aria-expanded={isMobileExpanded}
           className="flex min-h-12 w-full items-center gap-3 text-left"
           type="button"
-          onClick={() => setMobileExpanded((expanded) => !expanded)}
+          onClick={() => {
+            onMobileOpen();
+            if (mobileActive && isComplete) {
+              setMobileExpanded((expanded) => !expanded);
+            }
+          }}
         >
           <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900">
             1
           </span>
           <span className="min-w-0 flex-1 text-xl font-bold text-stone-950">
-            Hatch details
+            Hatch Details
           </span>
           {isComplete ? <CompleteIconLabel /> : null}
           {!isMobileExpanded && isComplete ? (
@@ -123,7 +141,25 @@ export function HatchInformationCard({
             <AgeMessage ageAtAvailability={ageAtAvailability} />
           </div>
         ) : (
-          <div className="mt-3">{renderBody()}</div>
+          <div className="relative mt-3">
+            <MobileLiveBirdsArtwork
+              className="absolute -right-2 -top-16 size-28 opacity-90"
+              name="nest"
+            />
+            {renderBody()}
+            <button
+              className="mt-6 inline-flex min-h-13 w-full items-center justify-center gap-3 rounded-xl bg-emerald-800 px-5 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+              disabled={!isComplete}
+              type="button"
+              onClick={() => {
+                setMobileExpanded(false);
+                onMobileContinue();
+              }}
+            >
+              Continue to next step
+              <span aria-hidden="true" className="text-xl">→</span>
+            </button>
+          </div>
         )}
       </section>
       <div className="hidden sm:block">
