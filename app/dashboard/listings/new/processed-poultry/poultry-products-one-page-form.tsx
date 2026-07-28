@@ -107,8 +107,10 @@ type PublishSuccessDialogState = {
   summary: string | null;
 };
 
+const todayIsoDate = getLocalIsoDate(new Date());
+
 const emptyForm: PoultryProductFormState = {
-  availableDate: "",
+  availableDate: todayIsoDate,
   description: "",
   packageSize: "",
   price: "",
@@ -1468,7 +1470,7 @@ function MobilePoultryProductWorkflow({
             <CompactField label="Available Date">
               <span className="relative block min-w-0 overflow-hidden rounded-md">
                 <input
-                  className={`${inputClass} block w-full min-w-0 appearance-none pr-11 text-left [-webkit-appearance:none] [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0`}
+                  className={`${inputClass} block h-12 w-full min-w-0 appearance-none py-0 pr-11 text-left leading-[3rem] [-webkit-appearance:none] [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-date-and-time-value]:min-h-12 [&::-webkit-date-and-time-value]:leading-[3rem]`}
                   type="date"
                   value={form.availableDate}
                   onChange={(event) =>
@@ -2932,7 +2934,7 @@ function getFormSnapshot(form: PoultryProductFormState) {
 
 function hasStartedForm(form: PoultryProductFormState) {
   return Boolean(
-    form.availableDate ||
+    form.availableDate !== todayIsoDate ||
       form.description.trim() ||
       form.packageSize.trim() ||
       form.price.trim() ||
@@ -2940,6 +2942,14 @@ function hasStartedForm(form: PoultryProductFormState) {
       form.productType ||
       form.quantityAvailable.trim(),
   );
+}
+
+function getLocalIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function isWholeNumber(value: string) {

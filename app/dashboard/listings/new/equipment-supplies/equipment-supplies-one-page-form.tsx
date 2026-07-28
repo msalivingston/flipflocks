@@ -104,7 +104,7 @@ type PublishSuccessDialogState = {
   summary: string | null;
 };
 
-const todayIsoDate = new Date().toISOString().slice(0, 10);
+const todayIsoDate = getLocalIsoDate(new Date());
 
 const emptyForm: EquipmentFormState = {
   availableDate: todayIsoDate,
@@ -1388,7 +1388,7 @@ function MobileEquipmentWorkflow({
             <CompactField label="Available Date">
               <span className="relative block min-w-0 overflow-hidden rounded-md">
                 <input
-                  className={`${inputClass} block w-full min-w-0 appearance-none pr-11 text-left [-webkit-appearance:none] [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0`}
+                  className={`${inputClass} block h-12 w-full min-w-0 appearance-none py-0 pr-11 text-left leading-[3rem] [-webkit-appearance:none] [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-date-and-time-value]:min-h-12 [&::-webkit-date-and-time-value]:leading-[3rem]`}
                   type="date"
                   value={form.availableDate}
                   onChange={(event) =>
@@ -2684,6 +2684,14 @@ function hasStartedForm(form: EquipmentFormState) {
       form.quantityAvailable.trim() ||
       form.availableDate !== todayIsoDate,
   );
+}
+
+function getLocalIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function validateEquipmentForm(form: EquipmentFormState) {
