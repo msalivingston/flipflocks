@@ -37,10 +37,6 @@ import {
 } from "../../_components/creation-wizard-shared";
 import { SectionCard } from "../../../../inventory/add-v2/live-birds/SectionCard";
 import {
-  SidebarCard,
-  SummaryRow,
-} from "../../../../inventory/add-v2/live-birds/SidebarCard";
-import {
   PublishInventoryButton,
   SaveDraftButton,
   type PublishStatus,
@@ -183,6 +179,10 @@ export function HatchingEggsStandaloneOnePageForm({
   const [isStartOverDialogOpen, setIsStartOverDialogOpen] = useState(false);
   const [desktopActiveStep, setDesktopActiveStep] = useState<1 | 2 | null>(1);
   const [desktopHighestUnlockedStep, setDesktopHighestUnlockedStep] = useState<
+    1 | 2 | 3
+  >(isEditMode ? 3 : 1);
+  const [mobileActiveStep, setMobileActiveStep] = useState<1 | 2 | 3>(1);
+  const [mobileHighestUnlockedStep, setMobileHighestUnlockedStep] = useState<
     1 | 2 | 3
   >(isEditMode ? 3 : 1);
   const [publishSuccessDialog, setPublishSuccessDialog] =
@@ -950,6 +950,8 @@ export function HatchingEggsStandaloneOnePageForm({
     setPublishStatus("idle");
     setDesktopActiveStep(1);
     setDesktopHighestUnlockedStep(1);
+    setMobileActiveStep(1);
+    setMobileHighestUnlockedStep(1);
     setIsStartOverDialogOpen(false);
     setPublishSuccessDialog(null);
     isNavigatingAfterPublishRef.current = false;
@@ -989,9 +991,22 @@ export function HatchingEggsStandaloneOnePageForm({
   }
 
   return (
-    <DashboardPageContent className="bg-stone-50/60">
+    <>
+    <MobileHatchingEggTaskHeader
+      currentStep={mobileActiveStep}
+      disabled={
+        saveDraftStatus === "saving" ||
+        (isEditMode ? !hasUnsavedChanges : Boolean(saveDraftDisabledReason))
+      }
+      isEditMode={isEditMode}
+      saveDraftStatus={saveDraftStatus}
+      onBack={backToInventory}
+      onSaveDraft={handleSaveDraft}
+      onStartOver={() => setIsStartOverDialogOpen(true)}
+    />
+    <DashboardPageContent className="bg-stone-50/60 max-sm:px-4 max-sm:py-5 max-sm:pb-24">
       <div className="mx-auto w-full max-w-[1150px]">
-        <header className="mb-5">
+        <header className="mb-5 max-sm:hidden">
           <Link
             className="inline-flex min-h-11 items-center text-base font-bold text-emerald-800 underline-offset-4 hover:underline sm:min-h-0 sm:text-sm sm:font-semibold"
             href={
@@ -1054,247 +1069,62 @@ export function HatchingEggsStandaloneOnePageForm({
           />
         ) : (
           <>
-          <div className="grid gap-5 sm:hidden xl:grid-cols-[minmax(0,1fr)_320px]">
-            <main className="space-y-4">
-              <SectionCard step="1" title="Item Details">
-                <div className="grid gap-4">
-                  <CompactField label="Species">
-                    <select
-                      className={inputClass}
-                      disabled={fieldsLockedAfterAddSave}
-                      value={form.speciesId}
-                      onChange={(event) => updateSpecies(event.target.value)}
-                    >
-                      <option value="">Choose species</option>
-                      {species.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.common_name}
-                        </option>
-                      ))}
-                    </select>
-                  </CompactField>
-
-                  <HatchingEggBreedLookup
-                    breeds={breeds}
-                    disabled={fieldsLockedAfterAddSave}
-                    selectedBreedId={selectedBreedId}
-                    speciesId={form.speciesId}
-                    value={form.itemName}
-                    onCustomChange={updateBreedOrVarietyName}
-                    onSelectBreed={selectReferenceBreed}
-                  />
-
-                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    <CompactField label="Available Date">
-                      <input
-                        className={inputClass}
-                        disabled={fieldsLockedAfterAddSave}
-                        type="date"
-                        value={form.availableDate}
-                        onChange={(event) =>
-                          updateForm({ availableDate: event.target.value })
-                        }
-                      />
-                    </CompactField>
-                    <CompactField label="Quantity">
-                      <input
-                        className={inputClass}
-                        disabled={fieldsLockedAfterAddSave}
-                        inputMode="numeric"
-                        min="0"
-                        placeholder="Enter quantity"
-                        step="1"
-                        type="number"
-                        value={form.quantityAvailable}
-                        onChange={(event) =>
-                          updateForm({ quantityAvailable: event.target.value })
-                        }
-                      />
-                    </CompactField>
-                    <CompactField label="Price Per Egg">
-                      <MoneyInput
-                        disabled={fieldsLockedAfterAddSave}
-                        value={form.price}
-                        onChange={(value) => updateForm({ price: value })}
-                      />
-                    </CompactField>
-                    <CompactField label="Minimum Order">
-                      <input
-                        className={inputClass}
-                        disabled={fieldsLockedAfterAddSave}
-                        inputMode="numeric"
-                        min="1"
-                        placeholder="Optional"
-                        step="1"
-                        type="number"
-                        value={form.minimumOrderQuantity}
-                        onChange={(event) =>
-                          updateForm({
-                            minimumOrderQuantity: event.target.value,
-                          })
-                        }
-                      />
-                    </CompactField>
-                  </div>
-                  {fieldsLockedAfterAddSave ? (
-                    <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800">
-                      This Add-only draft has been created. Publish it as saved,
-                      or start over to create another hatching egg item.
-                    </p>
-                  ) : null}
-                  {isEditMode ? (
-                    <CompactField label="Visibility">
-                      <select
-                        className={inputClass}
-                        value={form.visibilityStatus}
-                        onChange={(event) =>
-                          updateForm({ visibilityStatus: event.target.value })
-                        }
-                      >
-                        <option value="hidden">Hidden</option>
-                        <option value="active">Live</option>
-                        <option value="sold_out">Sold out</option>
-                      </select>
-                    </CompactField>
-                  ) : null}
-                  <ValidationMessage errors={validationErrors} />
-                </div>
-              </SectionCard>
-
-              <SectionCard step="2" title="Photos">
-                <HatchingEggPhotos
-                  addPendingPhotos={addPendingPhotos}
-                  hatchingEggItemId={hatchingEggItemId}
-                  mediaItems={mediaItems}
-                  pendingPhotos={pendingPhotos}
-                  photoError={photoError}
-                  removePendingPhoto={removePendingPhoto}
-                  reorderPendingPhotos={reorderPendingPhotos}
-                  savePendingPhotoCrop={savePendingPhotoCrop}
-                  storeId={storeId}
-                  onReload={() => {
-                    if (hatchingEggItemId) {
-                      void loadHatchingEggMedia(hatchingEggItemId);
-                    }
-                  }}
-                />
-              </SectionCard>
-
-              <SectionCard step="3" title="Description">
-                {matchingDescriptionGroup ? (
-                  <div className="mb-3 space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm leading-6 text-emerald-900">
-                    <p className="font-semibold">
-                      This will appear with your other{" "}
-                      {matchingDescriptionGroup.displayName} hatching eggs on
-                      the storefront.
-                    </p>
-                    <p>Shared on the storefront: breed name and description</p>
-                    <p>
-                      Kept separate: available date, price, quantity, minimum
-                      order, and photos
-                    </p>
-                  </div>
-                ) : null}
-                <label>
-                  <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
-                    {matchingDescriptionGroup
-                      ? `Storefront description for ${matchingDescriptionGroup.displayName}`
-                      : "Storefront description"}
-                  </span>
-                <textarea
-                  className={`${inputClass} min-h-32 resize-y py-3 leading-6`}
-                  disabled={fieldsLockedAfterAddSave}
-                  maxLength={descriptionMaxLength}
-                  placeholder="Share collection timing, fertility notes, rooster details, pickup expectations, or anything buyers should know."
-                  value={form.description}
-                  onChange={(event) => updateDescription(event.target.value)}
-                />
-                </label>
-                <p className="mt-2 text-sm text-stone-500">
-                  {matchingDescriptionGroup
-                    ? `Changing this description will update it for every ${matchingDescriptionGroup.displayName} hatching egg option.`
-                    : "Required. Keep it clear, accurate, and helpful."}
-                </p>
-              </SectionCard>
-
-              <SectionCard step="4" title="Ready to publish?">
-                <div className="space-y-4 sm:space-y-6">
-                  <div className="space-y-2">
-                    <p className="text-base leading-7 text-stone-700 sm:text-sm sm:leading-6">
-                      {isEditMode
-                        ? "Save changes to update this standalone hatching egg item."
-                        : "Save a hidden draft first, or publish once the item details are ready."}
-                    </p>
-                    <p className="text-base leading-7 text-stone-500 sm:text-sm sm:leading-6">
-                      This standalone item is saved outside breed profiles and
-                      listing batches.
-                    </p>
-                  </div>
-                  <ActionStatus
-                    actionError={actionError}
-                    actionMessage={actionMessage}
-                    publishDisabledReason={
-                      isEditMode ? null : publishDisabledReason
-                    }
-                    validationErrors={validationErrors}
-                  />
-                  {isEditMode ? (
-                    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
-                      <button
-                        className="seller-secondary-button"
-                        type="button"
-                        onClick={backToInventory}
-                      >
-                        Back to Inventory
-                      </button>
-                      {hatchingEggProductId ? (
-                        <button
-                          className="seller-secondary-button"
-                          type="button"
-                          onClick={() => setIsPersistentShareOpen(true)}
-                        >
-                          Share listing
-                        </button>
-                      ) : null}
-                      <button
-                        className="seller-primary-button"
-                        disabled={saveDraftStatus === "saving" || !hasUnsavedChanges}
-                        type="button"
-                        onClick={handleSaveDraft}
-                      >
-                        {saveDraftStatus === "saving" ? "Saving..." : "Save Changes"}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
-                      <SaveDraftButton
-                        canSaveDraft={!saveDraftDisabledReason}
-                        onSaveDraft={handleSaveDraft}
-                        saveDraftDisabledReason={saveDraftDisabledReason}
-                        saveDraftStatus={saveDraftStatus}
-                      />
-                      <PublishInventoryButton
-                        onReviewPublish={handlePublish}
-                        publishDisabledReason={publishDisabledReason}
-                        publishStatus={publishStatus}
-                      />
-                    </div>
-                  )}
-                </div>
-              </SectionCard>
-            </main>
-
-            <aside className="hidden space-y-4 xl:block">
-              <HatchingEggSummaryCard
-                form={form}
-                selectedSpeciesName={selectedSpecies?.common_name ?? ""}
-              />
-              <HatchingEggReadinessCard
-                descriptionComplete={descriptionComplete}
-                detailsComplete={detailsComplete}
-                photoCount={activePhotoCount}
-              />
-            </aside>
+          <div className="sm:hidden">
+            <MobileHatchingEggWorkflow
+              actionError={actionError}
+              actionMessage={actionMessage}
+              activePhotoCount={activePhotoCount}
+              activeStep={mobileActiveStep}
+              addPendingPhotos={addPendingPhotos}
+              breeds={breeds}
+              descriptionComplete={descriptionComplete}
+              detailsComplete={detailsComplete}
+              fieldsLockedAfterAddSave={fieldsLockedAfterAddSave}
+              form={form}
+              hatchingEggItemId={hatchingEggItemId}
+              hatchingEggProductId={hatchingEggProductId}
+              hasUnsavedChanges={hasUnsavedChanges}
+              highestUnlockedStep={mobileHighestUnlockedStep}
+              isEditMode={isEditMode}
+              matchingDescriptionGroup={matchingDescriptionGroup}
+              mediaItems={mediaItems}
+              pendingPhotos={pendingPhotos}
+              photoError={photoError}
+              publishDisabledReason={publishDisabledReason}
+              publishStatus={publishStatus}
+              removePendingPhoto={removePendingPhoto}
+              reorderPendingPhotos={reorderPendingPhotos}
+              saveDraftDisabledReason={saveDraftDisabledReason}
+              saveDraftStatus={saveDraftStatus}
+              savePendingPhotoCrop={savePendingPhotoCrop}
+              selectedBreedId={selectedBreedId}
+              selectedSpeciesName={selectedSpecies?.common_name ?? ""}
+              species={species}
+              storeId={storeId}
+              validationErrors={validationErrors}
+              onBackToInventory={backToInventory}
+              onBreedChange={updateBreedOrVarietyName}
+              onBreedSelect={selectReferenceBreed}
+              onDescriptionChange={updateDescription}
+              onFormUpdate={updateForm}
+              onOpenPersistentShare={() => setIsPersistentShareOpen(true)}
+              onPublish={handlePublish}
+              onReloadPhotos={() => {
+                if (hatchingEggItemId) {
+                  void loadHatchingEggMedia(hatchingEggItemId);
+                }
+              }}
+              onSaveDraft={handleSaveDraft}
+              onSpeciesChange={updateSpecies}
+              onStepContinue={(step) => {
+                const nextStep = Math.min(3, step + 1) as 1 | 2 | 3;
+                setMobileHighestUnlockedStep((currentStep) =>
+                  currentStep < nextStep ? nextStep : currentStep,
+                );
+                setMobileActiveStep(nextStep);
+              }}
+              onStepOpen={setMobileActiveStep}
+            />
           </div>
           <DesktopHatchingEggWorkflow
             actionError={actionError}
@@ -1396,6 +1226,623 @@ export function HatchingEggsStandaloneOnePageForm({
         onClose={() => setIsPersistentShareOpen(false)}
       />
     </DashboardPageContent>
+    </>
+  );
+}
+
+function MobileHatchingEggWorkflow({
+  actionError,
+  actionMessage,
+  activePhotoCount,
+  activeStep,
+  addPendingPhotos,
+  breeds,
+  descriptionComplete,
+  detailsComplete,
+  fieldsLockedAfterAddSave,
+  form,
+  hatchingEggItemId,
+  hatchingEggProductId,
+  hasUnsavedChanges,
+  highestUnlockedStep,
+  isEditMode,
+  matchingDescriptionGroup,
+  mediaItems,
+  onBackToInventory,
+  onBreedChange,
+  onBreedSelect,
+  onDescriptionChange,
+  onFormUpdate,
+  onOpenPersistentShare,
+  onPublish,
+  onReloadPhotos,
+  onSaveDraft,
+  onSpeciesChange,
+  onStepContinue,
+  onStepOpen,
+  pendingPhotos,
+  photoError,
+  publishDisabledReason,
+  publishStatus,
+  removePendingPhoto,
+  reorderPendingPhotos,
+  saveDraftDisabledReason,
+  saveDraftStatus,
+  savePendingPhotoCrop,
+  selectedBreedId,
+  selectedSpeciesName,
+  species,
+  storeId,
+  validationErrors,
+}: {
+  actionError: string | null;
+  actionMessage: string | null;
+  activePhotoCount: number;
+  activeStep: 1 | 2 | 3;
+  addPendingPhotos: (files: FileList | null) => void;
+  breeds: ReferenceBreed[];
+  descriptionComplete: boolean;
+  detailsComplete: boolean;
+  fieldsLockedAfterAddSave: boolean;
+  form: HatchingEggFormState;
+  hatchingEggItemId: string;
+  hatchingEggProductId: string | null;
+  hasUnsavedChanges: boolean;
+  highestUnlockedStep: 1 | 2 | 3;
+  isEditMode: boolean;
+  matchingDescriptionGroup: ReturnType<
+    typeof findMatchingHatchingEggDescriptionGroup
+  >;
+  mediaItems: ListingPhotoItem[];
+  onBackToInventory: () => void;
+  onBreedChange: (value: string) => void;
+  onBreedSelect: (breed: ReferenceBreed) => void;
+  onDescriptionChange: (value: string) => void;
+  onFormUpdate: (updates: Partial<HatchingEggFormState>) => void;
+  onOpenPersistentShare: () => void;
+  onPublish: () => void;
+  onReloadPhotos: () => void;
+  onSaveDraft: () => void;
+  onSpeciesChange: (speciesId: string) => void;
+  onStepContinue: (step: 1 | 2) => void;
+  onStepOpen: (step: 1 | 2 | 3) => void;
+  pendingPhotos: PendingPhoto[];
+  photoError: string | null;
+  publishDisabledReason: string | null;
+  publishStatus: PublishStatus;
+  removePendingPhoto: (photo: PendingPhoto) => void;
+  reorderPendingPhotos: (photos: DashboardPhoto[]) => void;
+  saveDraftDisabledReason: string | null;
+  saveDraftStatus: SaveDraftStatus;
+  savePendingPhotoCrop: (
+    photo: DashboardPhoto,
+    crop: PhotoCropMetadata | null,
+  ) => void;
+  selectedBreedId: string | null;
+  selectedSpeciesName: string;
+  species: ReferenceSpecies[];
+  storeId: string;
+  validationErrors: string[];
+}) {
+  const workflowReady = detailsComplete && descriptionComplete;
+
+  return (
+    <main className="space-y-3">
+      <MobileHatchingEggSection
+        active={activeStep === 1}
+        complete={highestUnlockedStep > 1}
+        step={1}
+        summary={
+          <>
+            <p className="font-semibold text-stone-700">
+              {form.itemName.trim() || "Breed not set"}
+            </p>
+            <p>
+              {formatDate(form.availableDate)}{" "}
+              <span aria-hidden="true">•</span>{" "}
+              {form.quantityAvailable.trim() || "0"} eggs{" "}
+              <span aria-hidden="true">•</span>{" "}
+              {isValidMoney(form.price) ? formatCurrency(form.price) : "$0.00"} each
+            </p>
+          </>
+        }
+        title="Egg Details"
+        onOpen={() => onStepOpen(1)}
+      >
+        <div className="relative">
+          <Image
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-2 -top-4 h-24 w-28 object-contain opacity-90"
+            height={96}
+            src="/illustrations/hatching-eggs-chick-nest.png"
+            width={112}
+          />
+          <div className="max-w-[58%]">
+            <p className="text-base font-bold leading-6 text-stone-950">
+              Tell buyers about these hatching eggs
+            </p>
+            <p className="mt-2 text-base leading-7 text-stone-600">
+              Add the breed, availability, quantity, and price for this egg
+              offering.
+            </p>
+          </div>
+
+          <div className="mt-5 grid gap-4">
+            <CompactField label="Species">
+              <select
+                className={inputClass}
+                disabled={fieldsLockedAfterAddSave}
+                value={form.speciesId}
+                onChange={(event) => onSpeciesChange(event.target.value)}
+              >
+                <option value="">Choose species</option>
+                {species.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.common_name}
+                  </option>
+                ))}
+              </select>
+            </CompactField>
+            <HatchingEggBreedLookup
+              breeds={breeds}
+              disabled={fieldsLockedAfterAddSave}
+              selectedBreedId={selectedBreedId}
+              speciesId={form.speciesId}
+              value={form.itemName}
+              onCustomChange={onBreedChange}
+              onSelectBreed={onBreedSelect}
+            />
+            <CompactField label="Available Date">
+              <span className="relative block min-w-0 overflow-hidden rounded-md">
+                <input
+                  className={`${inputClass} block w-full min-w-0 appearance-none pr-11 text-left [-webkit-appearance:none] [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0`}
+                  disabled={fieldsLockedAfterAddSave}
+                  type="date"
+                  value={form.availableDate}
+                  onChange={(event) =>
+                    onFormUpdate({ availableDate: event.target.value })
+                  }
+                />
+                <Image
+                  alt=""
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 object-contain"
+                  height={18}
+                  src="/glyphs/calendar.png"
+                  width={18}
+                />
+              </span>
+            </CompactField>
+            <CompactField label="Quantity">
+              <input
+                className={inputClass}
+                disabled={fieldsLockedAfterAddSave}
+                inputMode="numeric"
+                min="0"
+                placeholder="Enter quantity"
+                step="1"
+                type="number"
+                value={form.quantityAvailable}
+                onChange={(event) =>
+                  onFormUpdate({ quantityAvailable: event.target.value })
+                }
+              />
+            </CompactField>
+            <CompactField label="Price Per Egg">
+              <MoneyInput
+                disabled={fieldsLockedAfterAddSave}
+                value={form.price}
+                onChange={(value) => onFormUpdate({ price: value })}
+              />
+            </CompactField>
+            <CompactField label="Minimum Order">
+              <input
+                className={inputClass}
+                disabled={fieldsLockedAfterAddSave}
+                inputMode="numeric"
+                min="1"
+                placeholder="Optional"
+                step="1"
+                type="number"
+                value={form.minimumOrderQuantity}
+                onChange={(event) =>
+                  onFormUpdate({ minimumOrderQuantity: event.target.value })
+                }
+              />
+            </CompactField>
+            {isEditMode ? (
+              <CompactField label="Visibility">
+                <select
+                  className={inputClass}
+                  value={form.visibilityStatus}
+                  onChange={(event) =>
+                    onFormUpdate({ visibilityStatus: event.target.value })
+                  }
+                >
+                  <option value="hidden">Hidden</option>
+                  <option value="active">Live</option>
+                  <option value="sold_out">Sold out</option>
+                </select>
+              </CompactField>
+            ) : null}
+          </div>
+
+          <div
+            className={`mt-5 rounded-lg border px-4 py-3 text-sm font-semibold leading-6 ${
+              detailsComplete
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                : "border-amber-200 bg-amber-50 text-amber-900"
+            }`}
+          >
+            {detailsComplete
+              ? `${form.quantityAvailable} eggs will be available ${formatDate(
+                  form.availableDate,
+                )} at ${formatCurrency(form.price)} each.`
+              : "Complete the required egg details to continue."}
+          </div>
+          <ValidationMessage errors={validationErrors} />
+          <button
+            className="mt-5 inline-flex min-h-13 w-full items-center justify-center gap-3 rounded-xl bg-emerald-800 px-5 text-base font-bold text-white shadow-sm transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+            disabled={!detailsComplete}
+            type="button"
+            onClick={() => onStepContinue(1)}
+          >
+            Continue to next step
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </MobileHatchingEggSection>
+
+      <MobileHatchingEggSection
+        active={activeStep === 2}
+        complete={highestUnlockedStep > 2}
+        disabled={highestUnlockedStep < 2}
+        step={2}
+        summary={
+          <p>
+            {activePhotoCount} photo{activePhotoCount === 1 ? "" : "s"}{" "}
+            <span aria-hidden="true">•</span>{" "}
+            {descriptionComplete ? "Description added" : "Description needed"}
+          </p>
+        }
+        title="Photos & Description"
+        onOpen={() => onStepOpen(2)}
+      >
+        <div className="space-y-5">
+          <HatchingEggPhotos
+            addPendingPhotos={addPendingPhotos}
+            desktopCompact
+            hatchingEggItemId={hatchingEggItemId}
+            mediaItems={mediaItems}
+            pendingPhotos={pendingPhotos}
+            photoError={photoError}
+            removePendingPhoto={removePendingPhoto}
+            reorderPendingPhotos={reorderPendingPhotos}
+            savePendingPhotoCrop={savePendingPhotoCrop}
+            storeId={storeId}
+            title="Photos"
+            onReload={onReloadPhotos}
+          />
+          <div className="border-t border-stone-200 pt-5">
+            <h3 className="text-lg font-bold text-stone-950">Description</h3>
+            {matchingDescriptionGroup ? (
+              <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm leading-6 text-emerald-900">
+                <p className="font-semibold">
+                  Shared with your other {matchingDescriptionGroup.displayName}{" "}
+                  hatching eggs.
+                </p>
+              </div>
+            ) : null}
+            <label className="mt-4 block">
+              <span className="mb-1.5 block text-base font-bold text-stone-700">
+                Storefront description
+              </span>
+              <textarea
+                className={`${inputClass} min-h-40 resize-y py-3 leading-6`}
+                disabled={fieldsLockedAfterAddSave}
+                maxLength={descriptionMaxLength}
+                placeholder="Share collection timing, fertility notes, rooster details, pickup expectations, or anything buyers should know."
+                value={form.description}
+                onChange={(event) => onDescriptionChange(event.target.value)}
+              />
+            </label>
+            <p className="mt-2 text-sm font-medium text-stone-500">
+              {form.description.length} / {descriptionMaxLength}
+            </p>
+          </div>
+          <button
+            className="inline-flex min-h-13 w-full items-center justify-center rounded-xl bg-emerald-800 px-5 text-base font-bold text-white shadow-sm transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+            disabled={!descriptionComplete}
+            type="button"
+            onClick={() => onStepContinue(2)}
+          >
+            Done editing
+          </button>
+        </div>
+      </MobileHatchingEggSection>
+
+      <MobileHatchingEggSection
+        active={activeStep === 3}
+        complete={workflowReady && !publishDisabledReason}
+        disabled={highestUnlockedStep < 3}
+        headerArtwork={
+          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-amber-50">
+            <Image
+              alt=""
+              className="size-12 object-contain"
+              height={48}
+              src="/illustrations/hatching-eggs-chick-nest.png"
+              width={48}
+            />
+          </span>
+        }
+        step={3}
+        summary={
+          <p className="font-semibold text-emerald-800">
+            {workflowReady
+              ? "Everything ready to publish"
+              : "Review and publish when ready"}
+          </p>
+        }
+        title="Ready to Publish"
+        onOpen={() => onStepOpen(3)}
+      >
+        <div className="space-y-5">
+          <div className="flex flex-col items-center py-2 text-center">
+            <span
+              aria-hidden="true"
+              className="flex size-20 items-center justify-center rounded-full bg-emerald-800 text-4xl font-bold text-white shadow-[0_10px_30px_rgba(6,95,70,0.2)]"
+            >
+              ✓
+            </span>
+            <p className="mt-4 text-xl font-bold text-stone-950">
+              Everything looks good!
+            </p>
+            <p className="mt-2 text-base leading-7 text-stone-600">
+              Review the summary, then publish your hatching eggs.
+            </p>
+          </div>
+          <ActionStatus
+            actionError={actionError}
+            actionMessage={actionMessage}
+            publishDisabledReason={isEditMode ? null : publishDisabledReason}
+            validationErrors={validationErrors}
+          />
+          {isEditMode ? (
+            <div className="flex flex-col gap-3">
+              <button
+                className="seller-primary-button"
+                disabled={saveDraftStatus === "saving" || !hasUnsavedChanges}
+                type="button"
+                onClick={onSaveDraft}
+              >
+                {saveDraftStatus === "saving" ? "Saving..." : "Save Changes"}
+              </button>
+              {hatchingEggProductId ? (
+                <button
+                  className="seller-secondary-button"
+                  type="button"
+                  onClick={onOpenPersistentShare}
+                >
+                  Share listing
+                </button>
+              ) : null}
+              <button
+                className="seller-secondary-button"
+                type="button"
+                onClick={onBackToInventory}
+              >
+                Back to Inventory
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col-reverse gap-3">
+              <SaveDraftButton
+                canSaveDraft={!saveDraftDisabledReason}
+                desktopFullWidth
+                onSaveDraft={onSaveDraft}
+                saveDraftDisabledReason={saveDraftDisabledReason}
+                saveDraftStatus={saveDraftStatus}
+              />
+              <PublishInventoryButton
+                desktopFullWidth
+                onReviewPublish={onPublish}
+                publishDisabledReason={publishDisabledReason}
+                publishStatus={publishStatus}
+              />
+            </div>
+          )}
+          <HatchingEggDesktopSummary
+            activePhotoCount={activePhotoCount}
+            form={form}
+            selectedSpeciesName={selectedSpeciesName}
+          />
+        </div>
+      </MobileHatchingEggSection>
+    </main>
+  );
+}
+
+function MobileHatchingEggSection({
+  active,
+  children,
+  complete = false,
+  disabled = false,
+  headerArtwork,
+  onOpen,
+  step,
+  summary,
+  title,
+}: {
+  active: boolean;
+  children: ReactNode;
+  complete?: boolean;
+  disabled?: boolean;
+  headerArtwork?: ReactNode;
+  onOpen: () => void;
+  step: 1 | 2 | 3;
+  summary: ReactNode;
+  title: string;
+}) {
+  return (
+    <section
+      className={`rounded-2xl border p-5 transition-all duration-200 ${
+        disabled
+          ? "border-stone-200 bg-white opacity-60"
+          : active
+            ? "border-emerald-200 bg-emerald-50/60 shadow-[0_6px_20px_rgba(31,42,32,0.07)]"
+            : "border-stone-200 bg-white shadow-sm"
+      }`}
+    >
+      <button
+        aria-expanded={active}
+        className="flex min-h-11 w-full items-center gap-3 text-left disabled:cursor-not-allowed"
+        disabled={disabled}
+        type="button"
+        onClick={onOpen}
+      >
+        {headerArtwork}
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-800 text-sm font-bold text-white">
+          {step}
+        </span>
+        <span className="min-w-0 flex-1 text-xl font-bold text-stone-950">
+          {title}
+        </span>
+        {complete ? (
+          <span className="text-xs font-bold text-emerald-800">✓ Complete</span>
+        ) : null}
+        {!disabled ? (
+          <span
+            aria-hidden="true"
+            className={`h-2.5 w-2.5 shrink-0 border-b-2 border-r-2 border-emerald-800/80 transition-transform ${
+              active ? "rotate-45" : "-rotate-45"
+            }`}
+          />
+        ) : null}
+      </button>
+      {active && !disabled ? (
+        <div className="mt-4">{children}</div>
+      ) : (
+        <div className="mt-2 pl-11 text-sm font-medium leading-5 text-stone-600">
+          {summary}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MobileHatchingEggTaskHeader({
+  currentStep,
+  disabled,
+  isEditMode,
+  onBack,
+  onSaveDraft,
+  onStartOver,
+  saveDraftStatus,
+}: {
+  currentStep: 1 | 2 | 3;
+  disabled: boolean;
+  isEditMode: boolean;
+  onBack: () => void;
+  onSaveDraft: () => void;
+  onStartOver: () => void;
+  saveDraftStatus: SaveDraftStatus;
+}) {
+  const steps = [
+    ["Egg", "Details"],
+    ["Photos &", "Description"],
+    ["Ready to", "Publish"],
+  ] as const;
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-stone-200/80 bg-white pt-[env(safe-area-inset-top)] shadow-[0_1px_8px_rgba(67,55,38,0.06)] sm:hidden">
+      <div className="grid min-h-13 grid-cols-[2.5rem_1fr_3.75rem] items-center gap-1 px-3">
+        <button
+          aria-label="Back to inventory"
+          className="inline-flex size-9 items-center justify-start text-2xl text-stone-950"
+          type="button"
+          onClick={onBack}
+        >
+          <span aria-hidden="true">←</span>
+        </button>
+        <div className="min-w-0 text-center">
+          <h1 className="truncate text-lg font-bold text-stone-950">
+            {isEditMode ? "Edit Hatching Eggs" : "Add Hatching Eggs"}
+          </h1>
+          <p className="text-[11px] font-semibold leading-4 text-stone-500">
+            <span className="text-emerald-800">Step {currentStep} of 3</span>
+            <span aria-hidden="true"> &nbsp;•&nbsp; </span>
+            About 2 minutes
+          </p>
+        </div>
+        <button
+          className="min-h-9 text-right text-xs font-bold leading-4 text-stone-950 disabled:text-stone-400"
+          disabled={disabled || saveDraftStatus === "success"}
+          type="button"
+          onClick={onSaveDraft}
+        >
+          {saveDraftStatus === "saving"
+            ? "Saving..."
+            : isEditMode
+              ? "Save"
+              : "Save draft"}
+        </button>
+      </div>
+      <div className="px-5 pb-2 pt-1.5">
+        <div
+          aria-label={`Step ${currentStep} of 3`}
+          aria-valuemax={3}
+          aria-valuemin={1}
+          aria-valuenow={currentStep}
+          className="relative grid grid-cols-3"
+          role="progressbar"
+        >
+          <span
+            aria-hidden="true"
+            className="absolute left-[16.67%] right-[16.67%] top-4 h-px bg-stone-200"
+          />
+          {steps.map(([firstLine, secondLine], index) => {
+            const step = (index + 1) as 1 | 2 | 3;
+            const active = step === currentStep;
+            const complete = step < currentStep;
+
+            return (
+              <div className="relative flex flex-col items-center" key={step}>
+                <span
+                  aria-hidden="true"
+                  className={`z-10 flex size-8 items-center justify-center rounded-full border text-xs font-bold transition-all duration-200 ${
+                    active || complete
+                      ? "border-emerald-800 bg-emerald-800 text-white"
+                      : "border-stone-300 bg-white text-stone-500"
+                  }`}
+                >
+                  {step}
+                </span>
+                <span
+                  className={`mt-1 text-center text-[10px] font-semibold leading-3 ${
+                    active ? "text-stone-950" : "text-stone-600"
+                  }`}
+                >
+                  {firstLine}
+                  <br />
+                  {secondLine}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        {!isEditMode ? (
+          <button
+            className="ml-auto mt-0.5 block min-h-6 text-[10px] font-semibold text-emerald-800 underline-offset-4 hover:underline focus:outline-none focus:ring-2 focus:ring-emerald-700"
+            type="button"
+            onClick={onStartOver}
+          >
+            Start over
+          </button>
+        ) : null}
+      </div>
+    </header>
   );
 }
 
@@ -2329,100 +2776,6 @@ function MoneyInput({
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
-    </div>
-  );
-}
-
-function HatchingEggSummaryCard({
-  form,
-  selectedSpeciesName,
-}: {
-  form: HatchingEggFormState;
-  selectedSpeciesName: string;
-}) {
-  return (
-    <SidebarCard title="Hatching Eggs Summary">
-      <SummaryRow
-        glyph="/glyphs/hen.png"
-        label="Name"
-        value={form.itemName.trim() || "Not set"}
-      />
-      <SummaryRow
-        glyph="/glyphs/egg.png"
-        label="Species"
-        value={selectedSpeciesName || "Not selected"}
-      />
-      <SummaryRow
-        glyph="/glyphs/calendar.png"
-        label="Available date"
-        value={formatDate(form.availableDate)}
-      />
-      <SummaryRow
-        glyph="/glyphs/feed-sack.png"
-        label="Quantity"
-        value={form.quantityAvailable.trim() || "0"}
-      />
-      <SummaryRow
-        glyph="/glyphs/cart.png"
-        label="Price per egg"
-        value={isValidMoney(form.price) ? formatCurrency(form.price) : "$0.00"}
-      />
-    </SidebarCard>
-  );
-}
-
-function HatchingEggReadinessCard({
-  descriptionComplete,
-  detailsComplete,
-  photoCount,
-}: {
-  descriptionComplete: boolean;
-  detailsComplete: boolean;
-  photoCount: number;
-}) {
-  return (
-    <SidebarCard title="Ready to Publish">
-      <div className="space-y-3">
-        <ChecklistRow complete={detailsComplete} label="Item Details" />
-        <ChecklistRow complete={photoCount > 0} label="Photos" />
-        <ChecklistRow complete={descriptionComplete} label="Description" />
-      </div>
-      <p
-        className={`mt-5 rounded-md border px-3 py-2 text-base font-semibold sm:text-sm ${
-          detailsComplete
-            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-            : "border-stone-200 bg-stone-50 text-stone-600"
-        }`}
-      >
-        {detailsComplete
-          ? "Looks ready to publish."
-          : "Complete item details to publish."}
-      </p>
-    </SidebarCard>
-  );
-}
-
-function ChecklistRow({
-  complete,
-  label,
-}: {
-  complete: boolean;
-  label: string;
-}) {
-  return (
-    <div className="flex items-center gap-3 text-base font-medium text-stone-700 sm:text-sm">
-      <span
-        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full sm:h-5 sm:w-5 ${
-          complete ? "bg-emerald-600" : "border border-stone-300 bg-stone-100"
-        }`}
-      >
-        {complete ? (
-          <span className="block h-2.5 w-1.5 rotate-45 border-b-2 border-r-2 border-white" />
-        ) : (
-          <span className="h-1.5 w-1.5 rounded-full bg-stone-400" />
-        )}
-      </span>
-      {label}
     </div>
   );
 }
