@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
@@ -166,6 +167,10 @@ export function PoultryProductsOnePageForm({
   const [isPersistentShareOpen, setIsPersistentShareOpen] = useState(false);
   const isNavigatingAfterPublishRef = useRef(false);
   const isEditMode = Boolean(initialProcessedPoultryItemId);
+  const [desktopActiveStep, setDesktopActiveStep] = useState<1 | 2 | null>(1);
+  const [desktopHighestUnlockedStep, setDesktopHighestUnlockedStep] = useState<
+    1 | 2 | 3
+  >(isEditMode ? 3 : 1);
 
   useEffect(() => {
     if (!storeId || !processedPoultryEnabled) return;
@@ -798,6 +803,8 @@ export function PoultryProductsOnePageForm({
     setActionMessage(null);
     setSaveDraftStatus("idle");
     setPublishStatus("idle");
+    setDesktopActiveStep(1);
+    setDesktopHighestUnlockedStep(1);
     setIsStartOverDialogOpen(false);
   }
 
@@ -836,7 +843,7 @@ export function PoultryProductsOnePageForm({
 
   return (
     <DashboardPageContent className="bg-stone-50/60">
-      <div className="max-w-7xl">
+      <div className="mx-auto max-w-[1150px]">
         <header className="mb-5">
           <Link
             className="inline-flex min-h-11 items-center text-base font-bold text-emerald-800 underline-offset-4 hover:underline sm:min-h-0 sm:text-sm sm:font-semibold"
@@ -892,6 +899,19 @@ export function PoultryProductsOnePageForm({
               </span>
             </div>
           </div>
+          <DesktopPoultryProductProgress
+            activeStep={desktopActiveStep ?? desktopHighestUnlockedStep}
+            highestUnlockedStep={desktopHighestUnlockedStep}
+            onStepOpen={(step) => {
+              if (step === 3) {
+                setDesktopActiveStep(null);
+                return;
+              }
+              setDesktopActiveStep((currentStep) =>
+                currentStep === step ? null : step,
+              );
+            }}
+          />
         </header>
 
         {isLoadingSpecies || isLoadingExistingProduct ? (
@@ -902,7 +922,8 @@ export function PoultryProductsOnePageForm({
             message={loadError}
           />
         ) : (
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+          <>
+          <div className="grid gap-5 lg:hidden">
             <main className="space-y-4">
               <SectionCard step="1" title="Product Details">
                 <div className="grid gap-4">
@@ -1124,6 +1145,59 @@ export function PoultryProductsOnePageForm({
               />
             </aside>
           </div>
+          <DesktopPoultryProductWorkflow
+            actionError={actionError}
+            actionMessage={actionMessage}
+            activePhotoCount={activePhotoCount}
+            activeStep={desktopActiveStep}
+            addPendingPhotos={addPendingPhotos}
+            descriptionComplete={descriptionComplete}
+            form={form}
+            highestUnlockedStep={desktopHighestUnlockedStep}
+            isEditMode={isEditMode}
+            mediaItems={mediaItems}
+            pendingPhotos={pendingPhotos}
+            photoError={photoError}
+            processedPoultryItemId={processedPoultryItemId}
+            productDetailsComplete={productDetailsComplete}
+            publishDisabledReason={publishDisabledReason}
+            publishStatus={publishStatus}
+            removePendingPhoto={removePendingPhoto}
+            reorderPendingPhotos={reorderPendingPhotos}
+            saveDraftDisabledReason={saveDraftDisabledReason}
+            saveDraftStatus={saveDraftStatus}
+            savePendingPhotoCrop={savePendingPhotoCrop}
+            selectedSpeciesName={selectedSpecies?.common_name ?? ""}
+            species={species}
+            storeId={storeId}
+            validationErrors={validationErrors}
+            onBackToInventory={backToInventory}
+            onDetailsContinue={() => {
+              setDesktopHighestUnlockedStep((currentStep) =>
+                currentStep < 2 ? 2 : currentStep,
+              );
+              setDesktopActiveStep(2);
+            }}
+            onDoneEditing={() => {
+              setDesktopHighestUnlockedStep(3);
+              setDesktopActiveStep(null);
+            }}
+            onFormUpdate={updateForm}
+            onOpenPersistentShare={() => setIsPersistentShareOpen(true)}
+            onPublish={handlePublish}
+            onReloadPhotos={() => {
+              if (processedPoultryItemId) {
+                void loadProcessedPoultryMedia(processedPoultryItemId);
+              }
+            }}
+            onSaveDraft={handleSaveDraft}
+            onStepToggle={(step) =>
+              setDesktopActiveStep((currentStep) =>
+                currentStep === step ? null : step,
+              )
+            }
+          />
+          </>
         )}
       </div>
 
@@ -1164,6 +1238,587 @@ export function PoultryProductsOnePageForm({
   );
 }
 
+function DesktopPoultryProductWorkflow({
+  actionError,
+  actionMessage,
+  activePhotoCount,
+  activeStep,
+  addPendingPhotos,
+  descriptionComplete,
+  form,
+  highestUnlockedStep,
+  isEditMode,
+  mediaItems,
+  onBackToInventory,
+  onDetailsContinue,
+  onDoneEditing,
+  onFormUpdate,
+  onOpenPersistentShare,
+  onPublish,
+  onReloadPhotos,
+  onSaveDraft,
+  onStepToggle,
+  pendingPhotos,
+  photoError,
+  processedPoultryItemId,
+  productDetailsComplete,
+  publishDisabledReason,
+  publishStatus,
+  removePendingPhoto,
+  reorderPendingPhotos,
+  saveDraftDisabledReason,
+  saveDraftStatus,
+  savePendingPhotoCrop,
+  selectedSpeciesName,
+  species,
+  storeId,
+  validationErrors,
+}: {
+  actionError: string | null;
+  actionMessage: string | null;
+  activePhotoCount: number;
+  activeStep: 1 | 2 | null;
+  addPendingPhotos: (files: FileList | null) => void;
+  descriptionComplete: boolean;
+  form: PoultryProductFormState;
+  highestUnlockedStep: 1 | 2 | 3;
+  isEditMode: boolean;
+  mediaItems: ListingPhotoItem[];
+  onBackToInventory: () => void;
+  onDetailsContinue: () => void;
+  onDoneEditing: () => void;
+  onFormUpdate: (updates: Partial<PoultryProductFormState>) => void;
+  onOpenPersistentShare: () => void;
+  onPublish: () => void;
+  onReloadPhotos: () => void;
+  onSaveDraft: () => void;
+  onStepToggle: (step: 1 | 2) => void;
+  pendingPhotos: PendingPhoto[];
+  photoError: string | null;
+  processedPoultryItemId: string;
+  productDetailsComplete: boolean;
+  publishDisabledReason: string | null;
+  publishStatus: PublishStatus;
+  removePendingPhoto: (photo: PendingPhoto) => void;
+  reorderPendingPhotos: (photos: DashboardPhoto[]) => void;
+  saveDraftDisabledReason: string | null;
+  saveDraftStatus: SaveDraftStatus;
+  savePendingPhotoCrop: (
+    photo: DashboardPhoto,
+    crop: PhotoCropMetadata | null,
+  ) => void;
+  selectedSpeciesName: string;
+  species: ReferenceSpecies[];
+  storeId: string;
+  validationErrors: string[];
+}) {
+  const hasActionFeedback =
+    Boolean(actionError) ||
+    Boolean(actionMessage) ||
+    validationErrors.length > 0;
+
+  return (
+    <main className="hidden space-y-5 lg:block">
+      <SectionCard
+        desktopComplete={highestUnlockedStep >= 2}
+        desktopExpanded={activeStep === 1}
+        desktopSummary={
+          <span>
+            {form.productName.trim() || "Product not named"}{" "}
+            <span aria-hidden="true">•</span>{" "}
+            {form.productType || "Type not selected"}{" "}
+            <span aria-hidden="true">•</span> Available{" "}
+            {formatDate(form.availableDate)} <span aria-hidden="true">•</span>{" "}
+            {form.quantityAvailable.trim() || "0"} available{" "}
+            <span aria-hidden="true">•</span>{" "}
+            {isValidMoney(form.price) ? formatCurrency(form.price) : "$0.00"}
+          </span>
+        }
+        onDesktopToggle={() => onStepToggle(1)}
+        step="1"
+        title="Product Details"
+      >
+        <div className="relative grid gap-5 xl:pr-40">
+          <Image
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none absolute right-0 top-0 hidden h-32 w-40 object-contain opacity-90 xl:block"
+            height={128}
+            src="/illustrations/poultry-products-desktop.png"
+            width={160}
+          />
+          <label className="max-w-3xl">
+            <span className="mb-1.5 block text-xs font-semibold text-stone-600">
+              Product Name
+            </span>
+            <input
+              className={inputClass}
+              placeholder="Enter product name"
+              value={form.productName}
+              onChange={(event) =>
+                onFormUpdate({ productName: event.target.value })
+              }
+            />
+          </label>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <CompactField label="Product Type">
+              <select
+                className={inputClass}
+                value={form.productType}
+                onChange={(event) =>
+                  onFormUpdate({ productType: event.target.value })
+                }
+              >
+                <option value="">Choose product type</option>
+                {productTypeOptions.map((productType) => (
+                  <option key={productType} value={productType}>
+                    {productType}
+                  </option>
+                ))}
+              </select>
+            </CompactField>
+            <CompactField label="Species">
+              <select
+                className={inputClass}
+                value={form.speciesId}
+                onChange={(event) =>
+                  onFormUpdate({ speciesId: event.target.value })
+                }
+              >
+                <option value="">Choose species</option>
+                {species.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.common_name}
+                  </option>
+                ))}
+              </select>
+            </CompactField>
+            <CompactField label="Available Date">
+              <input
+                className={inputClass}
+                type="date"
+                value={form.availableDate}
+                onChange={(event) =>
+                  onFormUpdate({ availableDate: event.target.value })
+                }
+              />
+            </CompactField>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <CompactField
+              helperText="Examples: 1 dozen, approx. 4 lb bird, 1 lb package, 8 oz jar"
+              label="Package Weight / Size"
+            >
+              <input
+                className={inputClass}
+                placeholder="1 dozen"
+                value={form.packageSize}
+                onChange={(event) =>
+                  onFormUpdate({ packageSize: event.target.value })
+                }
+              />
+            </CompactField>
+            <CompactField
+              helperText="Number of packages/items available."
+              label="Quantity Available"
+            >
+              <input
+                className={inputClass}
+                inputMode="numeric"
+                min="0"
+                placeholder="Enter quantity"
+                step="1"
+                type="number"
+                value={form.quantityAvailable}
+                onChange={(event) =>
+                  onFormUpdate({ quantityAvailable: event.target.value })
+                }
+              />
+            </CompactField>
+            <CompactField helperText="Price per package/item." label="Price">
+              <input
+                className={inputClass}
+                inputMode="decimal"
+                min="0"
+                placeholder="0.00"
+                step="0.01"
+                type="number"
+                value={form.price}
+                onChange={(event) =>
+                  onFormUpdate({ price: event.target.value })
+                }
+              />
+            </CompactField>
+          </div>
+          <ValidationMessage errors={validationErrors} />
+          <button
+            className="ml-auto inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-6 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+            disabled={!productDetailsComplete}
+            type="button"
+            onClick={onDetailsContinue}
+          >
+            Continue
+          </button>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        badge={
+          activePhotoCount > 0 || descriptionComplete ? "Added" : "Optional"
+        }
+        desktopComplete={highestUnlockedStep === 3}
+        desktopDisabled={highestUnlockedStep < 2}
+        desktopExpanded={activeStep === 2}
+        desktopSummary={`${activePhotoCount} photo${
+          activePhotoCount === 1 ? "" : "s"
+        } • ${
+          descriptionComplete ? "Description added" : "No description added"
+        }`}
+        onDesktopToggle={() => onStepToggle(2)}
+        step="2"
+        title="Photos & Description"
+      >
+        <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
+          <div className="min-w-0">
+            <PoultryProductPhotos
+              addPendingPhotos={addPendingPhotos}
+              desktopCompact
+              mediaItems={mediaItems}
+              pendingPhotos={pendingPhotos}
+              photoError={photoError}
+              processedPoultryItemId={processedPoultryItemId}
+              removePendingPhoto={removePendingPhoto}
+              reorderPendingPhotos={reorderPendingPhotos}
+              savePendingPhotoCrop={savePendingPhotoCrop}
+              storeId={storeId}
+              onReload={onReloadPhotos}
+            />
+          </div>
+          <div className="flex min-w-0 flex-col rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+            <h3 className="text-base font-bold text-stone-950">Description</h3>
+            <label className="mt-4 flex min-h-0 flex-1 flex-col">
+              <span className="mb-1.5 block text-sm font-semibold text-stone-600">
+                Storefront description
+              </span>
+              <textarea
+                className={`${inputClass} min-h-56 flex-1 resize-y py-3 leading-6`}
+                maxLength={descriptionMaxLength}
+                placeholder="Share pickup details, processing notes, package details, storage information, or anything buyers should know."
+                value={form.description}
+                onChange={(event) =>
+                  onFormUpdate({ description: event.target.value })
+                }
+              />
+            </label>
+            <div className="mt-2 flex items-center justify-between gap-4">
+              <p className="text-sm text-stone-500">
+                {form.description.length} / {descriptionMaxLength}
+              </p>
+              <button
+                className="inline-flex min-h-10 items-center justify-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2"
+                type="button"
+                onClick={onDoneEditing}
+              >
+                Done editing
+              </button>
+            </div>
+          </div>
+        </div>
+      </SectionCard>
+
+      <section
+        className={`rounded-lg border border-stone-200 bg-white p-5 shadow-sm ${
+          highestUnlockedStep < 3
+            ? "bg-stone-50/70 opacity-60 shadow-none"
+            : ""
+        }`}
+      >
+        <div className="flex min-h-12 items-center gap-4">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900">
+            3
+          </span>
+          <div>
+            <h2 className="text-xl font-bold text-stone-950">Ready to Publish</h2>
+            <p className="mt-1 text-sm text-stone-600">
+              Review the summary below, then publish your inventory.
+            </p>
+          </div>
+        </div>
+        {highestUnlockedStep >= 3 ? (
+          <div className="mt-4 space-y-5">
+            <div
+              className={`flex items-center gap-5 rounded-lg px-5 py-4 ${
+                productDetailsComplete ? "bg-emerald-50" : "bg-amber-50"
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`flex size-16 shrink-0 items-center justify-center rounded-full text-3xl font-bold text-white ${
+                  productDetailsComplete ? "bg-emerald-800" : "bg-amber-600"
+                }`}
+              >
+                {productDetailsComplete ? "✓" : "!"}
+              </span>
+              <div>
+                <p className="text-xl font-bold text-stone-950">
+                  {productDetailsComplete
+                    ? "You’re all set!"
+                    : "A few details remain"}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-stone-600">
+                  {productDetailsComplete
+                    ? "Everything looks great. Publish when you’re ready."
+                    : publishDisabledReason ??
+                      "Finish the required product details before publishing."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                {hasActionFeedback ? (
+                  <ActionStatus
+                    actionError={actionError}
+                    actionMessage={actionMessage}
+                    publishDisabledReason={
+                      isEditMode ? null : publishDisabledReason
+                    }
+                    validationErrors={validationErrors}
+                  />
+                ) : (
+                  <p
+                    className={`rounded-md border px-3 py-2 text-sm font-semibold ${
+                      productDetailsComplete
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        : "border-stone-200 bg-stone-50 text-stone-600"
+                    }`}
+                  >
+                    {productDetailsComplete
+                      ? "Everything is ready to publish."
+                      : "Complete the required details to publish."}
+                  </p>
+                )}
+              </div>
+              {isEditMode ? (
+                <>
+                  <button
+                    className="seller-secondary-button"
+                    type="button"
+                    onClick={onBackToInventory}
+                  >
+                    Back to Inventory
+                  </button>
+                  {processedPoultryItemId ? (
+                    <button
+                      className="seller-secondary-button"
+                      type="button"
+                      onClick={onOpenPersistentShare}
+                    >
+                      Share listing
+                    </button>
+                  ) : null}
+                  <SaveDraftButton
+                    canSaveDraft={!saveDraftDisabledReason}
+                    idleLabel="Save Changes"
+                    onSaveDraft={onSaveDraft}
+                    saveDraftDisabledReason={saveDraftDisabledReason}
+                    saveDraftStatus={saveDraftStatus}
+                    successLabel="Changes saved"
+                  />
+                </>
+              ) : (
+                <>
+                  <PublishInventoryButton
+                    onReviewPublish={onPublish}
+                    publishDisabledReason={publishDisabledReason}
+                    publishStatus={publishStatus}
+                  />
+                  <SaveDraftButton
+                    canSaveDraft={!saveDraftDisabledReason}
+                    onSaveDraft={onSaveDraft}
+                    saveDraftDisabledReason={saveDraftDisabledReason}
+                    saveDraftStatus={saveDraftStatus}
+                  />
+                </>
+              )}
+            </div>
+
+            <PoultryProductDesktopSummary
+              activePhotoCount={activePhotoCount}
+              form={form}
+              selectedSpeciesName={selectedSpeciesName}
+            />
+            <div className="flex items-center gap-5 border-t border-stone-200 pt-5">
+              <Image
+                alt=""
+                aria-hidden="true"
+                className="h-16 w-20 shrink-0 object-contain"
+                height={64}
+                src="/illustrations/poultry-products-desktop.png"
+                width={80}
+              />
+              <div>
+                <p className="text-lg font-bold text-stone-950">Almost there!</p>
+                <p className="mt-1 text-sm text-stone-600">
+                  Once published, your poultry product will appear in your
+                  storefront inventory.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </section>
+    </main>
+  );
+}
+
+function PoultryProductDesktopSummary({
+  activePhotoCount,
+  form,
+  selectedSpeciesName,
+}: {
+  activePhotoCount: number;
+  form: PoultryProductFormState;
+  selectedSpeciesName: string;
+}) {
+  const items = [
+    {
+      glyph: "/glyphs/egg-carton.png",
+      label: "Product type",
+      value: form.productType || "Not selected",
+    },
+    {
+      glyph: "/glyphs/hen.png",
+      label: "Species",
+      value: selectedSpeciesName || "Not selected",
+    },
+    {
+      glyph: "/glyphs/calendar.png",
+      label: "Available date",
+      value: formatDate(form.availableDate),
+    },
+    {
+      glyph: "/glyphs/feed-sack.png",
+      label: "Quantity available",
+      value: form.quantityAvailable.trim() || "0",
+    },
+    {
+      glyph: "/glyphs/cart.png",
+      label: "Price",
+      value: isValidMoney(form.price) ? formatCurrency(form.price) : "$0.00",
+    },
+    {
+      glyph: "/glyphs/camera.png",
+      label: "Photos",
+      value: String(activePhotoCount),
+    },
+  ];
+
+  return (
+    <section
+      aria-labelledby="poultry-product-desktop-summary-title"
+      className="border-t border-stone-200 pt-5"
+    >
+      <h3
+        className="text-lg font-bold text-stone-950"
+        id="poultry-product-desktop-summary-title"
+      >
+        Listing Summary
+      </h3>
+      <div className="mt-4 grid gap-x-8 gap-y-5 md:grid-cols-2 xl:grid-cols-3">
+        {items.map((item) => (
+          <div className="flex min-w-0 items-start gap-3" key={item.label}>
+            <Image
+              alt=""
+              className="mt-0.5 size-5 shrink-0 object-contain"
+              height={20}
+              src={item.glyph}
+              width={20}
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-stone-500">{item.label}</p>
+              <p className="mt-1 text-base font-semibold leading-6 text-stone-900">
+                {item.value}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DesktopPoultryProductProgress({
+  activeStep,
+  highestUnlockedStep,
+  onStepOpen,
+}: {
+  activeStep: 1 | 2 | 3;
+  highestUnlockedStep: 1 | 2 | 3;
+  onStepOpen: (step: 1 | 2 | 3) => void;
+}) {
+  const steps = [
+    "Product Details",
+    "Photos & Description",
+    "Ready to Publish",
+  ] as const;
+
+  return (
+    <nav
+      aria-label="Add Poultry Products progress"
+      className="mx-auto mt-8 hidden max-w-3xl px-4 lg:block"
+    >
+      <ol className="relative grid grid-cols-3">
+        <span
+          aria-hidden="true"
+          className="absolute left-[16.67%] right-[16.67%] top-5 h-px bg-stone-300"
+        />
+        {steps.map((label, index) => {
+          const step = (index + 1) as 1 | 2 | 3;
+          const active = step === activeStep;
+          const complete = step < highestUnlockedStep;
+          const disabled = step > highestUnlockedStep;
+
+          return (
+            <li className="relative flex flex-col items-center" key={label}>
+              <button
+                aria-current={active ? "step" : undefined}
+                className="group z-10 flex flex-col items-center text-center focus:outline-none disabled:cursor-not-allowed"
+                disabled={disabled}
+                type="button"
+                onClick={() => onStepOpen(step)}
+              >
+                <span
+                  className={`flex size-10 items-center justify-center rounded-full border text-sm font-bold shadow-sm transition-all group-focus:ring-2 group-focus:ring-emerald-700 group-focus:ring-offset-2 ${
+                    (active || complete) && !disabled
+                      ? "border-emerald-800 bg-emerald-800 text-white"
+                      : disabled
+                        ? "border-stone-200 bg-stone-100 text-stone-400 shadow-none"
+                        : "border-stone-300 bg-white text-stone-600"
+                  }`}
+                >
+                  {step}
+                </span>
+                <span
+                  className={`mt-2 text-sm font-semibold ${
+                    disabled
+                      ? "text-stone-400"
+                      : active
+                        ? "text-stone-950"
+                        : "text-stone-600"
+                  }`}
+                >
+                  {label}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
 function PoultryProductPhotos({
   addPendingPhotos,
   mediaItems,
@@ -1175,6 +1830,7 @@ function PoultryProductPhotos({
   reorderPendingPhotos,
   savePendingPhotoCrop,
   storeId,
+  desktopCompact = false,
 }: {
   addPendingPhotos: (files: FileList | null) => void;
   mediaItems: ListingPhotoItem[];
@@ -1189,6 +1845,7 @@ function PoultryProductPhotos({
     crop: PhotoCropMetadata | null,
   ) => void;
   storeId: string;
+  desktopCompact?: boolean;
 }) {
   if (pendingPhotos.length > 0 || !processedPoultryItemId) {
     return (
@@ -1199,6 +1856,7 @@ function PoultryProductPhotos({
         removePendingPhoto={removePendingPhoto}
         reorderPendingPhotos={reorderPendingPhotos}
         savePendingPhotoCrop={savePendingPhotoCrop}
+        desktopCompact={desktopCompact}
       />
     );
   }
@@ -1213,6 +1871,7 @@ function PoultryProductPhotos({
       entityType="processed_poultry_inventory_item"
       listingBatchId={processedPoultryItemId}
       mediaItems={mediaItems}
+      mobileCompact={desktopCompact}
       mode="setup"
       storeId={storeId}
       title="Photos"
@@ -1228,6 +1887,7 @@ function PendingPoultryProductPhotos({
   removePendingPhoto,
   reorderPendingPhotos,
   savePendingPhotoCrop,
+  desktopCompact = false,
 }: {
   addPendingPhotos: (files: FileList | null) => void;
   pendingPhotos: PendingPhoto[];
@@ -1238,6 +1898,7 @@ function PendingPoultryProductPhotos({
     photo: DashboardPhoto,
     crop: PhotoCropMetadata | null,
   ) => void;
+  desktopCompact?: boolean;
 }) {
   const dashboardPhotos = pendingPhotos.map((photo, index) => ({
     altText: photo.file.name,
@@ -1266,13 +1927,14 @@ function PendingPoultryProductPhotos({
               }
             : null
         }
-        fillEmptySlots
+        fillEmptySlots={!desktopCompact}
         helperText="Drag photos to reorder. The first photo is the featured storefront photo."
         maxFileSizeMb={maxPendingImageSizeBytes / 1024 / 1024}
         maxPhotos={maxPoultryProductPhotos}
         photos={dashboardPhotos}
         removePhotoContext="item"
         title="Photos"
+        mobileCompact={desktopCompact}
         onAddPhotos={addPendingPhotos}
         onRemovePhoto={(photo) => {
           const pendingPhoto = pendingPhotos.find((item) => item.id === photo.id);
