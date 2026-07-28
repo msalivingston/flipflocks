@@ -1,13 +1,15 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { disabledButtonClass } from "./constants";
-import { SectionCard } from "./SectionCard";
 import type { SaveDraftPreflightResult } from "./saveDraftPreflight";
 import type { PublishValidationIssue } from "./types";
 import { MobileLiveBirdsArtwork } from "./MobileLiveBirdsArtwork";
 
 export function ReviewPublishCard({
   onValidationIssueClick,
+  desktopDisabled,
+  desktopListingSummary,
   onSaveDraft,
   onMobileOpen,
   onReviewPublish,
@@ -23,6 +25,8 @@ export function ReviewPublishCard({
   validationIssues,
 }: {
   onValidationIssueClick?: (issue: PublishValidationIssue) => void;
+  desktopDisabled: boolean;
+  desktopListingSummary?: ReactNode;
   onSaveDraft: () => void;
   onMobileOpen: () => void;
   onReviewPublish: () => void;
@@ -51,6 +55,26 @@ export function ReviewPublishCard({
             Everything looks good!
           </p>
         </div>
+        <div
+          className={`hidden items-center gap-5 rounded-lg bg-emerald-50 px-5 py-4 ${
+            !stepLocked && validationIssues.length === 0 ? "sm:flex" : ""
+          }`}
+        >
+          <span
+            aria-hidden="true"
+            className="flex size-14 shrink-0 items-center justify-center rounded-full bg-emerald-800 text-2xl font-bold text-white"
+          >
+            ✓
+          </span>
+          <div>
+            <p className="text-lg font-bold text-stone-950">
+              You&apos;re all set!
+            </p>
+            <p className="mt-1 text-sm text-stone-600">
+              Review the summary below, then publish your inventory.
+            </p>
+          </div>
+        </div>
         <div className="space-y-2 sm:space-y-3">
           <p className="text-base leading-7 text-stone-700">
             Review the details above, then publish when everything looks right.
@@ -60,20 +84,58 @@ export function ReviewPublishCard({
           </p>
         </div>
 
-        {!stepLocked ? (
-          <FinalActionStatus
-            onValidationIssueClick={onValidationIssueClick}
+        <div className="sm:hidden">
+          {!stepLocked ? (
+            <FinalActionStatus
+              onValidationIssueClick={onValidationIssueClick}
+              publishDisabledReason={publishDisabledReason}
+              publishMessage={publishMessage}
+              publishStatus={publishStatus}
+              saveDraftDisabledReason={saveDraftDisabledReason}
+              saveDraftMessage={saveDraftMessage}
+              saveDraftStatus={saveDraftStatus}
+              validationIssues={validationIssues}
+            />
+          ) : null}
+          <div className="mt-4 flex flex-col-reverse gap-3">
+            <SaveDraftButton
+              canSaveDraft={saveDraftPreflight.canSaveDraft}
+              onSaveDraft={onSaveDraft}
+              saveDraftDisabledReason={saveDraftDisabledReason}
+              saveDraftStatus={saveDraftStatus}
+              stepLocked={stepLocked}
+              desktopFullWidth
+            />
+            <PublishInventoryButton
+              onReviewPublish={onReviewPublish}
+              publishDisabledReason={publishDisabledReason}
+              publishStatus={publishStatus}
+              stepLocked={stepLocked}
+              desktopFullWidth
+            />
+          </div>
+        </div>
+        <div className="hidden items-center gap-3 sm:flex">
+          <div className="min-w-0 flex-1">
+            {!stepLocked ? (
+              <FinalActionStatus
+                onValidationIssueClick={onValidationIssueClick}
+                publishDisabledReason={publishDisabledReason}
+                publishMessage={publishMessage}
+                publishStatus={publishStatus}
+                saveDraftDisabledReason={saveDraftDisabledReason}
+                saveDraftMessage={saveDraftMessage}
+                saveDraftStatus={saveDraftStatus}
+                validationIssues={validationIssues}
+              />
+            ) : null}
+          </div>
+          <PublishInventoryButton
+            onReviewPublish={onReviewPublish}
             publishDisabledReason={publishDisabledReason}
-            publishMessage={publishMessage}
             publishStatus={publishStatus}
-            saveDraftDisabledReason={saveDraftDisabledReason}
-            saveDraftMessage={saveDraftMessage}
-            saveDraftStatus={saveDraftStatus}
-            validationIssues={validationIssues}
+            stepLocked={stepLocked}
           />
-        ) : null}
-
-        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
           <SaveDraftButton
             canSaveDraft={saveDraftPreflight.canSaveDraft}
             onSaveDraft={onSaveDraft}
@@ -81,13 +143,10 @@ export function ReviewPublishCard({
             saveDraftStatus={saveDraftStatus}
             stepLocked={stepLocked}
           />
-          <PublishInventoryButton
-            onReviewPublish={onReviewPublish}
-            publishDisabledReason={publishDisabledReason}
-            publishStatus={publishStatus}
-            stepLocked={stepLocked}
-          />
         </div>
+        {desktopListingSummary ? (
+          <div className="hidden sm:block">{desktopListingSummary}</div>
+        ) : null}
       </div>
     );
   }
@@ -128,13 +187,28 @@ export function ReviewPublishCard({
         )}
       </section>
       <div className="hidden sm:block">
-        <SectionCard
-          className={stepLocked ? "opacity-60" : ""}
-          step="4"
-          title="Ready to publish?"
+        <section
+          className={`rounded-lg border border-stone-200 bg-white p-5 shadow-sm ${
+            desktopDisabled || stepLocked
+              ? "bg-stone-50/70 opacity-60 shadow-none"
+              : ""
+          }`}
         >
-          {renderContent()}
-        </SectionCard>
+          <div className="flex min-h-12 w-full items-center gap-4">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900">
+              4
+            </span>
+            <h2 className="min-w-0 text-xl font-bold text-stone-950">
+              Ready to Publish
+            </h2>
+            {desktopDisabled ? (
+              <span className="ml-auto text-sm font-bold text-stone-500">
+                Locked
+              </span>
+            ) : null}
+          </div>
+          {!desktopDisabled ? <div className="mt-4">{renderContent()}</div> : null}
+        </section>
       </div>
     </>
   );
@@ -272,6 +346,7 @@ export function SaveDraftButton({
   saveDraftStatus,
   successLabel = "Draft saved",
   stepLocked = false,
+  desktopFullWidth = false,
 }: {
   canSaveDraft: boolean;
   idleLabel?: string;
@@ -280,6 +355,7 @@ export function SaveDraftButton({
   saveDraftStatus: SaveDraftStatus;
   successLabel?: string;
   stepLocked?: boolean;
+  desktopFullWidth?: boolean;
 }) {
   const disabled =
     stepLocked ||
@@ -292,7 +368,9 @@ export function SaveDraftButton({
   if (disabled) {
     return (
       <button
-        className={`${disabledButtonClass} w-full sm:w-auto`}
+        className={`${disabledButtonClass} w-full ${
+          desktopFullWidth ? "sm:w-full" : "sm:w-auto"
+        }`}
         disabled
         type="button"
       >
@@ -303,7 +381,9 @@ export function SaveDraftButton({
 
   return (
     <button
-      className="inline-flex min-h-12 w-full items-center justify-center rounded-md border border-emerald-800/40 bg-white px-5 text-base font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
+      className={`inline-flex min-h-12 w-full items-center justify-center rounded-md border border-emerald-800/40 bg-white px-5 text-base font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:text-sm sm:font-semibold ${
+        desktopFullWidth ? "sm:w-full" : "sm:w-auto"
+      }`}
       onClick={onSaveDraft}
       type="button"
     >
@@ -316,11 +396,13 @@ export type SaveDraftStatus = "idle" | "saving" | "success" | "error";
 export type PublishStatus = "idle" | "publishing" | "success" | "error";
 
 export function PublishInventoryButton({
+  desktopFullWidth = false,
   onReviewPublish,
   publishDisabledReason,
   publishStatus,
   stepLocked = false,
 }: {
+  desktopFullWidth?: boolean;
   onReviewPublish: () => void;
   publishDisabledReason: string | null;
   publishStatus: PublishStatus;
@@ -336,7 +418,9 @@ export function PublishInventoryButton({
   if (disabled) {
     return (
       <button
-        className="inline-flex min-h-12 w-full cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-5 text-base font-bold text-white opacity-65 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
+        className={`inline-flex min-h-12 w-full cursor-not-allowed items-center justify-center rounded-md bg-emerald-800/70 px-5 text-base font-bold text-white opacity-65 sm:min-h-10 sm:text-sm sm:font-semibold ${
+          desktopFullWidth ? "sm:w-full" : "sm:w-auto"
+        }`}
         disabled
         title={stepLocked ? undefined : publishDisabledReason ?? undefined}
         type="button"
@@ -348,7 +432,11 @@ export function PublishInventoryButton({
 
   return (
     <button
-      className="inline-flex min-h-14 w-full items-center justify-center rounded-xl bg-emerald-800 px-6 text-lg font-bold text-white shadow-[0_8px_22px_rgba(6,95,70,0.2)] transition-all hover:-translate-y-0.5 hover:bg-emerald-900 active:translate-y-0 active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:min-h-10 sm:w-auto sm:rounded-md sm:px-5 sm:text-sm sm:font-semibold"
+      className={`inline-flex min-h-14 w-full items-center justify-center rounded-xl bg-emerald-800 px-6 text-lg font-bold text-white shadow-[0_8px_22px_rgba(6,95,70,0.2)] transition-all hover:-translate-y-0.5 hover:bg-emerald-900 active:translate-y-0 active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:rounded-md ${
+        desktopFullWidth
+          ? "sm:min-h-12 sm:w-full sm:text-base"
+          : "sm:min-h-10 sm:w-auto sm:px-5 sm:text-sm sm:font-semibold"
+      }`}
       onClick={onReviewPublish}
       type="button"
     >

@@ -13,6 +13,9 @@ import type { BirdOffering, PriceAdjustmentState } from "./types";
 
 export function AgeBasedPriceChangesCard({
   availableDate,
+  desktopActive,
+  desktopComplete,
+  desktopDisabled,
   introText,
   offerings,
   priceAdjustment,
@@ -22,8 +25,12 @@ export function AgeBasedPriceChangesCard({
   mobileActive = false,
   onMobileContinue,
   onMobileOpen,
+  onDesktopOpen,
 }: {
   availableDate: string;
+  desktopActive: boolean;
+  desktopComplete: boolean;
+  desktopDisabled: boolean;
   introText?: string;
   offerings: BirdOffering[];
   priceAdjustment: PriceAdjustmentState;
@@ -33,6 +40,7 @@ export function AgeBasedPriceChangesCard({
   mobileActive?: boolean;
   onMobileContinue: () => void;
   onMobileOpen: () => void;
+  onDesktopOpen: () => void;
 }) {
   const issues = getPriceAdjustmentIssues({ offerings, priceAdjustment });
   const example = getPriceAdjustmentExample({
@@ -142,9 +150,16 @@ export function AgeBasedPriceChangesCard({
                 </div>
               </div>
             ) : null}
-
           </div>
         ) : null}
+        <button
+          className="ml-auto hidden min-h-10 items-center justify-center rounded-md bg-emerald-800 px-6 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500 sm:inline-flex"
+          disabled={stepLocked}
+          type="button"
+          onClick={onMobileContinue}
+        >
+          Continue
+        </button>
       </div>
     );
   }
@@ -203,6 +218,17 @@ export function AgeBasedPriceChangesCard({
         <SectionCard
           badge="Optional"
           className={stepLocked ? "opacity-60" : ""}
+          desktopComplete={desktopComplete}
+          desktopDisabled={desktopDisabled}
+          desktopExpanded={desktopActive}
+          desktopSummary={
+            priceAdjustment.enabled
+              ? getCompactPriceAdjustmentSummary(priceAdjustment)
+                  .replace("Max ", "Maximum ")
+                  .replace("Min ", "Minimum ")
+              : "No automatic price changes"
+          }
+          onDesktopToggle={onDesktopOpen}
           step="3"
           title="Automatic price changes"
         >

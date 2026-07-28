@@ -4,38 +4,95 @@ export function SectionCard({
   badge,
   children,
   className = "",
+  desktopCollapsible = true,
+  desktopComplete = false,
+  desktopDisabled = false,
+  desktopExpanded,
+  desktopSummary,
   mobileComplete = false,
   mobileArtwork,
   mobileExpanded,
   mobileSummary,
   onMobileToggle,
+  onDesktopToggle,
   step,
   title,
 }: {
   badge?: string;
   children: ReactNode;
   className?: string;
+  desktopCollapsible?: boolean;
+  desktopComplete?: boolean;
+  desktopDisabled?: boolean;
+  desktopExpanded?: boolean;
+  desktopSummary?: ReactNode;
   mobileComplete?: boolean;
   mobileArtwork?: ReactNode;
   mobileExpanded?: boolean;
   mobileSummary?: ReactNode;
   onMobileToggle?: () => void;
+  onDesktopToggle?: () => void;
   step: string;
   title: string;
 }) {
   const hasMobileDisclosure = typeof mobileExpanded === "boolean";
+  const hasDesktopDisclosure = typeof desktopExpanded === "boolean";
+  const desktopHeaderContent = (
+    <>
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900">
+        {step}
+      </span>
+      <h2 className="min-w-0 text-xl font-bold text-stone-950">{title}</h2>
+      {badge ? (
+        <span className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs font-semibold text-stone-600">
+          {badge}
+        </span>
+      ) : null}
+      <span className="ml-auto inline-flex items-center gap-6">
+        {desktopComplete ? (
+          <span className="inline-flex items-center gap-2 text-sm font-bold text-emerald-800">
+            <span aria-hidden="true">✓</span>
+            Complete
+          </span>
+        ) : null}
+        {desktopCollapsible ? (
+          <>
+            <span className="text-sm font-bold text-emerald-800">
+              {desktopDisabled
+                ? "Locked"
+                : desktopExpanded
+                  ? "Collapse"
+                  : "Edit"}
+            </span>
+            <span
+              aria-hidden="true"
+              className={`h-2.5 w-2.5 border-b-2 border-r-2 border-emerald-800 transition-transform ${
+                desktopExpanded ? "rotate-45" : "-rotate-45"
+              }`}
+            />
+          </>
+        ) : desktopDisabled ? (
+          <span className="text-sm font-bold text-stone-500">Locked</span>
+        ) : null}
+      </span>
+    </>
+  );
 
   return (
     <section
       className={`rounded-2xl border border-stone-200 bg-white shadow-none transition-all duration-200 sm:rounded-lg sm:p-5 sm:shadow-sm ${
         hasMobileDisclosure && !mobileExpanded ? "p-3.5" : "p-5"
+      } ${
+        desktopDisabled
+          ? "sm:border-stone-200 sm:bg-stone-50/70 sm:opacity-60 sm:shadow-none"
+          : ""
       } ${className}`}
     >
       <button
         aria-expanded={hasMobileDisclosure ? mobileExpanded : undefined}
-        className={`flex w-full flex-wrap items-center gap-3 text-left sm:pointer-events-none ${
-          hasMobileDisclosure ? "" : "pointer-events-none"
-        }`}
+        className={`flex w-full flex-wrap items-center gap-3 text-left ${
+          hasDesktopDisclosure ? "sm:hidden" : "sm:pointer-events-none"
+        } ${hasMobileDisclosure ? "" : "pointer-events-none"}`}
         disabled={!hasMobileDisclosure}
         type="button"
         onClick={onMobileToggle}
@@ -78,15 +135,36 @@ export function SectionCard({
           />
         ) : null}
       </button>
+      {hasDesktopDisclosure && desktopCollapsible ? (
+        <button
+          aria-expanded={desktopExpanded}
+          className="hidden min-h-12 w-full items-center gap-4 text-left sm:flex sm:disabled:cursor-not-allowed"
+          disabled={desktopDisabled}
+          type="button"
+          onClick={onDesktopToggle}
+        >
+          {desktopHeaderContent}
+        </button>
+      ) : null}
+      {hasDesktopDisclosure && !desktopCollapsible ? (
+        <div className="hidden min-h-12 w-full items-center gap-4 sm:flex">
+          {desktopHeaderContent}
+        </div>
+      ) : null}
       {!mobileExpanded && mobileSummary ? (
         <div className="mt-1 pl-11 text-sm font-medium leading-5 text-stone-600 sm:hidden">
           {mobileSummary}
         </div>
       ) : null}
+      {hasDesktopDisclosure && !desktopExpanded && desktopSummary ? (
+        <div className="mt-1 hidden pl-14 text-sm font-medium leading-5 text-stone-600 sm:block">
+          {desktopSummary}
+        </div>
+      ) : null}
       <div
         className={`mt-3 sm:mt-4 ${
           hasMobileDisclosure && !mobileExpanded ? "hidden sm:block" : ""
-        }`}
+        } ${hasDesktopDisclosure && !desktopExpanded ? "sm:hidden" : ""}`}
       >
         {children}
       </div>

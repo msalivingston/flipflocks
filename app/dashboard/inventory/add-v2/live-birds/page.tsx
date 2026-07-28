@@ -28,9 +28,9 @@ import {
   type SellerBreedProfile,
 } from "../../../breeds/breed-data";
 import type { ListingPhotoItem } from "../../../listings/[listingBatchId]/listing-photos-section";
-import { BatchSummaryCard } from "./BatchSummaryCard";
 import { BirdOfferingsCard } from "./BirdOfferingsCard";
 import { AgeBasedPriceChangesCard } from "./AgeBasedPriceChangesCard";
+import { BatchSummaryCard } from "./BatchSummaryCard";
 import {
   fallbackBreedOptions,
   fallbackSpeciesOptions,
@@ -59,12 +59,10 @@ import {
   getPriceAdjustmentIssues,
   hydratePriceAdjustment,
 } from "./priceAdjustment";
-import { ReadyToPublishCard } from "./ReadyToPublishCard";
 import { ReviewPublishCard } from "./ReviewPublishCard";
 import type { PublishStatus, SaveDraftStatus } from "./ReviewPublishCard";
 import { getSaveDraftPreflight } from "./saveDraftPreflight";
 import { SavePreviewCard } from "./SavePreviewCard";
-import { SidebarCard } from "./SidebarCard";
 import { MobileLiveBirdsArtwork } from "./MobileLiveBirdsArtwork";
 import type {
   BirdOffering,
@@ -233,6 +231,12 @@ export function LiveBirdsListingForm({
   );
   const [groupsReviewMode, setGroupsReviewMode] = useState(false);
   const [mobileActiveStep, setMobileActiveStep] = useState<1 | 2 | 3 | 4>(1);
+  const [desktopExpandedStep, setDesktopExpandedStep] = useState<
+    1 | 2 | 3 | 4 | null
+  >(1);
+  const [highestUnlockedDesktopStep, setHighestUnlockedDesktopStep] = useState<
+    1 | 2 | 3 | 4
+  >(isEditMode ? 4 : 1);
   const [customBreedOfferingId, setCustomBreedOfferingId] = useState<
     string | null
   >(null);
@@ -272,10 +276,6 @@ export function LiveBirdsListingForm({
   const ageAtAvailability = useMemo(
     () => getAgeAtAvailability(hatchDate, availableDate),
     [availableDate, hatchDate],
-  );
-  const birdsTotal = offerings.reduce(
-    (total, offering) => total + getNumberInputValue(offering.quantity),
-    0,
   );
   const birdsForSaleGroupCount = useMemo(
     () => getBirdsForSaleGroupCount(offerings),
@@ -583,6 +583,15 @@ export function LiveBirdsListingForm({
         setLoadedDraftSpeciesId(draftRows.rows[0]?.species_id ?? null);
         setHatchDate(loadedHatchDate);
         setAvailableDate(loadedAvailableDate);
+        setHighestUnlockedDesktopStep(
+          isBirdsForSaleStepLocked({
+            availableDate: loadedAvailableDate,
+            hatchDate: loadedHatchDate,
+            species: selectedSpecies,
+          })
+            ? 1
+            : 2,
+        );
         setPriceAdjustment(loadedPriceAdjustment);
         setOfferings(loadedOfferings);
         nextOfferingId.current = loadedOfferings.length + 1;
@@ -615,6 +624,7 @@ export function LiveBirdsListingForm({
         setLoadedDraftSpeciesId(null);
         setHatchDate("");
         setAvailableDate(todayDate);
+        setHighestUnlockedDesktopStep(1);
         setPriceAdjustment(defaultPriceAdjustment);
         setOfferings(blankOfferings);
         nextOfferingId.current = initialOfferings.length + 1;
@@ -759,9 +769,55 @@ export function LiveBirdsListingForm({
     });
 
     setSpecies(nextSpecies);
+    unlockBirdsForSaleIfReady({
+      nextAvailableDate: availableDate,
+      nextHatchDate: hatchDate,
+      nextSpecies,
+    });
     setOfferings((currentOfferings) =>
       alignOfferingsToBreedOptions(currentOfferings, nextBreedOptions),
     );
+  }
+
+  function unlockBirdsForSaleIfReady({
+    nextAvailableDate,
+    nextHatchDate,
+    nextSpecies,
+  }: {
+    nextAvailableDate: string;
+    nextHatchDate: string;
+    nextSpecies: SpeciesOption;
+  }) {
+    if (
+      isEditMode ||
+      !isBirdsForSaleStepLocked({
+        availableDate: nextAvailableDate,
+        hatchDate: nextHatchDate,
+        species: nextSpecies,
+      })
+    ) {
+      setHighestUnlockedDesktopStep((currentStep) =>
+        currentStep < 2 ? 2 : currentStep,
+      );
+    }
+  }
+
+  function updateHatchDate(nextHatchDate: string) {
+    setHatchDate(nextHatchDate);
+    unlockBirdsForSaleIfReady({
+      nextAvailableDate: availableDate,
+      nextHatchDate,
+      nextSpecies: species,
+    });
+  }
+
+  function updateAvailableDate(nextAvailableDate: string) {
+    setAvailableDate(nextAvailableDate);
+    unlockBirdsForSaleIfReady({
+      nextAvailableDate,
+      nextHatchDate: hatchDate,
+      nextSpecies: species,
+    });
   }
 
   function updateOffering(
@@ -1849,6 +1905,8 @@ export function LiveBirdsListingForm({
     nextOfferingId.current = initialOfferings.length + 1;
     setGroupsReviewMode(false);
     setMobileActiveStep(1);
+    setDesktopExpandedStep(1);
+    setHighestUnlockedDesktopStep(1);
     setPriceAdjustment(defaultPriceAdjustment);
     setBreedPhotoActionMessage(null);
     setSaveDraftMessage(null);
@@ -1923,7 +1981,7 @@ export function LiveBirdsListingForm({
       saveDraftStatus={saveDraftStatus}
     />
     <DashboardPageContent className="bg-stone-50/60 max-sm:px-4 max-sm:py-5 max-sm:pb-24">
-      <div className="max-w-7xl">
+      <div className="mx-auto w-full max-w-[1150px]">
         <header className="mb-5 max-sm:hidden">
           <Link
             className="inline-flex min-h-11 items-center text-base font-bold text-emerald-800 underline-offset-4 hover:underline sm:min-h-0 sm:text-sm sm:font-semibold"
@@ -2003,6 +2061,11 @@ export function LiveBirdsListingForm({
               </span>
             </div>
           </div>
+          <DesktopLiveBirdsProgress
+            currentStep={desktopExpandedStep}
+            highestUnlockedStep={highestUnlockedDesktopStep}
+            onStepOpen={(step) => setDesktopExpandedStep(step)}
+          />
         </header>
 
         {draftLoading ? (
@@ -2022,10 +2085,10 @@ export function LiveBirdsListingForm({
           </div>
         ) : (
           <div
-            className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]"
+            className="w-full"
             key={formResetKey}
           >
-            <main className="space-y-4 max-sm:space-y-3">
+            <main className="space-y-4 max-sm:space-y-3 sm:space-y-5">
               {isEditMode && birdsForSaleGroupCount > 1 ? (
                 <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-base font-semibold leading-7 text-sky-900">
                   This listing includes multiple bird entries. Hatch date and
@@ -2035,12 +2098,13 @@ export function LiveBirdsListingForm({
               <HatchInformationCard
                 ageAtAvailability={ageAtAvailability}
                 availableDate={availableDate}
+                desktopActive={desktopExpandedStep === 1}
                 hatchDate={hatchDate}
                 referenceError={referenceDataError}
                 referenceLoading={referenceDataLoading}
                 species={species}
-                setAvailableDate={setAvailableDate}
-                setHatchDate={setHatchDate}
+                setAvailableDate={updateAvailableDate}
+                setHatchDate={updateHatchDate}
                 setSpecies={selectSpecies}
                 speciesReadOnly={isEditMode}
                 speciesOptions={speciesOptions}
@@ -2056,8 +2120,19 @@ export function LiveBirdsListingForm({
                     : undefined
                 }
                 mobileActive={mobileActiveStep === 1}
+                onDesktopContinue={() => {
+                  setHighestUnlockedDesktopStep((currentStep) =>
+                    currentStep < 2 ? 2 : currentStep,
+                  );
+                  setDesktopExpandedStep(2);
+                }}
                 onMobileContinue={() => setMobileActiveStep(2)}
                 onMobileOpen={() => setMobileActiveStep(1)}
+                onDesktopOpen={() =>
+                  setDesktopExpandedStep((currentStep) =>
+                    currentStep === 1 ? null : 1,
+                  )
+                }
               />
               <BirdOfferingsCard
                 addOffering={addOffering}
@@ -2066,12 +2141,24 @@ export function LiveBirdsListingForm({
                 breedOptionsMessage={breedOptionsMessage}
                 canAddCustomBreed={Boolean(species.id)}
                 duplicateOfferingIds={duplicateOfferingIds}
+                desktopActive={desktopExpandedStep === 2}
+                desktopDisabled={highestUnlockedDesktopStep < 2}
                 groupsReviewMode={groupsReviewMode}
                 mobileActive={mobileActiveStep === 2}
                 offerings={offerings}
                 onDoneAddingGroups={() => {
                   finishAddingGroups();
                   setMobileActiveStep(3);
+                  setDesktopExpandedStep(3);
+                  setHighestUnlockedDesktopStep((currentStep) =>
+                    currentStep < 3 ? 3 : currentStep,
+                  );
+                }}
+                onDesktopOpen={() => {
+                  setGroupsReviewMode(false);
+                  setDesktopExpandedStep((currentStep) =>
+                    currentStep === 2 ? null : 2,
+                  );
                 }}
                 onMobileOpen={() => {
                   setGroupsReviewMode(false);
@@ -2103,10 +2190,22 @@ export function LiveBirdsListingForm({
                   offerings={offerings}
                   priceAdjustment={priceAdjustment}
                   availableDate={availableDate}
+                  desktopActive={desktopExpandedStep === 3}
+                  desktopComplete={highestUnlockedDesktopStep === 4}
+                  desktopDisabled={highestUnlockedDesktopStep < 3}
                   locked={!plan.ageBasedPricingEnabled}
                   mobileActive={mobileActiveStep === 3}
-                  onMobileContinue={() => setMobileActiveStep(4)}
+                  onMobileContinue={() => {
+                    setMobileActiveStep(4);
+                    setDesktopExpandedStep(4);
+                    setHighestUnlockedDesktopStep(4);
+                  }}
                   onMobileOpen={() => setMobileActiveStep(3)}
+                  onDesktopOpen={() =>
+                    setDesktopExpandedStep((currentStep) =>
+                      currentStep === 3 ? null : 3,
+                    )
+                  }
                   stepLocked={birdsForSaleStepLocked}
                   updatePriceAdjustment={updatePriceAdjustment}
                   introText={
@@ -2133,6 +2232,16 @@ export function LiveBirdsListingForm({
                 />
               ) : (
                 <ReviewPublishCard
+                  desktopDisabled={highestUnlockedDesktopStep < 4}
+                  desktopListingSummary={
+                    <BatchSummaryCard
+                      ageAtAvailability={ageAtAvailability.message}
+                      availableDate={availableDate}
+                      hatchDate={hatchDate}
+                      offerings={offerings}
+                      priceAdjustment={priceAdjustment}
+                    />
+                  }
                   mobileActive={mobileActiveStep === 4}
                   onMobileOpen={() => setMobileActiveStep(4)}
                   onValidationIssueClick={focusPublishValidationIssue}
@@ -2167,39 +2276,23 @@ export function LiveBirdsListingForm({
                   </div>
                 </div>
               ) : null}
+              {!isEditMode && highestUnlockedDesktopStep === 4 ? (
+                <div className="hidden items-center gap-5 rounded-lg border border-stone-200 bg-white px-6 py-5 shadow-sm sm:flex">
+                  <MobileLiveBirdsArtwork
+                    className="h-20 w-24 rounded-xl opacity-70"
+                    name="nest"
+                  />
+                  <div>
+                    <p className="text-lg font-bold text-stone-950">Almost there!</p>
+                    <p className="mt-1 text-sm leading-6 text-stone-600">
+                      Once published, your birds will appear in your storefront
+                      inventory.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
             </main>
 
-            <aside className="hidden space-y-4 xl:block">
-              <BatchSummaryCard
-                birdsTotal={birdsTotal}
-                hatchDate={hatchDate}
-                offeringCount={birdsForSaleGroupCount}
-              />
-              {isEditMode ? (
-                <EditModeSidebarCard
-                  disabledReason={editSaveDisabledReason}
-                  message={
-                    hasMeaningfulUnsavedChanges &&
-                    editSaveStatus === "success"
-                      ? null
-                      : editSaveMessage
-                  }
-                  onSave={handleSaveEdit}
-                  status={editSaveStatus}
-                />
-              ) : (
-                <ReadyToPublishCard
-                  onReviewPublish={handleReviewPublish}
-                  onSaveDraft={handleSaveDraft}
-                  publishDisabledReason={publishDisabledReason}
-                  publishStatus={publishStatus}
-                  readiness={displayReadiness}
-                  saveDraftDisabledReason={saveDraftDisabledReason}
-                  saveDraftPreflight={saveDraftPreflight}
-                  saveDraftStatus={saveDraftStatus}
-                />
-              )}
-            </aside>
           </div>
         )}
       </div>
@@ -2399,6 +2492,78 @@ function MobileLiveBirdsTaskHeader({
         </button>
       </div>
     </header>
+  );
+}
+
+function DesktopLiveBirdsProgress({
+  currentStep,
+  highestUnlockedStep,
+  onStepOpen,
+}: {
+  currentStep: 1 | 2 | 3 | 4 | null;
+  highestUnlockedStep: 1 | 2 | 3 | 4;
+  onStepOpen: (step: 1 | 2 | 3 | 4) => void;
+}) {
+  const steps = [
+    "Hatch Details",
+    "Birds for Sale",
+    "Automatic Price Changes",
+    "Ready to Publish",
+  ] as const;
+
+  return (
+    <nav
+      aria-label="Add Live Birds progress"
+      className="mx-auto mt-8 hidden max-w-4xl px-4 sm:block"
+    >
+      <ol className="relative grid grid-cols-4">
+        <span
+          aria-hidden="true"
+          className="absolute left-[12.5%] right-[12.5%] top-5 h-px bg-stone-300"
+        />
+        {steps.map((label, index) => {
+          const step = (index + 1) as 1 | 2 | 3 | 4;
+          const active = step === currentStep;
+          const complete = step < highestUnlockedStep;
+          const disabled = step > highestUnlockedStep;
+
+          return (
+            <li className="relative flex flex-col items-center" key={label}>
+              <button
+                aria-current={active ? "step" : undefined}
+                className="group z-10 flex flex-col items-center text-center focus:outline-none disabled:cursor-not-allowed"
+                disabled={disabled}
+                type="button"
+                onClick={() => onStepOpen(step)}
+              >
+                <span
+                  className={`flex size-10 items-center justify-center rounded-full border text-sm font-bold shadow-sm transition-all group-hover:-translate-y-0.5 group-focus:ring-2 group-focus:ring-emerald-700 group-focus:ring-offset-2 ${
+                    (active || complete) && !disabled
+                      ? "border-emerald-800 bg-emerald-800 text-white"
+                      : disabled
+                        ? "border-stone-200 bg-stone-100 text-stone-400 shadow-none"
+                        : "border-stone-300 bg-white text-stone-600"
+                  }`}
+                >
+                  {step}
+                </span>
+                <span
+                  className={`mt-2 text-sm font-semibold ${
+                    disabled
+                      ? "text-stone-400"
+                      : active
+                        ? "text-stone-950"
+                        : "text-stone-600"
+                  }`}
+                >
+                  {label}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
 
@@ -2610,53 +2775,6 @@ function EditModeActionsCard({
         </div>
       </div>
     </section>
-  );
-}
-
-function EditModeSidebarCard({
-  disabledReason,
-  message,
-  onSave,
-  status,
-}: {
-  disabledReason: string | null;
-  message: string | null;
-  onSave: () => void;
-  status: EditSaveStatus;
-}) {
-  const isSaving = status === "saving";
-  const isDisabled = Boolean(disabledReason) || isSaving;
-
-  return (
-    <SidebarCard title="Ready to Save">
-      {message ? (
-        <p
-          className={`rounded-md border px-3 py-2 text-base font-semibold leading-7 ${
-            status === "error"
-              ? "border-red-200 bg-red-50 text-red-800"
-              : "border-emerald-200 bg-emerald-50 text-emerald-900"
-          }`}
-        >
-          {message}
-        </p>
-      ) : disabledReason ? (
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-base font-semibold leading-7 text-amber-800">
-          {disabledReason}
-        </p>
-      ) : (
-        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-base font-semibold leading-7 text-emerald-900">
-          Ready to save.
-        </p>
-      )}
-      <button
-        className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-800 px-5 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-emerald-800/45 sm:min-h-10 sm:text-sm sm:font-semibold"
-        disabled={isDisabled}
-        onClick={onSave}
-        type="button"
-      >
-        {isSaving ? "Saving..." : "Save Changes"}
-      </button>
-    </SidebarCard>
   );
 }
 

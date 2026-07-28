@@ -314,7 +314,7 @@ export function PhotoManager({
           <div
             className={`mt-4 grid gap-3 ${
               mobileCompact
-                ? "grid-cols-[minmax(0,1.25fr)_minmax(6.5rem,0.75fr)] lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.9fr)]"
+                ? "grid-cols-[minmax(0,1.25fr)_minmax(6.5rem,0.75fr)] lg:grid-cols-[minmax(0,1.55fr)_minmax(11rem,0.7fr)]"
                 : "lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.9fr)]"
             }`}
           >
@@ -358,7 +358,7 @@ export function PhotoManager({
             />
             <div
               className={`grid content-start gap-3 ${
-                mobileCompact ? "grid-cols-1" : "grid-cols-2"
+                mobileCompact ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-2"
               }`}
             >
               {secondaryPhotos.map((photo, index) => (

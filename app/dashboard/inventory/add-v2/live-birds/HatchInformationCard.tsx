@@ -11,11 +11,14 @@ export function HatchInformationCard({
   ageAtAvailability,
   availableDate,
   availableDateHelpText,
+  desktopActive,
   hatchDate,
   introText,
   mobileActive,
+  onDesktopContinue,
   onMobileContinue,
   onMobileOpen,
+  onDesktopOpen,
   referenceError,
   referenceLoading,
   setAvailableDate,
@@ -29,11 +32,14 @@ export function HatchInformationCard({
   ageAtAvailability: AgeAtAvailabilityResult;
   availableDate: string;
   availableDateHelpText?: string;
+  desktopActive: boolean;
   hatchDate: string;
   introText?: string;
   mobileActive: boolean;
+  onDesktopContinue: () => void;
   onMobileContinue: () => void;
   onMobileOpen: () => void;
+  onDesktopOpen: () => void;
   referenceError: string | null;
   referenceLoading: boolean;
   setAvailableDate: (value: string) => void;
@@ -162,8 +168,37 @@ export function HatchInformationCard({
         )}
       </section>
       <div className="hidden sm:block">
-        <SectionCard step="1" title="Hatch details">
-          {renderBody()}
+        <SectionCard
+          desktopComplete={isComplete}
+          desktopExpanded={desktopActive}
+          desktopSummary={
+            <span>
+              Hatch: {formatMobileDate(hatchDate)}{" "}
+              <span aria-hidden="true">•</span> Pickup:{" "}
+              {formatMobileDate(availableDate)}{" "}
+              <span aria-hidden="true">•</span>{" "}
+              {formatCompactAgeMessage(ageAtAvailability.message)}
+            </span>
+          }
+          onDesktopToggle={onDesktopOpen}
+          step="1"
+          title="Hatch Details"
+        >
+          <div className="relative pr-0 xl:pr-32">
+            <MobileLiveBirdsArtwork
+              className="absolute right-0 top-0 hidden size-28 rounded-xl opacity-85 xl:block"
+              name="nest"
+            />
+            {renderBody()}
+            <button
+              className="ml-auto mt-5 hidden min-h-10 items-center justify-center rounded-md bg-emerald-800 px-6 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500 sm:inline-flex"
+              disabled={!isComplete}
+              type="button"
+              onClick={onDesktopContinue}
+            >
+              Continue
+            </button>
+          </div>
         </SectionCard>
       </div>
     </>
@@ -353,13 +388,23 @@ function DateField({
       <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
         {label}
       </span>
-      <input
-        className={`${inputClass} block w-full max-w-full min-w-0`}
-        data-live-birds-field={fieldId}
-        type="date"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
+      <span className="relative block w-full min-w-0 max-w-full max-sm:overflow-hidden max-sm:rounded-md">
+        <input
+          className={`${inputClass} block box-border w-full max-w-full min-w-0 max-sm:appearance-none max-sm:pr-11 max-sm:text-left max-sm:[-webkit-appearance:none] max-sm:[&::-webkit-calendar-picker-indicator]:absolute max-sm:[&::-webkit-calendar-picker-indicator]:inset-0 max-sm:[&::-webkit-calendar-picker-indicator]:h-full max-sm:[&::-webkit-calendar-picker-indicator]:w-full max-sm:[&::-webkit-calendar-picker-indicator]:cursor-pointer max-sm:[&::-webkit-calendar-picker-indicator]:opacity-0`}
+          data-live-birds-field={fieldId}
+          type="date"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <Image
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 object-contain sm:hidden"
+          height={18}
+          src="/glyphs/calendar.png"
+          width={18}
+        />
+      </span>
       {helpText ? (
         <span className="mt-1.5 block text-base font-medium leading-6 text-stone-500">
           {helpText}

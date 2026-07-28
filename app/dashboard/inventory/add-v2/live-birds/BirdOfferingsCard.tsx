@@ -28,10 +28,13 @@ export function BirdOfferingsCard({
   breedOptionsMessage,
   canAddCustomBreed,
   duplicateOfferingIds,
+  desktopActive,
+  desktopDisabled,
   groupsReviewMode,
   mobileActive,
   offerings,
   onDoneAddingGroups,
+  onDesktopOpen,
   onMobileOpen,
   onOpenCustomBreedModal,
   prepareBreedPhotoProfile,
@@ -53,10 +56,13 @@ export function BirdOfferingsCard({
   breedOptionsMessage: string | null;
   canAddCustomBreed: boolean;
   duplicateOfferingIds: Set<string>;
+  desktopActive: boolean;
+  desktopDisabled: boolean;
   groupsReviewMode: boolean;
   mobileActive: boolean;
   offerings: BirdOffering[];
   onDoneAddingGroups: () => void;
+  onDesktopOpen: () => void;
   onMobileOpen: () => void;
   onOpenCustomBreedModal: (offeringId: string) => void;
   prepareBreedPhotoProfile: (offeringId: string) => void;
@@ -77,6 +83,7 @@ export function BirdOfferingsCard({
 }) {
   const birdsForSaleGroupCount = getBirdsForSaleGroupCount(offerings);
   const mobileSummary = getOfferingsMobileSummary(offerings);
+  const desktopSummary = mobileSummary.replace("Avg ", "Average ");
   const plan = getPlanCapabilities(planKey);
   const isEditMode = mode === "edit";
   const isLocked = Boolean(stepLocked);
@@ -91,6 +98,11 @@ export function BirdOfferingsCard({
             ? "max-sm:border-emerald-200 max-sm:bg-emerald-50/60 max-sm:shadow-[0_6px_20px_rgba(31,42,32,0.07)]"
             : "max-sm:border-stone-200"
       }
+      desktopComplete={groupsReviewMode}
+      desktopDisabled={desktopDisabled}
+      desktopExpanded={desktopActive}
+      desktopSummary={desktopSummary}
+      onDesktopToggle={onDesktopOpen}
       mobileComplete={groupsReviewMode}
       mobileArtwork={
         <MobileLiveBirdsArtwork className="size-16 rounded-full" name="hen" />
@@ -437,7 +449,7 @@ function ExpandedOfferingCard({
           </span>
         </button>
         {isBreedContentExpanded ? (
-          <div className="mt-3 grid gap-4">
+          <div className="mt-3 grid gap-4 sm:grid-cols-2 sm:items-stretch">
             <BreedPhotoPanel
               breedMediaItems={breedMediaItems}
               offering={offering}
@@ -445,7 +457,7 @@ function ExpandedOfferingCard({
               storeId={storeId}
               onBreedPhotosChanged={onBreedPhotosChanged}
             />
-            <div>
+            <div className="min-w-0 sm:flex sm:h-full sm:flex-col sm:rounded-lg sm:border sm:border-stone-200 sm:bg-white sm:p-5 sm:shadow-sm">
               <h3 className="text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">
                 Breed description
               </h3>
@@ -453,7 +465,7 @@ function ExpandedOfferingCard({
                 Description
               </p>
               <textarea
-                className={`${inputClass} mt-2 min-h-32 resize-y py-3 leading-6 sm:min-h-36`}
+                className={`${inputClass} mt-2 min-h-32 resize-y py-3 leading-6 sm:min-h-56 sm:flex-1`}
                 value={offering.description}
                 onChange={(event) =>
                   updateBreedDescription(offering.id, event.target.value)
@@ -463,7 +475,7 @@ function ExpandedOfferingCard({
                 {offering.description.length} / 500
               </p>
             </div>
-            <div className="flex justify-end">
+            <div className="flex justify-end sm:col-span-2">
               <button
                 className="inline-flex min-h-10 items-center justify-center rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2"
                 type="button"
@@ -725,7 +737,7 @@ function BreedPhotoPanel({
   onBreedPhotosChanged: () => void;
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <div>
         {offering.sellerBreedProfileId ? (
           <ListingPhotosSection
