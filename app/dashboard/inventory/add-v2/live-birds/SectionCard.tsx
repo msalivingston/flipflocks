@@ -55,14 +55,10 @@ export function SectionCard({
             Complete
           </span>
         ) : null}
-        {desktopCollapsible ? (
+        {desktopCollapsible && !desktopDisabled ? (
           <>
             <span className="text-sm font-bold text-emerald-800">
-              {desktopDisabled
-                ? "Locked"
-                : desktopExpanded
-                  ? "Collapse"
-                  : "Edit"}
+              {desktopExpanded ? "Collapse" : "Edit"}
             </span>
             <span
               aria-hidden="true"
@@ -71,8 +67,6 @@ export function SectionCard({
               }`}
             />
           </>
-        ) : desktopDisabled ? (
-          <span className="text-sm font-bold text-stone-500">Locked</span>
         ) : null}
       </span>
     </>

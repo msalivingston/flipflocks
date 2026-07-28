@@ -201,11 +201,6 @@ export function ReviewPublishCard({
             <h2 className="min-w-0 text-xl font-bold text-stone-950">
               Ready to Publish
             </h2>
-            {desktopDisabled ? (
-              <span className="ml-auto text-sm font-bold text-stone-500">
-                Locked
-              </span>
-            ) : null}
           </div>
           {!desktopDisabled ? <div className="mt-4">{renderContent()}</div> : null}
         </section>

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
@@ -180,6 +181,10 @@ export function HatchingEggsStandaloneOnePageForm({
   const [actionError, setActionError] = useState<string | null>(null);
   const [hasEditedDescription, setHasEditedDescription] = useState(false);
   const [isStartOverDialogOpen, setIsStartOverDialogOpen] = useState(false);
+  const [desktopActiveStep, setDesktopActiveStep] = useState<1 | 2 | null>(1);
+  const [desktopHighestUnlockedStep, setDesktopHighestUnlockedStep] = useState<
+    1 | 2 | 3
+  >(isEditMode ? 3 : 1);
   const [publishSuccessDialog, setPublishSuccessDialog] =
     useState<PublishSuccessDialogState | null>(null);
   const [isPersistentShareOpen, setIsPersistentShareOpen] = useState(false);
@@ -943,6 +948,8 @@ export function HatchingEggsStandaloneOnePageForm({
     setActionMessage(null);
     setSaveDraftStatus("idle");
     setPublishStatus("idle");
+    setDesktopActiveStep(1);
+    setDesktopHighestUnlockedStep(1);
     setIsStartOverDialogOpen(false);
     setPublishSuccessDialog(null);
     isNavigatingAfterPublishRef.current = false;
@@ -983,7 +990,7 @@ export function HatchingEggsStandaloneOnePageForm({
 
   return (
     <DashboardPageContent className="bg-stone-50/60">
-      <div className="max-w-7xl">
+      <div className="mx-auto w-full max-w-[1150px]">
         <header className="mb-5">
           <Link
             className="inline-flex min-h-11 items-center text-base font-bold text-emerald-800 underline-offset-4 hover:underline sm:min-h-0 sm:text-sm sm:font-semibold"
@@ -1023,6 +1030,20 @@ export function HatchingEggsStandaloneOnePageForm({
               </div>
             ) : null}
           </div>
+          <DesktopHatchingEggProgress
+            activeStep={desktopActiveStep ?? desktopHighestUnlockedStep}
+            highestUnlockedStep={desktopHighestUnlockedStep}
+            onStepOpen={(step) => {
+              if (step === 3) {
+                setDesktopActiveStep(null);
+                return;
+              }
+
+              setDesktopActiveStep((currentStep) =>
+                currentStep === step ? null : step,
+              );
+            }}
+          />
         </header>
 
         {loadError ? (
@@ -1032,7 +1053,8 @@ export function HatchingEggsStandaloneOnePageForm({
             label={isEditMode ? "Loading hatching egg item..." : "Loading species..."}
           />
         ) : (
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <>
+          <div className="grid gap-5 sm:hidden xl:grid-cols-[minmax(0,1fr)_320px]">
             <main className="space-y-4">
               <SectionCard step="1" title="Item Details">
                 <div className="grid gap-4">
@@ -1274,6 +1296,69 @@ export function HatchingEggsStandaloneOnePageForm({
               />
             </aside>
           </div>
+          <DesktopHatchingEggWorkflow
+            actionError={actionError}
+            actionMessage={actionMessage}
+            activePhotoCount={activePhotoCount}
+            activeStep={desktopActiveStep}
+            addPendingPhotos={addPendingPhotos}
+            breeds={breeds}
+            descriptionComplete={descriptionComplete}
+            detailsComplete={detailsComplete}
+            desktopHighestUnlockedStep={desktopHighestUnlockedStep}
+            fieldsLockedAfterAddSave={fieldsLockedAfterAddSave}
+            form={form}
+            hatchingEggItemId={hatchingEggItemId}
+            hatchingEggProductId={hatchingEggProductId}
+            hasUnsavedChanges={hasUnsavedChanges}
+            isEditMode={isEditMode}
+            matchingDescriptionGroup={matchingDescriptionGroup}
+            mediaItems={mediaItems}
+            pendingPhotos={pendingPhotos}
+            photoError={photoError}
+            publishDisabledReason={publishDisabledReason}
+            publishStatus={publishStatus}
+            removePendingPhoto={removePendingPhoto}
+            reorderPendingPhotos={reorderPendingPhotos}
+            saveDraftDisabledReason={saveDraftDisabledReason}
+            saveDraftStatus={saveDraftStatus}
+            savePendingPhotoCrop={savePendingPhotoCrop}
+            selectedBreedId={selectedBreedId}
+            selectedSpeciesName={selectedSpecies?.common_name ?? ""}
+            species={species}
+            storeId={storeId}
+            validationErrors={validationErrors}
+            onBackToInventory={backToInventory}
+            onDescriptionChange={updateDescription}
+            onBreedChange={updateBreedOrVarietyName}
+            onBreedSelect={selectReferenceBreed}
+            onDetailsContinue={() => {
+              setDesktopHighestUnlockedStep((currentStep) =>
+                currentStep < 2 ? 2 : currentStep,
+              );
+              setDesktopActiveStep(2);
+            }}
+            onDoneEditing={() => {
+              setDesktopHighestUnlockedStep(3);
+              setDesktopActiveStep(null);
+            }}
+            onOpenPersistentShare={() => setIsPersistentShareOpen(true)}
+            onPublish={handlePublish}
+            onReloadPhotos={() => {
+              if (hatchingEggItemId) {
+                void loadHatchingEggMedia(hatchingEggItemId);
+              }
+            }}
+            onSaveDraft={handleSaveDraft}
+            onSpeciesChange={updateSpecies}
+            onFormUpdate={updateForm}
+            onStepToggle={(step) =>
+              setDesktopActiveStep((currentStep) =>
+                currentStep === step ? null : step,
+              )
+            }
+          />
+          </>
         )}
       </div>
 
@@ -1314,6 +1399,610 @@ export function HatchingEggsStandaloneOnePageForm({
   );
 }
 
+function DesktopHatchingEggWorkflow({
+  actionError,
+  actionMessage,
+  activePhotoCount,
+  activeStep,
+  addPendingPhotos,
+  breeds,
+  descriptionComplete,
+  detailsComplete,
+  desktopHighestUnlockedStep,
+  fieldsLockedAfterAddSave,
+  form,
+  hatchingEggItemId,
+  hatchingEggProductId,
+  hasUnsavedChanges,
+  isEditMode,
+  matchingDescriptionGroup,
+  mediaItems,
+  onBackToInventory,
+  onBreedChange,
+  onBreedSelect,
+  onDescriptionChange,
+  onDetailsContinue,
+  onDoneEditing,
+  onFormUpdate,
+  onOpenPersistentShare,
+  onPublish,
+  onReloadPhotos,
+  onSaveDraft,
+  onSpeciesChange,
+  onStepToggle,
+  pendingPhotos,
+  photoError,
+  publishDisabledReason,
+  publishStatus,
+  removePendingPhoto,
+  reorderPendingPhotos,
+  saveDraftDisabledReason,
+  saveDraftStatus,
+  savePendingPhotoCrop,
+  selectedBreedId,
+  selectedSpeciesName,
+  species,
+  storeId,
+  validationErrors,
+}: {
+  actionError: string | null;
+  actionMessage: string | null;
+  activePhotoCount: number;
+  activeStep: 1 | 2 | null;
+  addPendingPhotos: (files: FileList | null) => void;
+  breeds: ReferenceBreed[];
+  descriptionComplete: boolean;
+  detailsComplete: boolean;
+  desktopHighestUnlockedStep: 1 | 2 | 3;
+  fieldsLockedAfterAddSave: boolean;
+  form: HatchingEggFormState;
+  hatchingEggItemId: string;
+  hatchingEggProductId: string | null;
+  hasUnsavedChanges: boolean;
+  isEditMode: boolean;
+  matchingDescriptionGroup: ReturnType<
+    typeof findMatchingHatchingEggDescriptionGroup
+  >;
+  mediaItems: ListingPhotoItem[];
+  onBackToInventory: () => void;
+  onBreedChange: (value: string) => void;
+  onBreedSelect: (breed: ReferenceBreed) => void;
+  onDescriptionChange: (value: string) => void;
+  onDetailsContinue: () => void;
+  onDoneEditing: () => void;
+  onFormUpdate: (updates: Partial<HatchingEggFormState>) => void;
+  onOpenPersistentShare: () => void;
+  onPublish: () => void;
+  onReloadPhotos: () => void;
+  onSaveDraft: () => void;
+  onSpeciesChange: (speciesId: string) => void;
+  onStepToggle: (step: 1 | 2) => void;
+  pendingPhotos: PendingPhoto[];
+  photoError: string | null;
+  publishDisabledReason: string | null;
+  publishStatus: PublishStatus;
+  removePendingPhoto: (photo: PendingPhoto) => void;
+  reorderPendingPhotos: (photos: DashboardPhoto[]) => void;
+  saveDraftDisabledReason: string | null;
+  saveDraftStatus: SaveDraftStatus;
+  savePendingPhotoCrop: (
+    photo: DashboardPhoto,
+    crop: PhotoCropMetadata | null,
+  ) => void;
+  selectedBreedId: string | null;
+  selectedSpeciesName: string;
+  species: ReferenceSpecies[];
+  storeId: string;
+  validationErrors: string[];
+}) {
+  const workflowReady = detailsComplete && descriptionComplete;
+  const hasActionFeedback =
+    Boolean(actionError) ||
+    Boolean(actionMessage) ||
+    validationErrors.length > 0;
+
+  return (
+    <main className="hidden space-y-5 sm:block">
+      <SectionCard
+        desktopComplete={desktopHighestUnlockedStep >= 2}
+        desktopExpanded={activeStep === 1}
+        desktopSummary={
+          <span>
+            {form.itemName.trim() || "Breed not set"}{" "}
+            <span aria-hidden="true">•</span> Available{" "}
+            {formatDate(form.availableDate)} <span aria-hidden="true">•</span>{" "}
+            {form.quantityAvailable.trim() || "0"} eggs{" "}
+            <span aria-hidden="true">•</span>{" "}
+            {isValidMoney(form.price) ? formatCurrency(form.price) : "$0.00"} per egg
+          </span>
+        }
+        onDesktopToggle={() => onStepToggle(1)}
+        step="1"
+        title="Egg Details"
+      >
+        <div className="relative grid gap-5 pr-0 xl:pr-36">
+          <Image
+            alt=""
+            aria-hidden="true"
+            className="absolute right-0 top-0 hidden h-28 w-36 object-contain opacity-90 xl:block"
+            height={112}
+            src="/illustrations/hatching-eggs-chick-nest.png"
+            width={144}
+          />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <CompactField label="Species">
+              <select
+                className={inputClass}
+                disabled={fieldsLockedAfterAddSave}
+                value={form.speciesId}
+                onChange={(event) => onSpeciesChange(event.target.value)}
+              >
+                <option value="">Choose species</option>
+                {species.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.common_name}
+                  </option>
+                ))}
+              </select>
+            </CompactField>
+            <HatchingEggBreedLookup
+              breeds={breeds}
+              disabled={fieldsLockedAfterAddSave}
+              selectedBreedId={selectedBreedId}
+              speciesId={form.speciesId}
+              value={form.itemName}
+              onCustomChange={onBreedChange}
+              onSelectBreed={onBreedSelect}
+            />
+          </div>
+          <div className="grid gap-4 lg:grid-cols-4">
+            <CompactField label="Available Date">
+              <input
+                className={inputClass}
+                disabled={fieldsLockedAfterAddSave}
+                type="date"
+                value={form.availableDate}
+                onChange={(event) =>
+                  onFormUpdate({ availableDate: event.target.value })
+                }
+              />
+            </CompactField>
+            <CompactField label="Quantity">
+              <input
+                className={inputClass}
+                disabled={fieldsLockedAfterAddSave}
+                inputMode="numeric"
+                min="0"
+                placeholder="Enter quantity"
+                step="1"
+                type="number"
+                value={form.quantityAvailable}
+                onChange={(event) =>
+                  onFormUpdate({ quantityAvailable: event.target.value })
+                }
+              />
+            </CompactField>
+            <CompactField label="Price Per Egg">
+              <MoneyInput
+                disabled={fieldsLockedAfterAddSave}
+                value={form.price}
+                onChange={(value) => onFormUpdate({ price: value })}
+              />
+            </CompactField>
+            <CompactField label="Minimum Order">
+              <input
+                className={inputClass}
+                disabled={fieldsLockedAfterAddSave}
+                inputMode="numeric"
+                min="1"
+                placeholder="Optional"
+                step="1"
+                type="number"
+                value={form.minimumOrderQuantity}
+                onChange={(event) =>
+                  onFormUpdate({ minimumOrderQuantity: event.target.value })
+                }
+              />
+            </CompactField>
+          </div>
+          {fieldsLockedAfterAddSave ? (
+            <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800">
+              This Add-only draft has been created. Publish it as saved, or start
+              over to create another hatching egg item.
+            </p>
+          ) : null}
+          {isEditMode ? (
+            <CompactField label="Visibility">
+              <select
+                className={inputClass}
+                value={form.visibilityStatus}
+                onChange={(event) =>
+                  onFormUpdate({ visibilityStatus: event.target.value })
+                }
+              >
+                <option value="hidden">Hidden</option>
+                <option value="active">Live</option>
+                <option value="sold_out">Sold out</option>
+              </select>
+            </CompactField>
+          ) : null}
+          <ValidationMessage errors={validationErrors} />
+          <button
+            className="ml-auto inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-6 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+            disabled={!detailsComplete}
+            type="button"
+            onClick={onDetailsContinue}
+          >
+            Continue
+          </button>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        badge={activePhotoCount > 0 ? "Added" : undefined}
+        desktopComplete={desktopHighestUnlockedStep === 3}
+        desktopDisabled={desktopHighestUnlockedStep < 2}
+        desktopExpanded={activeStep === 2}
+        desktopSummary={`${activePhotoCount} photo${
+          activePhotoCount === 1 ? "" : "s"
+        } • ${descriptionComplete ? "Description added" : "Description needed"}`}
+        onDesktopToggle={() => onStepToggle(2)}
+        step="2"
+        title="Photos & Description"
+      >
+        <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
+          <div className="min-w-0">
+            <HatchingEggPhotos
+              addPendingPhotos={addPendingPhotos}
+              desktopCompact
+              hatchingEggItemId={hatchingEggItemId}
+              mediaItems={mediaItems}
+              pendingPhotos={pendingPhotos}
+              photoError={photoError}
+              removePendingPhoto={removePendingPhoto}
+              reorderPendingPhotos={reorderPendingPhotos}
+              savePendingPhotoCrop={savePendingPhotoCrop}
+              storeId={storeId}
+              title="Photos"
+              onReload={onReloadPhotos}
+            />
+          </div>
+          <div className="flex min-w-0 flex-col rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+            <h3 className="text-base font-bold text-stone-950">Description</h3>
+            {matchingDescriptionGroup ? (
+              <div className="mt-3 space-y-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm leading-6 text-emerald-900">
+                <p className="font-semibold">
+                  Shared with your other {matchingDescriptionGroup.displayName}{" "}
+                  hatching eggs.
+                </p>
+                <p>Price, quantity, date, minimum order, and photos stay separate.</p>
+              </div>
+            ) : null}
+            <label className="mt-4 flex min-h-0 flex-1 flex-col">
+              <span className="mb-1.5 block text-sm font-semibold text-stone-600">
+                {matchingDescriptionGroup
+                  ? `Storefront description for ${matchingDescriptionGroup.displayName}`
+                  : "Storefront description"}
+              </span>
+              <textarea
+                className={`${inputClass} min-h-56 flex-1 resize-y py-3 leading-6`}
+                disabled={fieldsLockedAfterAddSave}
+                maxLength={descriptionMaxLength}
+                placeholder="Share collection timing, fertility notes, rooster details, pickup expectations, or anything buyers should know."
+                value={form.description}
+                onChange={(event) => onDescriptionChange(event.target.value)}
+              />
+            </label>
+            <div className="mt-2 flex items-center justify-between gap-4">
+              <p className="text-sm text-stone-500">
+                {form.description.length} / {descriptionMaxLength}
+              </p>
+              <button
+                className="inline-flex min-h-10 items-center justify-center rounded-md border border-stone-300 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 disabled:cursor-not-allowed disabled:text-stone-400"
+                disabled={!descriptionComplete}
+                type="button"
+                onClick={onDoneEditing}
+              >
+                Done editing
+              </button>
+            </div>
+          </div>
+        </div>
+      </SectionCard>
+
+      <section
+        className={`rounded-lg border border-stone-200 bg-white p-5 shadow-sm ${
+          desktopHighestUnlockedStep < 3
+            ? "bg-stone-50/70 opacity-60 shadow-none"
+            : ""
+        }`}
+      >
+        <div className="flex min-h-12 items-center gap-4">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900">
+            3
+          </span>
+          <div>
+            <h2 className="text-xl font-bold text-stone-950">Ready to Publish</h2>
+            <p className="mt-1 text-sm text-stone-600">
+              Review the summary below, then publish your inventory.
+            </p>
+          </div>
+        </div>
+        {desktopHighestUnlockedStep >= 3 ? (
+          <div className="mt-4 space-y-5">
+            <div
+              className={`flex items-center gap-5 rounded-lg px-5 py-4 ${
+                workflowReady ? "bg-emerald-50" : "bg-amber-50"
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`flex size-16 shrink-0 items-center justify-center rounded-full text-3xl font-bold text-white ${
+                  workflowReady ? "bg-emerald-800" : "bg-amber-600"
+                }`}
+              >
+                {workflowReady ? "✓" : "!"}
+              </span>
+              <div>
+                <p className="text-xl font-bold text-stone-950">
+                  {workflowReady ? "You’re all set!" : "A few details remain"}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-stone-600">
+                  {workflowReady
+                    ? "Everything looks great. Publish when you’re ready."
+                    : publishDisabledReason ??
+                      "Finish the remaining details before publishing."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                {hasActionFeedback ? (
+                  <ActionStatus
+                    actionError={actionError}
+                    actionMessage={actionMessage}
+                    publishDisabledReason={
+                      isEditMode ? null : publishDisabledReason
+                    }
+                    validationErrors={validationErrors}
+                  />
+                ) : (
+                  <p
+                    className={`rounded-md border px-3 py-2 text-sm font-semibold ${
+                      workflowReady
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        : "border-stone-200 bg-stone-50 text-stone-600"
+                    }`}
+                  >
+                    {workflowReady
+                      ? "Everything is ready to publish."
+                      : "Complete the required details to publish."}
+                  </p>
+                )}
+              </div>
+              {isEditMode ? (
+                <>
+                  <button
+                    className="seller-secondary-button"
+                    type="button"
+                    onClick={onBackToInventory}
+                  >
+                    Back to Inventory
+                  </button>
+                  {hatchingEggProductId ? (
+                    <button
+                      className="seller-secondary-button"
+                      type="button"
+                      onClick={onOpenPersistentShare}
+                    >
+                      Share listing
+                    </button>
+                  ) : null}
+                  <button
+                    className="seller-primary-button"
+                    disabled={saveDraftStatus === "saving" || !hasUnsavedChanges}
+                    type="button"
+                    onClick={onSaveDraft}
+                  >
+                    {saveDraftStatus === "saving" ? "Saving..." : "Save Changes"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <PublishInventoryButton
+                    onReviewPublish={onPublish}
+                    publishDisabledReason={publishDisabledReason}
+                    publishStatus={publishStatus}
+                  />
+                  <SaveDraftButton
+                    canSaveDraft={!saveDraftDisabledReason}
+                    onSaveDraft={onSaveDraft}
+                    saveDraftDisabledReason={saveDraftDisabledReason}
+                    saveDraftStatus={saveDraftStatus}
+                  />
+                </>
+              )}
+            </div>
+
+            <HatchingEggDesktopSummary
+              activePhotoCount={activePhotoCount}
+              form={form}
+              selectedSpeciesName={selectedSpeciesName}
+            />
+            <div className="flex items-center gap-5 border-t border-stone-200 pt-5">
+              <span className="flex size-16 shrink-0 items-center justify-center rounded-full bg-amber-50">
+                <Image
+                  alt=""
+                  className="size-10 object-contain"
+                  height={40}
+                  src="/glyphs/egg-carton.png"
+                  width={40}
+                />
+              </span>
+              <div>
+                <p className="text-lg font-bold text-stone-950">Almost there!</p>
+                <p className="mt-1 text-sm text-stone-600">
+                  Once published, your hatching eggs will appear in your
+                  storefront inventory.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </section>
+    </main>
+  );
+}
+
+function HatchingEggDesktopSummary({
+  activePhotoCount,
+  form,
+  selectedSpeciesName,
+}: {
+  activePhotoCount: number;
+  form: HatchingEggFormState;
+  selectedSpeciesName: string;
+}) {
+  const items = [
+    {
+      glyph: "/glyphs/egg.png",
+      label: "Breed",
+      value: form.itemName.trim() || "Not set",
+    },
+    {
+      glyph: "/glyphs/calendar.png",
+      label: "Available date",
+      value: formatDate(form.availableDate),
+    },
+    {
+      glyph: "/glyphs/feed-sack.png",
+      label: "Quantity",
+      value: `${form.quantityAvailable.trim() || "0"} eggs`,
+    },
+    {
+      glyph: "/glyphs/cart.png",
+      label: "Price per egg",
+      value: isValidMoney(form.price) ? formatCurrency(form.price) : "$0.00",
+    },
+    {
+      glyph: "/glyphs/egg-carton.png",
+      label: "Species",
+      value: selectedSpeciesName || "Not selected",
+    },
+    {
+      glyph: "/glyphs/camera.png",
+      label: "Photos",
+      value: String(activePhotoCount),
+    },
+    {
+      glyph: "/glyphs/clipboard.png",
+      label: "Minimum order",
+      value: form.minimumOrderQuantity.trim() || "Not set",
+    },
+  ];
+
+  return (
+    <section
+      aria-labelledby="hatching-eggs-desktop-summary-title"
+      className="border-t border-stone-200 pt-5"
+    >
+      <h3
+        className="text-lg font-bold text-stone-950"
+        id="hatching-eggs-desktop-summary-title"
+      >
+        Listing Summary
+      </h3>
+      <div className="mt-4 grid gap-x-8 gap-y-5 md:grid-cols-2 xl:grid-cols-3">
+        {items.map((item) => (
+          <div className="flex min-w-0 items-start gap-3" key={item.label}>
+            <Image
+              alt=""
+              className="mt-0.5 size-5 shrink-0 object-contain"
+              height={20}
+              src={item.glyph}
+              width={20}
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-stone-500">{item.label}</p>
+              <p className="mt-1 text-base font-semibold leading-6 text-stone-900">
+                {item.value}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DesktopHatchingEggProgress({
+  activeStep,
+  highestUnlockedStep,
+  onStepOpen,
+}: {
+  activeStep: 1 | 2 | 3;
+  highestUnlockedStep: 1 | 2 | 3;
+  onStepOpen: (step: 1 | 2 | 3) => void;
+}) {
+  const steps = ["Egg Details", "Photos & Description", "Ready to Publish"] as const;
+
+  return (
+    <nav
+      aria-label="Add Hatching Eggs progress"
+      className="mx-auto mt-8 hidden max-w-3xl px-4 sm:block"
+    >
+      <ol className="relative grid grid-cols-3">
+        <span
+          aria-hidden="true"
+          className="absolute left-[16.67%] right-[16.67%] top-5 h-px bg-stone-300"
+        />
+        {steps.map((label, index) => {
+          const step = (index + 1) as 1 | 2 | 3;
+          const active = step === activeStep;
+          const complete = step < highestUnlockedStep;
+          const disabled = step > highestUnlockedStep;
+
+          return (
+            <li className="relative flex flex-col items-center" key={label}>
+              <button
+                aria-current={active ? "step" : undefined}
+                className="group z-10 flex flex-col items-center text-center focus:outline-none disabled:cursor-not-allowed"
+                disabled={disabled}
+                type="button"
+                onClick={() => onStepOpen(step)}
+              >
+                <span
+                  className={`flex size-10 items-center justify-center rounded-full border text-sm font-bold shadow-sm transition-all group-focus:ring-2 group-focus:ring-emerald-700 group-focus:ring-offset-2 ${
+                    (active || complete) && !disabled
+                      ? "border-emerald-800 bg-emerald-800 text-white"
+                      : disabled
+                        ? "border-stone-200 bg-stone-100 text-stone-400 shadow-none"
+                        : "border-stone-300 bg-white text-stone-600"
+                  }`}
+                >
+                  {step}
+                </span>
+                <span
+                  className={`mt-2 text-sm font-semibold ${
+                    disabled
+                      ? "text-stone-400"
+                      : active
+                        ? "text-stone-950"
+                        : "text-stone-600"
+                  }`}
+                >
+                  {label}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
 function HatchingEggPhotos({
   addPendingPhotos,
   hatchingEggItemId,
@@ -1325,6 +2014,8 @@ function HatchingEggPhotos({
   reorderPendingPhotos,
   savePendingPhotoCrop,
   storeId,
+  desktopCompact = false,
+  title = "Photos",
 }: {
   addPendingPhotos: (files: FileList | null) => void;
   hatchingEggItemId: string;
@@ -1339,6 +2030,8 @@ function HatchingEggPhotos({
     crop: PhotoCropMetadata | null,
   ) => void;
   storeId: string;
+  desktopCompact?: boolean;
+  title?: string;
 }) {
   if (!hatchingEggItemId) {
     return (
@@ -1349,6 +2042,8 @@ function HatchingEggPhotos({
         removePendingPhoto={removePendingPhoto}
         reorderPendingPhotos={reorderPendingPhotos}
         savePendingPhotoCrop={savePendingPhotoCrop}
+        desktopCompact={desktopCompact}
+        title={title}
       />
     );
   }
@@ -1365,7 +2060,8 @@ function HatchingEggPhotos({
       mediaItems={mediaItems}
       mode="setup"
       storeId={storeId}
-      title="Photos"
+      title={title}
+      mobileCompact={desktopCompact}
       onReload={onReload}
     />
   );
@@ -1378,6 +2074,8 @@ function PendingHatchingEggPhotos({
   removePendingPhoto,
   reorderPendingPhotos,
   savePendingPhotoCrop,
+  desktopCompact = false,
+  title = "Photos",
 }: {
   addPendingPhotos: (files: FileList | null) => void;
   pendingPhotos: PendingPhoto[];
@@ -1388,6 +2086,8 @@ function PendingHatchingEggPhotos({
     photo: DashboardPhoto,
     crop: PhotoCropMetadata | null,
   ) => void;
+  desktopCompact?: boolean;
+  title?: string;
 }) {
   const dashboardPhotos = pendingPhotos.map((photo, index) => ({
     altText: photo.file.name,
@@ -1406,7 +2106,11 @@ function PendingHatchingEggPhotos({
       <PhotoManager
         acceptedTypes={acceptedPendingImageTypes}
         canManage
-        description="Manage the photos buyers see for this hatching egg item. The first photo will be the featured photo."
+        description={
+          desktopCompact
+            ? ""
+            : "Manage the photos buyers see for this hatching egg item. The first photo will be the featured photo."
+        }
         emptyDescription="Add photos now. They will be saved when you save or publish this item."
         error={
           photoError
@@ -1416,13 +2120,14 @@ function PendingHatchingEggPhotos({
               }
             : null
         }
-        fillEmptySlots
+        fillEmptySlots={!desktopCompact}
         helperText="Drag photos to reorder. The first photo is the featured photo."
         maxFileSizeMb={maxPendingImageSizeBytes / 1024 / 1024}
         maxPhotos={maxHatchingEggPhotos}
+        mobileCompact={desktopCompact}
         photos={dashboardPhotos}
         removePhotoContext="item"
-        title="Photos"
+        title={title}
         onAddPhotos={addPendingPhotos}
         onRemovePhoto={(photo) => {
           const pendingPhoto = pendingPhotos.find((item) => item.id === photo.id);

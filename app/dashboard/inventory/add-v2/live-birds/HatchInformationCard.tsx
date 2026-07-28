@@ -184,10 +184,14 @@ export function HatchInformationCard({
           step="1"
           title="Hatch Details"
         >
-          <div className="relative pr-0 xl:pr-32">
-            <MobileLiveBirdsArtwork
-              className="absolute right-0 top-0 hidden size-28 rounded-xl opacity-85 xl:block"
-              name="nest"
+          <div className="relative pr-0 xl:pr-36">
+            <Image
+              alt=""
+              aria-hidden="true"
+              className="absolute right-0 top-0 hidden h-28 w-36 object-contain opacity-90 xl:block"
+              height={112}
+              src="/illustrations/live-birds-hen-duck.png"
+              width={144}
             />
             {renderBody()}
             <button
