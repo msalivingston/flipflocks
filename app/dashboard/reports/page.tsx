@@ -7,7 +7,7 @@ export default function SellerReportsPage() {
       <header className="flex flex-col gap-3 border-b border-stone-200 bg-white px-5 py-3.5 sm:px-7 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-stone-950">Reports</h1>
-          <p className="mt-0.5 max-w-2xl text-sm leading-5 text-stone-600">
+          <p className="mt-0.5 hidden max-w-2xl text-sm leading-5 text-stone-600 lg:block">
             Review sales, items, and customer activity.
           </p>
         </div>
@@ -22,7 +22,7 @@ export default function SellerReportsPage() {
           />
         </div>
       </header>
-      <div className="mx-auto w-full max-w-7xl px-5 py-4 sm:px-7">
+      <div className="mx-auto w-full max-w-7xl px-4 py-4 pb-28 lg:px-7 lg:pb-4">
         <ReportsDashboard />
       </div>
     </>

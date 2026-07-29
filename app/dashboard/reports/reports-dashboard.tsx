@@ -150,6 +150,13 @@ const itemTypeOptions: { label: string; value: ItemTypeFilter }[] = [
 
 const dash = "\u2014";
 
+function getOptionLabel(
+  options: Array<{ label: string; value: string }>,
+  value: string,
+) {
+  return options.find((option) => option.value === value)?.label ?? value;
+}
+
 export function ReportsDashboard() {
   const { seller } = useSellerContext();
   const [activeTab, setActiveTab] = useState<ReportTab>("sales");
@@ -394,7 +401,7 @@ export function ReportsDashboard() {
   return (
     <div className="grid gap-0">
       <TabNav activeTab={activeTab} onChange={setActiveTab} />
-      <div className="rounded-b-xl rounded-tr-xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="rounded-b-xl rounded-tr-xl border-0 bg-transparent pt-4 shadow-none lg:border lg:border-stone-200 lg:bg-white lg:p-5 lg:shadow-sm">
         {activeTab === "sales" ? (
           <SalesTab
             amountFilter={salesAmountFilter}
@@ -455,7 +462,7 @@ function TabNav({
   return (
     <div
       aria-label="Report sections"
-      className="flex gap-1 overflow-x-auto border-b border-stone-200 pl-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="grid grid-cols-3 gap-1 rounded-xl bg-stone-100 p-1 lg:flex lg:overflow-x-auto lg:rounded-none lg:border-b lg:border-stone-200 lg:bg-transparent lg:p-0 lg:pl-px lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden"
       role="tablist"
     >
       {tabs.map((tab) => {
@@ -464,10 +471,10 @@ function TabNav({
         return (
           <button
             aria-selected={isActive}
-            className={`relative mb-[-1px] min-h-11 shrink-0 rounded-t-lg border px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-700 ${
+            className={`relative min-h-11 min-w-0 rounded-lg border px-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-700 lg:mb-[-1px] lg:shrink-0 lg:rounded-b-none lg:rounded-t-lg lg:px-4 ${
               isActive
-                ? "border-stone-200 border-b-white bg-white text-stone-950 shadow-[0_-1px_0_rgba(0,0,0,0.02)]"
-                : "border-transparent bg-stone-100/70 text-stone-600 hover:bg-white hover:text-stone-950"
+                ? "border-stone-200 bg-white text-stone-950 shadow-sm lg:border-b-white lg:shadow-[0_-1px_0_rgba(0,0,0,0.02)]"
+                : "border-transparent bg-transparent text-stone-600 hover:bg-white hover:text-stone-950 lg:bg-stone-100/70"
             }`}
             key={tab.value}
             onClick={() => onChange(tab.value)}
@@ -510,7 +517,47 @@ function SalesTab({
 }) {
   return (
     <div className="grid gap-4">
-      <SellerCard className="p-3.5 sm:p-4">
+      <div className="grid gap-3 lg:hidden">
+        <SellerCard className="p-3.5">
+          <DateRangeControl
+            dateSettings={dateSettings}
+            onChange={setDateSettings}
+          />
+          <MobileFilterPanel
+            activeCount={amountFilter === "any" ? 0 : 1}
+          >
+            <AmountControl
+              customValue={customAmount}
+              label="Order amount"
+              onCustomChange={setCustomAmount}
+              onFilterChange={setAmountFilter}
+              value={amountFilter}
+            />
+          </MobileFilterPanel>
+          <ActiveFilterChips
+            chips={[
+              getDateRangeLabel(dateSettings),
+              amountFilter === "any"
+                ? null
+                : getOptionLabel(amountOptions, amountFilter),
+            ]}
+          />
+        </SellerCard>
+        <ExportButton
+          label="Export CSV"
+          onClick={() =>
+            downloadCsv({
+              filename: `flockfront-sales-${formatFileDate(new Date())}.csv`,
+              rows: buildSalesCsvRows(
+                report.filteredOrders,
+                itemSummaryByOrder,
+              ),
+            })
+          }
+        />
+      </div>
+
+      <SellerCard className="hidden p-4 lg:block">
         <div className="grid gap-3 lg:grid-cols-[minmax(12rem,1fr)_minmax(12rem,1fr)_auto] lg:items-end">
           <DateRangeControl
             dateSettings={dateSettings}
@@ -614,7 +661,88 @@ function ItemsTab({
 
   return (
     <div className="grid gap-4">
-      <SellerCard className="p-3.5 sm:p-4">
+      <div className="grid gap-3 lg:hidden">
+        <SellerCard className="p-3.5">
+          <DateRangeControl
+            dateSettings={dateSettings}
+            onChange={setDateSettings}
+          />
+          <MobileFilterPanel
+            activeCount={[
+              itemTypeFilter !== "all",
+              speciesFilter !== "all",
+              breedFilter !== "all",
+              Boolean(itemSearch.trim()),
+            ].filter(Boolean).length}
+          >
+            <div className="grid gap-3">
+              <FilterSelect
+                label="Item type"
+                onChange={(value) => {
+                  setItemTypeFilter(value as ItemTypeFilter);
+                  setSpeciesFilter("all");
+                  setBreedFilter("all");
+                }}
+                options={itemTypeOptions}
+                value={itemTypeFilter}
+              />
+              <FilterSelect
+                label="Species"
+                onChange={(value) => {
+                  setSpeciesFilter(value);
+                  setBreedFilter("all");
+                }}
+                options={[
+                  { label: "All species", value: "all" },
+                  ...options.species.map((species) => ({
+                    label: species,
+                    value: species,
+                  })),
+                ]}
+                value={speciesFilter}
+              />
+              <FilterSelect
+                label="Breed"
+                onChange={setBreedFilter}
+                options={[
+                  { label: "All breeds", value: "all" },
+                  ...options.breeds.map((breed) => ({
+                    label: breed,
+                    value: breed,
+                  })),
+                ]}
+                value={breedFilter}
+              />
+              <SearchControl
+                label="Search item"
+                onChange={setItemSearch}
+                placeholder="Search items"
+                value={itemSearch}
+              />
+            </div>
+          </MobileFilterPanel>
+          <ActiveFilterChips
+            chips={[
+              getDateRangeLabel(dateSettings),
+              itemTypeFilter === "all" ? null : itemTypeFilter,
+              speciesFilter === "all" ? null : speciesFilter,
+              breedFilter === "all" ? null : breedFilter,
+              itemSearch.trim() ? `Search: ${itemSearch.trim()}` : null,
+            ]}
+          />
+        </SellerCard>
+        <ExportButton
+          label="Export CSV"
+          onClick={() =>
+            downloadCsv({
+              filename: `flockfront-items-${formatFileDate(new Date())}.csv`,
+              rows: buildItemsCsvRows(itemRows, dateRangeLabel),
+            })
+          }
+        />
+      </div>
+
+      <SellerCard className="hidden p-4 lg:block">
         <div className="grid gap-3 lg:grid-cols-[repeat(4,minmax(8.5rem,1fr))] xl:grid-cols-[minmax(8.5rem,1fr)_minmax(7.75rem,0.85fr)_minmax(7.75rem,0.85fr)_minmax(7.75rem,0.85fr)_minmax(12rem,1.25fr)_auto] xl:items-end">
           <DateRangeControl
             dateSettings={dateSettings}
@@ -695,6 +823,7 @@ function ItemsTab({
           glyph="/glyphs/checkmark.png"
           label="Top item"
           value={topItem}
+          wrapValue
         />
       </SummaryGrid>
 
@@ -759,7 +888,56 @@ function CustomersTab({
 
   return (
     <div className="grid gap-4">
-      <SellerCard className="p-3.5 sm:p-4">
+      <div className="grid gap-3 lg:hidden">
+        <SellerCard className="p-3.5">
+          <DateRangeControl
+            dateSettings={dateSettings}
+            onChange={setDateSettings}
+          />
+          <MobileFilterPanel
+            activeCount={[
+              spendFilter !== "any",
+              Boolean(search.trim()),
+            ].filter(Boolean).length}
+          >
+            <div className="grid gap-3">
+              <AmountControl
+                customValue={customSpend}
+                label="Minimum spend"
+                onCustomChange={setCustomSpend}
+                onFilterChange={setSpendFilter}
+                value={spendFilter}
+              />
+              <SearchControl
+                label="Search customer"
+                onChange={setSearch}
+                placeholder="Search customers"
+                value={search}
+              />
+            </div>
+          </MobileFilterPanel>
+          <ActiveFilterChips
+            chips={[
+              getDateRangeLabel(dateSettings),
+              spendFilter === "any"
+                ? null
+                : getOptionLabel(amountOptions, spendFilter),
+              search.trim() ? `Search: ${search.trim()}` : null,
+            ]}
+          />
+        </SellerCard>
+        <ExportButton
+          label="Export CSV"
+          onClick={() =>
+            downloadCsv({
+              filename: `flockfront-customers-${formatFileDate(new Date())}.csv`,
+              rows: buildCustomersCsvRows(customerRows, dateRangeLabel),
+            })
+          }
+        />
+      </div>
+
+      <SellerCard className="hidden p-4 lg:block">
         <div className="grid gap-3 lg:grid-cols-[minmax(12rem,1fr)_minmax(12rem,1fr)_minmax(14rem,1.35fr)_auto] lg:items-end">
           <DateRangeControl
             dateSettings={dateSettings}
@@ -808,6 +986,7 @@ function CustomersTab({
             topCustomer ? `${formatCurrency(topCustomer.totalSpent)} spent` : ""
           }
           value={topCustomer?.customerName ?? dash}
+          wrapValue
         />
         <SummaryCard
           glyph="/glyphs/feed-sack.png"
@@ -845,6 +1024,56 @@ function CustomersTab({
   );
 }
 
+function MobileFilterPanel({
+  activeCount,
+  children,
+}: {
+  activeCount: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="group mt-3 rounded-lg border border-stone-200 bg-stone-50 lg:hidden">
+      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-3 text-base font-bold text-stone-950 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-700 [&::-webkit-details-marker]:hidden">
+        <span>
+          Filters
+          {activeCount > 0 ? (
+            <span className="ml-2 inline-flex min-w-6 items-center justify-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-900">
+              {activeCount}
+            </span>
+          ) : null}
+        </span>
+        <span
+          aria-hidden="true"
+          className="text-lg text-stone-500 transition group-open:rotate-180"
+        >
+          &#8964;
+        </span>
+      </summary>
+      <div className="border-t border-stone-200 p-3">{children}</div>
+    </details>
+  );
+}
+
+function ActiveFilterChips({ chips }: { chips: Array<string | null> }) {
+  const visibleChips = chips.filter((chip): chip is string => Boolean(chip));
+
+  return (
+    <div
+      aria-label="Active report filters"
+      className="mt-3 flex flex-wrap gap-2 lg:hidden"
+    >
+      {visibleChips.map((chip) => (
+        <span
+          className="inline-flex min-h-8 items-center rounded-full bg-emerald-50 px-3 text-xs font-bold text-emerald-900 ring-1 ring-emerald-100"
+          key={chip}
+        >
+          {chip}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function DateRangeControl({
   dateSettings,
   onChange,
@@ -866,7 +1095,7 @@ function DateRangeControl({
         <div className="grid gap-2 sm:grid-cols-2">
           <input
             aria-label="Start date"
-            className="min-h-10 rounded-md border border-stone-300 bg-white px-2.5 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+            className="min-h-12 rounded-lg border border-stone-300 bg-white px-3 text-base font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 lg:min-h-10 lg:rounded-md lg:px-2.5 lg:text-sm"
             type="date"
             value={dateSettings.customStart}
             onChange={(event) =>
@@ -875,7 +1104,7 @@ function DateRangeControl({
           />
           <input
             aria-label="End date"
-            className="min-h-10 rounded-md border border-stone-300 bg-white px-2.5 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+            className="min-h-12 rounded-lg border border-stone-300 bg-white px-3 text-base font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 lg:min-h-10 lg:rounded-md lg:px-2.5 lg:text-sm"
             type="date"
             value={dateSettings.customEnd}
             onChange={(event) =>
@@ -912,7 +1141,7 @@ function AmountControl({
       {value === "custom" ? (
         <input
           aria-label={`${label} custom amount`}
-          className="min-h-10 rounded-md border border-stone-300 bg-white px-2.5 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+          className="min-h-12 rounded-lg border border-stone-300 bg-white px-3 text-base font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 lg:min-h-10 lg:rounded-md lg:px-2.5 lg:text-sm"
           min="0"
           placeholder="Enter amount"
           type="number"
@@ -936,10 +1165,10 @@ function FilterSelect({
   value: string;
 }) {
   return (
-    <label className="grid min-w-0 gap-1 text-sm font-semibold text-stone-950">
+    <label className="grid min-w-0 gap-1.5 text-base font-bold text-stone-950 lg:gap-1 lg:text-sm lg:font-semibold">
       {label}
       <select
-        className="min-h-10 w-full min-w-0 rounded-md border border-stone-300 bg-white px-2.5 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+        className="min-h-12 w-full min-w-0 rounded-lg border border-stone-300 bg-white px-3 text-base font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 lg:min-h-10 lg:rounded-md lg:px-2.5 lg:text-sm"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -965,10 +1194,10 @@ function SearchControl({
   value: string;
 }) {
   return (
-    <label className="grid min-w-0 gap-1 text-sm font-semibold text-stone-950">
+    <label className="grid min-w-0 gap-1.5 text-base font-bold text-stone-950 lg:gap-1 lg:text-sm lg:font-semibold">
       {label}
       <input
-        className="min-h-10 w-full min-w-0 rounded-md border border-stone-300 bg-white px-2.5 text-sm font-medium text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+        className="min-h-12 w-full min-w-0 rounded-lg border border-stone-300 bg-white px-3 text-base font-medium text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 lg:min-h-10 lg:rounded-md lg:px-2.5 lg:text-sm"
         placeholder={placeholder}
         type="search"
         value={value}
@@ -987,7 +1216,7 @@ function ExportButton({
 }) {
   return (
     <button
-      className="seller-secondary-button min-h-10 justify-center border-emerald-700 px-3 text-sm text-emerald-800 hover:bg-emerald-50 lg:self-end"
+      className="seller-secondary-button min-h-12 w-full justify-center rounded-lg border-emerald-700 px-3 text-base text-emerald-800 hover:bg-emerald-50 lg:min-h-10 lg:w-auto lg:self-end lg:rounded-full lg:text-sm"
       type="button"
       onClick={onClick}
     >
@@ -998,7 +1227,7 @@ function ExportButton({
 
 function SummaryGrid({ children }: { children: React.ReactNode }) {
   return (
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <section className="grid grid-cols-2 gap-2 lg:gap-3 xl:grid-cols-4">
       {children}
     </section>
   );
@@ -1009,22 +1238,28 @@ function SummaryCard({
   label,
   subvalue,
   value,
+  wrapValue = false,
 }: {
   glyph: string;
   label: string;
   subvalue?: string;
   value: string;
+  wrapValue?: boolean;
 }) {
   return (
-    <SellerCard className="min-h-[5.75rem] p-4">
-      <div className="flex items-center gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100">
-          <Image src={glyph} alt="" width={20} height={20} />
+    <SellerCard className="h-full min-h-[5.25rem] p-3 lg:min-h-[5.75rem] lg:p-4">
+      <div className="flex items-center gap-2.5 lg:gap-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 lg:size-10">
+          <Image src={glyph} alt="" width={19} height={19} />
         </span>
         <div className="min-w-0">
           <p className="text-xs font-semibold text-stone-600">{label}</p>
           <p
-            className="mt-0.5 truncate text-xl font-semibold text-stone-950"
+            className={`mt-0.5 text-lg font-bold text-stone-950 lg:text-xl lg:font-semibold ${
+              wrapValue
+                ? "line-clamp-2 break-words leading-5 lg:block lg:truncate lg:leading-normal"
+                : "truncate"
+            }`}
             title={value}
           >
             {value}
@@ -1056,7 +1291,7 @@ function ReportTableCard({
     <SellerCard className="overflow-hidden">
       <div className="px-4 py-3.5 sm:px-5">
         <h2 className="text-lg font-semibold text-stone-950">{title}</h2>
-        <p className="mt-0.5 text-sm leading-5 text-stone-600">
+        <p className="mt-0.5 hidden text-sm leading-5 text-stone-600 lg:block">
           {description}
         </p>
       </div>
@@ -1092,7 +1327,7 @@ function ResetSalesFilters({ onReset }: { onReset: () => void }) {
 function SalesTable({ orders }: { orders: SellerReportOrderRow[] }) {
   return (
     <>
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <table className="w-full text-left text-sm">
           <thead className="border-y border-stone-200 bg-stone-50 text-xs font-semibold uppercase tracking-[0.04em] text-stone-500">
             <tr>
@@ -1126,19 +1361,12 @@ function SalesTable({ orders }: { orders: SellerReportOrderRow[] }) {
           </tbody>
         </table>
       </div>
-      <div className="divide-y divide-stone-200 md:hidden">
+      <div className="grid gap-2.5 bg-stone-50/70 p-3 lg:hidden">
         {orders.map((order) => (
-          <MobileRow
+          <MobileSalesRow
             href={`/dashboard/orders/${order.order_id}`}
             key={order.order_id}
-            rows={[
-              ["Date", formatShortDate(order.created_at)],
-              ["Customer", formatCustomerName(order)],
-              ["Items", `${order.total_item_quantity ?? 0}`],
-              ["Total", formatCurrency(order.total_amount)],
-              ["Status", formatOrderLifecycle(order)],
-            ]}
-            title={formatOrderNumber(order.order_number)}
+            order={order}
           />
         ))}
       </div>
@@ -1149,7 +1377,7 @@ function SalesTable({ orders }: { orders: SellerReportOrderRow[] }) {
 function ItemsTable({ rows }: { rows: ItemSummaryRow[] }) {
   return (
     <>
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <table className="w-full text-left text-sm">
           <thead className="border-y border-stone-200 bg-stone-50 text-xs font-semibold uppercase tracking-[0.04em] text-stone-500">
             <tr>
@@ -1179,19 +1407,11 @@ function ItemsTable({ rows }: { rows: ItemSummaryRow[] }) {
           </tbody>
         </table>
       </div>
-      <div className="divide-y divide-stone-200 md:hidden">
+      <div className="grid gap-2.5 bg-stone-50/70 p-3 lg:hidden">
         {rows.map((item) => (
-          <MobileRow
+          <MobileItemRow
+            item={item}
             key={`${item.item}-${item.itemType}`}
-            rows={[
-              ["Item type", item.itemType],
-              ["Species", item.species],
-              ["Breed", item.breed],
-              ["Qty sold", `${item.quantity}`],
-              ["Orders", `${item.orders}`],
-              ["Revenue", formatCurrency(item.revenue)],
-            ]}
-            title={item.item}
           />
         ))}
       </div>
@@ -1202,7 +1422,7 @@ function ItemsTable({ rows }: { rows: ItemSummaryRow[] }) {
 function CustomersTable({ rows }: { rows: CustomerSummaryRow[] }) {
   return (
     <>
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <table className="w-full text-left text-sm">
           <thead className="border-y border-stone-200 bg-stone-50 text-xs font-semibold uppercase tracking-[0.04em] text-stone-500">
             <tr>
@@ -1232,18 +1452,12 @@ function CustomersTable({ rows }: { rows: CustomerSummaryRow[] }) {
           </tbody>
         </table>
       </div>
-      <div className="divide-y divide-stone-200 md:hidden">
+      <div className="grid gap-2.5 bg-stone-50/70 p-3 lg:hidden">
         {rows.map((customer) => (
-          <MobileRow
+          <MobileCustomerRow
+            customer={customer}
             href={`/dashboard/customers/${customer.customerId}`}
             key={customer.customerId}
-            rows={[
-              ["Orders", `${customer.orders}`],
-              ["Items bought", `${customer.itemsBought}`],
-              ["Total spent", formatCurrency(customer.totalSpent)],
-              ["Last order", formatShortDate(customer.lastOrder)],
-            ]}
-            title={customer.customerName}
           />
         ))}
       </div>
@@ -1304,32 +1518,98 @@ function StatusPill({ label }: { label: string }) {
   );
 }
 
-function MobileRow({
+function MobileSalesRow({
   href,
-  rows,
-  title,
+  order,
 }: {
-  href?: string;
-  rows: [string, string][];
-  title: string;
+  href: string;
+  order: SellerReportOrderRow;
 }) {
   return (
-    <div className="grid gap-2.5 px-4 py-3.5">
+    <Link
+      aria-label={`View ${formatOrderNumber(order.order_number)}`}
+      className="block min-h-11 rounded-xl border border-stone-200 bg-white p-3.5 shadow-sm transition hover:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-700/25"
+      href={href}
+    >
       <div className="flex items-start justify-between gap-3">
-        <h3 className="text-sm font-semibold text-stone-950">{title}</h3>
-        {href ? <TableLink href={href} /> : null}
+        <div className="min-w-0">
+          <h3 className="truncate text-base font-bold text-stone-950">
+            {formatOrderNumber(order.order_number)}
+          </h3>
+          <p className="mt-0.5 truncate text-sm text-stone-600">
+            {formatCustomerName(order)}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-base font-bold text-stone-950">
+            {formatCurrency(order.total_amount)}
+          </p>
+          <StatusPill label={formatOrderLifecycle(order)} />
+        </div>
       </div>
-      <dl className="grid gap-1.5">
-        {rows.map(([label, value]) => (
-          <div className="flex items-center justify-between gap-4" key={label}>
-            <dt className="text-xs font-medium text-stone-500">{label}</dt>
-            <dd className="text-right text-sm font-semibold text-stone-950">
-              {value}
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </div>
+      <p className="mt-2 text-sm font-medium text-stone-600">
+        {formatShortDate(order.created_at)} · {order.total_item_quantity ?? 0}{" "}
+        {(order.total_item_quantity ?? 0) === 1 ? "item" : "items"}
+      </p>
+    </Link>
+  );
+}
+
+function MobileItemRow({ item }: { item: ItemSummaryRow }) {
+  const metadata = [item.itemType, item.species, item.breed].filter(
+    (value, index, values) => value !== dash && values.indexOf(value) === index,
+  );
+
+  return (
+    <article className="min-h-11 rounded-xl border border-stone-200 bg-white p-3.5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-base font-bold leading-5 text-stone-950">
+            {item.item}
+          </h3>
+          <p className="mt-1 text-sm text-stone-600">{metadata.join(" · ")}</p>
+        </div>
+        <p className="shrink-0 text-base font-bold text-stone-950">
+          {formatCurrency(item.revenue)}
+        </p>
+      </div>
+      <p className="mt-2 text-sm font-medium text-stone-600">
+        {item.quantity} sold · {item.orders}{" "}
+        {item.orders === 1 ? "order" : "orders"}
+      </p>
+    </article>
+  );
+}
+
+function MobileCustomerRow({
+  customer,
+  href,
+}: {
+  customer: CustomerSummaryRow;
+  href: string;
+}) {
+  return (
+    <Link
+      aria-label={`View ${customer.customerName}`}
+      className="block min-h-11 rounded-xl border border-stone-200 bg-white p-3.5 shadow-sm transition hover:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-700/25"
+      href={href}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="min-w-0 text-base font-bold leading-5 text-stone-950">
+          {customer.customerName}
+        </h3>
+        <p className="shrink-0 text-base font-bold text-stone-950">
+          {formatCurrency(customer.totalSpent)}
+        </p>
+      </div>
+      <p className="mt-1.5 text-sm text-stone-600">
+        {customer.orders} {customer.orders === 1 ? "order" : "orders"} ·{" "}
+        {customer.itemsBought} {customer.itemsBought === 1 ? "item" : "items"}
+      </p>
+      <p className="mt-1 text-sm font-medium text-stone-600">
+        Last order {formatShortDate(customer.lastOrder)}
+      </p>
+    </Link>
   );
 }
 
