@@ -1606,6 +1606,7 @@ export function InventoryManagement() {
                     <InventorySelectControl
                       icon="filter"
                       label="Species"
+                      mobileLarge
                       value={activeFilters.species}
                       options={filterOptions.species}
                       onChange={(value) => updateActiveFilter("species", value)}
@@ -1613,6 +1614,7 @@ export function InventoryManagement() {
                     <InventorySelectControl
                       icon="filter"
                       label="Type/Sex"
+                      mobileLarge
                       value={activeFilters.typeSex}
                       options={filterOptions.typeSex}
                       onChange={(value) => updateActiveFilter("typeSex", value)}
@@ -1620,6 +1622,7 @@ export function InventoryManagement() {
                     <InventorySelectControl
                       icon="filter"
                       label="Age Range"
+                      mobileLarge
                       value={activeFilters.age}
                       options={ageFilterOptions}
                       onChange={(value) =>
@@ -1633,6 +1636,7 @@ export function InventoryManagement() {
                     <InventorySelectControl
                       icon="filter"
                       label="Species"
+                      mobileLarge
                       value={activeFilters.species}
                       options={filterOptions.species}
                       onChange={(value) => updateActiveFilter("species", value)}
@@ -1640,6 +1644,7 @@ export function InventoryManagement() {
                     <InventorySelectControl
                       icon="filter"
                       label="Breed"
+                      mobileLarge
                       value={activeFilters.breed}
                       options={filterOptions.breed}
                       onChange={(value) => updateActiveFilter("breed", value)}
@@ -1650,6 +1655,7 @@ export function InventoryManagement() {
                   <InventorySelectControl
                     icon="filter"
                     label="Product Category"
+                    mobileLarge
                     value={activeFilters.productCategory}
                     options={filterOptions.productCategory}
                     onChange={(value) =>
@@ -1662,6 +1668,7 @@ export function InventoryManagement() {
                     <InventorySelectControl
                       icon="filter"
                       label="Category"
+                      mobileLarge
                       value={activeFilters.equipmentCategory}
                       options={filterOptions.equipmentCategory}
                       onChange={(value) =>
@@ -1671,6 +1678,7 @@ export function InventoryManagement() {
                     <InventorySelectControl
                       icon="filter"
                       label="Condition"
+                      mobileLarge
                       value={activeFilters.condition}
                       options={filterOptions.condition}
                       onChange={(value) => updateActiveFilter("condition", value)}
@@ -1680,6 +1688,7 @@ export function InventoryManagement() {
                 <InventorySelectControl
                   icon="filter"
                   label="Status"
+                  mobileLarge
                   value={effectiveActiveFilters.availability}
                   options={filterOptions.availability}
                   onChange={(value) =>
@@ -2027,6 +2036,7 @@ function InventorySelectControl({
   compact = false,
   icon,
   label,
+  mobileLarge = false,
   value,
   options,
   onChange,
@@ -2034,6 +2044,7 @@ function InventorySelectControl({
   compact?: boolean;
   icon: "filter" | "sort";
   label: string;
+  mobileLarge?: boolean;
   value: string;
   options: { label: string; value: string }[];
   onChange: (value: string) => void;
@@ -2066,17 +2077,27 @@ function InventorySelectControl({
   }
 
   return (
-    <label className="grid gap-1 text-[13px] font-bold text-stone-700">
+    <label
+      className={`grid font-bold text-stone-700 ${
+        mobileLarge ? "gap-1.5 text-base" : "gap-1 text-[13px]"
+      }`}
+    >
       <span className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap">
         <Icon
           aria-hidden="true"
-          className="size-3.5 shrink-0 text-emerald-800"
+          className={`shrink-0 text-emerald-800 ${
+            mobileLarge ? "size-5" : "size-3.5"
+          }`}
           strokeWidth={2.25}
         />
         {label}
       </span>
       <select
-        className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 lg:min-h-10 lg:px-2.5"
+        className={`rounded-md border border-stone-300 bg-white font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 ${
+          mobileLarge
+            ? "h-14 px-4 text-lg"
+            : "min-h-11 px-3 text-sm lg:min-h-10 lg:px-2.5"
+        }`}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -2902,9 +2923,6 @@ function FlatInventoryCard({
           </summary>
 
           <div className="-ml-8 mt-3 w-[calc(100%+2rem)] min-w-0 border-t border-stone-200 pt-3">
-            <div className="mb-2.5 flex justify-end">
-              <AvailabilityPill label={item.availabilityLabel} />
-            </div>
             <dl className="grid min-w-0 grid-cols-2 gap-2 text-sm">
               {item.productTab === "live_poultry" ? (
                 <InventoryCardField
@@ -2965,36 +2983,35 @@ function FlatInventoryCard({
                   />
                 </dd>
               </div>
-              <InventoryCardField
-                label="Availability"
-                value={item.availabilityLabel}
-              />
+              <div className="col-span-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                <InventoryCardField
+                  label="Availability"
+                  value={item.availabilityLabel}
+                />
+                <InventoryItemActionsMenu
+                  item={item}
+                  isSharing={sharingItemId === item.id}
+                  isVisibilityUpdating={
+                    isStoreVisibilityInventoryItem(item) &&
+                    updatingVisibilityItemIds.includes(
+                      getStoreVisibilityItemId(item),
+                    )
+                  }
+                  isArchiveUpdating={
+                    isArchiveInventoryItem(item) &&
+                    updatingArchiveItemIds.includes(getArchiveItemId(item))
+                  }
+                  onArchiveInventoryItems={(items) =>
+                    onArchiveInventoryItems(items)
+                  }
+                  onRestoreInventoryItems={onRestoreInventoryItems}
+                  onShareInventoryItem={onShareInventoryItem}
+                  onSetLiveBirdInventoryVisibility={
+                    onSetLiveBirdInventoryVisibility
+                  }
+                />
+              </div>
             </dl>
-
-            <div className="mt-2.5 flex justify-end">
-              <InventoryItemActionsMenu
-                item={item}
-                isSharing={sharingItemId === item.id}
-                isVisibilityUpdating={
-                  isStoreVisibilityInventoryItem(item) &&
-                  updatingVisibilityItemIds.includes(
-                    getStoreVisibilityItemId(item),
-                  )
-                }
-                isArchiveUpdating={
-                  isArchiveInventoryItem(item) &&
-                  updatingArchiveItemIds.includes(getArchiveItemId(item))
-                }
-                onArchiveInventoryItems={(items) =>
-                  onArchiveInventoryItems(items)
-                }
-                onRestoreInventoryItems={onRestoreInventoryItems}
-                onShareInventoryItem={onShareInventoryItem}
-                onSetLiveBirdInventoryVisibility={
-                  onSetLiveBirdInventoryVisibility
-                }
-              />
-            </div>
           </div>
         </details>
       </div>
