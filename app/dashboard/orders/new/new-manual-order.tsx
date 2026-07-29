@@ -41,6 +41,7 @@ import type {
   DiscountType,
   EquipmentInventoryRow,
   FulfillmentMethod,
+  HatchingEggInventoryRow,
   InventorySearchRow,
   ListingInventoryRow,
   OrderLine,
@@ -144,6 +145,7 @@ export function NewManualOrder() {
         customerResult,
         inventoryResult,
         equipmentResult,
+        hatchingEggResult,
         processedPoultryResult,
         defaultsResult,
         pickupOptionsResult,
@@ -183,6 +185,16 @@ export function NewManualOrder() {
           .order("item_name", { ascending: true })
           .returns<EquipmentInventoryRow[]>(),
         supabase
+          .from("seller_hatching_egg_inventory_management")
+          .select(
+            "hatching_egg_inventory_item_id, item_name, species_name, description, quantity_available, price, available_date, minimum_order_quantity, visibility_status, moderation_status, operational_availability_status",
+          )
+          .eq("store_id", seller.store_id)
+          .neq("visibility_status", "archived")
+          .eq("moderation_status", "normal")
+          .order("item_name", { ascending: true })
+          .returns<HatchingEggInventoryRow[]>(),
+        supabase
           .from("seller_processed_poultry_inventory_management")
           .select(
             "processed_poultry_inventory_item_id, product_name, poultry_type, product_type, package_size, quantity_available, price, visibility_status, moderation_status, operational_availability_status",
@@ -221,6 +233,7 @@ export function NewManualOrder() {
       const firstError =
         customerResult.error ??
         inventoryResult.error ??
+        hatchingEggResult.error ??
         equipmentResult.error ??
         processedPoultryResult.error ??
         defaultsResult.error ??
@@ -237,6 +250,7 @@ export function NewManualOrder() {
       setInventory(
         normalizeSellableInventoryRows({
           equipmentRows: equipmentResult.data ?? [],
+          hatchingEggRows: hatchingEggResult.data ?? [],
           listingRows: inventoryResult.data ?? [],
           processedPoultryRows: processedPoultryResult.data ?? [],
         }),

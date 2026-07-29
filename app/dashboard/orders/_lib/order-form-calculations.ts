@@ -141,6 +141,16 @@ export function validateSharedOrderForm({
     if (!isPositiveWholeNumber(line.quantity)) {
       errors.push(`${label}: quantity must be 1 or more.`);
     }
+    if (
+      line.type === "inventory" &&
+      item?.minimum_order_quantity &&
+      isPositiveWholeNumber(line.quantity) &&
+      Number(line.quantity) < item.minimum_order_quantity
+    ) {
+      errors.push(
+        `${label}: minimum order quantity is ${item.minimum_order_quantity}.`,
+      );
+    }
     if (!isValidMoney(line.unitPrice)) {
       errors.push(`${label}: price must be a valid amount.`);
     }

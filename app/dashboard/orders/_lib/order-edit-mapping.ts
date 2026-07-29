@@ -10,6 +10,9 @@ export type EditableOrderItemRow = {
   inventory_item_id: string | null;
   equipment_inventory_item_id: string | null;
   processed_poultry_inventory_item_id: string | null;
+  hatching_egg_inventory_item_id: string | null;
+  species_name_snapshot: string | null;
+  breed_description_snapshot: string | null;
   breed_display_name_snapshot: string | null;
   inventory_type_snapshot: string | null;
   custom_inventory_label_snapshot: string | null;
@@ -103,6 +106,10 @@ function getInventoryItemType(
     return "processed_poultry_inventory";
   }
 
+  if (item.order_item_source === "hatching_egg_inventory") {
+    return "hatching_egg_inventory";
+  }
+
   if (
     item.order_item_source === "listing_inventory" ||
     item.order_item_source == null
@@ -122,6 +129,10 @@ function getInventoryItemId(item: EditableOrderItemRow) {
     return item.processed_poultry_inventory_item_id;
   }
 
+  if (item.order_item_source === "hatching_egg_inventory") {
+    return item.hatching_egg_inventory_item_id;
+  }
+
   return item.inventory_item_id;
 }
 
@@ -129,6 +140,9 @@ function getSavedItemCategory(item: EditableOrderItemRow): InventoryCategory {
   if (item.order_item_source === "equipment_inventory") return "equipment";
   if (item.order_item_source === "processed_poultry_inventory") {
     return "processed_poultry";
+  }
+  if (item.order_item_source === "hatching_egg_inventory") {
+    return "hatching_eggs";
   }
   if (
     item.inventory_type_snapshot === "hatching_eggs" ||
@@ -160,6 +174,16 @@ function getSavedItemDetail(item: EditableOrderItemRow) {
 
   if (item.order_item_source === "processed_poultry_inventory") {
     return [item.item_category_snapshot, item.custom_inventory_label_snapshot, category]
+      .filter(Boolean)
+      .join(" - ");
+  }
+
+  if (item.order_item_source === "hatching_egg_inventory") {
+    return [
+      item.species_name_snapshot,
+      item.breed_description_snapshot,
+      category,
+    ]
       .filter(Boolean)
       .join(" - ");
   }

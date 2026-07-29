@@ -41,10 +41,25 @@ export type ProcessedPoultryInventoryRow = {
   operational_availability_status: string;
 };
 
+export type HatchingEggInventoryRow = {
+  hatching_egg_inventory_item_id: string;
+  item_name: string;
+  species_name: string;
+  description: string | null;
+  quantity_available: number;
+  price: number;
+  available_date: string;
+  minimum_order_quantity: number | null;
+  visibility_status: string;
+  moderation_status: string;
+  operational_availability_status: string;
+};
+
 export type InventoryItemType =
   | "listing_inventory"
   | "equipment_inventory"
-  | "processed_poultry_inventory";
+  | "processed_poultry_inventory"
+  | "hatching_egg_inventory";
 
 export type BrowseInventoryFilter =
   | "all"
@@ -65,6 +80,8 @@ export type InventorySearchRow = {
   effective_unit_price: number;
   operational_availability_status: string;
   allowInventoryOverride: boolean;
+  available_date?: string | null;
+  minimum_order_quantity?: number | null;
 };
 
 export type OrderLine = {

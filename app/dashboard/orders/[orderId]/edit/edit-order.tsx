@@ -50,6 +50,7 @@ import type {
   DiscountType,
   EquipmentInventoryRow,
   FulfillmentMethod,
+  HatchingEggInventoryRow,
   InventorySearchRow,
   ListingInventoryRow,
   OrderLine,
@@ -197,6 +198,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
         customerResult,
         listingResult,
         equipmentResult,
+        hatchingEggResult,
         processedPoultryResult,
         defaultsResult,
         pickupOptionsResult,
@@ -213,7 +215,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
         supabase
           .from("seller_order_item_detail")
           .select(
-            "order_item_id, inventory_item_id, equipment_inventory_item_id, processed_poultry_inventory_item_id, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, order_item_source, custom_item_name_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity",
+            "order_item_id, inventory_item_id, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, species_name_snapshot, breed_description_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, order_item_source, custom_item_name_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity",
           )
           .eq("store_id", seller.store_id)
           .eq("order_id", orderId)
@@ -252,6 +254,16 @@ export function EditOrder({ orderId }: { orderId: string }) {
           .eq("moderation_status", "normal")
           .order("item_name", { ascending: true })
           .returns<EquipmentInventoryRow[]>(),
+        supabase
+          .from("seller_hatching_egg_inventory_management")
+          .select(
+            "hatching_egg_inventory_item_id, item_name, species_name, description, quantity_available, price, available_date, minimum_order_quantity, visibility_status, moderation_status, operational_availability_status",
+          )
+          .eq("store_id", seller.store_id)
+          .neq("visibility_status", "archived")
+          .eq("moderation_status", "normal")
+          .order("item_name", { ascending: true })
+          .returns<HatchingEggInventoryRow[]>(),
         supabase
           .from("seller_processed_poultry_inventory_management")
           .select(
@@ -293,6 +305,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
         itemResult.error ??
         customerResult.error ??
         listingResult.error ??
+        hatchingEggResult.error ??
         equipmentResult.error ??
         processedPoultryResult.error ??
         defaultsResult.error ??
@@ -328,6 +341,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
         deliveryOptions: nextDeliveryOptions,
         inventory: normalizeSellableInventoryRows({
           equipmentRows: equipmentResult.data ?? [],
+          hatchingEggRows: hatchingEggResult.data ?? [],
           listingRows: listingResult.data ?? [],
           processedPoultryRows: processedPoultryResult.data ?? [],
         }),
@@ -376,6 +390,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
               total: order.total_amount ?? 0,
               inventory: normalizeSellableInventoryRows({
                 equipmentRows: equipmentResult.data ?? [],
+                hatchingEggRows: hatchingEggResult.data ?? [],
                 listingRows: listingResult.data ?? [],
                 processedPoultryRows: processedPoultryResult.data ?? [],
               }),

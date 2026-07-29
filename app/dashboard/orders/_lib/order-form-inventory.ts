@@ -7,6 +7,7 @@ import { isPositiveWholeNumber } from "./order-form-calculations";
 import type {
   BrowseInventoryFilter,
   EquipmentInventoryRow,
+  HatchingEggInventoryRow,
   InventorySearchRow,
   ListingInventoryRow,
   OrderLine,
@@ -15,15 +16,18 @@ import type {
 
 export function normalizeSellableInventoryRows({
   equipmentRows,
+  hatchingEggRows,
   listingRows,
   processedPoultryRows,
 }: {
   equipmentRows: EquipmentInventoryRow[];
+  hatchingEggRows: HatchingEggInventoryRow[];
   listingRows: ListingInventoryRow[];
   processedPoultryRows: ProcessedPoultryInventoryRow[];
 }): InventorySearchRow[] {
   return [
     ...listingRows.map(normalizeListingInventoryRow),
+    ...hatchingEggRows.map(normalizeHatchingEggInventoryRow),
     ...processedPoultryRows.map(normalizeProcessedPoultryInventoryRow),
     ...equipmentRows.map(normalizeEquipmentInventoryRow),
   ].sort((firstItem, secondItem) => {
@@ -33,6 +37,30 @@ export function normalizeSellableInventoryRows({
 
     return categorySort || firstItem.title.localeCompare(secondItem.title);
   });
+}
+
+export function normalizeHatchingEggInventoryRow(
+  row: HatchingEggInventoryRow,
+): InventorySearchRow {
+  const availability = row.available_date
+    ? `Available ${row.available_date}`
+    : null;
+
+  return {
+    allowInventoryOverride: false,
+    available_date: row.available_date,
+    category: "hatching_eggs",
+    detailLabel: [row.species_name, row.description, availability]
+      .filter(Boolean)
+      .join(" - "),
+    effective_unit_price: row.price ?? 0,
+    id: row.hatching_egg_inventory_item_id,
+    itemType: "hatching_egg_inventory",
+    minimum_order_quantity: row.minimum_order_quantity,
+    operational_availability_status: row.operational_availability_status,
+    quantity_available: row.quantity_available ?? 0,
+    title: row.item_name,
+  };
 }
 
 export function normalizeListingInventoryRow(
@@ -182,6 +210,10 @@ export function formatInventorySearchLabel(item: InventorySearchRow) {
 }
 
 export function getManualOrderPayloadItemType(line: OrderLine) {
+  if (line.inventoryItemType === "hatching_egg_inventory") {
+    return "hatching_egg_inventory";
+  }
+
   if (line.inventoryItemType === "equipment_inventory") {
     return "equipment_inventory";
   }
