@@ -1517,7 +1517,27 @@ export function InventoryManagement() {
       />
 
       <SellerCard className="p-3">
-        <div className="grid gap-2 md:grid-cols-3">
+        <div className="grid grid-cols-3 divide-x divide-stone-200 lg:hidden">
+          <InventorySummaryCard
+            compact
+            glyph={summary.availableGlyph}
+            label={summary.availableLabel}
+            value={summary.availableValue}
+          />
+          <InventorySummaryCard
+            compact
+            glyph="/glyphs/calendar.png"
+            label={summary.reservedLabel}
+            value={summary.reservedValue}
+          />
+          <InventorySummaryCard
+            compact
+            glyph="/glyphs/shopping-bag.png"
+            label="Inventory Value"
+            value={formatCurrency(summary.inventoryValue)}
+          />
+        </div>
+        <div className="hidden gap-2 lg:grid lg:grid-cols-3">
           <InventorySummaryCard
             glyph={summary.availableGlyph}
             label={summary.availableLabel}
@@ -1555,7 +1575,144 @@ export function InventoryManagement() {
       </SellerCard>
 
       <SellerCard className="p-3 [&_input]:w-full [&_label]:min-w-0 [&_select]:w-full">
-        <div className="grid gap-3 lg:grid-flow-col lg:auto-cols-[minmax(0,1fr)] lg:items-end">
+        <div className="grid gap-3 lg:hidden">
+          <label className="grid gap-1 text-[13px] font-bold text-stone-700">
+            Search
+            <input
+              className="min-h-11 w-full rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+              placeholder={getSearchPlaceholder(activeTab)}
+              value={activeFilters.search}
+              onChange={(event) =>
+                updateActiveFilter("search", event.target.value)
+              }
+            />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <details className="group relative">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 rounded-md border border-stone-300 bg-white px-3 text-sm font-bold text-stone-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-700/20 [&::-webkit-details-marker]:hidden">
+                <Funnel
+                  aria-hidden="true"
+                  className="size-4 text-emerald-800"
+                  strokeWidth={2.25}
+                />
+                Filters
+                <span aria-hidden="true" className="text-stone-400 group-open:rotate-180">
+                  ▾
+                </span>
+              </summary>
+              <div className="absolute left-0 top-[calc(100%+0.5rem)] z-30 grid w-[calc(200%+0.5rem)] gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-[0_18px_40px_rgba(46,39,25,0.16)]">
+                {activeTab === "live_poultry" ? (
+                  <>
+                    <InventorySelectControl
+                      icon="filter"
+                      label="Species"
+                      value={activeFilters.species}
+                      options={filterOptions.species}
+                      onChange={(value) => updateActiveFilter("species", value)}
+                    />
+                    <InventorySelectControl
+                      icon="filter"
+                      label="Type/Sex"
+                      value={activeFilters.typeSex}
+                      options={filterOptions.typeSex}
+                      onChange={(value) => updateActiveFilter("typeSex", value)}
+                    />
+                    <InventorySelectControl
+                      icon="filter"
+                      label="Age Range"
+                      value={activeFilters.age}
+                      options={ageFilterOptions}
+                      onChange={(value) =>
+                        updateActiveFilter("age", value as AgeFilter)
+                      }
+                    />
+                  </>
+                ) : null}
+                {activeTab === "hatching_eggs" ? (
+                  <>
+                    <InventorySelectControl
+                      icon="filter"
+                      label="Species"
+                      value={activeFilters.species}
+                      options={filterOptions.species}
+                      onChange={(value) => updateActiveFilter("species", value)}
+                    />
+                    <InventorySelectControl
+                      icon="filter"
+                      label="Breed"
+                      value={activeFilters.breed}
+                      options={filterOptions.breed}
+                      onChange={(value) => updateActiveFilter("breed", value)}
+                    />
+                  </>
+                ) : null}
+                {activeTab === "processed_poultry" ? (
+                  <InventorySelectControl
+                    icon="filter"
+                    label="Product Category"
+                    value={activeFilters.productCategory}
+                    options={filterOptions.productCategory}
+                    onChange={(value) =>
+                      updateActiveFilter("productCategory", value)
+                    }
+                  />
+                ) : null}
+                {activeTab === "equipment" ? (
+                  <>
+                    <InventorySelectControl
+                      icon="filter"
+                      label="Category"
+                      value={activeFilters.equipmentCategory}
+                      options={filterOptions.equipmentCategory}
+                      onChange={(value) =>
+                        updateActiveFilter("equipmentCategory", value)
+                      }
+                    />
+                    <InventorySelectControl
+                      icon="filter"
+                      label="Condition"
+                      value={activeFilters.condition}
+                      options={filterOptions.condition}
+                      onChange={(value) => updateActiveFilter("condition", value)}
+                    />
+                  </>
+                ) : null}
+                <InventorySelectControl
+                  icon="filter"
+                  label="Status"
+                  value={effectiveActiveFilters.availability}
+                  options={filterOptions.availability}
+                  onChange={(value) =>
+                    updateActiveFilter(
+                      "availability",
+                      value as AvailabilityFilter,
+                    )
+                  }
+                />
+                {hasActiveFilters ? (
+                  <button
+                    type="button"
+                    className="justify-self-start text-sm font-semibold text-emerald-800 underline-offset-4 hover:text-emerald-950 hover:underline"
+                    onClick={resetActiveFilters}
+                  >
+                    Reset filters
+                  </button>
+                ) : null}
+              </div>
+            </details>
+            <InventorySelectControl
+              compact
+              icon="sort"
+              label="Sort"
+              value={activeFilters.sortBy}
+              options={activeSortOptions}
+              onChange={(value) =>
+                updateActiveFilter("sortBy", value as InventorySort)
+              }
+            />
+          </div>
+        </div>
+        <div className="hidden gap-3 lg:grid lg:grid-flow-col lg:auto-cols-[minmax(0,1fr)] lg:items-end">
           <label className="grid gap-1 text-[13px] font-bold text-stone-700">
             Search
             <input
@@ -1665,7 +1822,7 @@ export function InventoryManagement() {
         {hasActiveFilters ? (
           <button
             type="button"
-            className="mt-3 text-sm font-semibold text-emerald-800 underline-offset-4 hover:text-emerald-950 hover:underline"
+            className="mt-3 hidden text-sm font-semibold text-emerald-800 underline-offset-4 hover:text-emerald-950 hover:underline lg:inline-block"
             onClick={resetActiveFilters}
           >
             Reset filters
@@ -1700,6 +1857,7 @@ export function InventoryManagement() {
           <FlatInventoryTable
             draftPrices={draftPrices}
             draftQuantities={draftQuantities}
+            hasUnsavedChanges={hasUnsavedChanges}
             items={filteredItems}
             isArchiveProcessing={isArchiveProcessing}
             sharingItemId={sharingItemId}
@@ -1774,32 +1932,51 @@ function InventoryProductTabs({
   tabs: Array<{ id: InventoryProductTab; label: string }>;
 }) {
   return (
-    <div
-      aria-label="Inventory product types"
-      className="flex gap-1 overflow-x-auto border-b border-stone-200 pl-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      role="tablist"
-    >
-      {tabs.map((tab) => {
-        const isActive = activeTab === tab.id;
+    <>
+      <label className="grid gap-1 text-[13px] font-bold text-stone-700 lg:hidden">
+        Inventory category
+        <select
+          aria-label="Inventory category"
+          className="min-h-12 w-full rounded-lg border border-stone-300 bg-white px-3 text-base font-semibold text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+          value={activeTab}
+          onChange={(event) =>
+            onChange(event.target.value as InventoryProductTab)
+          }
+        >
+          {tabs.map((tab) => (
+            <option key={tab.id} value={tab.id}>
+              {tab.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div
+        aria-label="Inventory product types"
+        className="hidden gap-1 overflow-x-auto border-b border-stone-200 pl-px [scrollbar-width:none] lg:flex [&::-webkit-scrollbar]:hidden"
+        role="tablist"
+      >
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
 
-        return (
-          <button
-            aria-selected={isActive}
-            className={`relative mb-[-1px] min-h-11 shrink-0 rounded-t-lg border px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-700 ${
-              isActive
-                ? "border-stone-200 border-b-white bg-white text-stone-950 shadow-[0_-1px_0_rgba(0,0,0,0.02)]"
-                : "border-transparent bg-stone-100/70 text-stone-600 hover:bg-white hover:text-stone-950"
-            }`}
-            key={tab.id}
-            onClick={() => onChange(tab.id)}
-            role="tab"
-            type="button"
-          >
-            {tab.label}
-          </button>
-        );
-      })}
-    </div>
+          return (
+            <button
+              aria-selected={isActive}
+              className={`relative mb-[-1px] min-h-11 shrink-0 rounded-t-lg border px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-700 ${
+                isActive
+                  ? "border-stone-200 border-b-white bg-white text-stone-950 shadow-[0_-1px_0_rgba(0,0,0,0.02)]"
+                  : "border-transparent bg-stone-100/70 text-stone-600 hover:bg-white hover:text-stone-950"
+              }`}
+              key={tab.id}
+              onClick={() => onChange(tab.id)}
+              role="tab"
+              type="button"
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
@@ -1847,12 +2024,14 @@ function InventorySaveBar({
 }
 
 function InventorySelectControl({
+  compact = false,
   icon,
   label,
   value,
   options,
   onChange,
 }: {
+  compact?: boolean;
   icon: "filter" | "sort";
   label: string;
   value: string;
@@ -1860,6 +2039,31 @@ function InventorySelectControl({
   onChange: (value: string) => void;
 }) {
   const Icon = icon === "filter" ? Funnel : ArrowUpDown;
+
+  if (compact) {
+    return (
+      <label className="relative block">
+        <span className="sr-only">{label}</span>
+        <Icon
+          aria-hidden="true"
+          className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-emerald-800"
+          strokeWidth={2.25}
+        />
+        <select
+          aria-label={label}
+          className="min-h-11 rounded-md border border-stone-300 bg-white pl-9 pr-3 text-sm font-bold text-stone-800 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
 
   return (
     <label className="grid gap-1 text-[13px] font-bold text-stone-700">
@@ -1887,14 +2091,32 @@ function InventorySelectControl({
 }
 
 function InventorySummaryCard({
+  compact = false,
   glyph,
   label,
   value,
 }: {
+  compact?: boolean;
   glyph: string;
   label: string;
   value: number | string;
 }) {
+  if (compact) {
+    return (
+      <div className="min-w-0 px-2 py-1 text-center first:pl-0 last:pr-0">
+        <span className="mx-auto flex size-7 items-center justify-center rounded-full bg-emerald-900/5">
+          <Image src={glyph} alt="" width={16} height={16} />
+        </span>
+        <p className="mt-1 truncate text-[0.62rem] font-bold uppercase tracking-[0.04em] text-stone-500">
+          {label}
+        </p>
+        <p className="mt-0.5 truncate text-base font-bold leading-none text-stone-950">
+          {value}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-16 items-center gap-2.5 rounded-md border border-stone-200 bg-white px-3 py-2.5 shadow-sm">
       <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-900/5">
@@ -2022,6 +2244,7 @@ function RestoreInventorySuccessDialog({
 function FlatInventoryTable({
   draftPrices,
   draftQuantities,
+  hasUnsavedChanges,
   isArchiveProcessing,
   items,
   sharingItemId,
@@ -2042,6 +2265,7 @@ function FlatInventoryTable({
 }: {
   draftPrices: Record<string, string>;
   draftQuantities: Record<string, string>;
+  hasUnsavedChanges: boolean;
   isArchiveProcessing: boolean;
   items: FlatInventoryItem[];
   sharingItemId: string | null;
@@ -2115,12 +2339,7 @@ function FlatInventoryTable({
           </div>
         </div>
       ) : null}
-      <div className="grid gap-3 p-3 lg:hidden">
-        {tab === "live_poultry" ? (
-          <div className="flex justify-end">
-          <AgeHeaderWithTooltip tooltipId="inventory-age-tooltip-mobile" />
-          </div>
-        ) : null}
+      <div className="grid gap-2 p-2 lg:hidden">
         {items.map((item) => (
           <FlatInventoryCard
             draftPrices={draftPrices}
@@ -2145,9 +2364,13 @@ function FlatInventoryTable({
         ))}
       </div>
       {selectedCount > 0 ? (
-        <div className="sticky bottom-0 z-30 border-t border-emerald-900/20 bg-white/95 px-3 py-2 shadow-[0_-8px_20px_rgba(0,0,0,0.08)] backdrop-blur lg:hidden">
-          <div className="flex items-center gap-2">
-            <p className="min-w-0 flex-1 text-base font-bold text-emerald-950 sm:text-sm sm:font-semibold">
+        <div
+          className={`sticky z-30 border-t border-emerald-900/20 bg-white/95 px-3 py-2.5 shadow-[0_-8px_20px_rgba(0,0,0,0.08)] backdrop-blur lg:hidden ${
+            hasUnsavedChanges ? "bottom-[7.75rem]" : "bottom-0"
+          }`}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="min-w-[7rem] flex-1 text-sm font-bold text-emerald-950">
               {selectedCount} selected
             </p>
             <InventoryVisibilityBulkActions
@@ -2166,7 +2389,7 @@ function FlatInventoryTable({
             />
             <button
               type="button"
-              className="min-h-12 rounded-md border border-stone-300 bg-white px-3 py-2 text-base font-bold text-stone-800 shadow-sm transition hover:border-emerald-700 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-11 sm:text-sm sm:font-semibold"
+              className="min-h-11 rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-800 shadow-sm transition hover:border-emerald-700 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={isArchiveProcessing}
               onClick={onDeselectAll}
             >
@@ -2628,10 +2851,14 @@ function FlatInventoryCard({
   const isChanged =
     isInventoryItemChanged(item, draftQuantities) ||
     isInventoryItemPriceChanged(item, draftPrices);
+  const compactTitle =
+    item.productTab === "live_poultry" && item.typeSex
+      ? `${item.breedOrItem}, ${item.typeSex}`
+      : item.breedOrItem;
 
   return (
     <article
-      className={`rounded-lg border p-4 shadow-sm sm:p-3 ${
+      className={`rounded-lg border p-3 shadow-sm ${
         isSelected
           ? "border-emerald-700 bg-emerald-50/70"
           : isChanged
@@ -2639,110 +2866,131 @@ function FlatInventoryCard({
             : "border-transparent bg-white sm:border-stone-200"
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 gap-2">
-          <input
-            aria-label={`Select ${item.breedOrItem}`}
-            checked={isSelected}
-            className="mt-0.5 size-7 shrink-0 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700 sm:size-6"
-            type="checkbox"
-            onChange={() => onToggleSelection(item.id)}
-          />
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <InventoryItemThumbnail item={item} />
-              <h2 className="truncate text-base font-semibold text-stone-950">
-                {item.breedOrItem}
-              </h2>
+      <div className="flex items-start gap-2">
+        <input
+          aria-label={`Select ${item.breedOrItem}`}
+          checked={isSelected}
+          className="mt-2 size-6 shrink-0 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
+          type="checkbox"
+          onChange={() => onToggleSelection(item.id)}
+        />
+        <details className="group min-w-0 flex-1">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700/20 [&::-webkit-details-marker]:hidden">
+            <InventoryItemThumbnail item={item} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-base font-semibold text-stone-950">
+                {compactTitle}
+              </span>
+              <span className="mt-0.5 block truncate text-sm leading-5 text-stone-600">
+                {item.productTab === "live_poultry"
+                  ? `Age: ${item.ageLabel}`
+                  : getInventoryItemSubtitle(item)}
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              className="flex size-9 shrink-0 items-center justify-center rounded-full text-xl leading-none text-stone-500 transition-transform group-open:rotate-180"
+            >
+              ▾
+            </span>
+          </summary>
+
+          <div className="-ml-8 mt-3 w-[calc(100%+2rem)] min-w-0 border-t border-stone-200 pt-3">
+            <div className="mb-2.5 flex justify-end">
+              <AvailabilityPill label={item.availabilityLabel} />
             </div>
-            <p className="mt-0.5 text-sm leading-5 text-stone-600">
-              {getInventoryItemSubtitle(item)}
-            </p>
+            <dl className="grid min-w-0 grid-cols-2 gap-2 text-sm">
+              {item.productTab === "live_poultry" ? (
+                <InventoryCardField
+                  label="Hatch date"
+                  value={formatTableDate(item.hatchDate)}
+                />
+              ) : null}
+              {item.productTab === "hatching_eggs" ? (
+                <InventoryCardField
+                  label="Available date"
+                  value={formatTableDate(item.availableDate)}
+                />
+              ) : null}
+              {item.kind === "processed_poultry" ? (
+                <InventoryCardField
+                  label="Product Category"
+                  value={item.productCategory}
+                />
+              ) : null}
+              {item.kind === "equipment" ? (
+                <>
+                  <InventoryCardField
+                    label="Category"
+                    value={item.equipmentCategory}
+                  />
+                  <InventoryCardField
+                    label="Condition"
+                    value={item.condition || "--"}
+                  />
+                </>
+              ) : null}
+              <div className="rounded-md bg-stone-50 px-2.5 py-2">
+                <dt className="text-sm font-bold uppercase tracking-[0.05em] text-stone-500 sm:text-xs sm:font-semibold">
+                  Available
+                </dt>
+                <dd className="mt-1">
+                  <AvailableQuantityControl
+                    draftQuantities={draftQuantities}
+                    item={item}
+                    updateDraftQuantity={updateDraftQuantity}
+                  />
+                </dd>
+              </div>
+              <InventoryCardField
+                label="Reserved"
+                value={String(item.reservedQuantity)}
+              />
+              <div className="rounded-md bg-stone-50 px-2.5 py-2">
+                <dt className="text-sm font-bold uppercase tracking-[0.05em] text-stone-500 sm:text-xs sm:font-semibold">
+                  Price
+                </dt>
+                <dd className="mt-1">
+                  <PriceEditControl
+                    draftPrices={draftPrices}
+                    item={item}
+                    resetDraftPrice={resetDraftPrice}
+                    updateDraftPrice={updateDraftPrice}
+                  />
+                </dd>
+              </div>
+              <InventoryCardField
+                label="Availability"
+                value={item.availabilityLabel}
+              />
+            </dl>
+
+            <div className="mt-2.5 flex justify-end">
+              <InventoryItemActionsMenu
+                item={item}
+                isSharing={sharingItemId === item.id}
+                isVisibilityUpdating={
+                  isStoreVisibilityInventoryItem(item) &&
+                  updatingVisibilityItemIds.includes(
+                    getStoreVisibilityItemId(item),
+                  )
+                }
+                isArchiveUpdating={
+                  isArchiveInventoryItem(item) &&
+                  updatingArchiveItemIds.includes(getArchiveItemId(item))
+                }
+                onArchiveInventoryItems={(items) =>
+                  onArchiveInventoryItems(items)
+                }
+                onRestoreInventoryItems={onRestoreInventoryItems}
+                onShareInventoryItem={onShareInventoryItem}
+                onSetLiveBirdInventoryVisibility={
+                  onSetLiveBirdInventoryVisibility
+                }
+              />
+            </div>
           </div>
-        </div>
-        <AvailabilityPill label={item.availabilityLabel} />
-      </div>
-
-      <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
-        {item.productTab === "live_poultry" ? (
-          <>
-            <InventoryCardField
-              label="Hatch date"
-              value={formatTableDate(item.hatchDate)}
-            />
-            <InventoryCardField label="Age" value={item.ageLabel} />
-          </>
-        ) : null}
-        {item.productTab === "hatching_eggs" ? (
-          <InventoryCardField
-            label="Available date"
-            value={formatTableDate(item.availableDate)}
-          />
-        ) : null}
-        {item.kind === "processed_poultry" ? (
-          <InventoryCardField
-            label="Product Category"
-            value={item.productCategory}
-          />
-        ) : null}
-        {item.kind === "equipment" ? (
-          <>
-            <InventoryCardField label="Category" value={item.equipmentCategory} />
-            <InventoryCardField
-              label="Condition"
-              value={item.condition || "--"}
-            />
-          </>
-        ) : null}
-        <div className="rounded-md bg-stone-50 px-2.5 py-2">
-          <dt className="text-sm font-bold uppercase tracking-[0.05em] text-stone-500 sm:text-xs sm:font-semibold">
-            Available
-          </dt>
-          <dd className="mt-1">
-            <AvailableQuantityControl
-              draftQuantities={draftQuantities}
-              item={item}
-              updateDraftQuantity={updateDraftQuantity}
-            />
-          </dd>
-        </div>
-        <InventoryCardField
-          label="Reserved"
-          value={String(item.reservedQuantity)}
-        />
-        <div className="rounded-md bg-stone-50 px-2.5 py-2">
-          <dt className="text-sm font-bold uppercase tracking-[0.05em] text-stone-500 sm:text-xs sm:font-semibold">
-            Price
-          </dt>
-          <dd className="mt-1">
-            <PriceEditControl
-              draftPrices={draftPrices}
-              item={item}
-              resetDraftPrice={resetDraftPrice}
-              updateDraftPrice={updateDraftPrice}
-            />
-          </dd>
-        </div>
-        <InventoryCardField label="Availability" value={item.availabilityLabel} />
-      </dl>
-
-      <div className="mt-4 flex justify-end">
-        <InventoryItemActionsMenu
-          item={item}
-          isSharing={sharingItemId === item.id}
-          isVisibilityUpdating={
-            isStoreVisibilityInventoryItem(item) &&
-            updatingVisibilityItemIds.includes(getStoreVisibilityItemId(item))
-          }
-          isArchiveUpdating={
-            isArchiveInventoryItem(item) &&
-            updatingArchiveItemIds.includes(getArchiveItemId(item))
-          }
-          onArchiveInventoryItems={(items) => onArchiveInventoryItems(items)}
-          onRestoreInventoryItems={onRestoreInventoryItems}
-          onShareInventoryItem={onShareInventoryItem}
-          onSetLiveBirdInventoryVisibility={onSetLiveBirdInventoryVisibility}
-        />
+        </details>
       </div>
     </article>
   );
@@ -2934,11 +3182,11 @@ function InventoryCardField({
   value: string;
 }) {
   return (
-    <div className="rounded-md bg-stone-50 px-2.5 py-2">
+    <div className="min-w-0 rounded-md bg-stone-50 px-2.5 py-2">
       <dt className="text-sm font-bold uppercase tracking-[0.05em] text-stone-500 sm:text-xs sm:font-semibold">
         {label}
       </dt>
-      <dd className="mt-1 text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">{value}</dd>
+      <dd className="mt-1 break-words text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">{value}</dd>
     </div>
   );
 }
