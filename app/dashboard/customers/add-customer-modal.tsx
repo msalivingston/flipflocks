@@ -42,6 +42,21 @@ type DuplicateCustomer = {
   phone: string | null;
 };
 
+type EditableCustomerResult = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  business_name: string | null;
+  email: string | null;
+  phone: string | null;
+  delivery_address_line1: string | null;
+  delivery_city: string | null;
+  delivery_state: string | null;
+  delivery_postal_code: string | null;
+  delivery_country: string | null;
+  internal_notes: string | null;
+};
+
 export type CreatedCustomer = {
   customer_id: string;
   first_name: string;
@@ -49,6 +64,15 @@ export type CreatedCustomer = {
   business_name: string | null;
   email: string | null;
   phone: string | null;
+};
+
+export type EditableCustomer = CreatedCustomer & {
+  delivery_address_line1: string | null;
+  delivery_city: string | null;
+  delivery_state: string | null;
+  delivery_postal_code: string | null;
+  delivery_country: string | null;
+  internal_notes: string | null;
 };
 
 export function AddCustomerButton({
@@ -81,7 +105,7 @@ export function AddCustomerButton({
         {children}
       </button>
       {open ? (
-        <AddCustomerModal
+        <CustomerModal
           onClose={closeModal}
           onCreated={onCreated}
           requireEmail={requireEmail}
@@ -91,21 +115,84 @@ export function AddCustomerButton({
   );
 }
 
-function AddCustomerModal({
+export function EditCustomerButton({
+  className,
+  customer,
+  children,
+  onUpdated,
+}: {
+  className: string;
+  customer: EditableCustomer;
+  children: React.ReactNode;
+  onUpdated: (customer: EditableCustomer) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  function closeModal() {
+    setOpen(false);
+    window.setTimeout(() => triggerRef.current?.focus(), 0);
+  }
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        aria-label={`Edit ${customer.first_name} ${customer.last_name}`}
+        className={className}
+        title="Edit customer"
+        type="button"
+        onClick={() => setOpen(true)}
+      >
+        {children}
+      </button>
+      {open ? (
+        <CustomerModal
+          customer={customer}
+          onClose={closeModal}
+          onUpdated={onUpdated}
+          requireEmail={false}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function CustomerModal({
+  customer,
   onClose,
   onCreated,
+  onUpdated,
   requireEmail,
 }: {
+  customer?: EditableCustomer;
   onClose: () => void;
   onCreated?: (customer: CreatedCustomer) => void;
+  onUpdated?: (customer: EditableCustomer) => void;
   requireEmail: boolean;
 }) {
+  const isEditing = Boolean(customer);
   const router = useRouter();
   const { seller } = useSellerContext();
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
-  const [values, setValues] = useState(initialValues);
+  const [values, setValues] = useState<AddCustomerValues>(() =>
+    customer
+      ? {
+          firstName: customer.first_name,
+          lastName: customer.last_name,
+          businessName: customer.business_name ?? "",
+          phone: formatPhoneNumber(customer.phone ?? ""),
+          email: customer.email ?? "",
+          street: customer.delivery_address_line1 ?? "",
+          city: customer.delivery_city ?? "",
+          state: customer.delivery_state ?? "",
+          postalCode: customer.delivery_postal_code ?? "",
+          notes: customer.internal_notes ?? "",
+        }
+      : initialValues,
+  );
   const [errors, setErrors] = useState<AddCustomerErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [duplicate, setDuplicate] = useState<DuplicateCustomer | null>(null);
@@ -194,7 +281,9 @@ function AddCustomerModal({
       }
 
       const possibleDuplicate = findPossibleDuplicate(
-        existingResult.data ?? [],
+        (existingResult.data ?? []).filter(
+          (existing) => existing.id !== customer?.customer_id,
+        ),
         values,
       );
       if (possibleDuplicate) {
@@ -204,52 +293,74 @@ function AddCustomerModal({
       }
     }
 
-    const insertResult = await supabase
-      .from("customers")
-      .insert({
-        store_id: seller.store_id,
-        first_name: values.firstName.trim(),
-        last_name: values.lastName.trim(),
-        business_name: values.businessName.trim() || null,
-        email: normalizeEmail(values.email) || null,
-        phone: values.phone.trim() || null,
-        delivery_address_line1: values.street.trim() || null,
-        delivery_city: values.city.trim() || null,
-        delivery_state: values.state.trim() || null,
-        delivery_postal_code: values.postalCode.trim() || null,
-        delivery_country:
-          values.street.trim() ||
-          values.city.trim() ||
-          values.state.trim() ||
-          values.postalCode.trim()
-            ? "US"
-            : null,
-        internal_notes: values.notes.trim() || null,
-      })
-      .select("id, first_name, last_name, business_name, email, phone")
-      .single<{
-        id: string;
-        first_name: string;
-        last_name: string;
-        business_name: string | null;
-        email: string | null;
-        phone: string | null;
-      }>();
+    const customerValues = {
+      first_name: values.firstName.trim(),
+      last_name: values.lastName.trim(),
+      business_name: values.businessName.trim() || null,
+      email: normalizeEmail(values.email) || null,
+      phone: values.phone.trim() || null,
+      delivery_address_line1: values.street.trim() || null,
+      delivery_city: values.city.trim() || null,
+      delivery_state: values.state.trim() || null,
+      delivery_postal_code: values.postalCode.trim() || null,
+      delivery_country:
+        values.street.trim() ||
+        values.city.trim() ||
+        values.state.trim() ||
+        values.postalCode.trim()
+          ? customer?.delivery_country || "US"
+          : null,
+      internal_notes: values.notes.trim() || null,
+    };
+    const customerSelect =
+      "id, first_name, last_name, business_name, email, phone, delivery_address_line1, delivery_city, delivery_state, delivery_postal_code, delivery_country, internal_notes";
+    const saveResult = isEditing
+      ? await supabase
+          .from("customers")
+          .update(customerValues)
+          .eq("id", customer!.customer_id)
+          .eq("store_id", seller.store_id)
+          .select(customerSelect)
+          .single<EditableCustomerResult>()
+      : await supabase
+          .from("customers")
+          .insert({ store_id: seller.store_id, ...customerValues })
+          .select(customerSelect)
+          .single<EditableCustomerResult>();
 
-    if (insertResult.error) {
-      setFormError(insertResult.error.message || "Customer could not be added.");
+    if (saveResult.error) {
+      setFormError(
+        saveResult.error.message ||
+          (isEditing
+            ? "Customer changes could not be saved."
+            : "Customer could not be added."),
+      );
       setIsSaving(false);
       return;
     }
 
-    const createdCustomer: CreatedCustomer = {
-      customer_id: insertResult.data.id,
-      first_name: insertResult.data.first_name,
-      last_name: insertResult.data.last_name,
-      business_name: insertResult.data.business_name,
-      email: insertResult.data.email,
-      phone: insertResult.data.phone,
+    const savedCustomer: EditableCustomer = {
+      customer_id: saveResult.data.id,
+      first_name: saveResult.data.first_name,
+      last_name: saveResult.data.last_name,
+      business_name: saveResult.data.business_name,
+      email: saveResult.data.email,
+      phone: saveResult.data.phone,
+      delivery_address_line1: saveResult.data.delivery_address_line1,
+      delivery_city: saveResult.data.delivery_city,
+      delivery_state: saveResult.data.delivery_state,
+      delivery_postal_code: saveResult.data.delivery_postal_code,
+      delivery_country: saveResult.data.delivery_country,
+      internal_notes: saveResult.data.internal_notes,
     };
+
+    if (isEditing) {
+      onUpdated?.(savedCustomer);
+      onClose();
+      return;
+    }
+
+    const createdCustomer: CreatedCustomer = savedCustomer;
 
     if (onCreated) {
       onCreated(createdCustomer);
@@ -288,7 +399,7 @@ function AddCustomerModal({
       >
         <header className="sticky top-0 z-10 flex min-h-16 items-center border-b border-stone-200 bg-white px-4 lg:px-6">
           <button
-            aria-label="Close Add Customer"
+            aria-label={`Close ${isEditing ? "Edit" : "Add"} Customer`}
             className="inline-flex size-11 items-center justify-center rounded-full text-stone-700 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 lg:hidden"
             disabled={isSaving}
             type="button"
@@ -298,14 +409,16 @@ function AddCustomerModal({
           </button>
           <div className="min-w-0 flex-1 lg:pr-12">
             <h2 id={titleId} className="text-xl font-bold text-stone-950">
-              Add Customer
+              {isEditing ? "Edit Customer" : "Add Customer"}
             </h2>
             <p className="mt-0.5 hidden text-sm text-stone-600 lg:block">
-              Save customer details without creating an order.
+              {isEditing
+                ? "Update customer details."
+                : "Save customer details without creating an order."}
             </p>
           </div>
           <button
-            aria-label="Close Add Customer"
+            aria-label={`Close ${isEditing ? "Edit" : "Add"} Customer`}
             className="absolute right-4 top-3 hidden size-10 items-center justify-center rounded-full text-2xl leading-none text-stone-500 transition hover:bg-stone-100 hover:text-stone-950 focus:outline-none focus:ring-2 focus:ring-emerald-700 lg:inline-flex"
             disabled={isSaving}
             type="button"
@@ -389,7 +502,8 @@ function AddCustomerModal({
 
               <fieldset className="grid gap-4 border-t border-stone-200 pt-4">
                 <legend className="mb-1 text-base font-bold text-stone-900">
-                  Address <span className="font-normal text-stone-500">(optional)</span>
+                  Mailing Address{" "}
+                  <span className="font-normal text-stone-500">(optional)</span>
                 </legend>
                 <Field label="Street address">
                   <input
@@ -484,7 +598,11 @@ function AddCustomerModal({
                       type="button"
                       onClick={() => void saveCustomer(true)}
                     >
-                      {isSaving ? "Adding…" : "Create Anyway"}
+                      {isSaving
+                        ? "Saving…"
+                        : isEditing
+                          ? "Save Anyway"
+                          : "Create Anyway"}
                     </button>
                   </div>
                 </div>
@@ -515,7 +633,11 @@ function AddCustomerModal({
               disabled={isSaving}
               type="submit"
             >
-              {isSaving ? "Adding customer…" : "Add Customer"}
+              {isSaving
+                ? "Saving customer…"
+                : isEditing
+                  ? "Save Changes"
+                  : "Add Customer"}
             </button>
           </footer>
         </form>

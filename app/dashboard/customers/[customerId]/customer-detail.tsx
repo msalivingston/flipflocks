@@ -5,6 +5,10 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  EditCustomerButton,
+  type EditableCustomer,
+} from "../add-customer-modal";
 import { useSellerContext } from "../../_components/seller-context";
 import {
   DashboardPageContent,
@@ -78,12 +82,6 @@ type CustomerDetailState = {
   orders: SellerCustomerOrderRow[];
   timelineNotes: CustomerTimelineNoteRow[];
   fulfillmentEvents: OrderFulfillmentEventRow[];
-};
-
-type CustomerContactForm = {
-  email: string;
-  phone: string;
-  pickupLocation: string;
 };
 
 type ActivityView = "orders" | "timeline";
@@ -270,7 +268,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
   }
 
   return (
-    <DashboardPageContent className="space-y-5">
+    <DashboardPageContent className="space-y-4 px-4 py-4 pb-28 lg:space-y-5 lg:px-7 lg:py-5 lg:pb-5">
       <DetailHeader customerName={customerName} />
 
       <CustomerSummaryCard
@@ -281,43 +279,48 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
       />
 
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(19rem,0.95fr)]">
-        <CustomerActivityCard
-          customerId={customer.customer_id}
-          fulfillmentEvents={data.fulfillmentEvents}
-          onTimelineNotesChange={(timelineNotes) => {
-            setData((current) => ({ ...current, timelineNotes }));
-          }}
-          orders={data.orders}
-          selectedView={selectedActivityView}
-          storeId={seller?.store_id ?? ""}
-          timelineNotes={data.timelineNotes}
-          onSelectedViewChange={setSelectedActivityView}
-        />
+        <div className="order-2 min-w-0 lg:order-none">
+          <CustomerActivityCard
+            customerId={customer.customer_id}
+            fulfillmentEvents={data.fulfillmentEvents}
+            onTimelineNotesChange={(timelineNotes) => {
+              setData((current) => ({ ...current, timelineNotes }));
+            }}
+            orders={data.orders}
+            selectedView={selectedActivityView}
+            storeId={seller?.store_id ?? ""}
+            timelineNotes={data.timelineNotes}
+            onSelectedViewChange={setSelectedActivityView}
+          />
+        </div>
 
-        <aside className="grid min-w-0 content-start gap-5">
-          <ContactDetailsCard
-            customer={customer}
-            pickupLocation={pickupLocation}
-            onCustomerChange={(updates) => {
-              setData((current) => ({
-                ...current,
-                customer: current.customer
-                  ? { ...current.customer, ...updates }
-                  : current.customer,
-              }));
-            }}
-          />
-          <CustomerNotesCard
-            customer={customer}
-            onCustomerChange={(updates) => {
-              setData((current) => ({
-                ...current,
-                customer: current.customer
-                  ? { ...current.customer, ...updates }
-                  : current.customer,
-              }));
-            }}
-          />
+        <aside className="contents lg:grid lg:min-w-0 lg:content-start lg:gap-5">
+          <div className="order-1 min-w-0 lg:order-none">
+            <ContactDetailsCard
+              customer={customer}
+              onCustomerChange={(updates) => {
+                setData((current) => ({
+                  ...current,
+                  customer: current.customer
+                    ? { ...current.customer, ...updates }
+                    : current.customer,
+                }));
+              }}
+            />
+          </div>
+          <div className="order-3 min-w-0 lg:order-none">
+            <CustomerNotesCard
+              customer={customer}
+              onCustomerChange={(updates) => {
+                setData((current) => ({
+                  ...current,
+                  customer: current.customer
+                    ? { ...current.customer, ...updates }
+                    : current.customer,
+                }));
+              }}
+            />
+          </div>
           <WorkingOrdersCard count={customer.open_order_count ?? 0} />
         </aside>
       </div>
@@ -333,7 +336,7 @@ function DetailHeader({
   isLoading?: boolean;
 }) {
   return (
-    <header className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <header className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between lg:gap-4">
       <div className="min-w-0">
         <nav
           aria-label="Breadcrumb"
@@ -347,14 +350,16 @@ function DetailHeader({
             {isLoading ? "Loading" : customerName}
           </span>
         </nav>
-        <h1 className="mt-3 truncate text-3xl font-semibold text-stone-950">
+        <h1 className="mt-2 hidden truncate text-2xl font-bold text-stone-950 lg:mt-3 lg:block lg:text-3xl lg:font-semibold">
           {customerName}
         </h1>
-        <p className="mt-2 max-w-2xl text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
+        <p className="mt-2 hidden max-w-2xl text-base leading-7 text-stone-600 sm:text-sm sm:leading-6 lg:block">
           Review contact details and purchase history for this buyer.
         </p>
       </div>
-      <BackToCustomersLink />
+      <div className="hidden lg:block">
+        <BackToCustomersLink />
+      </div>
     </header>
   );
 }
@@ -371,8 +376,81 @@ function CustomerSummaryCard({
   pickupLocation: string | null;
 }) {
   return (
-    <section className="rounded-xl border border-transparent bg-white p-5 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm">
-      <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] xl:items-center">
+    <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)] lg:rounded-lg lg:p-5 lg:shadow-sm">
+      <div className="lg:hidden">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-900">
+            {formatCustomerInitials(customer)}
+          </span>
+          <div className="min-w-0">
+            <h2 className="truncate text-xl font-bold text-stone-950">
+              {customerName}
+            </h2>
+            {customer.business_name ? (
+              <p className="mt-0.5 truncate text-sm font-semibold text-stone-600">
+                {customer.business_name}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          {customer.phone ? (
+            <>
+              <a
+                className="seller-small-button min-h-12 gap-2 rounded-lg px-2"
+                href={`tel:${customer.phone.replace(/[^\d+]/g, "")}`}
+              >
+                <Image src="/glyphs/phone.png" alt="" width={17} height={17} />
+                Call
+              </a>
+              <a
+                className="seller-small-button min-h-12 gap-2 rounded-lg px-2"
+                href={`sms:${customer.phone.replace(/[^\d+]/g, "")}`}
+              >
+                <Image src="/glyphs/chat.png" alt="" width={17} height={17} />
+                Text
+              </a>
+            </>
+          ) : (
+            <span className="col-span-2 inline-flex min-h-12 items-center justify-center rounded-lg border border-stone-200 bg-stone-50 px-3 text-sm font-semibold text-stone-400">
+              No phone
+            </span>
+          )}
+          {customer.email ? (
+            <a
+              className="seller-small-button min-h-12 gap-2 rounded-lg px-2"
+              href={`mailto:${customer.email}`}
+            >
+              <Image src="/glyphs/envelope.png" alt="" width={17} height={17} />
+              Email
+            </a>
+          ) : (
+            <span className="inline-flex min-h-12 items-center justify-center rounded-lg border border-stone-200 bg-stone-50 px-3 text-sm font-semibold text-stone-400">
+              No email
+            </span>
+          )}
+        </div>
+
+        <div className="mt-4 grid gap-2 border-t border-stone-100 pt-4 text-sm leading-6 text-stone-700">
+          <p>
+            <span className="font-bold text-stone-950">Lifetime:</span>{" "}
+            {customer.order_count ?? 0}{" "}
+            {(customer.order_count ?? 0) === 1 ? "Order" : "Orders"} -{" "}
+            {formatCurrency(customer.lifetime_order_total)} Total
+          </p>
+          <p>
+            <span className="font-bold text-stone-950">Last order:</span>{" "}
+            {formatDateOnly(customer.latest_order_created_at)}
+          </p>
+          <p>
+            <span className="font-bold text-stone-950">Working orders:</span>{" "}
+            {customer.open_order_count ?? 0}
+          </p>
+        </div>
+      </div>
+
+      <div className="hidden min-w-0 gap-5 lg:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] xl:items-center">
         <div className="flex min-w-0 gap-4">
           <InitialsBubble customer={customer} />
           <div className="min-w-0">
@@ -455,14 +533,14 @@ function CustomerActivityCard({
         selectedView={selectedView}
         onSelectedViewChange={onSelectedViewChange}
       />
-      <section className="min-w-0 rounded-b-xl rounded-tr-xl border border-transparent bg-white p-5 shadow-none sm:border-stone-200 sm:shadow-sm">
+      <section className="min-w-0 rounded-b-xl rounded-tr-xl border border-stone-200 bg-white p-4 shadow-[0_12px_30px_rgba(46,39,25,0.04)] lg:p-5 lg:shadow-sm">
         <div className="flex min-w-0 items-start gap-3">
           <IconBubble src="/glyphs/clipboard.png" />
           <div className="min-w-0">
-            <h2 className="text-xl font-semibold text-stone-950">
+            <h2 className="text-lg font-bold text-stone-950 lg:text-xl lg:font-semibold">
               {selectedView === "orders" ? "Order history" : "Timeline"}
             </h2>
-            <p className="mt-1 text-base leading-7 text-stone-600 sm:text-sm sm:leading-6">
+            <p className="mt-1 hidden text-base leading-7 text-stone-600 sm:text-sm sm:leading-6 lg:block">
               {selectedView === "orders"
                 ? "Previous requests and purchases from this customer."
                 : "Dated customer activity, order milestones, and seller notes."}
@@ -502,7 +580,7 @@ function ActivityTabs({
   return (
     <div
       aria-label="Customer activity sections"
-      className="flex gap-1 overflow-x-auto border-b border-stone-200 pl-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="grid grid-cols-2 gap-1 rounded-xl bg-stone-100 p-1 lg:flex lg:overflow-x-auto lg:rounded-none lg:border-b lg:border-stone-200 lg:bg-transparent lg:p-0 lg:pl-px lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden"
       role="tablist"
     >
       {activityTabs.map((tab) => {
@@ -511,10 +589,10 @@ function ActivityTabs({
         return (
           <button
             aria-selected={isActive}
-            className={`relative mb-[-1px] min-h-11 shrink-0 rounded-t-lg border px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-700 ${
+            className={`relative min-h-11 shrink-0 rounded-lg border px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-700 lg:mb-[-1px] lg:rounded-b-none lg:rounded-t-lg ${
               isActive
-                ? "border-stone-200 border-b-white bg-white text-stone-950 shadow-[0_-1px_0_rgba(0,0,0,0.02)]"
-                : "border-transparent bg-stone-100/70 text-stone-600 hover:bg-white hover:text-stone-950"
+                ? "border-stone-200 bg-white text-stone-950 shadow-sm lg:border-b-white lg:shadow-[0_-1px_0_rgba(0,0,0,0.02)]"
+                : "border-transparent bg-transparent text-stone-600 hover:bg-white hover:text-stone-950 lg:bg-stone-100/70"
             }`}
             key={tab.id}
             onClick={() => onSelectedViewChange(tab.id)}
@@ -916,18 +994,18 @@ function CustomerOrderCard({ order }: { order: SellerCustomerOrderRow }) {
   const status = formatOrderLifecycle(order);
 
   return (
-    <article className="rounded-xl border border-transparent bg-stone-50/70 p-4 shadow-none sm:rounded-lg sm:border-stone-200 sm:bg-white sm:shadow-[0_8px_18px_rgba(46,39,25,0.04)]">
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <article className="rounded-xl border border-stone-200 bg-white p-3 shadow-none lg:rounded-lg lg:p-4 lg:shadow-[0_8px_18px_rgba(46,39,25,0.04)]">
+      <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h3 className="text-lg font-semibold text-stone-950">
+            <h3 className="text-base font-bold text-stone-950 lg:text-lg lg:font-semibold">
               {formatOrderNumber(order.order_number)}
             </h3>
             <span className="inline-flex min-h-7 items-center rounded-full bg-emerald-50 px-2.5 py-1 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-100 sm:min-h-0 sm:text-xs">
               {status}
             </span>
           </div>
-          <p className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-sm leading-5 text-stone-600">
+          <p className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5 text-sm leading-5 text-stone-600 lg:mt-3 lg:gap-2">
             <Image src="/glyphs/calendar.png" alt="" width={15} height={15} />
             <span>{formatDateTime(order.created_at)}</span>
             <span aria-hidden="true">-</span>
@@ -935,20 +1013,22 @@ function CustomerOrderCard({ order }: { order: SellerCustomerOrderRow }) {
           </p>
         </div>
         <Link
-          className="inline-flex min-h-12 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-stone-300 bg-white px-4 text-base font-bold text-stone-950 transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 sm:min-h-10 sm:text-sm sm:font-semibold"
+          className="inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-stone-300 bg-white px-3 text-sm font-bold text-stone-950 transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 lg:min-h-10 lg:px-4 lg:font-semibold"
           href={`/dashboard/orders/${order.order_id}`}
         >
           View order
         </Link>
       </div>
 
-      <dl className="mt-4 grid gap-3 border-t border-stone-100 pt-4 text-sm sm:grid-cols-3">
+      <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-stone-100 pt-3 text-sm lg:mt-4 lg:grid-cols-3 lg:pt-4">
         <CompactFact
           label="Items"
           value={`${order.total_item_quantity ?? order.item_count ?? 0}`}
         />
         <CompactFact label="Total" value={formatCurrency(order.total_amount)} />
-        <CompactFact label="Status" value={status} />
+        <div className="hidden lg:block">
+          <CompactFact label="Status" value={status} />
+        </div>
       </dl>
     </article>
   );
@@ -956,74 +1036,15 @@ function CustomerOrderCard({ order }: { order: SellerCustomerOrderRow }) {
 
 function ContactDetailsCard({
   customer,
-  pickupLocation,
   onCustomerChange,
 }: {
   customer: SellerCustomerDetailRow;
-  pickupLocation: string | null;
   onCustomerChange: (updates: Partial<SellerCustomerDetailRow>) => void;
 }) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [form, setForm] = useState<CustomerContactForm>(() =>
-    getContactForm(customer, pickupLocation),
-  );
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  function beginEditing() {
-    setForm(getContactForm(customer, pickupLocation));
-    setSaveError(null);
-    setIsEditing(true);
-  }
-
-  function cancelEditing() {
-    setForm(getContactForm(customer, pickupLocation));
-    setSaveError(null);
-    setIsEditing(false);
-  }
-
-  async function saveContact(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaveError(null);
-
-    const email = form.email.trim();
-
-    if (email && !isValidEmail(email)) {
-      setSaveError("Enter a valid email address.");
-      return;
-    }
-
-    setIsSaving(true);
-
-    const pickupLocationValue = form.pickupLocation.trim();
-    const updates = {
-      email,
-      phone: form.phone.trim() || null,
-      delivery_address_line1: pickupLocationValue || null,
-      delivery_address_line2: null,
-      delivery_city: null,
-      delivery_state: null,
-      delivery_postal_code: null,
-      delivery_country: null,
-    };
-    const { error } = await supabase.rpc("seller_update_customer", {
-      p_customer_id: customer.customer_id,
-      p_updates: updates,
-    });
-
-    setIsSaving(false);
-
-    if (error) {
-      setSaveError(error.message);
-      return;
-    }
-
-    onCustomerChange(updates);
-    setIsEditing(false);
-  }
+  const mailingAddressLines = formatMailingAddressLines(customer);
 
   return (
-    <section className="min-w-0 rounded-xl border border-transparent bg-white p-5 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm">
+    <section className="min-w-0 rounded-xl border border-stone-200 bg-white p-4 shadow-none lg:rounded-lg lg:p-5 lg:shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <IconBubble src="/glyphs/person.png" />
@@ -1031,53 +1052,72 @@ function ContactDetailsCard({
             Contact details
           </h2>
         </div>
-        {!isEditing ? (
-          <IconButton
-            label="Edit contact details"
-            onClick={beginEditing}
-            src="/glyphs/pencil.png"
+        <EditCustomerButton
+          className="inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-600 transition hover:border-emerald-700 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/25 lg:size-9"
+          customer={toEditableCustomer(customer)}
+          onUpdated={(updatedCustomer) => onCustomerChange(updatedCustomer)}
+        >
+          <Image src="/glyphs/pencil.png" alt="" width={16} height={16} />
+        </EditCustomerButton>
+      </div>
+      <dl className="mt-5 grid gap-5">
+        {customer.business_name ? (
+          <DetailField
+            label="Farm or Business Name"
+            value={customer.business_name}
           />
         ) : null}
-      </div>
-      {isEditing ? (
-        <form className="mt-5 grid gap-4" onSubmit={saveContact}>
-          <EditableField
-            label="Email"
-            type="email"
-            value={form.email}
-            onChange={(value) => setForm((current) => ({ ...current, email: value }))}
-          />
-          <EditableField
-            label="Phone"
-            value={form.phone}
-            onChange={(value) => setForm((current) => ({ ...current, phone: value }))}
-          />
-          <EditableField
-            label="Pickup location"
-            value={form.pickupLocation}
-            onChange={(value) =>
-              setForm((current) => ({ ...current, pickupLocation: value }))
-            }
-          />
-          {saveError ? (
-            <p className="text-sm font-medium text-red-700">{saveError}</p>
-          ) : null}
-          <FormActions
-            isSaving={isSaving}
-            onCancel={cancelEditing}
-            saveLabel="Save"
-          />
-        </form>
-      ) : (
-        <dl className="mt-5 grid gap-5">
-          <DetailField label="Email" value={customer.email || "No email on file"} />
-          <DetailField label="Phone" value={customer.phone || "No phone on file"} />
-          <DetailField
-            label="Pickup location"
-            value={pickupLocation || "No pickup location on file"}
-          />
-        </dl>
-      )}
+        <DetailField
+          label="Email"
+          value={
+            customer.email ? (
+              <>
+                <a
+                  className="break-all text-emerald-800 underline decoration-emerald-800/35 underline-offset-2 lg:hidden"
+                  href={`mailto:${customer.email}`}
+                >
+                  {customer.email}
+                </a>
+                <span className="hidden lg:inline">{customer.email}</span>
+              </>
+            ) : (
+              "No email on file"
+            )
+          }
+        />
+        <DetailField
+          label="Phone"
+          value={
+            customer.phone ? (
+              <>
+                <a
+                  className="text-emerald-800 underline decoration-emerald-800/35 underline-offset-2 lg:hidden"
+                  href={`tel:${customer.phone.replace(/[^\d+]/g, "")}`}
+                >
+                  {customer.phone}
+                </a>
+                <span className="hidden lg:inline">{customer.phone}</span>
+              </>
+            ) : (
+              "No phone on file"
+            )
+          }
+        />
+        <DetailField
+          label="Mailing Address"
+          value={
+            mailingAddressLines.length > 0 ? (
+              <span className="grid gap-0.5">
+                {mailingAddressLines.map((line) => (
+                  <span key={line}>{line}</span>
+                ))}
+              </span>
+            ) : (
+              "No mailing address on file"
+            )
+          }
+        />
+      </dl>
     </section>
   );
 }
@@ -1131,7 +1171,7 @@ function CustomerNotesCard({
   }
 
   return (
-    <section className="min-w-0 rounded-xl border border-transparent bg-white p-5 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm">
+    <section className="min-w-0 rounded-xl border border-stone-200 bg-white p-4 shadow-none lg:rounded-lg lg:p-5 lg:shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <IconBubble src="/glyphs/clipboard.png" />
@@ -1170,7 +1210,7 @@ function CustomerNotesCard({
           />
         </form>
       ) : (
-        <p className="mt-5 whitespace-pre-wrap break-words text-base font-medium leading-7 text-stone-700 sm:text-sm sm:leading-6">
+        <p className="mt-3 whitespace-pre-wrap break-words text-base font-medium leading-7 text-stone-700 lg:mt-5 lg:text-sm lg:leading-6">
           {customer.internal_notes?.trim() || (
             <span className="font-normal text-stone-500">No notes yet.</span>
           )}
@@ -1182,7 +1222,7 @@ function CustomerNotesCard({
 
 function WorkingOrdersCard({ count }: { count: number }) {
   return (
-    <section className="rounded-xl border border-transparent bg-white p-5 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm">
+    <section className="hidden rounded-lg border border-stone-200 bg-white p-5 shadow-sm lg:block">
       <div className="flex items-center gap-3">
         <IconBubble src="/glyphs/egg-carton.png" />
         <h2 className="text-xl font-semibold text-stone-950">
@@ -1235,7 +1275,13 @@ function CompactFact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function DetailField({ label, value }: { label: string; value: string }) {
+function DetailField({
+  label,
+  value,
+}: {
+  label: React.ReactNode;
+  value: React.ReactNode;
+}) {
   return (
     <div className="min-w-0">
       <dt className="text-sm font-semibold uppercase tracking-[0.12em] text-stone-500 sm:text-xs">
@@ -1508,19 +1554,56 @@ function formatPickupLocation(customer: SellerCustomerDetailRow) {
     .join(", ");
 }
 
-function getContactForm(
+function toEditableCustomer(
   customer: SellerCustomerDetailRow,
-  pickupLocation: string | null,
-): CustomerContactForm {
+): EditableCustomer {
   return {
+    customer_id: customer.customer_id,
+    first_name: customer.first_name ?? "",
+    last_name: customer.last_name ?? "",
+    business_name: customer.business_name,
     email: customer.email ?? "",
-    phone: customer.phone ?? "",
-    pickupLocation: pickupLocation ?? "",
+    phone: customer.phone,
+    delivery_address_line1: customer.delivery_address_line1,
+    delivery_city: customer.delivery_city,
+    delivery_state: customer.delivery_state,
+    delivery_postal_code: customer.delivery_postal_code,
+    delivery_country: customer.delivery_country,
+    internal_notes: customer.internal_notes,
   };
 }
 
-function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+function formatMailingAddressLines(customer: SellerCustomerDetailRow) {
+  const streetLine = [
+    customer.delivery_address_line1,
+    customer.delivery_address_line2,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const cityRegionLine = [
+    customer.delivery_city,
+    [
+      customer.delivery_state,
+      customer.delivery_postal_code,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    customer.delivery_country &&
+    customer.delivery_country.toUpperCase() !== "US"
+      ? customer.delivery_country
+      : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const deliveryLines = [streetLine, cityRegionLine].filter(Boolean);
+
+  if (deliveryLines.length > 0) return deliveryLines;
+
+  const contactLocation = [customer.city, customer.state, customer.country]
+    .filter(Boolean)
+    .join(", ");
+
+  return contactLocation ? [contactLocation] : [];
 }
 
 function formatDateOnly(value: string | null) {
