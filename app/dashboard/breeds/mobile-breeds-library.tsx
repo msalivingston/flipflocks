@@ -42,6 +42,7 @@ import {
 
 type MobileBreedsLibraryProps = {
   actionError: string | null;
+  autoExpandProfileId: string | null;
   catalogQuery: string;
   catalogSpeciesFilter: string;
   hasActiveCatalogFilters: boolean;
@@ -78,6 +79,7 @@ type MobileBreedsLibraryProps = {
 
 export function MobileBreedsLibrary({
   actionError,
+  autoExpandProfileId,
   catalogQuery,
   catalogSpeciesFilter,
   hasActiveCatalogFilters,
@@ -142,6 +144,7 @@ export function MobileBreedsLibrary({
   const pendingActionRef = useRef<(() => void) | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
+  const lastAutoExpandedProfileIdRef = useRef<string | null>(null);
   const speciesCount = useMemo(
     () => new Set(profiles.map((profile) => profile.species_id)).size,
     [profiles],
@@ -178,6 +181,32 @@ export function MobileBreedsLibrary({
     window.addEventListener("beforeunload", warnBeforeLeaving);
     return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
   }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    if (
+      !autoExpandProfileId ||
+      lastAutoExpandedProfileIdRef.current === autoExpandProfileId
+    ) {
+      return;
+    }
+
+    const profile = profiles.find((item) => item.id === autoExpandProfileId);
+    if (!profile) return;
+
+    lastAutoExpandedProfileIdRef.current = autoExpandProfileId;
+    setDescriptionDraft(getProfileDescription(profile, libraryByBreedId));
+    setDescriptionError(null);
+    setSavedDescriptionProfileId(null);
+    setExpandedProfileId(profile.id);
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        document
+          .getElementById(`mobile-breed-${profile.id}-details`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    });
+  }, [autoExpandProfileId, libraryByBreedId, profiles]);
 
   useEffect(() => {
     function guardInternalNavigation(event: MouseEvent) {

@@ -47,6 +47,7 @@ import {
   type BreedSpecies,
   type SellerBreedProfile,
 } from "./breed-data";
+import { MobileAddBreedSheet } from "./mobile-add-breed-sheet";
 import { MobileBreedsLibrary } from "./mobile-breeds-library";
 
 type ActiveTab = "catalog" | "library";
@@ -57,7 +58,7 @@ type BreedProfileUpsertResult = {
 };
 
 type AddBreedResult =
-  | { ok: true; breedProfileId: string }
+  | { ok: true; breedProfileId: string; warning?: string }
   | { ok: false; message: string };
 type UpdateBreedDescriptionResult =
   | { ok: true }
@@ -117,6 +118,9 @@ export function BreedsManagement() {
     null,
   );
   const [reloadKey, setReloadKey] = useState(0);
+  const [mobileAutoExpandProfileId, setMobileAutoExpandProfileId] = useState<
+    string | null
+  >(null);
   const isDesktopViewport = useSyncExternalStore(
     subscribeBreedDesktopBreakpoint,
     readBreedDesktopBreakpoint,
@@ -399,6 +403,54 @@ export function BreedsManagement() {
     }
 
     return { ok: true, breedProfileId };
+  }
+
+  async function addMobileCustomBreed(
+    draft: CustomBreedDraft,
+    photos: { crop: PhotoCropMetadata; file: File }[],
+  ): Promise<AddBreedResult> {
+    const result = await addCustomBreed(draft);
+    if (!result.ok || photos.length === 0) return result;
+
+    let failedPhotoCount = 0;
+
+    for (const [index, photo] of photos.entries()) {
+      const uploadResult = await uploadSellerPhoto({
+        entityId: result.breedProfileId,
+        entityType: "seller_breed_profile",
+        file: photo.file,
+        isFeatured: index === 0,
+        sortOrder: index,
+        storeId,
+      });
+
+      if (!uploadResult.ok) {
+        failedPhotoCount += 1;
+        continue;
+      }
+
+      const cropResult = await updateSellerPhotoCrop(
+        uploadResult.media.media_link_id,
+        photo.crop,
+      );
+
+      if (!cropResult.ok) {
+        await archiveSellerPhoto(uploadResult.media.media_link_id);
+        failedPhotoCount += 1;
+      }
+    }
+
+    if (failedPhotoCount > 0) {
+      return {
+        ...result,
+        warning:
+          failedPhotoCount === 1
+            ? "Breed created, but 1 photo could not be uploaded."
+            : `Breed created, but ${failedPhotoCount} photos could not be uploaded.`,
+      };
+    }
+
+    return result;
   }
 
   async function updateBreedDescription(
@@ -721,6 +773,7 @@ export function BreedsManagement() {
           }
           libraryByBreedId={libraryByBreedId}
           mediaByProfileId={mediaByProfileId}
+          autoExpandProfileId={mobileAutoExpandProfileId}
           profiles={profiles}
           selectedProfileIds={selectedProfileIds}
           species={species}
@@ -800,8 +853,8 @@ export function BreedsManagement() {
         </div>
       )}
 
-      {isModalOpen ? (
-        <AddBreedModal
+      {isModalOpen && isDesktopViewport ? (
+        <DesktopAddBreedModal
           libraryBreeds={sortedLibraryBreeds}
           profiles={profiles}
           species={species}
@@ -813,6 +866,45 @@ export function BreedsManagement() {
             setIsModalOpen(false);
             setReloadKey((current) => current + 1);
             router.push(`/dashboard/breeds/${breedProfileId}`);
+          }}
+        />
+      ) : null}
+
+      {isModalOpen && !isDesktopViewport ? (
+        <MobileAddBreedSheet
+          existingBreedIds={existingBreedIds}
+          libraryBreeds={sortedLibraryBreeds}
+          species={species}
+          speciesById={speciesById}
+          onAddLibraryBreed={addLibraryBreed}
+          onClose={(addedCount) => {
+            setIsModalOpen(false);
+            if (addedCount > 0) {
+              setSuccessMessage(
+                addedCount === 1
+                  ? "1 breed added to My Breeds"
+                  : `${addedCount} breeds added to My Breeds`,
+              );
+              setReloadKey((current) => current + 1);
+            }
+          }}
+          onCreateCustomBreed={addMobileCustomBreed}
+          onCustomCreated={(breedProfileId, warning) => {
+            setIsModalOpen(false);
+            setMobileAutoExpandProfileId(breedProfileId);
+            setCatalogQuery("");
+            setCatalogSpeciesFilter("all");
+            setSuccessMessage(warning ?? "Breed created");
+            setReloadKey((current) => current + 1);
+          }}
+          onLibraryDone={(addedCount) => {
+            setIsModalOpen(false);
+            setSuccessMessage(
+              addedCount === 1
+                ? "1 breed added to My Breeds"
+                : `${addedCount} breeds added to My Breeds`,
+            );
+            setReloadKey((current) => current + 1);
           }}
         />
       ) : null}
@@ -1705,7 +1797,7 @@ function RemoveBreedDialog({
   );
 }
 
-function AddBreedModal({
+function DesktopAddBreedModal({
   libraryBreeds,
   onAddCustomBreed,
   onAddLibraryBreed,

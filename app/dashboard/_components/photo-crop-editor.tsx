@@ -174,9 +174,9 @@ export function PhotoCropEditor({
           </button>
         </div>
 
-        <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-3 pb-5">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 pb-5">
           <div
-            className="relative mx-auto cursor-move touch-none overflow-hidden rounded-md border border-stone-300 bg-stone-100"
+            className="relative mx-auto shrink-0 cursor-move touch-none overflow-hidden rounded-md border border-stone-300 bg-stone-100"
             style={{
               aspectRatio: crop.aspect,
               width: "min(100%, clamp(220px, calc(100vh - 380px), 410px))",
