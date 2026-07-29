@@ -45,9 +45,12 @@ export function OrderFulfillmentSection({
   usesConfiguredPickupOptions: boolean;
 }) {
   return (
-    <SellerCard className="min-w-0 p-3">
-      <h2 className="text-lg font-semibold text-stone-950">Order Details</h2>
-      <div className="mt-2 grid gap-2 md:grid-cols-2">
+    <SellerCard className="min-w-0 rounded-2xl p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)] lg:rounded-lg lg:p-3 lg:shadow-sm">
+      <h2 className="text-xl font-bold text-stone-950 lg:text-lg lg:font-semibold">
+        <span className="lg:hidden">Fulfillment &amp; Notes</span>
+        <span className="hidden lg:inline">Order Details</span>
+      </h2>
+      <div className="mt-3 grid gap-3 lg:mt-2 lg:grid-cols-2 lg:gap-2">
         <label className="grid gap-1 text-sm font-semibold text-stone-700">
           Fulfillment method
           <select
@@ -110,7 +113,7 @@ export function OrderFulfillmentSection({
               </select>
             </label>
 
-            <div className="grid gap-2 md:col-span-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_7rem_7rem]">
+            <div className="grid gap-3 lg:col-span-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_7rem_7rem] lg:gap-2">
               <label className="grid gap-1 text-sm font-semibold text-stone-700">
                 Delivery address
                 <input
@@ -177,7 +180,7 @@ export function OrderFulfillmentSection({
           </>
         ) : null}
 
-        <label className="grid gap-1 text-sm font-semibold text-stone-700 md:col-span-2">
+        <label className="grid gap-1 text-sm font-semibold text-stone-700 lg:col-span-2">
           Customer note
           <textarea
             className="seller-form-field seller-compact-field min-h-16 resize-y py-2"

@@ -633,7 +633,7 @@ export function NewManualOrder() {
   }
 
   return (
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start lg:gap-3">
       <div className="grid min-w-0 gap-3">
         <CustomerSection
           customerMode={customerMode}
@@ -705,14 +705,16 @@ export function NewManualOrder() {
         />
       </div>
 
-      <SellerCard className="p-3 lg:sticky lg:top-3">
-        <h2 className="text-lg font-semibold text-stone-950">Order Summary</h2>
+      <SellerCard className="rounded-2xl p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)] lg:sticky lg:top-3 lg:rounded-lg lg:p-3 lg:shadow-sm">
+        <h2 className="text-xl font-bold text-stone-950 lg:text-lg lg:font-semibold">
+          Order Summary
+        </h2>
         <div className="mt-3 grid gap-3">
           <label className="grid gap-1 text-sm font-semibold text-stone-700">
             Discount
             <div className="grid grid-cols-[1fr_7rem] gap-2">
               <input
-                className="seller-form-field seller-compact-field"
+                className="seller-form-field seller-compact-field min-h-12 text-base lg:min-h-0 lg:text-sm"
                 inputMode="decimal"
                 min="0"
                 step="0.01"
@@ -724,7 +726,7 @@ export function NewManualOrder() {
                 }}
               />
               <select
-                className="seller-form-field seller-compact-field"
+                className="seller-form-field seller-compact-field min-h-12 text-base lg:min-h-0 lg:text-sm"
                 value={discountType}
                 onChange={(event) =>
                   setDiscountType(event.target.value as DiscountType)
@@ -766,7 +768,7 @@ export function NewManualOrder() {
           <label className="flex items-start gap-3 rounded-lg border border-stone-200 bg-white px-3 py-3 text-sm text-stone-700">
             <input
               checked={sendBuyerConfirmation && canEmailBuyerConfirmation}
-              className="mt-1 size-4 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700"
+              className="mt-0.5 size-6 rounded border-stone-300 text-emerald-800 focus:ring-emerald-700 lg:mt-1 lg:size-4"
               disabled={!canEmailBuyerConfirmation || isSaving}
               type="checkbox"
               onChange={(event) => setSendBuyerConfirmation(event.target.checked)}
@@ -784,7 +786,7 @@ export function NewManualOrder() {
           </label>
 
           <button
-            className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-5 text-sm font-semibold text-white transition hover:bg-emerald-900 disabled:cursor-wait disabled:opacity-70"
+            className="inline-flex min-h-12 items-center justify-center rounded-lg bg-emerald-800 px-5 text-base font-bold text-white transition hover:bg-emerald-900 disabled:cursor-wait disabled:opacity-70 lg:min-h-10 lg:rounded-md lg:text-sm lg:font-semibold"
             disabled={isSaving}
             type="button"
             onClick={createOrder}
@@ -793,7 +795,6 @@ export function NewManualOrder() {
           </button>
         </div>
       </SellerCard>
-
     </div>
   );
 }
@@ -849,14 +850,16 @@ function CustomerSection({
     newCustomer.firstName.trim().length > 0 && isEmail(newCustomer.email);
 
   return (
-    <SellerCard className="min-w-0 overflow-hidden p-3">
-      <h2 className="text-lg font-semibold text-stone-950">Customer</h2>
-      <div className="relative mt-2">
+    <SellerCard className="min-w-0 overflow-hidden rounded-2xl p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)] lg:rounded-lg lg:p-3 lg:shadow-sm">
+      <h2 className="text-xl font-bold text-stone-950 lg:text-lg lg:font-semibold">
+        Customer
+      </h2>
+      <div className="relative mt-3 lg:mt-2">
         <label className="sr-only" htmlFor="manual-order-customer-search">
           Search or select customer
         </label>
         <input
-          className="seller-form-field seller-compact-field seller-action-search-field pr-36"
+          className="seller-form-field seller-action-search-field min-h-12 pr-24 text-base lg:min-h-0 lg:pr-36 lg:text-sm"
           id="manual-order-customer-search"
           placeholder="Search or select customer"
           type="text"
@@ -867,7 +870,7 @@ function CustomerSection({
           }}
         />
         <button
-          className="absolute right-2 top-1/2 inline-flex min-h-8 -translate-y-1/2 items-center rounded-md px-2.5 text-sm font-bold text-emerald-800 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/25"
+          className="absolute right-2 top-1/2 inline-flex min-h-10 -translate-y-1/2 items-center rounded-lg bg-emerald-50 px-3 text-sm font-bold text-emerald-800 transition hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-700/25 lg:min-h-8 lg:rounded-md lg:bg-transparent lg:px-2.5"
           type="button"
           onClick={() => {
             setIsAddingCustomer(true);
@@ -875,7 +878,8 @@ function CustomerSection({
             setSelectedCustomerId("");
           }}
         >
-          + Add Customer
+          <span className="lg:hidden">+ New</span>
+          <span className="hidden lg:inline">+ Add Customer</span>
         </button>
       </div>
 
@@ -943,7 +947,7 @@ function CustomerSection({
       {isAddingCustomer ? (
         <div className="mt-2 rounded-md border border-stone-200 bg-[#fffdf7] px-3 py-2">
           <h3 className="text-sm font-bold text-stone-950">Add New Customer</h3>
-          <div className="mt-2 grid gap-2 md:grid-cols-[1.2fr_1fr_1fr_auto] md:items-end">
+          <div className="mt-2 grid gap-3 lg:grid-cols-[1.2fr_1fr_1fr_auto] lg:items-end lg:gap-2">
             <TextField
               label="Name*"
               placeholder="Full name"

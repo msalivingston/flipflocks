@@ -67,14 +67,16 @@ export function OrderItemsEditor({
 }) {
   return (
     <>
-      <SellerCard className="min-w-0 overflow-hidden p-3">
-        <h2 className="text-lg font-semibold text-stone-950">Order Items</h2>
-        <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <SellerCard className="min-w-0 overflow-hidden rounded-2xl p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)] lg:rounded-lg lg:p-3 lg:shadow-sm">
+        <h2 className="text-xl font-bold text-stone-950 lg:text-lg lg:font-semibold">
+          Order Items
+        </h2>
+        <div className="mt-3 grid gap-3 lg:mt-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-2">
           <label className="sr-only" htmlFor="manual-order-inventory-search">
             Search inventory by breed, type, or age
           </label>
           <input
-            className="seller-form-field seller-compact-field seller-action-search-field"
+            className="seller-form-field seller-action-search-field min-h-12 text-base lg:min-h-0 lg:text-sm"
             id="manual-order-inventory-search"
             placeholder="Quick add: type breed, age, or item name"
             type="text"
@@ -84,9 +86,9 @@ export function OrderItemsEditor({
               onBrowseOpenChange(false);
             }}
           />
-          <div className="flex items-center gap-1.5">
+          <div className="grid grid-cols-2 gap-2 lg:flex lg:items-center lg:gap-1.5">
             <button
-              className="inline-flex min-h-9 items-center rounded-md border border-emerald-100 bg-emerald-50 px-2.5 text-xs font-bold text-emerald-900 transition hover:border-emerald-200 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-700/25"
+              className="inline-flex min-h-12 items-center justify-center rounded-lg border border-emerald-100 bg-emerald-50 px-3 text-sm font-bold text-emerald-900 transition hover:border-emerald-200 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-700/25 lg:min-h-9 lg:rounded-md lg:px-2.5 lg:text-xs"
               type="button"
               onClick={() => {
                 onBrowseOpenChange((current) => !current);
@@ -96,7 +98,7 @@ export function OrderItemsEditor({
               Browse inventory
             </button>
             <button
-              className="inline-flex min-h-9 items-center rounded-md px-2.5 text-xs font-bold text-emerald-800 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/25"
+              className="inline-flex min-h-12 items-center justify-center rounded-lg border border-stone-200 px-3 text-sm font-bold text-emerald-800 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/25 lg:min-h-9 lg:rounded-md lg:border-0 lg:px-2.5 lg:text-xs"
               type="button"
               onClick={onAddCustomItem}
             >
@@ -113,7 +115,7 @@ export function OrderItemsEditor({
 
         <div className="mt-3 max-w-full overflow-hidden">
           <div className="min-w-0">
-            <div className="grid grid-cols-[minmax(0,1fr)_72px_96px_90px_28px] gap-2 border-b border-stone-200 px-1 pb-2 text-xs font-bold uppercase tracking-[0.04em] text-stone-500">
+            <div className="hidden grid-cols-[minmax(0,1fr)_72px_96px_90px_28px] gap-2 border-b border-stone-200 px-1 pb-2 text-xs font-bold uppercase tracking-[0.04em] text-stone-500 lg:grid">
               <span>Item</span>
               <span className="text-center">Qty</span>
               <span>Unit price</span>
@@ -247,12 +249,12 @@ function BrowseInventoryDialog({
   return (
     <div
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/25 px-3 py-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-stone-950/25 px-0 py-0 lg:items-center lg:px-3 lg:py-4"
       role="dialog"
       onMouseDown={onClose}
     >
       <div
-        className="flex max-h-[70vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-stone-200 bg-[#fffdf7] shadow-xl"
+        className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-stone-200 bg-[#fffdf7] shadow-xl lg:max-h-[70vh] lg:rounded-lg"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
@@ -304,7 +306,7 @@ function BrowseInventoryDialog({
 
               return (
                 <div
-                  className="grid grid-cols-[minmax(0,1fr)_5rem_5.25rem_4rem] items-center gap-2 border-b border-stone-100 px-4 py-2 text-sm last:border-b-0"
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-stone-100 px-4 py-3 text-sm last:border-b-0 lg:grid-cols-[minmax(0,1fr)_5rem_5.25rem_4rem] lg:gap-2 lg:py-2"
                   key={item.id}
                 >
                   <div className="min-w-0">
@@ -315,14 +317,14 @@ function BrowseInventoryDialog({
                       {formatBrowseInventoryMetadata(item)}
                     </p>
                   </div>
-                  <p className="text-right text-xs font-semibold text-stone-600">
+                  <p className="text-left text-xs font-semibold text-stone-600 lg:text-right">
                     {item.quantity_available ?? 0} available
                   </p>
                   <p className="text-right text-sm font-bold text-stone-950">
                     {formatCurrency(item.effective_unit_price)}
                   </p>
                   <button
-                    className={`justify-self-end rounded-md px-2 py-1 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700/25 ${
+                    className={`col-start-2 row-start-1 min-h-10 justify-self-end rounded-md px-3 py-1 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700/25 lg:col-auto lg:row-auto lg:min-h-0 lg:px-2 lg:text-xs ${
                       wasAdded
                         ? "bg-emerald-100 text-emerald-800"
                         : "text-emerald-800 hover:bg-emerald-50"
@@ -387,9 +389,9 @@ function OrderItemRow({
     quantity > selectedItem.quantity_available;
 
   return (
-    <div className="px-1 py-2">
-      <div className="grid grid-cols-[minmax(0,1fr)_72px_96px_90px_28px] items-start gap-2">
-        <div className="min-w-0">
+    <div className="py-3 lg:px-1 lg:py-2">
+      <div className="relative grid grid-cols-3 items-start gap-3 rounded-xl border border-stone-200 px-3 py-3 lg:static lg:grid-cols-[minmax(0,1fr)_72px_96px_90px_28px] lg:gap-2 lg:rounded-none lg:border-0 lg:px-0 lg:py-0">
+        <div className="col-span-3 min-w-0 pr-9 lg:col-span-1 lg:pr-0">
           {line.type === "custom" ? (
             <div className="grid min-w-0 gap-1.5">
               <div className="flex min-w-0 items-center">
@@ -434,21 +436,29 @@ function OrderItemRow({
           value={line.quantity}
           onChange={(quantityValue) => updateLine({ quantity: quantityValue })}
         />
-        <input
-          aria-label="Unit price"
-          className="seller-form-field seller-compact-field"
-          min="0"
-          step="0.01"
-          type="number"
-          value={line.unitPrice}
-          onChange={(event) => updateLine({ unitPrice: event.target.value })}
-        />
-        <p className="pt-2 text-right text-sm font-bold text-stone-950">
-          {formatCurrency(quantity * unitPrice)}
-        </p>
+        <label className="grid gap-1 text-xs font-bold uppercase tracking-[0.04em] text-stone-500 lg:block">
+          <span className="lg:hidden">Unit price</span>
+          <input
+            aria-label="Unit price"
+            className="seller-form-field seller-compact-field min-h-11 w-full text-base lg:min-h-0 lg:text-sm"
+            min="0"
+            step="0.01"
+            type="number"
+            value={line.unitPrice}
+            onChange={(event) => updateLine({ unitPrice: event.target.value })}
+          />
+        </label>
+        <div className="grid gap-1 text-right lg:block">
+          <span className="block text-xs font-bold uppercase tracking-[0.04em] text-stone-500 lg:hidden">
+            Line total
+          </span>
+          <p className="flex min-h-11 items-center justify-end text-base font-bold text-stone-950 lg:min-h-0 lg:pt-2 lg:text-sm">
+            {formatCurrency(quantity * unitPrice)}
+          </p>
+        </div>
         <button
           aria-label="Remove item"
-          className="ml-auto flex size-7 items-center justify-center rounded-md opacity-70 transition hover:bg-red-50 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-500/25"
+          className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-md opacity-70 transition hover:bg-red-50 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-500/25 lg:static lg:ml-auto lg:size-7"
           type="button"
           onClick={onRemove}
         >
@@ -519,14 +529,17 @@ function QuantityInput({
   value: string;
 }) {
   return (
-    <input
-      aria-label="Quantity"
-      className="seller-form-field seller-compact-field text-center"
-      min="1"
-      step="1"
-      type="number"
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-    />
+    <label className="grid gap-1 text-xs font-bold uppercase tracking-[0.04em] text-stone-500 lg:block">
+      <span className="lg:hidden">Quantity</span>
+      <input
+        aria-label="Quantity"
+        className="seller-form-field seller-compact-field min-h-11 w-full text-center text-base lg:min-h-0 lg:text-sm"
+        min="1"
+        step="1"
+        type="number"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
   );
 }
