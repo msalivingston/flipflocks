@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../../../_components/seller-context";
@@ -866,22 +867,38 @@ export function EditOrder({ orderId }: { orderId: string }) {
 
   return (
     <>
-      <SellerPageHeader
-        eyebrow="Orders"
-        title={pageTitle}
-        description="Update this order's customer, items, and fulfillment details."
-      />
-      <div className="mx-auto w-full max-w-7xl px-5 py-4 sm:px-7">
-        <div className="mb-3">
+      <div className="hidden lg:block">
+        <SellerPageHeader
+          eyebrow="Orders"
+          title={pageTitle}
+          description="Update this order's customer, items, and fulfillment details."
+        />
+      </div>
+      <header className="flex items-center border-b border-stone-200/80 bg-white px-4 py-3 lg:hidden">
+        <Link
+          aria-label="Back to order"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full text-emerald-800 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+          href={`/dashboard/orders/${orderId}`}
+        >
+          <ArrowLeft aria-hidden="true" className="size-5" />
+        </Link>
+        <h1 className="min-w-0 flex-1 pr-11 text-center text-2xl font-bold text-stone-950">
+          Edit Order
+        </h1>
+      </header>
+      <div className="mx-auto w-full max-w-7xl px-3 py-3 sm:px-5 lg:px-7 lg:py-4">
+        <div className="mb-3 hidden lg:block">
           <BackToOrderLink orderId={orderId} />
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start">
-          <div className="grid min-w-0 gap-3">
-            <SellerCard className="min-w-0 p-3">
-              <h2 className="text-lg font-semibold text-stone-950">Customer</h2>
-              <div className="mt-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start lg:gap-3">
+          <div className="grid min-w-0 gap-4 lg:gap-3">
+            <SellerCard className="min-w-0 rounded-2xl p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)] lg:rounded-lg lg:p-3 lg:shadow-sm">
+              <h2 className="text-xl font-bold text-stone-950 lg:text-lg lg:font-semibold">
+                Customer
+              </h2>
+              <div className="mt-3 rounded-xl border border-stone-200 bg-white px-3 py-3 text-sm text-stone-700 lg:mt-2 lg:rounded-lg lg:py-2">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-2">
                   <div className="min-w-0">
                     <p className="font-bold text-stone-950">
                       {displayedCustomer.name}
@@ -894,7 +911,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
                     )}
                   </div>
                   <button
-                    className="text-left text-xs font-bold text-emerald-800 transition hover:text-emerald-950"
+                    className="inline-flex min-h-11 items-center justify-center self-start rounded-lg border border-emerald-100 bg-emerald-50 px-3 text-sm font-bold text-emerald-800 transition hover:bg-emerald-100 hover:text-emerald-950 lg:min-h-0 lg:rounded-none lg:border-0 lg:bg-transparent lg:px-0 lg:text-left lg:text-xs"
                     type="button"
                     onClick={openCustomerSearch}
                   >
@@ -910,7 +927,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
                       Search customers
                     </label>
                     <input
-                      className="seller-form-field seller-compact-field"
+                      className="seller-form-field seller-compact-field min-h-12 text-base lg:min-h-0 lg:text-sm"
                       id="edit-order-customer-search"
                       placeholder="Search by name, email, or phone"
                       type="text"
@@ -1019,8 +1036,10 @@ export function EditOrder({ orderId }: { orderId: string }) {
             ) : null}
           </div>
 
-          <SellerCard className="p-3 lg:sticky lg:top-3">
-            <h2 className="text-lg font-semibold text-stone-950">Order Summary</h2>
+          <SellerCard className="rounded-2xl p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)] lg:sticky lg:top-3 lg:rounded-lg lg:p-3 lg:shadow-sm">
+            <h2 className="text-xl font-bold text-stone-950 lg:text-lg lg:font-semibold">
+              Order Summary
+            </h2>
             <div className="mt-3 grid gap-3">
               <div className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm">
                 <p className="text-xs font-bold uppercase text-stone-500">
@@ -1036,7 +1055,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
                 Discount
                 <div className="grid grid-cols-[1fr_7rem] gap-2">
                   <input
-                    className="seller-form-field seller-compact-field"
+                    className="seller-form-field seller-compact-field min-h-12 text-base lg:min-h-0 lg:text-sm"
                     inputMode="decimal"
                     min="0"
                     step="0.01"
@@ -1045,7 +1064,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
                     onChange={(event) => setDiscountValue(event.target.value)}
                   />
                   <select
-                    className="seller-form-field seller-compact-field"
+                    className="seller-form-field seller-compact-field min-h-12 text-base lg:min-h-0 lg:text-sm"
                     value={discountType}
                     onChange={(event) =>
                       setDiscountType(event.target.value as DiscountType)
@@ -1119,7 +1138,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
                 >
                   <input
                     checked={emailUpdatedOrder}
-                    className="mt-1 size-4 accent-emerald-700"
+                    className="mt-0.5 size-6 accent-emerald-700 lg:mt-1 lg:size-4"
                     disabled={!canEmailUpdatedOrder || isSaving}
                     onChange={(event) => {
                       setEmailUpdatedOrderOverride(event.target.checked);
@@ -1140,14 +1159,17 @@ export function EditOrder({ orderId }: { orderId: string }) {
               ) : null}
 
               <button
-                className="seller-primary-button"
+                className="seller-primary-button min-h-12 rounded-lg text-base font-bold lg:min-h-10 lg:rounded-full lg:text-sm"
                 disabled={isSaving}
                 type="button"
                 onClick={() => void saveOrder()}
               >
                 {isSaving ? "Saving..." : "Save changes"}
               </button>
-              <Link className="seller-secondary-button" href={`/dashboard/orders/${orderId}`}>
+              <Link
+                className="seller-secondary-button min-h-12 rounded-lg text-base font-bold lg:min-h-10 lg:rounded-full lg:text-sm"
+                href={`/dashboard/orders/${orderId}`}
+              >
                 Cancel
               </Link>
             </div>
