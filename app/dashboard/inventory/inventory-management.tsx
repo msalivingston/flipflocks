@@ -1576,11 +1576,21 @@ export function InventoryManagement() {
 
       <SellerCard className="p-3 [&_input]:w-full [&_label]:min-w-0 [&_select]:w-full">
         <div className="grid gap-3 lg:hidden">
-          <label className="grid gap-1 text-sm font-bold text-stone-700">
-            Search
+          <label className="relative block">
+            <span className="sr-only">Search inventory</span>
+            <Image
+              aria-hidden="true"
+              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 opacity-70"
+              src="/glyphs/looking-glass.png"
+              alt=""
+              width={18}
+              height={18}
+            />
             <input
-              className="min-h-11 w-full rounded-md border border-stone-300 bg-white px-3 text-[0.95rem] font-medium text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
-              placeholder={getSearchPlaceholder(activeTab)}
+              className="seller-form-field min-h-12 rounded-lg"
+              placeholder={getMobileSearchPlaceholder(activeTab)}
+              style={{ paddingLeft: "3.5rem" }}
+              type="search"
               value={activeFilters.search}
               onChange={(event) =>
                 updateActiveFilter("search", event.target.value)
@@ -3996,6 +4006,16 @@ function getSearchPlaceholder(tab: InventoryProductTab) {
   if (tab === "equipment") return "Item name";
 
   return "Breed or type";
+}
+
+function getMobileSearchPlaceholder(tab: InventoryProductTab) {
+  if (tab === "hatching_eggs") {
+    return "Search by breed, variety, or species";
+  }
+  if (tab === "processed_poultry") return "Search by product name";
+  if (tab === "equipment") return "Search by item name";
+
+  return "Search by breed or type";
 }
 
 function getEmptyInventoryTitle(tab: InventoryProductTab) {

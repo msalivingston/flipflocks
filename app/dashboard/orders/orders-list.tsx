@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { ArrowUpDown, ChevronDown } from "lucide-react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../_components/seller-context";
@@ -829,7 +829,26 @@ export function OrdersList() {
         <SellerCard className="rounded-2xl p-3 shadow-[0_16px_38px_rgba(46,39,25,0.05)] sm:p-4">
           <div className="grid gap-3">
             <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_11rem]">
-              <label className="relative block">
+              <label className="relative block xl:hidden">
+                <span className="sr-only">Search orders</span>
+                <Image
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 opacity-70"
+                  src="/glyphs/looking-glass.png"
+                  alt=""
+                  width={18}
+                  height={18}
+                />
+                <input
+                  className="seller-form-field min-h-12 rounded-lg"
+                  placeholder="Search orders by customer, item, or order number"
+                  style={{ paddingLeft: "3.5rem" }}
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => updateSearchQuery(event.target.value)}
+                />
+              </label>
+              <label className="relative hidden xl:block">
                 <span className="sr-only">Search orders</span>
                 <Image
                   aria-hidden="true"
@@ -2803,7 +2822,14 @@ function MobileOrderFilters({
         </label>
 
         <label className="min-w-0 rounded-xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
-          <span className="block text-sm font-bold text-stone-700">Sort</span>
+          <span className="flex items-center gap-1.5 text-sm font-bold text-stone-700">
+            <ArrowUpDown
+              aria-hidden="true"
+              className="size-4 text-emerald-800"
+              strokeWidth={2.25}
+            />
+            Sort
+          </span>
           <select
             className="mt-1 min-h-8 w-full bg-transparent text-base font-normal text-stone-950 outline-none"
             value={sort}

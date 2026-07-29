@@ -21,7 +21,7 @@ import {
 
 type SellerCustomerDetailRow = {
   customer_id: string;
-  email: string;
+  email: string | null;
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
@@ -387,7 +387,7 @@ function CustomerSummaryCard({
             <div className="mt-4 grid min-w-0 gap-2 text-base text-stone-600 sm:text-sm">
               <ContactLine
                 icon="/glyphs/envelope.png"
-                value={customer.email}
+                value={customer.email || "No email on file"}
               />
               <ContactLine
                 icon="/glyphs/phone.png"
@@ -1070,7 +1070,7 @@ function ContactDetailsCard({
         </form>
       ) : (
         <dl className="mt-5 grid gap-5">
-          <DetailField label="Email" value={customer.email} />
+          <DetailField label="Email" value={customer.email || "No email on file"} />
           <DetailField label="Phone" value={customer.phone || "No phone on file"} />
           <DetailField
             label="Pickup location"
@@ -1476,7 +1476,7 @@ function formatCustomerInitials(customer: SellerCustomerDetailRow) {
 
   if (initials) return initials.slice(0, 2).toUpperCase();
 
-  return customer.email.slice(0, 2).toUpperCase();
+  return customer.email?.slice(0, 2).toUpperCase() || "CU";
 }
 
 function formatPickupLocation(customer: SellerCustomerDetailRow) {
@@ -1513,7 +1513,7 @@ function getContactForm(
   pickupLocation: string | null,
 ): CustomerContactForm {
   return {
-    email: customer.email,
+    email: customer.email ?? "",
     phone: customer.phone ?? "",
     pickupLocation: pickupLocation ?? "",
   };

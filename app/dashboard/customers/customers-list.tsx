@@ -39,7 +39,7 @@ const avatarTones = [
 
 type SellerCustomerSummaryRow = {
   customer_id: string;
-  email: string;
+  email: string | null;
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
@@ -177,8 +177,31 @@ export function CustomersList() {
 
   return (
     <div className="min-w-0 space-y-4">
-      <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(20rem,1fr)_minmax(15rem,18rem)_auto] lg:items-end">
-        <label className="grid min-w-0 gap-1.5 text-base font-bold text-stone-700 sm:text-sm">
+      <div className="grid min-w-0 gap-3 rounded-2xl border border-stone-200 bg-white p-3 shadow-[0_16px_38px_rgba(46,39,25,0.05)] lg:grid-cols-[minmax(20rem,1fr)_minmax(15rem,18rem)_auto] lg:items-end lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+        <label className="relative block lg:hidden">
+          <span className="sr-only">Search customers</span>
+          <Image
+            aria-hidden="true"
+            className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 opacity-70"
+            src="/glyphs/looking-glass.png"
+            alt=""
+            width={18}
+            height={18}
+          />
+          <input
+            className="seller-form-field min-h-12 rounded-lg"
+            placeholder="Search customers by name, email, phone, or farm"
+            style={{ paddingLeft: "3.5rem" }}
+            type="search"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(1);
+            }}
+          />
+        </label>
+
+        <label className="hidden min-w-0 gap-1.5 text-base font-bold text-stone-700 sm:text-sm lg:grid">
           <span className="inline-flex items-center gap-1.5">
             <Image
               aria-hidden="true"
@@ -235,15 +258,6 @@ export function CustomersList() {
           </span>
         </label>
 
-        <Link
-          className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-800 px-4 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 sm:text-sm lg:self-end"
-          href="/dashboard/orders/new"
-        >
-          <span aria-hidden="true" className="text-xl leading-none">
-            +
-          </span>
-          Add customer
-        </Link>
       </div>
 
       <p className="text-sm font-medium text-stone-600">
@@ -253,9 +267,19 @@ export function CustomersList() {
 
       {visibleCustomers.length > 0 ? (
         <>
-          <div className="min-w-0 overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
-            <div className="max-md:overflow-x-auto">
-              <table className="w-full max-w-full table-fixed text-left max-md:min-w-[680px]">
+          <div className="space-y-3 lg:hidden">
+            {pageCustomers.map((customer, index) => (
+              <MobileCustomerCard
+                customer={customer}
+                index={pageStart + index}
+                key={customer.customer_id}
+              />
+            ))}
+          </div>
+
+          <div className="hidden min-w-0 overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm lg:block">
+            <div>
+              <table className="w-full max-w-full table-fixed text-left">
                 <colgroup>
                   <col style={{ width: "46%" }} />
                   <col style={{ width: "9%" }} />
@@ -314,6 +338,86 @@ export function CustomersList() {
         />
       )}
     </div>
+  );
+}
+
+function MobileCustomerCard({
+  customer,
+  index,
+}: {
+  customer: SellerCustomerSummaryRow;
+  index: number;
+}) {
+  const customerName = formatCustomerName(customer);
+
+  return (
+    <article className="rounded-lg border border-stone-200 bg-white px-3 py-3 shadow-sm">
+      <div className="flex min-w-0 items-start gap-3">
+        <span
+          aria-hidden="true"
+          className={`flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-bold ${avatarTones[index % avatarTones.length]}`}
+        >
+          {formatCustomerInitials(customer)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <Link
+                className="block truncate text-base font-bold text-stone-950"
+                href={`/dashboard/customers/${customer.customer_id}`}
+              >
+                {customerName}
+              </Link>
+              {customer.business_name ? (
+                <p className="truncate text-sm font-semibold text-stone-700">
+                  {customer.business_name}
+                </p>
+              ) : null}
+              <a
+                className="mt-0.5 block min-h-6 truncate text-sm font-bold text-emerald-900 underline decoration-emerald-800/30 underline-offset-2"
+                href={`mailto:${customer.email}`}
+              >
+                {customer.email}
+              </a>
+              {customer.phone ? (
+                <a
+                  className="block min-h-6 w-fit whitespace-nowrap text-sm font-bold text-emerald-900 underline decoration-emerald-800/30 underline-offset-2"
+                  href={`tel:${customer.phone}`}
+                >
+                  {customer.phone}
+                </a>
+              ) : null}
+            </div>
+            <Link
+              className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-md border border-emerald-800 px-3 text-sm font-bold text-emerald-900"
+              href={`/dashboard/customers/${customer.customer_id}`}
+            >
+              View
+            </Link>
+          </div>
+          <p className="mt-2 text-sm font-normal leading-5 text-stone-600">
+            <span className="font-bold text-stone-700">Lifetime:</span>{" "}
+            {customer.order_count ?? 0}{" "}
+            {(customer.order_count ?? 0) === 1 ? "Order" : "Orders"} -{" "}
+            {formatCurrency(customer.lifetime_order_total)} Total
+          </p>
+          <p className="text-sm leading-5 text-stone-500">
+            <span className="font-bold text-stone-700">Last Order:</span>{" "}
+            <span className="font-normal text-stone-600">
+              {customer.latest_order_created_at
+                ? formatLongDate(customer.latest_order_created_at)
+                : "Not set"}
+            </span>
+            {customer.latest_order_total != null ? (
+              <>
+                {" - "}
+                {formatCurrency(customer.latest_order_total)}
+              </>
+            ) : null}
+          </p>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -382,13 +486,13 @@ function ContactLine({
   email,
   phone,
 }: {
-  email: string;
+  email: string | null;
   phone: string | null;
 }) {
   return (
     <div className="mt-1 grid min-w-0 gap-0.5 text-sm leading-5 text-stone-600">
       <span className="block max-w-[220px] truncate whitespace-nowrap lg:max-w-[260px] 2xl:max-w-[300px]">
-        {email}
+        {email || "No email on file"}
       </span>
       {phone ? (
         <span className="whitespace-nowrap text-stone-500">{phone}</span>
@@ -436,13 +540,13 @@ function Pagination({
   const pages = getPaginationPages(currentPage, totalPages);
 
   return (
-    <div className="flex flex-col gap-3 text-sm text-stone-600 sm:flex-row sm:items-center sm:justify-between">
-      <p>
+    <div className="flex flex-col gap-3 text-sm text-stone-600 lg:flex-row lg:items-center lg:justify-between">
+      <p className="text-center lg:text-left">
         Showing {showingStart}-{showingEnd} of {totalCustomers} customers
       </p>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex w-full items-center gap-2 lg:w-auto lg:flex-wrap">
         <button
-          className="inline-flex min-h-12 items-center justify-center rounded-md border border-stone-200 bg-white px-3 text-base font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-10 sm:text-sm"
+          className="inline-flex min-h-12 flex-1 items-center justify-center rounded-md border border-stone-200 bg-white px-3 text-base font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-45 lg:min-h-10 lg:flex-none lg:text-sm"
           type="button"
           disabled={currentPage === 1}
           onClick={() => onPageChange(currentPage - 1)}
@@ -452,14 +556,14 @@ function Pagination({
         {pages.map((paginationItem, index) =>
           paginationItem === "ellipsis" ? (
             <span
-              className="inline-flex min-h-12 min-w-12 items-center justify-center text-base font-bold text-stone-500 sm:min-h-10 sm:min-w-10 sm:text-sm"
+              className="hidden min-h-10 min-w-10 items-center justify-center text-sm font-bold text-stone-500 lg:inline-flex"
               key={`ellipsis-${index}`}
             >
               ...
             </span>
           ) : (
             <button
-              className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border px-3 font-semibold shadow-sm transition sm:min-h-10 sm:min-w-10 ${
+              className={`hidden min-h-10 min-w-10 items-center justify-center rounded-md border px-3 font-semibold shadow-sm transition lg:inline-flex ${
                 paginationItem === currentPage
                   ? "border-emerald-800 bg-emerald-800 text-white"
                   : "border-stone-200 bg-white text-stone-950 hover:bg-stone-50"
@@ -473,7 +577,7 @@ function Pagination({
           ),
         )}
         <button
-          className="inline-flex min-h-11 items-center justify-center rounded-md border border-stone-200 bg-white px-3 font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-45 sm:min-h-10"
+          className="inline-flex min-h-12 flex-1 items-center justify-center rounded-md border border-stone-200 bg-white px-3 text-base font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-45 lg:min-h-10 lg:flex-none lg:text-sm"
           type="button"
           disabled={currentPage === totalPages}
           onClick={() => onPageChange(currentPage + 1)}
@@ -589,7 +693,7 @@ function formatCustomerInitials(customer: SellerCustomerSummaryRow) {
 
   if (initials) return initials.slice(0, 2).toUpperCase();
 
-  return customer.email.slice(0, 2).toUpperCase();
+  return customer.email?.slice(0, 2).toUpperCase() || "CU";
 }
 
 function formatDate(value: string | null) {
@@ -597,6 +701,14 @@ function formatDate(value: string | null) {
 
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatLongDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));

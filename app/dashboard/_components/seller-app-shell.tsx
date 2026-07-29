@@ -23,12 +23,12 @@ const sellerNavItems = [
     href: "/dashboard/inventory",
     glyph: "/glyphs/egg-carton.png",
   },
-  { label: "Breeds", href: "/dashboard/breeds", glyph: "/glyphs/hen.png" },
   {
     label: "Customers",
     href: "/dashboard/customers",
     glyph: "/glyphs/customers.png",
   },
+  { label: "Breeds", href: "/dashboard/breeds", glyph: "/glyphs/hen.png" },
   { label: "Reports", href: "/dashboard/reports", glyph: "/glyphs/reports.png" },
   {
     label: "Store Admin",
