@@ -149,7 +149,7 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
 
   if (isLoading) {
     return (
-      <section className="rounded-[0.95rem] bg-white px-5 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-7 lg:py-6">
+      <section className="rounded-[0.95rem] bg-white px-4 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-7 lg:py-6">
         <p className="text-sm font-bold text-stone-600">
           Loading your saved setup...
         </p>
@@ -173,7 +173,7 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
       : pickupInstructions;
 
   return (
-    <section className="rounded-[0.95rem] bg-white px-5 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-7 lg:py-6">
+    <section className="rounded-[0.95rem] bg-white px-4 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-7 lg:py-6">
       <h2 className="font-serif text-[1.45rem] font-semibold leading-tight text-stone-950 sm:text-[1.7rem]">
         Review your setup
       </h2>
@@ -282,9 +282,9 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
           </p>
         ) : null}
 
-        <div className="grid gap-3 sm:grid-cols-[0.42fr_1fr]">
+        <div className="grid grid-cols-[0.42fr_1fr] gap-3">
           <button
-            className="flex min-h-10 w-full items-center justify-center rounded-md border border-stone-300 bg-white px-4 text-sm font-bold text-stone-700 shadow-sm transition hover:border-[#246f38] hover:text-[#246f38] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:text-[15px]"
+            className="flex min-h-12 w-full items-center justify-center rounded-md border border-stone-300 bg-white px-4 text-base font-bold text-stone-700 shadow-sm transition hover:border-[#246f38] hover:text-[#246f38] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-10 sm:text-[15px]"
             disabled={isSubmitting}
             onClick={onBack}
             type="button"
@@ -292,7 +292,7 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
             Back
           </button>
           <button
-            className="flex min-h-10 w-full items-center justify-center rounded-md bg-[#246f38] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#1c5c2d] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:text-[15px]"
+            className="flex min-h-12 w-full items-center justify-center rounded-md bg-[#246f38] px-3 text-base font-bold text-white shadow-sm transition hover:bg-[#1c5c2d] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-10 sm:px-4 sm:text-[15px]"
             disabled={isSubmitting}
             onClick={finishOnboarding}
             type="button"

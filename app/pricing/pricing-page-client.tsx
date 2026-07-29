@@ -233,7 +233,10 @@ export function PricingPageClient({
               sellerSignupsEnabled={sellerSignupsEnabled}
             />
 
-            <div className="overflow-hidden rounded-lg border border-[#e8deca] bg-white/62 text-[#111827]">
+            <div
+              className="scroll-mt-4 overflow-hidden rounded-lg border border-[#e8deca] bg-white/62 text-[#111827]"
+              id="mobile-feature-comparison"
+            >
               <div className="grid [grid-template-columns:minmax(0,1fr)_4.75rem_4.75rem] border-b border-[#e8deca] bg-[#fdf9ee]/60 text-[11px] font-bold uppercase tracking-[0.08em] text-[#5f665f]">
                 <div className="px-3 py-2">Feature</div>
                 <div className="grid place-items-center border-l border-[#e8deca] px-1 py-2 text-center">

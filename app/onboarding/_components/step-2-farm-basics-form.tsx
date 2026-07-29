@@ -204,7 +204,7 @@ export function Step2FarmBasicsForm({
   }
 
   return (
-    <section className="rounded-[0.95rem] bg-white px-5 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-7 lg:py-5">
+    <section className="rounded-[0.95rem] bg-white px-4 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-7 lg:py-5">
       <h2 className="font-serif text-[1.45rem] font-semibold leading-tight text-stone-950 sm:text-[1.7rem]">
         Farm &amp; contact basics
       </h2>
@@ -284,12 +284,12 @@ export function Step2FarmBasicsForm({
             Use FlockFront&apos;s starter farm description
           </label>
           <label
-            className="mt-3 block text-xs font-bold text-stone-950 sm:text-[13px]"
+            className="mt-3 block text-sm font-bold text-stone-950 sm:text-[13px]"
             htmlFor="about-text"
           >
             Farm description *
           </label>
-          <p className="mt-1 text-xs leading-5 text-stone-500">
+          <p className="mt-1 text-sm leading-5 text-stone-500 sm:text-xs">
             Use our starter description or edit it to sound like your farm. This
             appears on your storefront. Keep it to 250 words or fewer.
           </p>
@@ -305,7 +305,7 @@ export function Step2FarmBasicsForm({
             rows={7}
             value={aboutText}
           />
-          <div className="mt-1 flex items-center justify-between gap-3 text-xs text-stone-500">
+          <div className="mt-1 flex items-center justify-between gap-3 text-sm text-stone-500 sm:text-xs">
             {errors.aboutText ? (
               <p className="font-semibold text-red-700">{errors.aboutText}</p>
             ) : (
@@ -326,10 +326,10 @@ export function Step2FarmBasicsForm({
         <div className="rounded-md border border-dashed border-stone-300 bg-[#fffaf1] px-3 py-2.5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-bold text-stone-950 sm:text-[13px]">
+              <p className="text-sm font-bold text-stone-950 sm:text-[13px]">
                 Farm logo
               </p>
-              <p className="mt-0.5 text-xs text-stone-500">
+              <p className="mt-0.5 text-sm text-stone-500 sm:text-xs">
                 Optional. Upload your farm logo for your storefront.
               </p>
               {logoFile ? (
@@ -343,7 +343,7 @@ export function Step2FarmBasicsForm({
                 </p>
               ) : null}
             </div>
-            <label className="inline-flex min-h-9 cursor-pointer items-center justify-center rounded-md border border-stone-300 bg-white px-3 text-xs font-bold text-stone-700 transition hover:border-[#246f38] hover:text-[#246f38]">
+            <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md border border-stone-300 bg-white px-3 text-sm font-bold text-stone-700 transition hover:border-[#246f38] hover:text-[#246f38] sm:min-h-9 sm:text-xs">
               Choose logo
               <input
                 accept="image/png,image/jpeg,image/webp"
@@ -357,7 +357,7 @@ export function Step2FarmBasicsForm({
         </div>
 
         <fieldset>
-          <legend className="text-xs font-bold text-stone-950 sm:text-[13px]">
+          <legend className="text-sm font-bold text-stone-950 sm:text-[13px]">
             Location display preference *
           </legend>
           <div className="mt-2 grid gap-2">
@@ -409,7 +409,7 @@ export function Step2FarmBasicsForm({
         ) : null}
 
         <button
-          className="flex min-h-10 w-full items-center justify-center rounded-md bg-[#246f38] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#1c5c2d] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:text-[15px]"
+          className="flex min-h-12 w-full items-center justify-center rounded-md bg-[#246f38] px-4 text-base font-bold text-white shadow-sm transition hover:bg-[#1c5c2d] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-10 sm:text-[15px]"
           disabled={isSubmitting}
           type="submit"
         >
@@ -451,14 +451,14 @@ function Field({
 
   return (
     <div>
-      <label className="text-xs font-bold text-stone-950 sm:text-[13px]" htmlFor={id}>
+      <label className="text-sm font-bold text-stone-950 sm:text-[13px]" htmlFor={id}>
         {label}
       </label>
       <input
         aria-describedby={error ? errorId : undefined}
         aria-invalid={Boolean(error)}
         autoComplete={autoComplete}
-        className={`mt-1 min-h-10 w-full rounded-md border bg-white px-3 text-sm font-medium text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:ring-2 focus:ring-[#246f38]/25 sm:text-[14px] ${
+        className={`mt-1 min-h-12 w-full rounded-md border bg-white px-3 text-base font-medium text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:ring-2 focus:ring-[#246f38]/25 sm:min-h-10 sm:text-[14px] ${
           error
             ? "border-red-400 focus:border-red-500"
             : "border-stone-300 focus:border-[#246f38]"
@@ -470,7 +470,7 @@ function Field({
         value={value}
       />
       {helperText && !error ? (
-        <p className="mt-1 text-xs text-stone-500">{helperText}</p>
+        <p className="mt-1 text-sm text-stone-500 sm:text-xs">{helperText}</p>
       ) : null}
       {error ? (
         <p className="mt-1 text-xs font-semibold text-red-700 sm:text-[13px]" id={errorId}>

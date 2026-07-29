@@ -8,7 +8,11 @@ export const metadata = {
 
 export default function SignupPage() {
   return (
-    <OnboardingShell currentStep={1}>
+    <OnboardingShell
+      currentStep={1}
+      compactOnMobile
+      reassurance="Only takes a few minutes."
+    >
       <SignupForm />
     </OnboardingShell>
   );

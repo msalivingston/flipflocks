@@ -92,7 +92,7 @@ export function SignupForm() {
   }
 
   return (
-    <section className="rounded-[0.95rem] bg-white px-5 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-8 lg:py-6">
+    <section className="rounded-[0.95rem] bg-white px-4 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-8 lg:py-6">
       <h2 className="font-serif text-[1.55rem] font-semibold leading-tight text-stone-950 sm:text-[1.8rem]">
         Create your account
       </h2>
@@ -138,7 +138,7 @@ export function SignupForm() {
             type="password"
             value={password}
           />
-          <p className="mt-1 text-xs font-normal text-stone-500 sm:text-[13px]">
+          <p className="mt-1 text-sm font-normal text-stone-600 sm:text-[13px] sm:text-stone-500">
             Use at least 8 characters.
           </p>
         </div>
@@ -167,21 +167,21 @@ export function SignupForm() {
           </div>
         ) : null}
 
-        <p className="rounded-lg border border-[#dbe8d8] bg-[#fffaf1] px-3 py-2 text-xs font-semibold leading-5 text-stone-600 sm:text-[13px]">
+        <p className="rounded-lg border border-[#dbe8d8] bg-[#fffaf1] px-3 py-2 text-sm font-semibold leading-5 text-stone-600 sm:text-[13px]">
           Plans start at $5/month or $50/year. Market is $29/month or
           $270/year for active sellers who need more room and more sale types.
           You&apos;ll choose your plan after setting up your farm basics.
         </p>
 
         <button
-          className="flex min-h-10 w-full items-center justify-center rounded-md bg-[#246f38] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#1c5c2d] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:text-[15px]"
+          className="flex min-h-12 w-full items-center justify-center rounded-md bg-[#246f38] px-4 text-base font-bold text-white shadow-sm transition hover:bg-[#1c5c2d] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-10 sm:text-[15px]"
           disabled={isSubmitting}
           type="submit"
         >
           {isSubmitting ? "Creating your account..." : "Create my farm store"}
         </button>
 
-        <p className="px-1 text-center text-xs leading-5 text-stone-500 sm:text-[13px]">
+        <p className="px-1 text-center text-sm leading-5 text-stone-500 sm:text-[13px]">
           By creating an account, you agree to our{" "}
           <Link
             className="font-semibold text-[#1f6f38] underline underline-offset-2"
@@ -238,14 +238,14 @@ function Field({
 
   return (
     <div>
-      <label className="text-xs font-bold text-stone-950 sm:text-[13px]" htmlFor={id}>
+      <label className="text-sm font-bold text-stone-950 sm:text-[13px]" htmlFor={id}>
         {label}
       </label>
       <input
         aria-describedby={error ? errorId : undefined}
         aria-invalid={Boolean(error)}
         autoComplete={autoComplete}
-        className={`mt-1 min-h-10 w-full rounded-md border bg-white px-3 text-sm font-medium text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:ring-2 focus:ring-[#246f38]/25 sm:text-[15px] ${
+        className={`mt-1 min-h-12 w-full rounded-md border bg-white px-3 text-base font-medium text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:ring-2 focus:ring-[#246f38]/25 sm:min-h-10 sm:text-[15px] ${
           error
             ? "border-red-400 focus:border-red-500"
             : "border-stone-300 focus:border-[#246f38]"
@@ -257,7 +257,7 @@ function Field({
         value={value}
       />
       {error ? (
-        <p className="mt-1 text-xs font-semibold text-red-700 sm:text-[13px]" id={errorId}>
+        <p className="mt-1 text-sm font-semibold text-red-700 sm:text-[13px]" id={errorId}>
           {error}
         </p>
       ) : null}

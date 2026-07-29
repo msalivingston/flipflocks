@@ -208,6 +208,7 @@ export function OnboardingFlow() {
     return (
       <OnboardingShell
         body="We are checking where to pick up your setup."
+        compactOnMobile
         currentStep={2}
         headline="Tell us about your farm"
         subhead="Share a few basics so customers can find and connect with you."
@@ -225,6 +226,7 @@ export function OnboardingFlow() {
     return (
       <OnboardingShell
         body="Try FlockFront free for 7 days. Choose the plan that fits how you sell now. You can change plans later."
+        compactOnMobile
         currentStep={3}
         headline="Choose your plan"
         subhead="Start with a 7-day free trial"
@@ -263,6 +265,7 @@ export function OnboardingFlow() {
     return (
       <OnboardingShell
         body="Select all that apply. You can change this later."
+        compactOnMobile
         currentStep={4}
         headline="What do you plan to sell?"
         subhead="Choose the categories that fit your farm"
@@ -303,6 +306,7 @@ export function OnboardingFlow() {
     return (
       <OnboardingShell
         body="These instructions appear at checkout and again in the buyer's order confirmation email. You can edit them anytime."
+        compactOnMobile
         currentStep={5}
         headline="Set your pickup instructions"
         subhead="Make pickup clear from the start"
@@ -340,6 +344,7 @@ export function OnboardingFlow() {
     return (
       <OnboardingShell
         body="Review your setup below. When you're ready, head to your dashboard to add your first listing."
+        compactOnMobile
         currentStep={6}
         headline="You're ready to start"
         subhead="Your farm store is set up"
@@ -366,6 +371,7 @@ export function OnboardingFlow() {
   return (
     <OnboardingShell
       body="We'll use this info to create your storefront and help customers know who you are and where you're located."
+      compactOnMobile
       currentStep={2}
       headline="Tell us about your farm"
       subhead="Share a few basics so customers can find and connect with you."

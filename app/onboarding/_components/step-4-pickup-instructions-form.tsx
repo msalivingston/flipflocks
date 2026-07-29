@@ -94,7 +94,7 @@ export function Step4PickupInstructionsForm({
   }
 
   return (
-    <section className="rounded-[0.95rem] bg-white px-5 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-7 lg:py-6">
+    <section className="rounded-[0.95rem] bg-white px-4 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-7 lg:py-6">
       <h2 className="font-serif text-[1.45rem] font-semibold leading-tight text-stone-950 sm:text-[1.7rem]">
         Pickup instructions
       </h2>
@@ -102,12 +102,12 @@ export function Step4PickupInstructionsForm({
       <form className="mt-4 space-y-4" onSubmit={handleSubmit} noValidate>
         <div>
           <label
-            className="text-xs font-bold text-stone-950 sm:text-[13px]"
+            className="text-sm font-bold text-stone-950 sm:text-[13px]"
             htmlFor="pickup-instructions"
           >
             Default pickup instructions *
           </label>
-          <p className="mt-1 text-xs leading-5 text-stone-500">
+          <p className="mt-1 text-sm leading-5 text-stone-500 sm:text-xs">
             Shown to buyers at checkout and included in their order
             confirmation email.
           </p>
@@ -116,7 +116,7 @@ export function Step4PickupInstructionsForm({
               errors.pickupInstructions ? "pickup-instructions-error" : undefined
             }
             aria-invalid={Boolean(errors.pickupInstructions)}
-            className={`mt-1 min-h-[180px] w-full resize-y rounded-md border bg-white px-3 py-2 text-sm font-medium leading-6 text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:ring-2 focus:ring-[#246f38]/25 sm:text-[14px] ${
+            className={`mt-1 min-h-[180px] w-full resize-y rounded-md border bg-white px-3 py-2 text-base font-medium leading-6 text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:ring-2 focus:ring-[#246f38]/25 sm:text-[14px] ${
               errors.pickupInstructions
                 ? "border-red-400 focus:border-red-500"
                 : "border-stone-300 focus:border-[#246f38]"
@@ -137,13 +137,13 @@ export function Step4PickupInstructionsForm({
         </div>
 
         <fieldset>
-          <legend className="text-xs font-bold text-stone-950 sm:text-[13px]">
+          <legend className="text-sm font-bold text-stone-950 sm:text-[13px]">
             How can buyers contact you after ordering? *
           </legend>
           <div className="mt-2 grid gap-2 sm:grid-cols-3">
             {contactOptions.map((option) => (
               <label
-                className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-stone-200 px-3 text-sm font-semibold text-stone-700 transition has-checked:border-[#246f38] has-checked:bg-[#eff8ed]"
+                className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-stone-200 px-3 text-sm font-semibold text-stone-700 transition has-checked:border-[#246f38] has-checked:bg-[#eff8ed] sm:min-h-10"
                 key={option.key}
               >
                 <input
@@ -184,9 +184,9 @@ export function Step4PickupInstructionsForm({
           </p>
         ) : null}
 
-        <div className="grid gap-3 sm:grid-cols-[0.42fr_1fr]">
+        <div className="grid grid-cols-[0.42fr_1fr] gap-3">
           <button
-            className="flex min-h-10 w-full items-center justify-center rounded-md border border-stone-300 bg-white px-4 text-sm font-bold text-stone-700 shadow-sm transition hover:border-[#246f38] hover:text-[#246f38] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:text-[15px]"
+            className="flex min-h-12 w-full items-center justify-center rounded-md border border-stone-300 bg-white px-4 text-base font-bold text-stone-700 shadow-sm transition hover:border-[#246f38] hover:text-[#246f38] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-10 sm:text-[15px]"
             disabled={isSubmitting}
             onClick={onBack}
             type="button"
@@ -194,7 +194,7 @@ export function Step4PickupInstructionsForm({
             Back
           </button>
           <button
-            className="flex min-h-10 w-full items-center justify-center rounded-md bg-[#246f38] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#1c5c2d] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:text-[15px]"
+            className="flex min-h-12 w-full items-center justify-center rounded-md bg-[#246f38] px-4 text-base font-bold text-white shadow-sm transition hover:bg-[#1c5c2d] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-10 sm:text-[15px]"
             disabled={isSubmitting}
             type="submit"
           >
