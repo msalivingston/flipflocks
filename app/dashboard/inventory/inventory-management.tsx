@@ -1933,11 +1933,11 @@ function InventoryProductTabs({
 }) {
   return (
     <>
-      <label className="grid gap-1 text-[13px] font-bold text-stone-700 lg:hidden">
+      <label className="grid gap-2 text-lg font-bold text-stone-800 lg:hidden">
         Inventory category
         <select
           aria-label="Inventory category"
-          className="min-h-12 w-full rounded-lg border border-stone-300 bg-white px-3 text-base font-semibold text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+          className="h-14 w-full rounded-lg border border-stone-300 bg-white px-4 text-lg font-bold text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
           value={activeTab}
           onChange={(event) =>
             onChange(event.target.value as InventoryProductTab)
@@ -2051,7 +2051,7 @@ function InventorySelectControl({
         />
         <select
           aria-label={label}
-          className="min-h-11 rounded-md border border-stone-300 bg-white pl-9 pr-3 text-sm font-bold text-stone-800 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+          className="h-11 rounded-md border border-stone-300 bg-white pl-9 pr-3 text-base font-bold text-stone-800 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
           value={value}
           onChange={(event) => onChange(event.target.value)}
         >
@@ -2107,10 +2107,10 @@ function InventorySummaryCard({
         <span className="mx-auto flex size-7 items-center justify-center rounded-full bg-emerald-900/5">
           <Image src={glyph} alt="" width={16} height={16} />
         </span>
-        <p className="mt-1 truncate text-[0.62rem] font-bold uppercase tracking-[0.04em] text-stone-500">
+        <p className="mt-1 truncate text-xs font-bold uppercase tracking-[0.035em] text-stone-500">
           {label}
         </p>
-        <p className="mt-0.5 truncate text-base font-bold leading-none text-stone-950">
+        <p className="mt-1 truncate text-lg font-bold leading-none text-stone-950">
           {value}
         </p>
       </div>
@@ -2881,7 +2881,13 @@ function FlatInventoryCard({
               <span className="block truncate text-base font-semibold text-stone-950">
                 {compactTitle}
               </span>
-              <span className="mt-0.5 block truncate text-sm leading-5 text-stone-600">
+              <span
+                className={`mt-0.5 block truncate leading-5 text-stone-600 ${
+                  item.productTab === "live_poultry"
+                    ? "text-base font-medium"
+                    : "text-sm"
+                }`}
+              >
                 {item.productTab === "live_poultry"
                   ? `Age: ${item.ageLabel}`
                   : getInventoryItemSubtitle(item)}
@@ -3099,7 +3105,7 @@ function InventoryItemActionsMenu({
         }}
       >
         <Link
-          className="block rounded-md px-3 py-2 text-sm font-semibold text-stone-800 transition hover:bg-stone-100 hover:text-stone-950 focus:bg-stone-100 focus:outline-none"
+          className="block rounded-md px-3 py-2.5 text-base font-semibold text-stone-800 transition hover:bg-stone-100 hover:text-stone-950 focus:bg-stone-100 focus:outline-none lg:py-2 lg:text-sm"
           href={item.manageHref}
           onClick={() => setIsOpen(false)}
         >
@@ -3108,7 +3114,7 @@ function InventoryItemActionsMenu({
         {canShare ? (
           <button
             type="button"
-            className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-stone-800 transition hover:bg-stone-100 hover:text-stone-950 focus:bg-stone-100 focus:outline-none disabled:cursor-wait disabled:opacity-60"
+            className="block w-full rounded-md px-3 py-2.5 text-left text-base font-semibold text-stone-800 transition hover:bg-stone-100 hover:text-stone-950 focus:bg-stone-100 focus:outline-none disabled:cursor-wait disabled:opacity-60 lg:py-2 lg:text-sm"
             disabled={isSharing}
             onClick={() => {
               setIsOpen(false);
@@ -3121,7 +3127,7 @@ function InventoryItemActionsMenu({
         {storeVisibilityAction ? (
           <button
             type="button"
-            className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-stone-800 transition hover:bg-stone-100 hover:text-stone-950 focus:bg-stone-100 focus:outline-none disabled:cursor-wait disabled:opacity-60"
+            className="block w-full rounded-md px-3 py-2.5 text-left text-base font-semibold text-stone-800 transition hover:bg-stone-100 hover:text-stone-950 focus:bg-stone-100 focus:outline-none disabled:cursor-wait disabled:opacity-60 lg:py-2 lg:text-sm"
             disabled={isVisibilityUpdating}
             onClick={() => {
               setIsOpen(false);
@@ -3139,7 +3145,7 @@ function InventoryItemActionsMenu({
         {archiveAction ? (
           <button
             type="button"
-            className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-stone-800 transition hover:bg-stone-100 hover:text-stone-950 focus:bg-stone-100 focus:outline-none disabled:cursor-wait disabled:opacity-60"
+            className="block w-full rounded-md px-3 py-2.5 text-left text-base font-semibold text-stone-800 transition hover:bg-stone-100 hover:text-stone-950 focus:bg-stone-100 focus:outline-none disabled:cursor-wait disabled:opacity-60 lg:py-2 lg:text-sm"
             disabled={isArchiveUpdating}
             onClick={() => {
               setIsOpen(false);
@@ -3202,7 +3208,7 @@ function AvailableQuantityControl({
 }) {
   if (item.kind === "hatching_egg") {
     return (
-      <span className="inline-flex h-12 min-w-24 items-center justify-center rounded-md border border-stone-200 bg-stone-50 px-2 text-lg font-bold text-stone-950 sm:h-8 sm:min-w-16 sm:text-sm sm:font-semibold">
+      <span className="inline-flex h-11 min-w-24 items-center justify-center rounded-md border border-stone-200 bg-stone-50 px-2 text-lg font-bold text-stone-950 sm:h-8 sm:min-w-16 sm:text-sm sm:font-semibold">
         {item.availableQuantity}
       </span>
     );
@@ -3220,7 +3226,7 @@ function AvailableQuantityControl({
     <div className="flex flex-col items-center">
       <input
         aria-label={`Available quantity for ${item.breedOrItem}`}
-        className={`h-12 w-24 rounded-md border px-2 text-center text-lg font-bold text-stone-950 shadow-sm focus:outline-none focus:ring-2 sm:h-8 sm:w-16 sm:text-sm sm:font-semibold ${
+        className={`h-11 w-24 rounded-md border px-2 text-center text-lg font-bold text-stone-950 shadow-sm focus:outline-none focus:ring-2 sm:h-8 sm:w-16 sm:text-sm sm:font-semibold ${
           rowHasInvalidQuantity
             ? "border-red-400 focus:border-red-600 focus:ring-red-600/20"
             : isChanged
@@ -3272,7 +3278,7 @@ function PriceEditControl({
         <input
           id={`price-${priceItemId}`}
           aria-label={`Price for ${item.breedOrItem}`}
-          className={`h-12 w-24 rounded-md border py-0 pl-6 pr-2 text-right text-lg font-bold text-stone-950 shadow-sm focus:outline-none focus:ring-2 sm:h-8 sm:w-20 sm:text-sm sm:font-semibold ${
+          className={`h-11 w-24 rounded-md border py-0 pl-6 pr-2 text-right text-lg font-bold text-stone-950 shadow-sm focus:outline-none focus:ring-2 sm:h-8 sm:w-20 sm:text-sm sm:font-semibold ${
             rowHasInvalidPrice
               ? "border-red-400 focus:border-red-600 focus:ring-red-600/20"
               : isChanged

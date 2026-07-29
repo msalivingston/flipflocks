@@ -7,10 +7,9 @@ export default function SellerInventoryPage() {
     <>
       <SellerPageHeader
         title="Inventory"
-        description="Manage birds and equipment with filters, sorting, and quick edits."
         action={
           <Link
-            className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-bold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
+            className="absolute right-5 top-5 inline-flex min-h-12 items-center justify-center rounded-md bg-emerald-800 px-5 text-base font-bold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 lg:static lg:min-h-10 lg:px-4 lg:text-sm"
             href="/dashboard/inventory/add-v2"
           >
             + Add Inventory
