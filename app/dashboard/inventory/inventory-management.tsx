@@ -1588,7 +1588,7 @@ export function InventoryManagement() {
             />
           </label>
           <div className="grid grid-cols-2 gap-2">
-            <details className="group relative">
+            <details className="group relative open:pb-[28rem]">
               <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 rounded-md border border-stone-300 bg-white px-3 text-sm font-bold text-stone-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-700/20 [&::-webkit-details-marker]:hidden">
                 <Funnel
                   aria-hidden="true"
@@ -1600,7 +1600,7 @@ export function InventoryManagement() {
                   ▾
                 </span>
               </summary>
-              <div className="absolute left-0 top-[calc(100%+0.5rem)] z-30 grid w-[calc(200%+0.5rem)] gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-[0_18px_40px_rgba(46,39,25,0.16)]">
+              <div className="absolute left-0 top-[3.25rem] z-30 grid w-[calc(200%+0.5rem)] gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-[0_18px_40px_rgba(46,39,25,0.16)]">
                 {activeTab === "live_poultry" ? (
                   <>
                     <InventorySelectControl
