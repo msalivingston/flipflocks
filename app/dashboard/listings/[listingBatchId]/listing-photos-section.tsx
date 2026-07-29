@@ -7,50 +7,21 @@ import {
   PhotoManager,
 } from "../../_components/photo-manager";
 import type { PhotoCropMetadata } from "../../_components/photo-crop-editor";
+import {
+  archiveSellerPhoto,
+  sellerAcceptedImageTypes,
+  sellerMaxImageSizeBytes,
+  type SellerMediaItem,
+  updateSellerPhotoCrop,
+  uploadSellerPhoto,
+  validateSellerPhoto,
+} from "../../_components/seller-media-client";
 
-export type ListingPhotoItem = {
-  media_asset_id: string;
-  media_link_id: string;
-  store_id: string;
-  entity_type: string;
-  entity_id: string;
-  display_context: string;
-  public_url: string;
-  alt_text: string | null;
-  caption: string | null;
-  sort_order: number | null;
-  is_featured: boolean;
-  crop_metadata?: PhotoCropMetadata | null;
-  moderation_status: string;
-  asset_status: string;
-  visibility_status: string;
-  original_filename: string | null;
-  content_type: string;
-  file_size_bytes: number;
-  width_px: number | null;
-  height_px: number | null;
-  source_type?: string | null;
-  source_breed_id?: string | null;
-  source_image_url?: string | null;
-};
-
-type UploadResponse = {
-  media?: ListingPhotoItem | null;
-  error?: {
-    code?: string;
-    message?: string;
-  };
-};
+export type ListingPhotoItem = SellerMediaItem;
 
 type PhotoError = {
   title: string;
   message: string;
-};
-
-type FunctionErrorContext = {
-  context?: Response;
-  message?: string;
-  name?: string;
 };
 
 type PhotoManagerMode = "setup" | "public-content" | "readonly";
@@ -62,8 +33,8 @@ type PhotoEntityType =
   | "equipment_inventory_item"
   | "processed_poultry_inventory_item";
 
-const acceptedImageTypes = ["image/jpeg", "image/png", "image/webp"] as const;
-const maxImageSizeBytes = 8 * 1024 * 1024;
+const acceptedImageTypes = sellerAcceptedImageTypes;
+const maxImageSizeBytes = sellerMaxImageSizeBytes;
 const maxListingPhotos = 4;
 
 /**
@@ -154,56 +125,23 @@ export function ListingPhotosSection({
     const uploadedMedia: ListingPhotoItem[] = [];
 
     for (const [index, file] of selectedFiles.entries()) {
-      const { data: sessionData, error: sessionError } =
-        await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
+      const uploadResult = await uploadSellerPhoto({
+        entityId: mediaEntityId,
+        entityType,
+        file,
+        isFeatured:
+          photoCount === 0 && uploadedMedia.length === 0 && index === 0,
+        sortOrder: photoCount + index,
+        storeId,
+      });
 
-      if (sessionError || !accessToken) {
-        console.error("seller-media-upload missing seller session", {
-          message: sessionError?.message,
-        });
-        setError({
-          title: "Photo upload failed",
-          message: "Please sign in again and try uploading the photo.",
-        });
+      if (!uploadResult.ok) {
+        setError(uploadResult.error);
         setIsUploading(false);
         return;
       }
 
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("store_id", storeId);
-      formData.append("entity_type", entityType);
-      formData.append("entity_id", mediaEntityId);
-      formData.append("display_context", "gallery");
-      formData.append("sort_order", String(photoCount + index));
-      formData.append(
-        "is_featured",
-        String(photoCount === 0 && uploadedMedia.length === 0 && index === 0),
-      );
-
-      const { data, error: uploadError } =
-        await supabase.functions.invoke<UploadResponse>("seller-media-upload", {
-          body: formData,
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
-
-      if (uploadError || data?.error) {
-        const uploadFailure = await buildUploadFailure({
-          data,
-          fileName: file.name,
-          uploadError,
-        });
-        setError(uploadFailure);
-        setIsUploading(false);
-        return;
-      }
-
-      if (data?.media) {
-        uploadedMedia.push(data.media);
-      }
+      uploadedMedia.push(uploadResult.media);
     }
 
     if (uploadedMedia.length > 0) {
@@ -220,16 +158,10 @@ export function ListingPhotosSection({
 
     setError(null);
 
-    const { error: archiveError } = await supabase.rpc(
-      "seller_archive_media_link",
-      {
-        p_media_link_id: photo.media_link_id,
-      },
-    );
+    const archiveResult = await archiveSellerPhoto(photo.media_link_id);
 
-    if (archiveError) {
+    if (!archiveResult.ok) {
       console.error("seller media link archive failed", {
-        message: archiveError.message,
         mediaLinkId: photo.media_link_id,
       });
       setError({
@@ -374,15 +306,11 @@ export function ListingPhotosSection({
 
     setError(null);
 
-    const { error: cropError } = await supabase.rpc("seller_update_media_crop", {
-      p_crop_metadata: crop,
-      p_media_link_id: photo.id,
-    });
+    const cropResult = await updateSellerPhotoCrop(photo.id, crop);
 
-    if (cropError) {
+    if (!cropResult.ok) {
       console.error("seller media crop update failed", {
         mediaLinkId: photo.id,
-        message: cropError.message,
       });
       setError({
         title: "Photo crop was not saved",
@@ -448,19 +376,8 @@ export function ListingPhotosSection({
 
 function validateFiles(files: File[]) {
   for (const file of files) {
-    if (!acceptedImageTypes.includes(file.type as (typeof acceptedImageTypes)[number])) {
-      return {
-        title: "File type not supported",
-        message: "Use a JPG, PNG, or WebP photo.",
-      };
-    }
-
-    if (file.size <= 0 || file.size > maxImageSizeBytes) {
-      return {
-        title: "Photo is too large",
-        message: "Use a photo under 8 MB.",
-      };
-    }
+    const error = validateSellerPhoto(file);
+    if (error) return error;
   }
 
   return null;
@@ -540,91 +457,6 @@ function applyReorderedPhotos(
       sort_order: nextOrder,
     };
   });
-}
-
-async function buildUploadFailure({
-  data,
-  fileName,
-  uploadError,
-}: {
-  data: UploadResponse | null;
-  fileName: string;
-  uploadError: unknown;
-}): Promise<PhotoError> {
-  const edgeError = await readFunctionError(uploadError);
-  const code = data?.error?.code ?? edgeError?.code;
-  const message = data?.error?.message ?? edgeError?.message;
-
-  console.error("seller-media-upload failed", {
-    code,
-    fileName,
-    message,
-    status: edgeError?.status,
-    supabaseMessage: toFunctionErrorContext(uploadError)?.message,
-  });
-
-  return mapUploadErrorToSellerMessage(code);
-}
-
-async function readFunctionError(uploadError: unknown) {
-  const response = toFunctionErrorContext(uploadError)?.context;
-
-  if (!response) return null;
-
-  try {
-    const body = (await response.clone().json()) as UploadResponse;
-
-    return {
-      code: body.error?.code,
-      message: body.error?.message,
-      status: response.status,
-    };
-  } catch (error) {
-    console.error("seller-media-upload error body could not be read", {
-      error,
-      status: response.status,
-    });
-
-    return {
-      code: undefined,
-      message: undefined,
-      status: response.status,
-    };
-  }
-}
-
-function toFunctionErrorContext(error: unknown): FunctionErrorContext | null {
-  if (!error || typeof error !== "object") return null;
-
-  return error as FunctionErrorContext;
-}
-
-function mapUploadErrorToSellerMessage(code: string | undefined): PhotoError {
-  if (code === "unauthorized") {
-    return {
-      title: "Photo upload failed",
-      message: "Please sign in again and try uploading the photo.",
-    };
-  }
-
-  if (code === "unsupported_media_type" || code === "invalid_image") {
-    return {
-      title: "File type not supported",
-      message: "Use a JPG, PNG, or WebP photo.",
-    };
-  }
-
-  if (code === "file_too_large") {
-    return {
-      title: "Photo is too large",
-      message: "Use a photo under 8 MB.",
-    };
-  }
-
-  return {
-    title: "Photo upload failed",
-    message: "Please try again. If it keeps happening, choose a different photo.",
-  };
 }
 
 function toPublicImageUrl(publicUrl: string) {

@@ -23,6 +23,12 @@ import {
 } from "../_components/seller-ui";
 import type { ListingPhotoItem } from "../listings/[listingBatchId]/listing-photos-section";
 import {
+  archiveSellerPhoto,
+  updateSellerPhotoCrop,
+  uploadSellerPhoto,
+} from "../_components/seller-media-client";
+import type { PhotoCropMetadata } from "../_components/photo-crop-editor";
+import {
   breedLibrarySelect,
   buildLibraryByBreedId,
   buildSpeciesNameById,
@@ -41,6 +47,7 @@ import {
   type BreedSpecies,
   type SellerBreedProfile,
 } from "./breed-data";
+import { MobileBreedsLibrary } from "./mobile-breeds-library";
 
 type ActiveTab = "catalog" | "library";
 type AddMode = "choose" | "library" | "custom";
@@ -52,6 +59,16 @@ type BreedProfileUpsertResult = {
 type AddBreedResult =
   | { ok: true; breedProfileId: string }
   | { ok: false; message: string };
+type UpdateBreedDescriptionResult =
+  | { ok: true }
+  | { ok: false; message: string };
+type MobileBreedPhotoChange =
+  | { kind: "none" }
+  | {
+      additions: { crop: PhotoCropMetadata; file: File }[];
+      kind: "update";
+      removedMediaLinkIds: string[];
+    };
 
 type CustomBreedDraft = {
   description: string;
@@ -70,6 +87,8 @@ type RemoveDialogState =
 const breedHelperStorageKey = "flockfront:breeds-helper-expanded";
 const breedHelperPreferenceEvent =
   "flockfront:breeds-helper-preference-change";
+const breedDesktopMediaQuery = "(min-width: 1024px)";
+const breedDescriptionMaxLength = 1000;
 
 export function BreedsManagement() {
   const { seller } = useSellerContext();
@@ -98,6 +117,11 @@ export function BreedsManagement() {
     null,
   );
   const [reloadKey, setReloadKey] = useState(0);
+  const isDesktopViewport = useSyncExternalStore(
+    subscribeBreedDesktopBreakpoint,
+    readBreedDesktopBreakpoint,
+    () => false,
+  );
 
   useEffect(() => {
     if (!storeId) return;
@@ -377,6 +401,187 @@ export function BreedsManagement() {
     return { ok: true, breedProfileId };
   }
 
+  async function updateBreedDescription(
+    profileId: string,
+    description: string,
+  ): Promise<UpdateBreedDescriptionResult> {
+    const profile = profileById.get(profileId);
+
+    if (!profile) {
+      return { ok: false, message: "Breed could not be found." };
+    }
+
+    const normalizedDescription = description.trim();
+
+    if (normalizedDescription.length > breedDescriptionMaxLength) {
+      return {
+        ok: false,
+        message: `Breed description must be ${breedDescriptionMaxLength} characters or less.`,
+      };
+    }
+
+    const { error } = await supabase.rpc("seller_upsert_breed_profile", {
+      p_annual_egg_production: profile.annual_egg_production,
+      p_bird_type: profile.bird_type,
+      p_breed_id: profile.breed_id,
+      p_custom_breed_name: profile.custom_breed_name,
+      p_display_name: profile.display_name,
+      p_egg_color: profile.egg_color,
+      p_seller_breed_profile_id: profile.id,
+      p_seller_description: normalizedDescription || null,
+      p_seller_notes: profile.seller_notes,
+      p_species_id: profile.species_id,
+      p_store_id: storeId,
+      p_visibility_status: profile.visibility_status,
+    });
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+
+    setProfiles((current) =>
+      current.map((item) =>
+        item.id === profile.id
+          ? {
+              ...item,
+              seller_description: normalizedDescription || null,
+            }
+          : item,
+      ),
+    );
+
+    return { ok: true };
+  }
+
+  async function updateMobileBreed(
+    profileId: string,
+    description: string,
+    photoChange: MobileBreedPhotoChange,
+  ): Promise<UpdateBreedDescriptionResult> {
+    const currentPhotos = mediaByProfileId.get(profileId) ?? [];
+    const descriptionResult = await updateBreedDescription(
+      profileId,
+      description,
+    );
+
+    if (!descriptionResult.ok) {
+      return descriptionResult;
+    }
+
+    if (photoChange.kind === "update") {
+      const removedIdSet = new Set(photoChange.removedMediaLinkIds);
+      const survivingPhotos = currentPhotos.filter(
+        (item) => !removedIdSet.has(item.media_link_id),
+      );
+      const uploadedItems: ListingPhotoItem[] = [];
+
+      if (survivingPhotos.length + photoChange.additions.length > 4) {
+        return {
+          ok: false,
+          message: "You can add up to 4 photos for a breed.",
+        };
+      }
+
+      for (const [index, addition] of photoChange.additions.entries()) {
+      const uploadResult = await uploadSellerPhoto({
+        entityId: profileId,
+        entityType: "seller_breed_profile",
+          file: addition.file,
+          isFeatured: survivingPhotos.length === 0 && index === 0,
+          sortOrder: survivingPhotos.length + index,
+        storeId,
+      });
+
+      if (!uploadResult.ok) {
+          for (const uploadedItem of uploadedItems) {
+            await archiveSellerPhoto(uploadedItem.media_link_id);
+          }
+        return { ok: false, message: uploadResult.error.message };
+      }
+
+      const cropResult = await updateSellerPhotoCrop(
+          uploadResult.media.media_link_id,
+          addition.crop,
+      );
+
+      if (!cropResult.ok) {
+          await archiveSellerPhoto(uploadResult.media.media_link_id);
+          for (const uploadedItem of uploadedItems) {
+            await archiveSellerPhoto(uploadedItem.media_link_id);
+          }
+        return { ok: false, message: cropResult.message };
+      }
+
+        uploadedItems.push({
+          ...uploadResult.media,
+          crop_metadata: addition.crop,
+        });
+      }
+
+      for (const mediaLinkId of photoChange.removedMediaLinkIds) {
+        const archiveResult = await archiveSellerPhoto(mediaLinkId);
+        if (!archiveResult.ok) {
+          for (const uploadedItem of uploadedItems) {
+            await archiveSellerPhoto(uploadedItem.media_link_id);
+          }
+          return { ok: false, message: archiveResult.message };
+        }
+      }
+
+      const nextProfilePhotos = [...survivingPhotos, ...uploadedItems].map(
+        (item, index) => ({
+          ...item,
+          is_featured: index === 0,
+          sort_order: index,
+        }),
+      );
+
+      if (nextProfilePhotos.length > 0) {
+        const { error: reorderError } = await supabase.rpc(
+          "seller_reorder_media",
+          {
+            p_entity_type: "seller_breed_profile",
+            p_entity_id: profileId,
+            p_display_context: "gallery",
+            p_media_link_ids: nextProfilePhotos.map(
+              (item) => item.media_link_id,
+            ),
+          },
+        );
+
+        if (reorderError) {
+          return {
+            ok: false,
+            message: "The photo order could not be saved. Please try again.",
+          };
+        }
+
+        const { error: featuredError } = await supabase.rpc(
+          "seller_set_media_featured",
+          {
+            p_media_link_id: nextProfilePhotos[0].media_link_id,
+          },
+        );
+
+        if (featuredError) {
+          return {
+            ok: false,
+            message: "The storefront photo could not be updated. Please try again.",
+          };
+        }
+      }
+
+      setMediaItems((current) => {
+        const otherProfileMedia = current.filter(
+          (item) => item.entity_id !== profileId,
+        );
+        return [...otherProfileMedia, ...nextProfilePhotos];
+      });
+    }
+
+    return { ok: true };
+  }
+
   function toggleProfileSelection(profileId: string) {
     setSelectedProfileIds((current) => {
       const nextSelectedProfileIds = new Set(current);
@@ -506,61 +711,94 @@ export function BreedsManagement() {
 
   return (
     <>
-      <div className="space-y-3">
-        <BreedLibraryHelper />
+      {!isDesktopViewport ? (
+        <MobileBreedsLibrary
+          actionError={actionError}
+          catalogQuery={catalogQuery}
+          catalogSpeciesFilter={catalogSpeciesFilter}
+          hasActiveCatalogFilters={
+            catalogQuery.trim() !== "" || catalogSpeciesFilter !== "all"
+          }
+          libraryByBreedId={libraryByBreedId}
+          mediaByProfileId={mediaByProfileId}
+          profiles={profiles}
+          selectedProfileIds={selectedProfileIds}
+          species={species}
+          speciesById={speciesById}
+          successMessage={successMessage}
+          usageLoadError={usageLoadError}
+          visibleProfiles={visibleProfiles}
+          onAddBreed={() => setIsModalOpen(true)}
+          onClearSelection={clearSelection}
+          onOpenBulkRemove={openBulkRemoveDialog}
+          onOpenSingleRemove={openSingleRemoveDialog}
+          onResetCatalogFilters={() => {
+            setCatalogQuery("");
+            setCatalogSpeciesFilter("all");
+          }}
+          onSetCatalogQuery={setCatalogQuery}
+          onSetCatalogSpeciesFilter={setCatalogSpeciesFilter}
+          onSaveBreedChanges={updateMobileBreed}
+          onToggleAllVisible={toggleAllVisibleProfiles}
+          onToggleProfileSelection={toggleProfileSelection}
+        />
+      ) : (
+        <div className="space-y-3">
+          <BreedLibraryHelper />
 
-        <BreedTabs activeTab={activeTab} onChange={setActiveTab} />
+          <BreedTabs activeTab={activeTab} onChange={setActiveTab} />
 
-        {actionError ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
-            {actionError}
-          </div>
-        ) : null}
-        {successMessage ? (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
-            {successMessage}
-          </div>
-        ) : null}
+          {actionError ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
+              {actionError}
+            </div>
+          ) : null}
+          {successMessage ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+              {successMessage}
+            </div>
+          ) : null}
 
-        {activeTab === "catalog" ? (
-          <BreedCatalogPanel
-            catalogQuery={catalogQuery}
-            catalogSpeciesFilter={catalogSpeciesFilter}
-            catalogSpeciesOptions={catalogSpeciesOptions}
-            groups={filteredGroups}
-            hasActiveCatalogFilters={
-              catalogQuery.trim() !== "" || catalogSpeciesFilter !== "all"
-            }
-            libraryByBreedId={libraryByBreedId}
-            mediaByProfileId={mediaByProfileId}
-            profiles={profiles}
-            selectedProfileIds={selectedProfileIds}
-            usageLoadError={usageLoadError}
-            usedProfileIds={usedProfileIds}
-            onAddBreed={() => setIsModalOpen(true)}
-            onClearSelection={clearSelection}
-            onOpenBulkRemove={openBulkRemoveDialog}
-            onOpenSingleRemove={openSingleRemoveDialog}
-            onResetCatalogFilters={() => {
-              setCatalogQuery("");
-              setCatalogSpeciesFilter("all");
-            }}
-            onSetCatalogQuery={setCatalogQuery}
-            onSetCatalogSpeciesFilter={setCatalogSpeciesFilter}
-            onToggleAllVisible={toggleAllVisibleProfiles}
-            onToggleProfileSelection={toggleProfileSelection}
-          />
-        ) : (
-          <BreedLibraryPanel
-            addingBreedId={addingBreedId}
-            existingBreedIds={existingBreedIds}
-            libraryBreeds={sortedLibraryBreeds}
-            species={species}
-            speciesById={speciesById}
-            onAdd={(breed) => void addLibraryBreedInPlace(breed)}
-          />
-        )}
-      </div>
+          {activeTab === "catalog" ? (
+            <BreedCatalogPanel
+              catalogQuery={catalogQuery}
+              catalogSpeciesFilter={catalogSpeciesFilter}
+              catalogSpeciesOptions={catalogSpeciesOptions}
+              groups={filteredGroups}
+              hasActiveCatalogFilters={
+                catalogQuery.trim() !== "" || catalogSpeciesFilter !== "all"
+              }
+              libraryByBreedId={libraryByBreedId}
+              mediaByProfileId={mediaByProfileId}
+              profiles={profiles}
+              selectedProfileIds={selectedProfileIds}
+              usageLoadError={usageLoadError}
+              usedProfileIds={usedProfileIds}
+              onAddBreed={() => setIsModalOpen(true)}
+              onClearSelection={clearSelection}
+              onOpenBulkRemove={openBulkRemoveDialog}
+              onOpenSingleRemove={openSingleRemoveDialog}
+              onResetCatalogFilters={() => {
+                setCatalogQuery("");
+                setCatalogSpeciesFilter("all");
+              }}
+              onSetCatalogQuery={setCatalogQuery}
+              onSetCatalogSpeciesFilter={setCatalogSpeciesFilter}
+              onToggleAllVisible={toggleAllVisibleProfiles}
+              onToggleProfileSelection={toggleProfileSelection}
+            />
+          ) : (
+            <BreedLibraryPanel
+              addingBreedId={addingBreedId}
+              existingBreedIds={existingBreedIds}
+              libraryBreeds={sortedLibraryBreeds}
+              species={species}
+              speciesById={speciesById}
+              onAdd={(breed) => void addLibraryBreedInPlace(breed)}
+            />
+          )}
+        </div>
+      )}
 
       {isModalOpen ? (
         <AddBreedModal
@@ -1906,4 +2144,20 @@ function subscribeBreedHelperPreference(onStoreChange: () => void) {
     window.removeEventListener("storage", handleStorage);
     window.removeEventListener(breedHelperPreferenceEvent, onStoreChange);
   };
+}
+
+function readBreedDesktopBreakpoint() {
+  if (typeof window === "undefined") return false;
+
+  return window.matchMedia(breedDesktopMediaQuery).matches;
+}
+
+function subscribeBreedDesktopBreakpoint(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+
+  const mediaQueryList = window.matchMedia(breedDesktopMediaQuery);
+
+  mediaQueryList.addEventListener("change", onStoreChange);
+
+  return () => mediaQueryList.removeEventListener("change", onStoreChange);
 }

@@ -27,17 +27,23 @@ const defaultCrop: PhotoCropMetadata = {
 };
 
 export function PhotoCropEditor({
+  hideReset = false,
   isSaving = false,
   onCancel,
   onReset,
   onSave,
   photo,
+  saveLabel = "Save crop",
+  title = "Edit photo crop",
 }: {
+  hideReset?: boolean;
   isSaving?: boolean;
   onCancel: () => void;
   onReset: () => void;
   onSave: (crop: PhotoCropMetadata) => void;
   photo: EditableCropPhoto;
+  saveLabel?: string;
+  title?: string;
 }) {
   const [crop, setCrop] = useState<PhotoCropMetadata>(
     normalizeCrop(photo.cropMetadata),
@@ -49,14 +55,55 @@ export function PhotoCropEditor({
     x: number;
     y: number;
   } | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.requestAnimationFrame(() => {
+      dialogRef.current
+        ?.querySelector<HTMLElement>("button:not([disabled])")
+        ?.focus();
+    });
+
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onCancel();
+      if (event.key === "Escape") {
+        onCancel();
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+
+      const focusableElements = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (!firstElement || !lastElement) return;
+
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
     }
 
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previousFocusRef.current?.focus();
+    };
   }, [onCancel]);
 
   function updateCrop(updates: Partial<PhotoCropMetadata>) {
@@ -103,13 +150,16 @@ export function PhotoCropEditor({
       className="fixed inset-0 z-50 flex items-end bg-stone-950/55 p-0 sm:items-center sm:p-5"
       role="dialog"
     >
-      <div className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-lg bg-white shadow-xl sm:mx-auto sm:max-w-[560px] sm:rounded-lg">
+      <div
+        className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-xl sm:h-auto sm:max-h-[85vh] sm:mx-auto sm:max-w-[560px] sm:rounded-lg"
+        ref={dialogRef}
+      >
         <div className="relative border-b border-stone-200 px-4 py-2 pr-12 sm:px-4 sm:pr-12">
           <h2
             className="text-base font-semibold text-stone-950"
             id="photo-crop-editor-title"
           >
-            Edit photo crop
+            {title}
           </h2>
           <p className="mt-0.5 truncate text-xs font-semibold text-stone-500">
             {photo.label}
@@ -175,9 +225,15 @@ export function PhotoCropEditor({
             >
               Center
             </button>
-            <button className="seller-secondary-button" type="button" onClick={onReset}>
-              Reset crop
-            </button>
+            {!hideReset ? (
+              <button
+                className="seller-secondary-button"
+                type="button"
+                onClick={onReset}
+              >
+                Reset crop
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -191,7 +247,7 @@ export function PhotoCropEditor({
             type="button"
             onClick={() => onSave(crop)}
           >
-            {isSaving ? "Saving" : "Save crop"}
+            {isSaving ? "Saving" : saveLabel}
           </button>
         </div>
       </div>

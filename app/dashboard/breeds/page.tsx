@@ -4,11 +4,13 @@ import { BreedsManagement } from "./breeds-management";
 export default function SellerBreedsPage() {
   return (
     <>
-      <SellerPageHeader
-        title="Breeds"
-        description="Build the breed list for your storefront."
-      />
-      <div className="mx-auto w-full max-w-6xl px-5 py-5 sm:px-7">
+      <div className="hidden lg:block">
+        <SellerPageHeader
+          title="Breeds"
+          description="Build the breed list for your storefront."
+        />
+      </div>
+      <div className="mx-auto w-full max-w-6xl px-4 py-4 sm:px-5 lg:px-7 lg:py-5">
         <BreedsManagement />
       </div>
     </>

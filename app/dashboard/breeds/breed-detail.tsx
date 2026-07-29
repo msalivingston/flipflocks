@@ -635,19 +635,21 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
                 </p>
               </SellerCard>
             ) : (
-              <ListingPhotosSection
-                canManage={profile.visibility_status !== "archived"}
-                description="Manage the photos buyers see for this breed."
-                emptyDescription="Add clear breed photos once, then reuse them wherever this breed appears."
-                entityId={profile.id}
-                entityType="seller_breed_profile"
-                listingBatchId={profile.id}
-                mediaItems={mediaItems}
-                mode="public-content"
-                storeId={storeId}
-                title="Breed Photos"
-                onReload={() => setReloadKey((current) => current + 1)}
-              />
+              <div className="scroll-mt-4" id="breed-photos">
+                <ListingPhotosSection
+                  canManage={profile.visibility_status !== "archived"}
+                  description="Manage the photos buyers see for this breed."
+                  emptyDescription="Add clear breed photos once, then reuse them wherever this breed appears."
+                  entityId={profile.id}
+                  entityType="seller_breed_profile"
+                  listingBatchId={profile.id}
+                  mediaItems={mediaItems}
+                  mode="public-content"
+                  storeId={storeId}
+                  title="Breed Photos"
+                  onReload={() => setReloadKey((current) => current + 1)}
+                />
+              </div>
             )}
           </div>
 
