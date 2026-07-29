@@ -3287,16 +3287,51 @@ function HeroPhotoSection({
     normalizeHeroLayout(heroImage?.hero_layout),
   );
   const [showTips, setShowTips] = useState(false);
+  const [mobilePreviewMode, setMobilePreviewMode] = useState<
+    "mobile" | "desktop"
+  >("mobile");
+  const [desktopPreviewScale, setDesktopPreviewScale] = useState(
+    storefrontHeroFrame.setupPreviewScale,
+  );
   const [draftCrop, setDraftCrop] = useState<PhotoCropMetadata>(
     buildHeroInitialCrop(heroImage),
   );
+  const desktopPreviewRef = useRef<HTMLDivElement | null>(null);
   const dragStartRef = useRef<{
     pointerId: number;
     startX: number;
     startY: number;
     x: number;
     y: number;
+    movementScale: number;
   } | null>(null);
+
+  useEffect(() => {
+    const preview = desktopPreviewRef.current;
+
+    if (!preview) return;
+
+    const logicalPreviewWidth =
+      800 / storefrontHeroFrame.setupPreviewScale;
+    const updateScale = (width: number) => {
+      if (width <= 0) return;
+
+      setDesktopPreviewScale(
+        Math.min(
+          storefrontHeroFrame.setupPreviewScale,
+          width / logicalPreviewWidth,
+        ),
+      );
+    };
+    const observer = new ResizeObserver((entries) => {
+      updateScale(entries[0]?.contentRect.width ?? 0);
+    });
+
+    updateScale(preview.getBoundingClientRect().width);
+    observer.observe(preview);
+
+    return () => observer.disconnect();
+  }, [mobilePreviewMode]);
 
   function updateDraftCrop(updates: Partial<PhotoCropMetadata>) {
     const nextCrop = { ...draftCrop, ...updates };
@@ -3313,7 +3348,10 @@ function HeroPhotoSection({
     if (heroImage) onSaveLayout(nextLayout);
   }
 
-  function beginDrag(event: React.PointerEvent<HTMLDivElement>) {
+  function beginDrag(
+    event: React.PointerEvent<HTMLDivElement>,
+    movementScale = storefrontHeroFrame.setupPreviewScale,
+  ) {
     if (!heroImage) return;
 
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -3323,6 +3361,7 @@ function HeroPhotoSection({
       startY: event.clientY,
       x: draftCrop.x,
       y: draftCrop.y,
+      movementScale,
     };
   }
 
@@ -3334,11 +3373,11 @@ function HeroPhotoSection({
     setDraftCrop({
       x: Math.round(
         start.x +
-          (event.clientX - start.startX) / storefrontHeroFrame.setupPreviewScale,
+          (event.clientX - start.startX) / start.movementScale,
       ),
       y: Math.round(
         start.y +
-          (event.clientY - start.startY) / storefrontHeroFrame.setupPreviewScale,
+          (event.clientY - start.startY) / start.movementScale,
       ),
       aspect: draftCrop.aspect,
       zoom: draftCrop.zoom,
@@ -3430,12 +3469,16 @@ function HeroPhotoSection({
             </div>
           </div>
 
-          <div className="grid gap-2">
+          <div
+            className={`order-2 grid gap-2 sm:order-none ${
+              mobilePreviewMode === "desktop" ? "" : "hidden sm:grid"
+            }`}
+          >
             <div className="grid gap-1">
               <p className="text-sm font-semibold text-stone-800">
                 Desktop Hero Preview
               </p>
-              <p className="text-xs font-medium leading-4 text-stone-500">
+              <p className="text-sm font-medium leading-5 text-stone-600 sm:text-xs sm:leading-4 sm:text-stone-500">
                 Preview shown at a typical desktop width. Text wrapping and
                 image crop may vary slightly by screen size.
               </p>
@@ -3443,9 +3486,12 @@ function HeroPhotoSection({
             <div
               className={storefrontHeroFrame.setupPreviewClass}
               onPointerCancel={endDrag}
-              onPointerDown={beginDrag}
+              onPointerDown={(event) =>
+                beginDrag(event, desktopPreviewScale)
+              }
               onPointerMove={moveImage}
               onPointerUp={endDrag}
+              ref={desktopPreviewRef}
             >
               <div
                 className={cx(
@@ -3455,7 +3501,7 @@ function HeroPhotoSection({
                 style={
                   {
                     ...themeStyle,
-                    "--hero-preview-scale": storefrontHeroFrame.setupPreviewScale,
+                    "--hero-preview-scale": desktopPreviewScale,
                   } as CSSProperties
                 }
               >
@@ -3482,7 +3528,7 @@ function HeroPhotoSection({
             </div>
           </div>
 
-          <div className="grid gap-2">
+          <div className="order-3 grid gap-2 sm:order-none">
             <div className="grid gap-2">
               <label className="grid gap-1 text-sm font-semibold text-stone-700">
                 Zoom
@@ -3538,15 +3584,53 @@ function HeroPhotoSection({
             </div>
           </div>
 
-          <div className="grid gap-2 pt-1">
+          <div className="order-1 grid gap-1.5 sm:hidden">
+            <p className="text-sm font-semibold text-stone-800">Preview</p>
+            <div
+              aria-label="Hero preview size"
+              className="grid grid-cols-2 rounded-lg bg-stone-100 p-1"
+              role="group"
+            >
+              {(["mobile", "desktop"] as const).map((mode) => {
+                const isSelected = mobilePreviewMode === mode;
+                const label = mode === "mobile" ? "Mobile" : "Desktop";
+
+                return (
+                  <button
+                    aria-pressed={isSelected}
+                    className={`min-h-11 rounded-md px-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-1 ${
+                      isSelected
+                        ? "bg-white text-stone-950 shadow-sm"
+                        : "text-stone-600 hover:bg-white/70 hover:text-stone-950"
+                    }`}
+                    key={mode}
+                    onClick={() => setMobilePreviewMode(mode)}
+                    type="button"
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div
+            className={`order-2 grid gap-2 pt-1 sm:order-none sm:grid ${
+              mobilePreviewMode === "mobile" ? "" : "hidden"
+            }`}
+          >
             <p className="text-sm font-semibold text-stone-800">
               Mobile Hero Preview
             </p>
             <div
               className={cx(
                 storefrontFontVariablesClass,
-                "buyer-storefront relative mx-auto h-[13.35rem] w-full max-w-[390px] overflow-hidden rounded-lg bg-white shadow-sm [container-type:inline-size]",
+                "buyer-storefront relative mx-auto h-[13.35rem] w-full max-w-[390px] touch-none overflow-hidden rounded-lg bg-white shadow-sm [container-type:inline-size]",
               )}
+              onPointerCancel={endDrag}
+              onPointerDown={(event) => beginDrag(event, 0.82)}
+              onPointerMove={moveImage}
+              onPointerUp={endDrag}
               style={themeStyle}
             >
               <HeroPreviewBackdrop
@@ -3563,6 +3647,11 @@ function HeroPhotoSection({
                 layout={layout}
                 mode="mobile"
               />
+              {heroImage ? (
+                <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full bg-stone-950/70 px-3 py-1 text-xs font-semibold text-white">
+                  Drag to reposition
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
