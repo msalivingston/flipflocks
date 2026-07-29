@@ -81,6 +81,19 @@ type SellerReportCustomerRow = {
   last_name: string | null;
   phone: string | null;
   business_name: string | null;
+  delivery_address_line1: string | null;
+  delivery_address_line2: string | null;
+  delivery_city: string | null;
+  delivery_state: string | null;
+  delivery_postal_code: string | null;
+  delivery_country: string | null;
+  internal_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  order_count: number | null;
+  open_order_count: number | null;
+  lifetime_order_total: number | null;
+  latest_order_created_at: string | null;
 };
 
 type ReportData = {
@@ -107,14 +120,31 @@ type ItemSummaryRow = {
 };
 
 type CustomerSummaryRow = {
+  businessName: string;
+  createdAt: string;
   customerEmail: string;
   customerId: string;
+  customerFirstName: string;
+  customerLastName: string;
   customerName: string;
   customerPhone: string;
+  internalNotes: string;
   itemsBought: number;
   lastOrder: string;
+  lastOrderTotal: number;
+  latestOrderAt: string;
+  lifetimeOrderTotal: number;
+  mailingAddressLine1: string;
+  mailingAddressLine2: string;
+  mailingCity: string;
+  mailingCountry: string;
+  mailingPostalCode: string;
+  mailingState: string;
+  openOrders: number;
   orders: number;
+  totalOrders: number;
   totalSpent: number;
+  updatedAt: string;
 };
 
 const tabs: { label: string; value: ReportTab }[] = [
@@ -213,9 +243,9 @@ export function ReportsDashboard() {
           .limit(2000)
           .returns<SellerReportItemRow[]>(),
         supabase
-          .from("seller_customer_summary")
+          .from("seller_customer_detail")
           .select(
-            "customer_id, email, first_name, last_name, phone, business_name",
+            "customer_id, email, first_name, last_name, phone, business_name, delivery_address_line1, delivery_address_line2, delivery_city, delivery_state, delivery_postal_code, delivery_country, internal_notes, created_at, updated_at, order_count, open_order_count, lifetime_order_total, latest_order_created_at",
           )
           .eq("store_id", seller.store_id)
           .limit(1000)
@@ -256,6 +286,10 @@ export function ReportsDashboard() {
     () =>
       new Map(data.customers.map((customer) => [customer.customer_id, customer])),
     [data.customers],
+  );
+  const latestOrderTotalByCustomer = useMemo(
+    () => buildLatestOrderTotalByCustomer(data.orders),
+    [data.orders],
   );
   const dateRangeLabel = getDateRangeLabel(dateSettings);
 
@@ -345,8 +379,17 @@ export function ReportsDashboard() {
       .filter(isSaleOrder)
       .filter((order) => isOrderInDateRange(order, dateSettings));
 
-    return buildCustomerSummaries(saleOrders, customerLookup);
-  }, [customerLookup, data.orders, dateSettings]);
+    return buildCustomerSummaries(
+      saleOrders,
+      customerLookup,
+      latestOrderTotalByCustomer,
+    );
+  }, [
+    customerLookup,
+    data.orders,
+    dateSettings,
+    latestOrderTotalByCustomer,
+  ]);
 
   const filteredCustomerRows = useMemo(() => {
     const threshold = getAmountThreshold(
@@ -1658,6 +1701,7 @@ function buildItemSummaries(items: SellerReportItemRow[]) {
 function buildCustomerSummaries(
   orders: SellerReportOrderRow[],
   customers: Map<string, SellerReportCustomerRow>,
+  latestOrderTotalByCustomer: Map<string, number>,
 ) {
   const summaries = new Map<string, CustomerSummaryRow>();
 
@@ -1677,14 +1721,36 @@ function buildCustomerSummaries(
     }
 
     summaries.set(customerId, {
+      businessName: customer?.business_name ?? "",
+      createdAt: customer?.created_at ?? "",
       customerEmail: customer?.email ?? order.buyer_email_snapshot ?? "",
+      customerFirstName:
+        customer?.first_name ?? order.buyer_first_name_snapshot ?? "",
       customerId,
+      customerLastName:
+        customer?.last_name ?? order.buyer_last_name_snapshot ?? "",
       customerName: customer ? formatCustomerName(customer) : formatCustomerName(order),
       customerPhone: customer?.phone ?? order.buyer_phone_snapshot ?? "",
+      internalNotes: customer?.internal_notes ?? "",
       itemsBought: order.total_item_quantity ?? 0,
       lastOrder: order.created_at,
+      lastOrderTotal: customer
+        ? latestOrderTotalByCustomer.get(customer.customer_id) ?? 0
+        : order.total_amount ?? 0,
+      latestOrderAt: customer?.latest_order_created_at ?? order.created_at,
+      lifetimeOrderTotal:
+        customer?.lifetime_order_total ?? order.total_amount ?? 0,
+      mailingAddressLine1: customer?.delivery_address_line1 ?? "",
+      mailingAddressLine2: customer?.delivery_address_line2 ?? "",
+      mailingCity: customer?.delivery_city ?? "",
+      mailingCountry: customer?.delivery_country ?? "",
+      mailingPostalCode: customer?.delivery_postal_code ?? "",
+      mailingState: customer?.delivery_state ?? "",
+      openOrders: customer?.open_order_count ?? 0,
       orders: 1,
+      totalOrders: customer?.order_count ?? 1,
       totalSpent: order.total_amount ?? 0,
+      updatedAt: customer?.updated_at ?? "",
     });
   }
 
@@ -1695,6 +1761,36 @@ function buildCustomerSummaries(
 
     return second.orders - first.orders;
   });
+}
+
+function buildLatestOrderTotalByCustomer(orders: SellerReportOrderRow[]) {
+  const latestOrders = new Map<
+    string,
+    { createdAt: string; totalAmount: number }
+  >();
+
+  for (const order of orders) {
+    if (!order.customer_id || !isSaleOrder(order)) continue;
+
+    const existing = latestOrders.get(order.customer_id);
+    if (
+      !existing ||
+      new Date(order.created_at).getTime() >
+        new Date(existing.createdAt).getTime()
+    ) {
+      latestOrders.set(order.customer_id, {
+        createdAt: order.created_at,
+        totalAmount: order.total_amount ?? 0,
+      });
+    }
+  }
+
+  return new Map(
+    Array.from(latestOrders.entries()).map(([customerId, order]) => [
+      customerId,
+      order.totalAmount,
+    ]),
+  );
 }
 
 function buildOrderItemSummaryMap(items: SellerReportItemRow[]) {
@@ -1790,23 +1886,55 @@ function buildCustomersCsvRows(
 ) {
   return [
     [
-      "Customer Name",
-      "Customer Email",
-      "Customer Phone",
-      "Orders",
-      "Items Bought",
-      "Total Spent",
+      "Customer ID",
+      "First Name",
+      "Last Name",
+      "Farm or Business Name",
+      "Email",
+      "Phone",
+      "Mailing Address Line 1",
+      "Mailing Address Line 2",
+      "Mailing City",
+      "Mailing State",
+      "Mailing ZIP Code",
+      "Mailing Country",
+      "Private Notes",
+      "Customer Created Date",
+      "Last Updated Date",
+      "Orders in Date Range",
+      "Items Purchased in Date Range",
+      "Total Spent in Date Range",
+      "Total Orders",
+      "Working/Open Orders",
+      "Lifetime Total",
       "Last Order",
+      "Last Order Total",
       "Date Range",
     ],
     ...rows.map((row) => [
-      row.customerName,
+      row.customerId,
+      row.customerFirstName,
+      row.customerLastName,
+      row.businessName,
       row.customerEmail,
       row.customerPhone,
+      row.mailingAddressLine1,
+      row.mailingAddressLine2,
+      row.mailingCity,
+      row.mailingState,
+      row.mailingPostalCode,
+      row.mailingCountry,
+      row.internalNotes,
+      formatCsvDateTime(row.createdAt),
+      formatCsvDateTime(row.updatedAt),
       `${row.orders}`,
       `${row.itemsBought}`,
       formatCsvNumber(row.totalSpent),
-      formatShortDate(row.lastOrder),
+      `${row.totalOrders}`,
+      `${row.openOrders}`,
+      formatCsvNumber(row.lifetimeOrderTotal),
+      formatCsvDateTime(row.latestOrderAt),
+      formatCsvNumber(row.lastOrderTotal),
       dateRangeLabel,
     ]),
   ];
@@ -2011,6 +2139,18 @@ function formatShortDate(value: string | null) {
 
   return new Intl.DateTimeFormat("en-US", {
     day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatCsvDateTime(value: string | null) {
+  if (!value) return "";
+
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
     month: "short",
     year: "numeric",
   }).format(new Date(value));
