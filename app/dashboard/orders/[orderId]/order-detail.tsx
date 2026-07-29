@@ -44,6 +44,7 @@ type SellerOrderDetailRow = {
   canceled_at: string | null;
   archived_at: string | null;
   archived_by: string | null;
+  customer_id: string | null;
   buyer_first_name_snapshot: string | null;
   buyer_last_name_snapshot: string | null;
   buyer_email_snapshot: string | null;
@@ -183,7 +184,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         supabase
           .from("seller_order_management")
           .select(
-            "order_id, order_number, order_source, order_status, payment_method, payment_status, payment_provider, provider_payment_status, paid_at, created_at, ready_for_pickup_at, fulfilled_at, canceled_at, archived_at, archived_by, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, pickup_note, buyer_notes, subtotal_amount, tax_fee_label_snapshot, tax_fee_amount, total_amount, item_count, total_item_quantity, pickup_option_label_snapshot",
+            "order_id, order_number, order_source, order_status, payment_method, payment_status, payment_provider, provider_payment_status, paid_at, created_at, ready_for_pickup_at, fulfilled_at, canceled_at, archived_at, archived_by, customer_id, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, pickup_note, buyer_notes, subtotal_amount, tax_fee_label_snapshot, tax_fee_amount, total_amount, item_count, total_item_quantity, pickup_option_label_snapshot",
           )
           .eq("store_id", seller.store_id)
           .eq("order_id", orderId)
@@ -806,7 +807,97 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   return (
     <>
     <div className="order-detail-screen-content mx-auto flex w-full max-w-[1260px] flex-col gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-7">
-      <header className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <header className="sticky top-[4.15rem] z-20 -mx-4 -mt-3 border-b border-stone-200/80 bg-white px-4 py-3 sm:-mx-6 sm:px-6 lg:hidden">
+        <div className="flex items-center gap-3">
+          <Link
+            aria-label="Back to Orders"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full text-stone-800 transition hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+            href="/dashboard/orders"
+          >
+            <ArrowLeft aria-hidden="true" className="size-5" />
+          </Link>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-xl font-bold text-stone-950">
+              Order #{order.order_number}
+            </h1>
+            <p className="mt-0.5 truncate text-sm text-stone-500">
+              {formatDateTime(order.created_at)}
+            </p>
+          </div>
+          <QuickActionsMenu
+            canArchive={canArchiveOrder(order)}
+            canCancel={canCancelOrder(order)}
+            canMarkComplete={canMarkComplete(order, remainingPickupQuantity)}
+            canMarkPaid={canMarkPaymentPaid(order)}
+            canMarkUnfulfilled={canMarkUnfulfilled(order)}
+            canMarkUnpaid={canMarkPaymentUnpaid(order)}
+            canResendConfirmation={canResendOrderConfirmation}
+            canUnarchive={canUnarchiveOrder(order)}
+            editHref={
+              canEditOrder(order)
+                ? `/dashboard/orders/${order.order_id}/edit`
+                : undefined
+            }
+            isBusy={isSaving || isCanceling || isResendingConfirmation || isArchiving}
+            isOpen={isActionsMenuOpen}
+            label="Actions"
+            onArchive={openArchiveDialog}
+            onCancel={openCancelPanel}
+            onMarkComplete={() => {
+              setActionError(null);
+              setActionMessage(null);
+              setActionWarning(null);
+              setFulfillmentError(null);
+              setUnfulfillmentError(null);
+              setCancellationError(null);
+              setArchiveError(null);
+              setShowCancelPanel(false);
+              setShowArchiveDialog(false);
+              setShowUnfulfillmentDialog(false);
+              setShowResendConfirmationDialog(false);
+              setShowUnarchiveDialog(false);
+              setShowFulfillmentDialog(true);
+              setIsActionsMenuOpen(false);
+            }}
+            onMarkPaid={() => void markOrderPaid()}
+            onMarkUnfulfilled={() => {
+              setActionError(null);
+              setActionMessage(null);
+              setActionWarning(null);
+              setFulfillmentError(null);
+              setUnfulfillmentError(null);
+              setCancellationError(null);
+              setArchiveError(null);
+              setShowCancelPanel(false);
+              setShowArchiveDialog(false);
+              setShowFulfillmentDialog(false);
+              setShowResendConfirmationDialog(false);
+              setShowUnarchiveDialog(false);
+              setShowUnfulfillmentDialog(true);
+              setIsActionsMenuOpen(false);
+            }}
+            onMarkUnpaid={() => void markOrderUnpaid()}
+            onOpenChange={setIsActionsMenuOpen}
+            onPrint={printOrder}
+            onResendConfirmation={openResendConfirmationDialog}
+            onUnarchive={openUnarchiveDialog}
+            summaryClassName="min-h-11 rounded-lg !border-emerald-800 !bg-emerald-800 px-3 text-sm !text-white hover:!border-emerald-900 hover:!bg-emerald-900 hover:!text-white sm:min-h-11"
+          />
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-stone-100 pt-3">
+          <StatusPill tone={getSavedOrderStatusTone(order.order_status)}>
+            {formatSavedOrderStatus(order.order_status)}
+          </StatusPill>
+          <StatusPill tone={getSavedPaymentStatusTone(order.payment_status)}>
+            {formatSavedPaymentStatus(order.payment_status)}
+          </StatusPill>
+          {order.archived_at ? (
+            <StatusPill tone="bg-stone-200 text-stone-700">ARCHIVED</StatusPill>
+          ) : null}
+        </div>
+      </header>
+
+      <header className="hidden flex-col gap-3 lg:flex lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-sm font-bold uppercase text-emerald-800 sm:text-xs">
             Storefront order
@@ -906,16 +997,18 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         </div>
       </header>
 
-      <SellerCard className="p-3.5 shadow-[0_12px_30px_rgba(46,39,25,0.045)] sm:p-4">
+      <SellerCard className="hidden p-3.5 shadow-[0_12px_30px_rgba(46,39,25,0.045)] sm:p-4 lg:block">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3.5">
             <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-lg font-bold text-emerald-900">
               {getCustomerInitials(customerName)}
             </span>
             <div className="min-w-0">
-              <h2 className="truncate text-lg font-bold text-stone-950">
-                {customerName}
-              </h2>
+              <CustomerNameLink
+                className="block truncate text-lg font-bold"
+                customerId={order.customer_id}
+                customerName={customerName}
+              />
               <p className="mt-0.5 text-sm font-semibold text-stone-700">
                 {order.total_item_quantity ?? 0} item
                 {(order.total_item_quantity ?? 0) === 1 ? "" : "s"}{" "}
@@ -936,6 +1029,13 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           </div>
         </div>
       </SellerCard>
+
+      <MobileCustomerSection
+        customerId={order.customer_id}
+        customerName={customerName}
+        email={order.buyer_email_snapshot}
+        phone={order.buyer_phone_snapshot}
+      />
 
       {actionMessage ? (
         <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
@@ -1065,7 +1165,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                     />
                   ))}
                 </div>
-                <dl className="border-t border-stone-200/80 bg-[#fffdf8] px-4 py-2.5 text-sm">
+                <dl className="border-t border-stone-200/80 bg-transparent px-4 py-2.5 text-sm lg:bg-[#fffdf8]">
                   <RequestedTotalRow
                     label="Subtotal"
                     value={formatCurrency(order.subtotal_amount)}
@@ -1108,16 +1208,28 @@ export function OrderDetail({ orderId }: { orderId: string }) {
             isDeliveryOrder={isDeliveryOrder}
             order={order}
           />
+
+          <MobilePaymentSection order={order} />
         </main>
 
-        <aside className="grid h-fit gap-4">
+        <aside className="hidden h-fit gap-4 lg:grid">
           <SellerCard className="p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)]">
             <h2 className="text-lg font-bold text-stone-950">Buyer contact</h2>
             <div className="mt-4 grid gap-3.5">
-              <ContactLine
-                glyph="/glyphs/person.png"
-                value={customerName}
-              />
+              <div className="flex min-w-0 items-start gap-3 text-sm">
+                <Image
+                  className="shrink-0"
+                  src="/glyphs/person.png"
+                  alt=""
+                  width={18}
+                  height={18}
+                />
+                <CustomerNameLink
+                  className="min-w-0 truncate"
+                  customerId={order.customer_id}
+                  customerName={customerName}
+                />
+              </div>
               <ContactEmailLine
                 emptyValue="No email provided"
                 glyph="/glyphs/envelope.png"
@@ -1137,6 +1249,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           </SellerCard>
         </aside>
       </div>
+
     </div>
       {isPrintPortalReady && typeof document !== "undefined"
         ? createPortal(
@@ -1237,6 +1350,123 @@ function OrderItemRow({
   );
 }
 
+function MobileCustomerSection({
+  customerId,
+  customerName,
+  email,
+  phone,
+}: {
+  customerId: string | null;
+  customerName: string;
+  email: string | null;
+  phone: string | null;
+}) {
+  const phoneHref = phone ? formatPhoneHref(phone) : null;
+
+  return (
+    <SellerCard className="p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)] lg:hidden">
+      <h2 className="text-sm font-bold uppercase tracking-[0.08em] text-stone-500">
+        Customer
+      </h2>
+      <CustomerNameLink
+        className="mt-2 block text-xl font-bold"
+        customerId={customerId}
+        customerName={customerName}
+      />
+      {phone ? (
+        <p className="mt-1 text-sm text-stone-600">{phone}</p>
+      ) : null}
+      {email ? (
+        <p className="mt-0.5 truncate text-sm text-stone-600">{email}</p>
+      ) : null}
+      {phoneHref || email ? (
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          {phoneHref ? (
+            <>
+              <a
+                className="seller-small-button min-h-12 gap-3.5 rounded-lg px-3"
+                href={`tel:${phoneHref}`}
+              >
+                <Image src="/glyphs/phone.png" alt="" width={17} height={17} />
+                Call
+              </a>
+              <a
+                className="seller-small-button min-h-12 gap-3.5 rounded-lg px-3"
+                href={`sms:${phoneHref}`}
+              >
+                <Image src="/glyphs/chat.png" alt="" width={17} height={17} />
+                Text
+              </a>
+            </>
+          ) : null}
+          {email ? (
+            <a
+              className="seller-small-button min-h-12 gap-3.5 rounded-lg px-3"
+              href={`mailto:${email}`}
+            >
+              <Image src="/glyphs/envelope.png" alt="" width={17} height={17} />
+              Email
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+    </SellerCard>
+  );
+}
+
+function CustomerNameLink({
+  className = "",
+  customerId,
+  customerName,
+}: {
+  className?: string;
+  customerId: string | null;
+  customerName: string;
+}) {
+  if (!customerId) {
+    return <span className={`text-stone-950 ${className}`}>{customerName}</span>;
+  }
+
+  return (
+    <Link
+      className={`text-emerald-800 underline-offset-4 transition hover:text-emerald-900 hover:underline focus:text-emerald-900 focus:underline focus:outline-none focus:ring-2 focus:ring-emerald-700/30 ${className}`}
+      href={`/dashboard/customers/${customerId}`}
+    >
+      {customerName}
+    </Link>
+  );
+}
+
+function MobilePaymentSection({ order }: { order: SellerOrderDetailRow }) {
+  return (
+    <SellerCard className="p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)] lg:hidden">
+      <h2 className="text-lg font-bold text-stone-950">Payment</h2>
+      <dl className="mt-3 grid gap-3 text-sm">
+        <div className="flex items-center justify-between gap-4">
+          <dt className="font-bold text-stone-700">Payment method</dt>
+          <dd className="text-right text-stone-700">
+            {formatPaymentMethod(order.payment_method)}
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <dt className="font-bold text-stone-700">Payment status</dt>
+          <dd>
+            <StatusPill tone={getSavedPaymentStatusTone(order.payment_status)}>
+              {formatSavedPaymentStatus(order.payment_status)}
+            </StatusPill>
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-4 border-t border-stone-200 pt-3">
+          <dt className="text-base font-bold text-stone-950">Order total</dt>
+          <dd className="text-lg font-bold text-stone-950">
+            {formatCurrency(order.total_amount)}
+          </dd>
+        </div>
+      </dl>
+    </SellerCard>
+  );
+}
+
 function FulfillmentNotesSection({
   address,
   deliveryFee,
@@ -1268,10 +1498,23 @@ function FulfillmentNotesSection({
       <dl className="mt-2 grid gap-1.5 text-sm leading-5 text-stone-700">
         {rows.map((row) => (
           <div
-            className="grid gap-1 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-3"
+            className={`grid gap-1 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-3 ${
+              row.label === "Customer note"
+                ? "mt-2 border-t border-stone-200 pt-3 lg:mt-0 lg:border-0 lg:pt-0"
+                : ""
+            }`}
             key={row.label}
           >
-            <dt className="font-bold text-stone-950">{row.label}</dt>
+            <dt className="font-bold text-stone-950">
+              {row.label === "Customer note" ? (
+                <>
+                  <span className="lg:hidden">Buyer notes</span>
+                  <span className="hidden lg:inline">{row.label}</span>
+                </>
+              ) : (
+                row.label
+              )}
+            </dt>
             <dd className="whitespace-pre-line break-words">{row.value}</dd>
           </div>
         ))}
@@ -1823,8 +2066,12 @@ function QuickActionsMenu({
   canMarkUnpaid,
   canResendConfirmation,
   canUnarchive,
+  editHref,
   isBusy,
   isOpen,
+  label = "More actions",
+  menuPlacement = "down",
+  summaryClassName = "",
   onArchive,
   onCancel,
   onMarkComplete,
@@ -1832,6 +2079,7 @@ function QuickActionsMenu({
   onMarkUnfulfilled,
   onMarkUnpaid,
   onOpenChange,
+  onPrint,
   onResendConfirmation,
   onUnarchive,
 }: {
@@ -1843,8 +2091,12 @@ function QuickActionsMenu({
   canMarkUnpaid: boolean;
   canResendConfirmation: boolean;
   canUnarchive: boolean;
+  editHref?: string;
   isBusy: boolean;
   isOpen: boolean;
+  label?: string;
+  menuPlacement?: "down" | "up";
+  summaryClassName?: string;
   onArchive: () => void;
   onCancel: () => void;
   onMarkComplete: () => void;
@@ -1852,6 +2104,7 @@ function QuickActionsMenu({
   onMarkUnfulfilled: () => void;
   onMarkUnpaid: () => void;
   onOpenChange: (isOpen: boolean) => void;
+  onPrint?: () => void;
   onResendConfirmation: () => void;
   onUnarchive: () => void;
 }) {
@@ -1861,11 +2114,34 @@ function QuickActionsMenu({
       open={isOpen}
       onToggle={(event) => onOpenChange(event.currentTarget.open)}
     >
-      <summary className={`${orderDetailButtonClass} cursor-pointer list-none`}>
-        More actions
+      <summary
+        className={`${orderDetailButtonClass} cursor-pointer list-none ${summaryClassName}`}
+      >
+        {label}
         <ChevronDown aria-hidden="true" className="size-4" />
       </summary>
-      <div className="absolute right-0 z-20 mt-2 w-60 rounded-xl border border-stone-200 bg-white p-2 shadow-[0_18px_40px_rgba(46,39,25,0.14)]">
+      <div
+        className={`absolute right-0 z-20 w-60 rounded-xl border border-stone-200 bg-white p-2 shadow-[0_18px_40px_rgba(46,39,25,0.14)] ${
+          menuPlacement === "up" ? "bottom-full mb-2" : "mt-2"
+        }`}
+      >
+        {onPrint ? (
+          <QuickActionButton
+            disabled={isBusy}
+            glyph="/glyphs/clipboard.png"
+            label="Print order"
+            onClick={onPrint}
+          />
+        ) : null}
+        {editHref ? (
+          <Link
+            className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold text-stone-950 transition hover:bg-emerald-50 hover:text-emerald-900 focus:bg-emerald-50 focus:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/25"
+            href={editHref}
+          >
+            <Image src="/glyphs/pencil.png" alt="" width={18} height={18} />
+            Edit order
+          </Link>
+        ) : null}
         {canMarkComplete ? (
           <QuickActionButton
             disabled={isBusy}
@@ -2398,11 +2674,13 @@ function CancellationDialog({
 
 function MobileAmount({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 rounded-lg bg-[#fbfaf6] px-3 py-2 text-left min-[360px]:text-right sm:rounded-none sm:bg-transparent sm:p-0 sm:text-right sm:tabular-nums">
-      <span className="block text-sm font-bold uppercase text-stone-500 sm:hidden">
+    <div className="min-w-0 py-1 text-left min-[360px]:text-right sm:p-0 sm:text-right sm:tabular-nums">
+      <span className="block text-xs font-bold uppercase tracking-[0.04em] text-stone-500 sm:hidden">
         {label}
       </span>
-      <span className="break-words text-base font-bold text-stone-950">{value}</span>
+      <span className="break-words text-sm font-bold text-stone-950 sm:text-base">
+        {value}
+      </span>
     </div>
   );
 }
@@ -2421,7 +2699,7 @@ function ItemThumbnail({
   const shouldShowImage = Boolean(displayUrl) && !hasImageError;
 
   return (
-    <span className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-[#f4f8ef] sm:size-14">
+    <span className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-white sm:size-14 lg:bg-[#f4f8ef]">
       {shouldShowImage ? (
         <Image
           className="object-cover"
