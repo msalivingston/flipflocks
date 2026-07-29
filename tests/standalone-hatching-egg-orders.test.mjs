@@ -69,7 +69,7 @@ test("normalizes standalone hatching eggs to the shared inventory shape", () => 
   assert.equal(row.id, "egg-1");
   assert.equal(row.title, standaloneEgg.item_name);
   assert.match(row.detailLabel, /Chicken/);
-  assert.match(row.detailLabel, /Blue-shell hatching eggs/);
+  assert.doesNotMatch(row.detailLabel, /Blue-shell hatching eggs/);
   assert.equal(row.quantity_available, 12);
   assert.equal(row.effective_unit_price, 6.5);
   assert.equal(row.operational_availability_status, "coming_soon");

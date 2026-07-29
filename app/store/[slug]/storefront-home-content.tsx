@@ -387,10 +387,11 @@ function toProcessedPoultryCard(
     href: `/store/${item.store_slug}/processed-poultry/${item.processed_poultry_inventory_item_id}`,
     imageAlt: item.featured_image_alt_text || item.product_name,
     imageUrl: item.featured_image_url,
-    meta: [item.poultry_type, item.product_type].filter(Boolean).join(" - "),
+    meta: [item.product_type, item.poultry_type].filter(Boolean).join(" - "),
     price: formatCurrency(item.unit_price),
     speciesFilter: item.poultry_type,
     title: item.product_name,
+    typeLabel: "Poultry Products",
   };
 }
 
@@ -405,9 +406,10 @@ function toEquipmentCard(item: StorefrontEquipmentItem): StorefrontListingCard {
     href: `/store/${item.store_slug}/equipment/${item.equipment_inventory_item_id}`,
     imageAlt: item.featured_image_alt_text || item.item_name,
     imageUrl: item.featured_image_url,
-    meta: item.category,
+    meta: [item.category, item.condition].filter(Boolean).join(" - "),
     price: formatCurrency(item.unit_price),
     title: item.item_name,
+    typeLabel: "Equipment & Supplies",
   };
 }
 
@@ -440,6 +442,11 @@ function toProductCard(product: StorefrontProduct): StorefrontListingCard {
     price: product.pricingLabel || "See options",
     speciesFilter: product.speciesName,
     title: product.name,
+    typeLabel:
+      product.productSource === "hatching_egg_inventory" ||
+      product.batchType === "hatching_eggs"
+        ? "Hatching Eggs"
+        : "Live Birds",
   };
 }
 

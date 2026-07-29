@@ -222,7 +222,7 @@ export default async function StorefrontProcessedPoultryPage({
           <section className="hidden gap-5 lg:grid lg:pt-1">
             <div>
               <p className="storefront-primary-color text-xs font-bold uppercase tracking-[0.18em] text-[#073f1e]">
-                {[item.poultry_type, item.product_type].filter(Boolean).join(" - ")}
+                Poultry Products
               </p>
               <h1
                 className={cx(
@@ -232,6 +232,11 @@ export default async function StorefrontProcessedPoultryPage({
               >
                 {item.product_name}
               </h1>
+              <p className="mt-2 text-sm font-semibold text-stone-600">
+                {[item.product_type, item.poultry_type, item.package_size]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
             </div>
 
             <p className="max-w-2xl whitespace-pre-line text-base leading-7 text-stone-700">
@@ -269,7 +274,7 @@ function MobileProcessedIdentity({
   item: StorefrontProcessedPoultryItem;
   location: string;
 }) {
-  const meta = [item.poultry_type, item.product_type, item.package_size]
+  const meta = [item.product_type, item.poultry_type, item.package_size]
     .filter(Boolean)
     .join(" · ");
 

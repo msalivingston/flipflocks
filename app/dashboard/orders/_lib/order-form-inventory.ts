@@ -43,16 +43,16 @@ export function normalizeHatchingEggInventoryRow(
   row: HatchingEggInventoryRow,
 ): InventorySearchRow {
   const availability = row.available_date
-    ? `Available ${row.available_date}`
+    ? `Available ${formatCompactDate(row.available_date)}`
     : null;
 
   return {
     allowInventoryOverride: false,
     available_date: row.available_date,
     category: "hatching_eggs",
-    detailLabel: [row.species_name, row.description, availability]
+    detailLabel: [row.species_name, availability]
       .filter(Boolean)
-      .join(" - "),
+      .join(" · "),
     effective_unit_price: row.price ?? 0,
     id: row.hatching_egg_inventory_item_id,
     itemType: "hatching_egg_inventory",
@@ -77,7 +77,7 @@ export function normalizeListingInventoryRow(
   return {
     allowInventoryOverride: true,
     category,
-    detailLabel: [inventoryType, age].filter(Boolean).join(" - "),
+    detailLabel: [inventoryType, age].filter(Boolean).join(" · "),
     effective_unit_price: row.effective_unit_price ?? 0,
     id: row.inventory_item_id,
     itemType: "listing_inventory",
@@ -93,7 +93,7 @@ export function normalizeEquipmentInventoryRow(
   return {
     allowInventoryOverride: false,
     category: "equipment",
-    detailLabel: [row.category, row.condition].filter(Boolean).join(" - "),
+    detailLabel: [row.category, row.condition].filter(Boolean).join(" · "),
     effective_unit_price: row.price ?? 0,
     id: row.equipment_inventory_item_id,
     itemType: "equipment_inventory",
@@ -109,9 +109,9 @@ export function normalizeProcessedPoultryInventoryRow(
   return {
     allowInventoryOverride: false,
     category: "processed_poultry",
-    detailLabel: [row.poultry_type, row.product_type, row.package_size]
+    detailLabel: [row.product_type, row.poultry_type, row.package_size]
       .filter(Boolean)
-      .join(" - "),
+      .join(" · "),
     effective_unit_price: row.price ?? 0,
     id: row.processed_poultry_inventory_item_id,
     itemType: "processed_poultry_inventory",
@@ -180,10 +180,10 @@ export function getInventoryCategorySort(category: BrowseInventoryFilter) {
 }
 
 export function formatInventoryCategoryLabel(category: BrowseInventoryFilter) {
-  if (category === "poultry") return "Live poultry";
-  if (category === "hatching_eggs") return "Hatching eggs";
-  if (category === "processed_poultry") return "Poultry product";
-  if (category === "equipment") return "Equipment";
+  if (category === "poultry") return "Live Birds";
+  if (category === "hatching_eggs") return "Hatching Eggs";
+  if (category === "processed_poultry") return "Poultry Products";
+  if (category === "equipment") return "Equipment & Supplies";
 
   return "Inventory";
 }
@@ -226,9 +226,19 @@ export function getManualOrderPayloadItemType(line: OrderLine) {
 }
 
 export function formatInventoryMetadata(item: InventorySearchRow) {
-  return `${item.detailLabel} - ${formatInventoryCategoryLabel(item.category)}`;
+  return [formatInventoryCategoryLabel(item.category), item.detailLabel]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 export function formatBrowseInventoryMetadata(item: InventorySearchRow) {
-  return `${item.detailLabel} - ${formatInventoryCategoryLabel(item.category)}`;
+  return formatInventoryMetadata(item);
+}
+
+function formatCompactDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(`${value.slice(0, 10)}T00:00:00`));
 }

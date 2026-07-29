@@ -170,7 +170,7 @@ export default async function StorefrontProductPage({
           <section className="hidden gap-5 lg:grid lg:pt-1">
             <div>
               <p className="storefront-primary-color text-xs font-bold uppercase tracking-[0.18em] text-[#073f1e]">
-                {product.speciesName}
+                {isHatchingEggProduct ? "Hatching Eggs" : "Live Birds"}
               </p>
               <h1
                 className={cx(
@@ -180,6 +180,9 @@ export default async function StorefrontProductPage({
               >
                 {product.name}
               </h1>
+              <p className="mt-2 text-sm font-semibold text-stone-600">
+                {product.speciesName}
+              </p>
             </div>
 
             <p className="max-w-2xl whitespace-pre-line text-base leading-7 text-stone-700">
@@ -218,11 +221,14 @@ export default async function StorefrontProductPage({
 
 function MobileProductIdentity({ product }: { product: StorefrontProduct }) {
   const description = formatProductDescription(product.description);
+  const isHatchingEggProduct =
+    product.productSource === "hatching_egg_inventory" ||
+    product.batchType === "hatching_eggs";
 
   return (
     <section className="grid gap-1.5 lg:hidden">
       <p className="storefront-primary-color text-[0.72rem] font-bold uppercase tracking-[0.12em] text-[#073f1e]">
-        {product.speciesName}
+        {isHatchingEggProduct ? "Hatching Eggs" : "Live Birds"}
       </p>
       <h1
         className={cx(
@@ -232,6 +238,9 @@ function MobileProductIdentity({ product }: { product: StorefrontProduct }) {
       >
         {product.name}
       </h1>
+      <p className="text-sm font-semibold text-stone-700">
+        {product.speciesName}
+      </p>
       {description ? (
         <p className="line-clamp-2 text-[0.95rem] leading-5 text-stone-700">
           {description}

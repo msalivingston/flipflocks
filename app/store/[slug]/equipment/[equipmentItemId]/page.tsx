@@ -224,7 +224,7 @@ export default async function StorefrontEquipmentPage({
           <section className="hidden gap-5 lg:grid lg:pt-1">
             <div>
               <p className="storefront-primary-color text-xs font-bold uppercase tracking-[0.18em] text-[#073f1e]">
-                {item.category}
+                Equipment & Supplies
               </p>
               <h1
                 className={cx(
@@ -234,6 +234,11 @@ export default async function StorefrontEquipmentPage({
               >
                 {item.item_name}
               </h1>
+              <p className="mt-2 text-sm font-semibold text-stone-600">
+                {[item.category, item.condition ? `${item.condition} condition` : null]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
             </div>
 
             <p className="max-w-2xl whitespace-pre-line text-base leading-7 text-stone-700">

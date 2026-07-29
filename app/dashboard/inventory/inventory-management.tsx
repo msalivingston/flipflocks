@@ -3753,7 +3753,7 @@ function getEmptyInventoryDescription(tab: InventoryProductTab) {
 
 function getInventoryItemSubtitle(item: FlatInventoryItem) {
   if (item.kind === "hatching_egg") {
-    return [item.species, item.typeSex].filter(Boolean).join(" - ");
+    return [item.typeSex, item.species].filter(Boolean).join(" · ");
   }
 
   if (item.kind === "processed_poultry") {

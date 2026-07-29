@@ -29,6 +29,7 @@ export type StorefrontListingCard = {
   imageAlt: string;
   imageUrl: string | null;
   meta: string;
+  typeLabel: string;
   price: string;
   speciesFilter?: string | null;
   title: string;
@@ -811,11 +812,16 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
         </div>
         <div className="flex min-w-0 flex-col pr-0.5">
           <p className="storefront-primary-color truncate text-[0.76rem] font-bold leading-tight text-emerald-700">
-            {card.meta}
+            {card.typeLabel}
           </p>
           <h3 className="mt-px line-clamp-2 text-[1.06rem] font-bold leading-[1.08] text-stone-950 min-[390px]:text-[1.13rem]">
             {card.title}
           </h3>
+          {card.meta ? (
+            <p className="mt-0.5 truncate text-[0.78rem] font-semibold text-stone-600">
+              {card.meta}
+            </p>
+          ) : null}
           {card.description ? (
             <p className="mt-0.5 line-clamp-2 text-[0.82rem] leading-4 text-stone-600">
               {card.description}
@@ -841,11 +847,16 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
       >
         <div className="px-3.5 pb-2 pt-3 lg:px-4 lg:pb-2.5 lg:pt-4">
           <p className="storefront-primary-color truncate text-[0.7rem] font-bold uppercase tracking-[0.08em] text-emerald-700">
-            {card.meta}
+            {card.typeLabel}
           </p>
           <h3 className="mt-1 line-clamp-1 text-base font-semibold leading-snug text-stone-950 lg:mt-1.5">
             {card.title}
           </h3>
+          {card.meta ? (
+            <p className="mt-1 truncate text-xs font-semibold text-stone-600">
+              {card.meta}
+            </p>
+          ) : null}
         </div>
         <div className="relative">
           <ListingPhoto alt={card.imageAlt} aspect="square" src={card.imageUrl} />
