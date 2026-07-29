@@ -1,10 +1,9 @@
 -- Allow sellers to save a customer independently of an order. The original
--- customer schema required email and last name because storefront/manual order
--- creation always supplied both.
+-- customer schema required email because storefront/manual order creation
+-- always supplied one.
 
 alter table public.customers
-  alter column email drop not null,
-  alter column last_name drop not null;
+  alter column email drop not null;
 
 create index if not exists customers_store_normalized_email_idx
 on public.customers (store_id, lower(trim(email)))

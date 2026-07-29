@@ -1,5 +1,7 @@
 export type AddCustomerValues = {
-  name: string;
+  firstName: string;
+  lastName: string;
+  businessName: string;
   phone: string;
   email: string;
   street: string;
@@ -10,14 +12,18 @@ export type AddCustomerValues = {
 };
 
 export type AddCustomerErrors = Partial<
-  Record<"name" | "phone" | "email", string>
+  Record<"firstName" | "lastName" | "phone" | "email", string>
 >;
 
 export function validateAddCustomer(values: AddCustomerValues) {
   const errors: AddCustomerErrors = {};
 
-  if (!values.name.trim()) {
-    errors.name = "Enter the customer’s name.";
+  if (!values.firstName.trim()) {
+    errors.firstName = "Enter the customer’s first name.";
+  }
+
+  if (!values.lastName.trim()) {
+    errors.lastName = "Enter the customer’s last name.";
   }
 
   const phoneDigits = normalizePhone(values.phone);
@@ -50,14 +56,6 @@ export function formatPhoneNumber(value: string) {
   }
 
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-}
-
-export function splitCustomerName(value: string) {
-  const parts = value.trim().split(/\s+/).filter(Boolean);
-  return {
-    firstName: parts.shift() ?? "",
-    lastName: parts.join(" ") || null,
-  };
 }
 
 export function findPossibleDuplicate<

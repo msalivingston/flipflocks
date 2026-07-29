@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../../_components/seller-context";
 import {
+  AddCustomerButton,
+  type CreatedCustomer,
+} from "../../customers/add-customer-modal";
+import {
   ErrorState,
   LoadingState,
   SellerCard,
@@ -54,7 +58,7 @@ import { formatCurrency } from "../order-formatters";
 
 type CustomerRow = {
   customer_id: string;
-  email: string;
+  email: string | null;
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
@@ -96,7 +100,6 @@ export function NewManualOrder() {
   const [customerMode, setCustomerMode] = useState<CustomerMode>("existing");
   const [customerQuery, setCustomerQuery] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
-  const [isAddingCustomer, setIsAddingCustomer] = useState(false);
   const [inventoryQuery, setInventoryQuery] = useState("");
   const [isBrowseOpen, setIsBrowseOpen] = useState(false);
   const [browseFilter, setBrowseFilter] = useState<BrowseInventoryFilter>("all");
@@ -104,7 +107,7 @@ export function NewManualOrder() {
   const [browseAddedInventoryItemId, setBrowseAddedInventoryItemId] = useState<
     string | null
   >(null);
-  const [newCustomer, setNewCustomer] = useState({
+  const [newCustomer] = useState({
     email: "",
     firstName: "",
     lastName: "",
@@ -443,7 +446,20 @@ export function NewManualOrder() {
     setSelectedCustomerId(customerId);
     setCustomerMode("existing");
     setCustomerQuery("");
-    setIsAddingCustomer(false);
+    setValidationErrors([]);
+    setSaveError(null);
+  }
+
+  function selectCreatedCustomer(customer: CreatedCustomer) {
+    setCustomers((current) => [
+      customer,
+      ...current.filter(
+        (existing) => existing.customer_id !== customer.customer_id,
+      ),
+    ]);
+    setSelectedCustomerId(customer.customer_id);
+    setCustomerMode("existing");
+    setCustomerQuery("");
     setValidationErrors([]);
     setSaveError(null);
   }
@@ -460,22 +476,6 @@ export function NewManualOrder() {
 
     setPickupNote("");
     setPickupOptionId("");
-  }
-
-  function addNewCustomerInline() {
-    const parsedName = parseFullName(newCustomer.firstName);
-
-    setNewCustomer((current) => ({
-      ...current,
-      firstName: parsedName.firstName,
-      lastName: parsedName.lastName,
-    }));
-    setSelectedCustomerId("");
-    setCustomerMode("new");
-    setIsAddingCustomer(false);
-    setCustomerQuery("");
-    setValidationErrors([]);
-    setSaveError(null);
   }
 
   async function createOrder() {
@@ -652,15 +652,11 @@ export function NewManualOrder() {
         <CustomerSection
           customerMode={customerMode}
           customers={customers}
-          isAddingCustomer={isAddingCustomer}
-          newCustomer={newCustomer}
           query={customerQuery}
           selectedCustomer={selectedCustomer}
           selectedCustomerId={selectedCustomerId}
-          addNewCustomerInline={addNewCustomerInline}
+          onCustomerCreated={selectCreatedCustomer}
           setCustomerMode={setCustomerMode}
-          setIsAddingCustomer={setIsAddingCustomer}
-          setNewCustomer={setNewCustomer}
           setQuery={setCustomerQuery}
           selectCustomer={selectCustomer}
           setSelectedCustomerId={setSelectedCustomerId}
@@ -816,36 +812,22 @@ export function NewManualOrder() {
 function CustomerSection({
   customerMode,
   customers,
-  isAddingCustomer,
-  newCustomer,
   query,
   selectedCustomer,
   selectedCustomerId,
-  addNewCustomerInline,
+  onCustomerCreated,
   setCustomerMode,
-  setIsAddingCustomer,
-  setNewCustomer,
   setQuery,
   selectCustomer,
   setSelectedCustomerId,
 }: {
   customerMode: CustomerMode;
   customers: CustomerRow[];
-  isAddingCustomer: boolean;
-  newCustomer: {
-    email: string;
-    firstName: string;
-    lastName: string;
-    phone: string;
-    businessName: string;
-  };
   query: string;
   selectedCustomer: CustomerRow | undefined;
   selectedCustomerId: string;
-  addNewCustomerInline: () => void;
+  onCustomerCreated: (customer: CreatedCustomer) => void;
   setCustomerMode: (mode: CustomerMode) => void;
-  setIsAddingCustomer: (isAdding: boolean) => void;
-  setNewCustomer: (customer: typeof newCustomer) => void;
   setQuery: (query: string) => void;
   selectCustomer: (customerId: string) => void;
   setSelectedCustomerId: (customerId: string) => void;
@@ -855,13 +837,9 @@ function CustomerSection({
     ? filterCustomers(customers, query).slice(0, 6)
     : [];
   const selectedCustomerLabel =
-    !isAddingCustomer && customerMode === "existing" && selectedCustomer
+    customerMode === "existing" && selectedCustomer
       ? formatCustomerSummary(selectedCustomer)
-      : !isAddingCustomer && customerMode === "new" && newCustomer.email
-        ? formatInlineCustomerSummary(newCustomer)
-        : null;
-  const canAddCustomer =
-    newCustomer.firstName.trim().length > 0 && isEmail(newCustomer.email);
+      : null;
 
   return (
     <SellerCard className="min-w-0 overflow-hidden rounded-2xl p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)] lg:rounded-lg lg:p-3 lg:shadow-sm">
@@ -880,21 +858,16 @@ function CustomerSection({
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
-            setIsAddingCustomer(false);
           }}
         />
-        <button
+        <AddCustomerButton
           className="absolute right-2 top-1/2 inline-flex min-h-10 -translate-y-1/2 items-center rounded-lg bg-emerald-50 px-3 text-sm font-bold text-emerald-800 transition hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-700/25 lg:min-h-8 lg:rounded-md lg:bg-transparent lg:px-2.5"
-          type="button"
-          onClick={() => {
-            setIsAddingCustomer(true);
-            setCustomerMode("new");
-            setSelectedCustomerId("");
-          }}
+          onCreated={onCustomerCreated}
+          requireEmail
         >
           <span className="lg:hidden">+ New</span>
           <span className="hidden lg:inline">+ Add Customer</span>
-        </button>
+        </AddCustomerButton>
       </div>
 
       {canShowResults && customerMode !== "new" ? (
@@ -923,17 +896,13 @@ function CustomerSection({
           ) : (
             <div className="flex items-center justify-between gap-3 px-3 py-2 text-sm text-stone-600">
               <span>No results</span>
-              <button
+              <AddCustomerButton
                 className="font-bold text-emerald-800 hover:text-emerald-900"
-                type="button"
-                onClick={() => {
-                  setIsAddingCustomer(true);
-                  setCustomerMode("new");
-                  setSelectedCustomerId("");
-                }}
+                onCreated={onCustomerCreated}
+                requireEmail
               >
                 Add Customer
-              </button>
+              </AddCustomerButton>
             </div>
           )}
         </div>
@@ -950,7 +919,6 @@ function CustomerSection({
             onClick={() => {
               setCustomerMode("existing");
               setSelectedCustomerId("");
-              setIsAddingCustomer(false);
             }}
           >
             Remove
@@ -958,77 +926,7 @@ function CustomerSection({
         </div>
       ) : null}
 
-      {isAddingCustomer ? (
-        <div className="mt-2 rounded-md border border-stone-200 bg-[#fffdf7] px-3 py-2">
-          <h3 className="text-sm font-bold text-stone-950">Add New Customer</h3>
-          <div className="mt-2 grid gap-3 lg:grid-cols-[1.2fr_1fr_1fr_auto] lg:items-end lg:gap-2">
-            <TextField
-              label="Name*"
-              placeholder="Full name"
-              value={newCustomer.firstName}
-              onChange={(firstName) =>
-                setNewCustomer({ ...newCustomer, firstName })
-              }
-            />
-            <TextField
-              label="Email*"
-              placeholder="Email address"
-              type="email"
-              value={newCustomer.email}
-              onChange={(email) => setNewCustomer({ ...newCustomer, email })}
-            />
-            <TextField
-              label="Phone"
-              placeholder="Phone number"
-              type="tel"
-              value={newCustomer.phone}
-              onChange={(phone) => setNewCustomer({ ...newCustomer, phone })}
-            />
-            <button
-              className="inline-flex min-h-10 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-bold text-white hover:bg-emerald-900 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
-              disabled={!canAddCustomer}
-              type="button"
-              onClick={addNewCustomerInline}
-            >
-              Add Customer
-            </button>
-          </div>
-        </div>
-      ) : null}
     </SellerCard>
-  );
-}
-
-function TextField({
-  label,
-  min,
-  onChange,
-  placeholder,
-  step,
-  type = "text",
-  value,
-}: {
-  label: string;
-  min?: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  step?: string;
-  type?: string;
-  value: string;
-}) {
-  return (
-    <label className="grid gap-1 text-sm font-semibold text-stone-700">
-      {label}
-      <input
-        className="seller-form-field seller-compact-field"
-        min={min}
-        placeholder={placeholder}
-        step={step}
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
   );
 }
 
@@ -1152,33 +1050,6 @@ function formatCustomerSummary(customer: CustomerRow) {
   ]
     .filter(Boolean)
     .join(" - ");
-}
-
-function formatInlineCustomerSummary(customer: {
-  email: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
-}) {
-  return [
-    formatNewCustomerName(customer),
-    customer.email.trim(),
-    customer.phone.trim(),
-  ]
-    .filter(Boolean)
-    .join(" - ");
-}
-
-function formatNewCustomerName(customer: {
-  firstName: string;
-  lastName: string;
-}) {
-  const fullName = [customer.firstName, customer.lastName]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-
-  return fullName || "Customer";
 }
 
 function parseFullName(fullName: string) {

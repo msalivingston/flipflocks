@@ -3,12 +3,13 @@ import test from "node:test";
 import {
   findPossibleDuplicate,
   formatPhoneNumber,
-  splitCustomerName,
   validateAddCustomer,
 } from "./add-customer-validation.ts";
 
 const blankValues = {
-  name: "",
+  firstName: "",
+  lastName: "",
+  businessName: "",
   phone: "",
   email: "",
   street: "",
@@ -18,18 +19,27 @@ const blankValues = {
   notes: "",
 };
 
-test("only name is required", () => {
+test("first and last name are required", () => {
   assert.deepEqual(validateAddCustomer(blankValues), {
-    name: "Enter the customer’s name.",
+    firstName: "Enter the customer’s first name.",
+    lastName: "Enter the customer’s last name.",
   });
-  assert.deepEqual(validateAddCustomer({ ...blankValues, name: "Sam" }), {});
+  assert.deepEqual(
+    validateAddCustomer({
+      ...blankValues,
+      firstName: "Sam",
+      lastName: "Miller",
+    }),
+    {},
+  );
 });
 
 test("optional phone and email validate only when entered", () => {
   assert.deepEqual(
     validateAddCustomer({
       ...blankValues,
-      name: "Sam",
+      firstName: "Sam",
+      lastName: "Miller",
       phone: "555",
       email: "not-an-email",
     }),
@@ -40,12 +50,8 @@ test("optional phone and email validate only when entered", () => {
   );
 });
 
-test("phone formatting and single-word names are supported", () => {
+test("phone formatting is supported", () => {
   assert.equal(formatPhoneNumber("9707658099"), "(970) 765-8099");
-  assert.deepEqual(splitCustomerName("Prince"), {
-    firstName: "Prince",
-    lastName: null,
-  });
 });
 
 test("duplicate matching normalizes email and phone", () => {

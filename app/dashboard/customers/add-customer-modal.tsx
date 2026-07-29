@@ -18,12 +18,13 @@ import {
   findPossibleDuplicate,
   formatPhoneNumber,
   normalizeEmail,
-  splitCustomerName,
   validateAddCustomer,
 } from "./add-customer-validation";
 
 const initialValues: AddCustomerValues = {
-  name: "",
+  firstName: "",
+  lastName: "",
+  businessName: "",
   phone: "",
   email: "",
   street: "",
@@ -41,12 +42,25 @@ type DuplicateCustomer = {
   phone: string | null;
 };
 
+export type CreatedCustomer = {
+  customer_id: string;
+  first_name: string;
+  last_name: string;
+  business_name: string | null;
+  email: string | null;
+  phone: string | null;
+};
+
 export function AddCustomerButton({
   className,
   children,
+  onCreated,
+  requireEmail = false,
 }: {
   className: string;
   children: React.ReactNode;
+  onCreated?: (customer: CreatedCustomer) => void;
+  requireEmail?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -66,12 +80,26 @@ export function AddCustomerButton({
       >
         {children}
       </button>
-      {open ? <AddCustomerModal onClose={closeModal} /> : null}
+      {open ? (
+        <AddCustomerModal
+          onClose={closeModal}
+          onCreated={onCreated}
+          requireEmail={requireEmail}
+        />
+      ) : null}
     </>
   );
 }
 
-function AddCustomerModal({ onClose }: { onClose: () => void }) {
+function AddCustomerModal({
+  onClose,
+  onCreated,
+  requireEmail,
+}: {
+  onClose: () => void;
+  onCreated?: (customer: CreatedCustomer) => void;
+  requireEmail: boolean;
+}) {
   const router = useRouter();
   const { seller } = useSellerContext();
   const titleId = useId();
@@ -134,9 +162,12 @@ function AddCustomerModal({ onClose }: { onClose: () => void }) {
 
   async function saveCustomer(createAnyway: boolean) {
     const nextErrors = validateAddCustomer(values);
+    if (requireEmail && !values.email.trim()) {
+      nextErrors.email = "Enter the customer’s email for this order.";
+    }
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
-      if (nextErrors.name) nameRef.current?.focus();
+      if (nextErrors.firstName) nameRef.current?.focus();
       return;
     }
 
@@ -173,13 +204,13 @@ function AddCustomerModal({ onClose }: { onClose: () => void }) {
       }
     }
 
-    const { firstName, lastName } = splitCustomerName(values.name);
     const insertResult = await supabase
       .from("customers")
       .insert({
         store_id: seller.store_id,
-        first_name: firstName,
-        last_name: lastName,
+        first_name: values.firstName.trim(),
+        last_name: values.lastName.trim(),
+        business_name: values.businessName.trim() || null,
         email: normalizeEmail(values.email) || null,
         phone: values.phone.trim() || null,
         delivery_address_line1: values.street.trim() || null,
@@ -195,8 +226,15 @@ function AddCustomerModal({ onClose }: { onClose: () => void }) {
             : null,
         internal_notes: values.notes.trim() || null,
       })
-      .select("id")
-      .single<{ id: string }>();
+      .select("id, first_name, last_name, business_name, email, phone")
+      .single<{
+        id: string;
+        first_name: string;
+        last_name: string;
+        business_name: string | null;
+        email: string | null;
+        phone: string | null;
+      }>();
 
     if (insertResult.error) {
       setFormError(insertResult.error.message || "Customer could not be added.");
@@ -204,7 +242,22 @@ function AddCustomerModal({ onClose }: { onClose: () => void }) {
       return;
     }
 
-    router.push(`/dashboard/customers/${insertResult.data.id}`);
+    const createdCustomer: CreatedCustomer = {
+      customer_id: insertResult.data.id,
+      first_name: insertResult.data.first_name,
+      last_name: insertResult.data.last_name,
+      business_name: insertResult.data.business_name,
+      email: insertResult.data.email,
+      phone: insertResult.data.phone,
+    };
+
+    if (onCreated) {
+      onCreated(createdCustomer);
+      onClose();
+      return;
+    }
+
+    router.push(`/dashboard/customers/${createdCustomer.customer_id}`);
   }
 
   function handleDialogKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
@@ -265,14 +318,47 @@ function AddCustomerModal({ onClose }: { onClose: () => void }) {
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 pb-32 lg:px-6 lg:pb-6">
             <div className="grid gap-4">
-              <Field label="Name" required error={errors.name}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="First Name"
+                  required
+                  error={errors.firstName}
+                >
+                  <input
+                    ref={nameRef}
+                    aria-invalid={Boolean(errors.firstName)}
+                    autoComplete="given-name"
+                    className="seller-form-field min-h-12"
+                    value={values.firstName}
+                    onChange={(event) =>
+                      updateValue("firstName", event.target.value)
+                    }
+                  />
+                </Field>
+                <Field
+                  label="Last Name"
+                  required
+                  error={errors.lastName}
+                >
+                  <input
+                    aria-invalid={Boolean(errors.lastName)}
+                    autoComplete="family-name"
+                    className="seller-form-field min-h-12"
+                    value={values.lastName}
+                    onChange={(event) =>
+                      updateValue("lastName", event.target.value)
+                    }
+                  />
+                </Field>
+              </div>
+              <Field label="Farm or Business Name">
                 <input
-                  ref={nameRef}
-                  aria-invalid={Boolean(errors.name)}
-                  autoComplete="name"
+                  autoComplete="organization"
                   className="seller-form-field min-h-12"
-                  value={values.name}
-                  onChange={(event) => updateValue("name", event.target.value)}
+                  value={values.businessName}
+                  onChange={(event) =>
+                    updateValue("businessName", event.target.value)
+                  }
                 />
               </Field>
               <Field label="Phone" error={errors.phone}>
@@ -288,7 +374,7 @@ function AddCustomerModal({ onClose }: { onClose: () => void }) {
                   }
                 />
               </Field>
-              <Field label="Email" error={errors.email}>
+              <Field label="Email" required={requireEmail} error={errors.email}>
                 <input
                   aria-invalid={Boolean(errors.email)}
                   autoCapitalize="none"
@@ -415,9 +501,9 @@ function AddCustomerModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          <footer className="sticky bottom-0 z-10 border-t border-stone-200 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 lg:flex lg:justify-end lg:gap-3 lg:px-6 lg:pb-4">
+          <footer className="sticky bottom-0 z-10 grid grid-cols-[auto_minmax(0,1fr)] gap-3 border-t border-stone-200 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 lg:flex lg:justify-end lg:px-6 lg:pb-4">
             <button
-              className="seller-secondary-button hidden min-h-11 px-5 lg:inline-flex"
+              className="seller-secondary-button min-h-12 px-5 lg:min-h-11"
               disabled={isSaving}
               type="button"
               onClick={onClose}
@@ -425,7 +511,7 @@ function AddCustomerModal({ onClose }: { onClose: () => void }) {
               Cancel
             </button>
             <button
-              className="seller-primary-button min-h-12 w-full px-6 lg:min-h-11 lg:w-auto"
+              className="seller-primary-button min-h-12 w-full rounded-md px-6 lg:min-h-11 lg:w-auto"
               disabled={isSaving}
               type="submit"
             >
