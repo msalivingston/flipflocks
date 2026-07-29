@@ -115,15 +115,23 @@ export function SortableOptionList<TItem extends SortableOptionListItem>({
   return (
     <>
       <div className="grid gap-2">
-        {items.map((item) => (
+        {items.map((item, index) => (
           <SortableOptionListRow
+            canMoveDown={index < items.length - 1}
+            canMoveUp={index > 0}
             dragHandleLabel={dragHandleLabel}
             isDragging={draggingId === item.id}
             item={item}
             key={item.id}
             onBeginDrag={beginDrag}
             onEndDrag={endDrag}
+            onMoveDown={() =>
+              onReorder(moveItemByOffset(items.map(({ id }) => id), item.id, 1))
+            }
             onMoveDrag={moveDrag}
+            onMoveUp={() =>
+              onReorder(moveItemByOffset(items.map(({ id }) => id), item.id, -1))
+            }
             renderRow={renderRow}
             rowRefs={rowRefs}
           />
@@ -135,15 +143,21 @@ export function SortableOptionList<TItem extends SortableOptionListItem>({
 }
 
 function SortableOptionListRow<TItem extends SortableOptionListItem>({
+  canMoveDown,
+  canMoveUp,
   dragHandleLabel,
   isDragging,
   item,
   onBeginDrag,
   onEndDrag,
+  onMoveDown,
   onMoveDrag,
+  onMoveUp,
   renderRow,
   rowRefs,
 }: {
+  canMoveDown: boolean;
+  canMoveUp: boolean;
   dragHandleLabel: string;
   isDragging: boolean;
   item: TItem;
@@ -152,7 +166,9 @@ function SortableOptionListRow<TItem extends SortableOptionListItem>({
     event: React.PointerEvent<HTMLButtonElement>,
   ) => void;
   onEndDrag: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onMoveDown: () => void;
   onMoveDrag: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onMoveUp: () => void;
   renderRow: (props: RenderSortableOptionRow<TItem>) => ReactNode;
   rowRefs: React.RefObject<Map<string, HTMLElement>>;
 }) {
@@ -169,22 +185,71 @@ function SortableOptionListRow<TItem extends SortableOptionListItem>({
 
   return renderRow({
     dragHandle: (
-      <button
-        aria-label={dragHandleLabel}
-        className="inline-flex size-10 touch-none cursor-grab items-center justify-center rounded-md border border-stone-200 bg-stone-50 text-lg font-semibold leading-none text-stone-400 transition hover:border-stone-300 hover:bg-stone-100 active:cursor-grabbing active:border-emerald-300 active:bg-emerald-50 active:text-emerald-800"
-        onPointerCancel={onEndDrag}
-        onPointerDown={(event) => onBeginDrag(item, event)}
-        onPointerMove={onMoveDrag}
-        onPointerUp={onEndDrag}
-        type="button"
-      >
-        {"\u22ee\u22ee"}
-      </button>
+      <>
+        <div
+          aria-label={`Reorder ${getAccessibleItemName(item)}`}
+          className="col-span-2 flex items-center justify-between gap-3 sm:hidden"
+          role="group"
+        >
+          <span className="text-sm font-semibold text-stone-600">Reorder</span>
+          <span className="inline-flex overflow-hidden rounded-md border border-stone-200 bg-white shadow-sm">
+            <button
+              aria-label={`Move ${getAccessibleItemName(item)} up`}
+              className="inline-flex size-11 items-center justify-center text-xl font-bold text-emerald-900 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:bg-stone-50 disabled:text-stone-300"
+              disabled={!canMoveUp}
+              onClick={onMoveUp}
+              type="button"
+            >
+              {"\u2191"}
+            </button>
+            <button
+              aria-label={`Move ${getAccessibleItemName(item)} down`}
+              className="inline-flex size-11 items-center justify-center border-l border-stone-200 text-xl font-bold text-emerald-900 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:bg-stone-50 disabled:text-stone-300"
+              disabled={!canMoveDown}
+              onClick={onMoveDown}
+              type="button"
+            >
+              {"\u2193"}
+            </button>
+          </span>
+        </div>
+        <button
+          aria-label={dragHandleLabel}
+          className="hidden size-10 touch-none cursor-grab items-center justify-center rounded-md border border-stone-200 bg-stone-50 text-lg font-semibold leading-none text-stone-400 transition hover:border-stone-300 hover:bg-stone-100 active:cursor-grabbing active:border-emerald-300 active:bg-emerald-50 active:text-emerald-800 sm:inline-flex"
+          onPointerCancel={onEndDrag}
+          onPointerDown={(event) => onBeginDrag(item, event)}
+          onPointerMove={onMoveDrag}
+          onPointerUp={onEndDrag}
+          type="button"
+        >
+          {"\u22ee\u22ee"}
+        </button>
+      </>
     ),
     isDragging,
     item,
     rowRef,
   });
+}
+
+function moveItemByOffset(ids: string[], itemId: string, offset: -1 | 1) {
+  const orderedIds = [...ids];
+  const fromIndex = orderedIds.indexOf(itemId);
+  const toIndex = fromIndex + offset;
+
+  if (fromIndex < 0 || toIndex < 0 || toIndex >= orderedIds.length) {
+    return orderedIds;
+  }
+
+  [orderedIds[fromIndex], orderedIds[toIndex]] = [
+    orderedIds[toIndex],
+    orderedIds[fromIndex],
+  ];
+  return orderedIds;
+}
+
+function getAccessibleItemName(item: SortableOptionListItem) {
+  return item.label.trim() || "option";
 }
 
 function SortableRowDragPreview({ preview }: { preview: DragPreview }) {

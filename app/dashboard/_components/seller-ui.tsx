@@ -5,6 +5,7 @@ type SellerPageHeaderProps = {
   title: string;
   description?: string;
   action?: React.ReactNode;
+  compactOnMobile?: boolean;
 };
 
 export function SellerPageHeader({
@@ -12,18 +13,33 @@ export function SellerPageHeader({
   title,
   description,
   action,
+  compactOnMobile = false,
 }: SellerPageHeaderProps) {
   return (
-    <header className="relative flex flex-col gap-4 border-b border-stone-200 bg-white px-5 py-5 sm:px-7 lg:flex-row lg:items-center lg:justify-between">
+    <header
+      className={`relative flex border-b border-stone-200 bg-white px-5 sm:px-7 ${
+        compactOnMobile
+          ? "flex-row items-center justify-between gap-3 py-4 lg:gap-4 lg:py-5"
+          : "flex-col gap-4 py-5 lg:flex-row lg:items-center lg:justify-between"
+      }`}
+    >
       <div className="min-w-0">
         {eyebrow ? (
-          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-emerald-700">
+          <p
+            className={`mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-emerald-700 ${
+              compactOnMobile ? "truncate" : ""
+            }`}
+          >
             {eyebrow}
           </p>
         ) : null}
         <h1 className="text-2xl font-semibold text-stone-950">{title}</h1>
         {description ? (
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-600">
+          <p
+            className={`mt-1 max-w-2xl text-sm leading-6 text-stone-600 ${
+              compactOnMobile ? "hidden lg:block" : ""
+            }`}
+          >
             {description}
           </p>
         ) : null}

@@ -1224,6 +1224,17 @@ export function StoreAdmin() {
     });
   }
 
+  function moveCustomPolicy(policyId: string, offset: -1 | 1) {
+    const currentIndex = form.custom_policies.findIndex(
+      (policy) => policy.id === policyId,
+    );
+    const targetPolicy = form.custom_policies[currentIndex + offset];
+
+    if (!targetPolicy) return;
+
+    reorderCustomPolicyToTarget(policyId, targetPolicy.id);
+  }
+
   function beginCustomPolicyDrag(
     policyId: string,
     event: React.PointerEvent<HTMLButtonElement>,
@@ -1963,35 +1974,45 @@ export function StoreAdmin() {
   return (
     <>
       <SellerPageHeader
+        compactOnMobile
         eyebrow={seller.store_name}
         title="Store Setup"
         description="Manage your public storefront setup, pickup flow, policies, and preview link."
         action={
-          <div className="flex flex-wrap gap-2">
+          <>
             <Link
-              className="seller-primary-button"
+              className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-md bg-emerald-800 px-4 text-sm font-bold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2 lg:hidden"
               href={previewStoreUrl}
               target="_blank"
             >
-              Preview Store
+              Preview
             </Link>
-            <button
-              className="seller-secondary-button"
-              disabled={!hasUnsavedChanges || isSaving}
-              onClick={discardChanges}
-              type="button"
-            >
-              Discard Changes
-            </button>
-            <button
-              className="inline-flex min-h-10 items-center justify-center rounded-md bg-stone-950 px-4 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-400"
-              disabled={!hasUnsavedChanges || isSaving}
-              onClick={saveChanges}
-              type="button"
-            >
-              {isSaving ? "Saving..." : "Save"}
-            </button>
-          </div>
+            <div className="hidden flex-wrap gap-2 lg:flex">
+              <Link
+                className="seller-primary-button"
+                href={previewStoreUrl}
+                target="_blank"
+              >
+                Preview Store
+              </Link>
+              <button
+                className="seller-secondary-button"
+                disabled={!hasUnsavedChanges || isSaving}
+                onClick={discardChanges}
+                type="button"
+              >
+                Discard Changes
+              </button>
+              <button
+                className="inline-flex min-h-10 items-center justify-center rounded-md bg-stone-950 px-4 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-400"
+                disabled={!hasUnsavedChanges || isSaving}
+                onClick={saveChanges}
+                type="button"
+              >
+                {isSaving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </>
         }
       />
 
@@ -2011,7 +2032,11 @@ export function StoreAdmin() {
             activeTab={activeTab}
             onChange={setActiveTab}
           />
-          <div className="rounded-b-xl rounded-tr-xl border border-stone-200 bg-white p-5 shadow-sm">
+          <div
+            className={`rounded-b-xl rounded-tr-xl border border-stone-200 bg-white shadow-sm ${
+              activeTab === "photos" ? "p-5" : "p-3 sm:p-5"
+            }`}
+          >
             {activeTab === "storefront" ? (
               <StorefrontTab
                 form={form}
@@ -2171,7 +2196,7 @@ export function StoreAdmin() {
                   title="Equipment & Supplies"
                 />
               </div>
-              <p className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs font-medium leading-5 text-emerald-900">
+              <p className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-sm font-medium leading-6 text-emerald-900 sm:text-xs sm:leading-5">
                 You can change these anytime. Updates may take a few minutes to
                 appear on your storefront.
               </p>
@@ -2222,6 +2247,7 @@ export function StoreAdmin() {
                 onBeginCustomPolicyDrag={beginCustomPolicyDrag}
                 onEndCustomPolicyDrag={endCustomPolicyDrag}
                 onMoveCustomPolicyDrag={moveCustomPolicyDrag}
+                onMoveCustomPolicy={moveCustomPolicy}
                 onPickupPolicyChange={(value) =>
                   updateField("pickup_policy", value)
                 }
@@ -2275,32 +2301,65 @@ function StoreSetupTabs({
   onChange: (tab: StoreSetupTab) => void;
 }) {
   return (
-    <div
-      aria-label="Store setup sections"
-      className="flex gap-1 overflow-x-auto border-b border-stone-200 pl-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      role="tablist"
-    >
-      {storeSetupTabs.map((tab) => {
-        const isActive = activeTab === tab.id;
-
-        return (
-          <button
-            aria-selected={isActive}
-            className={`relative mb-[-1px] min-h-11 shrink-0 rounded-t-lg border px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-700 ${
-              isActive
-                ? "border-stone-200 border-b-white bg-white text-stone-950 shadow-[0_-1px_0_rgba(0,0,0,0.02)]"
-                : "border-transparent bg-stone-100/70 text-stone-600 hover:bg-white hover:text-stone-950"
-            }`}
-            key={tab.id}
-            onClick={() => onChange(tab.id)}
-            role="tab"
-            type="button"
+    <>
+      <label className="grid gap-1.5 rounded-t-xl border border-b-0 border-stone-200 bg-white px-3 py-3 text-sm font-bold text-stone-800 sm:hidden">
+        Storefront section
+        <span className="relative">
+          <select
+            aria-label="Storefront section"
+            className="min-h-12 w-full appearance-none rounded-lg border border-stone-300 bg-white px-3 pr-10 text-base font-semibold text-stone-950 shadow-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20"
+            onChange={(event) => onChange(event.target.value as StoreSetupTab)}
+            value={activeTab}
           >
-            {tab.label}
-          </button>
-        );
-      })}
-    </div>
+            {storeSetupTabs.map((tab) => (
+              <option key={tab.id} value={tab.id}>
+                {tab.label}
+              </option>
+            ))}
+          </select>
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-stone-700"
+          >
+            <svg className="size-5" fill="none" viewBox="0 0 24 24">
+              <path
+                d="M6 9l6 6 6-6"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+              />
+            </svg>
+          </span>
+        </span>
+      </label>
+      <div
+        aria-label="Store setup sections"
+        className="hidden gap-1 overflow-x-auto border-b border-stone-200 pl-px [scrollbar-width:none] sm:flex [&::-webkit-scrollbar]:hidden"
+        role="tablist"
+      >
+        {storeSetupTabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+
+          return (
+            <button
+              aria-selected={isActive}
+              className={`relative mb-[-1px] min-h-11 shrink-0 rounded-t-lg border px-4 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-700 ${
+                isActive
+                  ? "border-stone-200 border-b-white bg-white text-stone-950 shadow-[0_-1px_0_rgba(0,0,0,0.02)]"
+                  : "border-transparent bg-stone-100/70 text-stone-600 hover:bg-white hover:text-stone-950"
+              }`}
+              key={tab.id}
+              onClick={() => onChange(tab.id)}
+              role="tab"
+              type="button"
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
@@ -4233,7 +4292,7 @@ function StorefrontStatusPanel({
         <p className="text-sm font-semibold text-stone-950">
           {title}
         </p>
-        <p className="mt-0.5 text-xs font-medium leading-4 text-stone-600">
+        <p className="mt-0.5 text-sm font-medium leading-5 text-stone-600 sm:text-xs sm:leading-4">
           {description}
         </p>
       </div>
@@ -4243,7 +4302,7 @@ function StorefrontStatusPanel({
 
 function FieldExamples({ examples }: { examples: string[] }) {
   return (
-    <div className="text-xs font-medium leading-4 text-stone-600">
+    <div className="text-sm font-medium leading-5 text-stone-600 sm:text-xs sm:leading-4">
       <p className="font-semibold text-stone-700">Examples:</p>
       <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
         {examples.map((example) => (
@@ -4260,7 +4319,7 @@ function StorefrontNote({
   children: React.ReactNode;
 }) {
   return (
-    <p className="text-xs font-medium leading-5 text-stone-500">
+    <p className="text-sm font-medium leading-6 text-stone-600 sm:text-xs sm:leading-5 sm:text-stone-500">
       {children}
     </p>
   );
@@ -4665,7 +4724,7 @@ function TextField({
           ) : null}
         </span>
         {showCounter && maxLength ? (
-          <span className="text-xs font-medium text-stone-500">
+          <span className="hidden text-xs font-medium text-stone-500 sm:inline">
             {value.length} / {maxLength}
           </span>
         ) : null}
@@ -4680,8 +4739,13 @@ function TextField({
         value={value}
       />
       {helper ? (
-        <span className="text-xs font-medium leading-5 text-stone-500">
+        <span className="text-sm font-medium leading-6 text-stone-600 sm:text-xs sm:leading-5 sm:text-stone-500">
           {helper}
+        </span>
+      ) : null}
+      {showCounter && maxLength ? (
+        <span className="justify-self-end text-sm font-medium text-stone-500 sm:hidden">
+          {value.length} / {maxLength}
         </span>
       ) : null}
     </label>
@@ -4719,7 +4783,7 @@ function TextAreaField({
           {required ? <span className="ml-1 text-red-600">*</span> : null}
         </span>
         {showCounter && maxLength ? (
-          <span className="text-xs font-medium text-stone-500">
+          <span className="hidden text-xs font-medium text-stone-500 sm:inline">
             {value.length} / {maxLength}
           </span>
         ) : null}
@@ -4736,8 +4800,13 @@ function TextAreaField({
         value={value}
       />
       {helper ? (
-        <span className="text-xs font-medium leading-5 text-stone-500">
+        <span className="text-sm font-medium leading-6 text-stone-600 sm:text-xs sm:leading-5 sm:text-stone-500">
           {helper}
+        </span>
+      ) : null}
+      {showCounter && maxLength ? (
+        <span className="justify-self-end text-sm font-medium text-stone-500 sm:hidden">
+          {value.length} / {maxLength}
         </span>
       ) : null}
     </label>

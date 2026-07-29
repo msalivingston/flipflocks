@@ -32,7 +32,7 @@ type DeliveryOptionRowProps = {
 };
 
 const inputClass =
-  "min-h-10 rounded-md border border-stone-200 bg-stone-50/70 px-3 text-sm font-medium text-stone-950 outline-none transition placeholder:text-stone-400 focus:border-emerald-700 focus:bg-white focus:ring-2 focus:ring-emerald-700/15";
+  "min-h-12 min-w-0 rounded-md border border-stone-200 bg-stone-50/70 px-3 text-base font-medium text-stone-950 outline-none transition placeholder:text-stone-400 focus:border-emerald-700 focus:bg-white focus:ring-2 focus:ring-emerald-700/15 sm:min-h-10 sm:text-sm";
 
 export function DeliveryOptionsSection({
   deliveryEnabled,
@@ -109,7 +109,7 @@ export function DeliveryOptionsSection({
           </p>
         </div>
       ) : (
-        <p className="text-xs font-medium leading-5 text-stone-500">
+        <p className="text-sm font-medium leading-6 text-stone-600 sm:text-xs sm:leading-5 sm:text-stone-500">
           Choose whether buyers can have their orders delivered.
         </p>
       )}
@@ -123,7 +123,7 @@ export function DeliveryOptionsSection({
         />
         <span className="grid gap-1">
           <span>I would like to add delivery options as well.</span>
-          <span className="text-xs font-medium leading-5 text-stone-600">
+          <span className="text-sm font-medium leading-6 text-stone-600 sm:text-xs sm:leading-5">
             Add the locations or delivery areas you serve and the price for each.
             Buyers will choose one option during checkout.
           </span>
@@ -143,7 +143,7 @@ export function DeliveryOptionsSection({
               <h3 className="text-sm font-semibold text-stone-950">
                 Delivery options
               </h3>
-              <p className="mt-0.5 text-xs leading-5 text-stone-600">
+              <p className="mt-0.5 text-sm leading-6 text-stone-600 sm:text-xs sm:leading-5">
                 Examples: Paonia - $10.00, Delta - $15.00, Grand Junction -
                 $35.00.
               </p>
@@ -204,13 +204,13 @@ function DeliveryOptionRow({
 }: DeliveryOptionRowProps) {
   return (
     <div
-      className={`grid gap-2 rounded-md border bg-white px-2.5 py-2 transition sm:grid-cols-[auto_minmax(0,1.35fr)_minmax(7rem,0.65fr)_auto] sm:items-end ${
+      className={`grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 border-b border-stone-200 bg-transparent py-4 transition last:border-b-0 last:pb-0 sm:grid-cols-[auto_minmax(0,1.35fr)_minmax(7rem,0.65fr)_auto] sm:items-end sm:gap-2 sm:rounded-md sm:border sm:bg-white sm:px-2.5 sm:py-2 sm:last:border-b sm:last:pb-2 ${
         isDragging ? "border-emerald-300 bg-emerald-50/40 shadow-sm" : "border-stone-200"
       }`}
       ref={rowRef}
     >
       {dragHandle}
-      <label className="grid gap-1 text-xs font-semibold text-stone-600">
+      <label className="col-span-2 grid gap-1.5 text-sm font-semibold text-stone-700 sm:col-auto sm:gap-1 sm:text-xs sm:text-stone-600">
         Delivery option name
         <input
           className={inputClass}
@@ -219,7 +219,7 @@ function DeliveryOptionRow({
           value={option.name}
         />
       </label>
-      <label className="grid gap-1 text-xs font-semibold text-stone-600">
+      <label className="col-span-2 grid gap-1.5 text-sm font-semibold text-stone-700 sm:col-auto sm:gap-1 sm:text-xs sm:text-stone-600">
         Delivery price
         <input
           className={inputClass}
@@ -230,7 +230,7 @@ function DeliveryOptionRow({
         />
       </label>
       <button
-        className="inline-flex min-h-10 items-center justify-center rounded-md border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+        className="col-span-2 inline-flex min-h-11 items-center justify-center rounded-md border border-stone-200 bg-stone-100 px-3 text-sm font-semibold text-red-700 transition hover:border-red-200 hover:bg-red-50 sm:col-auto sm:min-h-10 sm:text-stone-700 sm:hover:text-red-700"
         onClick={onRemove}
         type="button"
       >

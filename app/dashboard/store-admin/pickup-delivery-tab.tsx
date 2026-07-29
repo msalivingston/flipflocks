@@ -188,7 +188,7 @@ export default function PickupDeliveryTab({
               <h3 className="text-sm font-semibold text-stone-950">
                 Pickup address
               </h3>
-              <p className="mt-0.5 text-xs leading-5 text-stone-600">
+              <p className="mt-0.5 text-sm leading-6 text-stone-600 sm:text-xs sm:leading-5">
                 This address is included in order confirmations after a buyer
                 places an order. It is not automatically displayed on your
                 public storefront.
@@ -377,7 +377,9 @@ function PickupMethodRow({
           </span>
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-stone-950">{title}</h3>
-            <p className="mt-0.5 text-xs leading-5 text-stone-600">{copy}</p>
+            <p className="mt-0.5 text-sm leading-6 text-stone-600 sm:text-xs sm:leading-5">
+              {copy}
+            </p>
           </div>
         </div>
         {badge ? (
@@ -461,7 +463,7 @@ function ManualPickupChoiceBuilder({
           <p className="text-sm font-semibold text-stone-950">
             Dropdown choices
           </p>
-          <p className="mt-0.5 text-xs leading-5 text-stone-600">
+          <p className="mt-0.5 text-sm leading-6 text-stone-600 sm:text-xs sm:leading-5">
             Create the short choices buyers will see at checkout.
           </p>
         </div>
@@ -473,7 +475,7 @@ function ManualPickupChoiceBuilder({
           + Add new
         </button>
       </div>
-      <p className="text-xs font-medium leading-5 text-stone-500">
+      <p className="text-sm font-medium leading-6 text-stone-600 sm:text-xs sm:leading-5 sm:text-stone-500">
         Examples: Tuesday, July 7 at 9am; Meet in town; Text to schedule.
       </p>
       {visibleOptions.length === 0 ? (
@@ -527,7 +529,7 @@ function PickupChoiceRow({
   return (
     <div className="grid gap-1">
       <div
-        className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border bg-white px-2.5 py-2 transition ${
+        className={`grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b border-stone-200 bg-transparent py-4 transition last:border-b-0 last:pb-0 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-2 sm:rounded-md sm:border sm:bg-white sm:px-2.5 sm:py-2 sm:last:border-b sm:last:pb-2 ${
           isDragging
             ? "border-emerald-300 bg-emerald-50/40 shadow-sm"
             : "border-stone-200"
@@ -536,7 +538,7 @@ function PickupChoiceRow({
       >
         {dragHandle}
         <input
-          className="min-h-10 rounded-md border border-stone-200 bg-stone-50/70 px-3 text-sm font-medium text-stone-950 outline-none transition placeholder:text-stone-400 focus:border-emerald-700 focus:bg-white focus:ring-2 focus:ring-emerald-700/15"
+          className="col-span-2 min-h-12 min-w-0 rounded-md border border-stone-200 bg-stone-50/70 px-3 text-base font-medium text-stone-950 outline-none transition placeholder:text-stone-400 focus:border-emerald-700 focus:bg-white focus:ring-2 focus:ring-emerald-700/15 sm:col-auto sm:min-h-10 sm:text-sm"
           onChange={(event) => onLabelChange(event.target.value)}
           placeholder="Tuesday, July 7 at 9am"
           ref={inputRef}
@@ -544,7 +546,7 @@ function PickupChoiceRow({
         />
         <button
           aria-label="Remove pickup choice"
-          className="inline-flex min-h-10 items-center justify-center rounded-md border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+          className="col-span-2 inline-flex min-h-11 items-center justify-center rounded-md border border-stone-200 bg-stone-100 px-3 text-sm font-semibold text-red-700 transition hover:border-red-200 hover:bg-red-50 sm:col-auto sm:min-h-10 sm:text-stone-700 sm:hover:text-red-700"
           onClick={onRemove}
           type="button"
         >
@@ -552,7 +554,7 @@ function PickupChoiceRow({
         </button>
       </div>
       {option.label !== option.label.trim() ? (
-        <p className="px-2 text-xs font-medium text-stone-500">
+        <p className="px-2 text-sm font-medium leading-5 text-stone-600 sm:text-xs sm:text-stone-500">
           Extra spaces will be cleaned up when you save.
         </p>
       ) : null}
