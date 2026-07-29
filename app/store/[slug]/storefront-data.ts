@@ -1,4 +1,5 @@
 import { publicSupabase } from "@/lib/public-supabase";
+import { normalizeHatchingEggBreedName } from "@/lib/hatching-egg-breed-name";
 import type { StorefrontCropMetadata } from "./storefront-ui";
 import type { StorefrontFontPairId } from "./storefront-fonts";
 
@@ -509,7 +510,7 @@ export function groupHatchingEggInventoryByProduct(
   const groups = new Map<string, StorefrontHatchingEggItem[]>();
 
   for (const item of items) {
-    const groupKey = normalizeHatchingEggItemName(item.item_name);
+    const groupKey = normalizeHatchingEggBreedName(item.item_name);
     const current = groups.get(groupKey) ?? [];
     current.push(item);
     groups.set(groupKey, current);
@@ -847,10 +848,6 @@ function compareNullableNumbers(
   if (left == null && right != null) return 1;
 
   return 0;
-}
-
-function normalizeHatchingEggItemName(value: string) {
-  return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 function compareOptions(

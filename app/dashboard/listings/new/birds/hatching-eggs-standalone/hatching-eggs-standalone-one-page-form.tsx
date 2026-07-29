@@ -9,6 +9,12 @@ import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { playDustySuccessSound } from "@/lib/success-sound";
 import { supabase } from "@/lib/supabase";
 import {
+  canUseCustomHatchingEggBreedName,
+  findMatchingHatchingEggPlatformBreed,
+  normalizeHatchingEggBreedName,
+  resolveHatchingEggBreedName,
+} from "@/lib/hatching-egg-breed-name";
+import {
   PhotoManager,
   type DashboardPhoto,
 } from "../../../../_components/photo-manager";
@@ -356,8 +362,15 @@ export function HatchingEggsStandaloneOnePageForm({
   }
 
   function updateBreedOrVarietyName(value: string) {
-    setSelectedBreedId(null);
-    updateForm(buildNameUpdateWithSharedDescription(value));
+    const matchingBreed = findMatchingHatchingEggPlatformBreed({
+      breeds,
+      name: value,
+      speciesId: form.speciesId,
+    });
+    const nextName = matchingBreed?.breed_name ?? value;
+
+    setSelectedBreedId(matchingBreed?.id ?? null);
+    updateForm(buildNameUpdateWithSharedDescription(nextName));
   }
 
   function selectReferenceBreed(breed: ReferenceBreed) {
@@ -706,7 +719,22 @@ export function HatchingEggsStandaloneOnePageForm({
       };
     }
 
-    const errors = validateHatchingEggForm(form);
+    const resolvedBreed = resolveHatchingEggBreedName({
+      breeds,
+      name: form.itemName,
+      speciesId: form.speciesId,
+    });
+    const formToSave =
+      resolvedBreed.canonicalName === form.itemName
+        ? form
+        : { ...form, itemName: resolvedBreed.canonicalName };
+
+    if (resolvedBreed.matchingBreed) {
+      setSelectedBreedId(resolvedBreed.matchingBreed.id);
+    }
+    if (formToSave !== form) setForm(formToSave);
+
+    const errors = validateHatchingEggForm(formToSave);
     setValidationErrors(errors);
 
     if (errors.length > 0) {
@@ -721,7 +749,7 @@ export function HatchingEggsStandaloneOnePageForm({
         const updateResult = await supabase.rpc(
           "seller_update_hatching_egg_inventory_item",
           {
-            ...buildHatchingEggRpcPayload(form),
+            ...buildHatchingEggRpcPayload(formToSave),
             p_hatching_egg_inventory_item_id: hatchingEggItemId,
           },
         );
@@ -748,7 +776,7 @@ export function HatchingEggsStandaloneOnePageForm({
         };
       }
 
-      if (formSnapshot !== savedFormSnapshot) {
+      if (getFormSnapshot(formToSave) !== savedFormSnapshot) {
         return {
           ok: false,
           message:
@@ -766,7 +794,7 @@ export function HatchingEggsStandaloneOnePageForm({
     }
 
     const result = await supabase.rpc("seller_create_hatching_egg_inventory_item", {
-      ...buildHatchingEggRpcPayload(form),
+      ...buildHatchingEggRpcPayload(formToSave),
       p_store_id: seller.store_id,
     });
 
@@ -2621,7 +2649,7 @@ function HatchingEggBreedLookup({
 }) {
   const listboxId = useId();
   const [isOpen, setIsOpen] = useState(false);
-  const normalizedValue = normalizeLookupText(value);
+  const normalizedValue = normalizeHatchingEggBreedName(value);
   const speciesBreeds = useMemo(
     () =>
       speciesId
@@ -2632,7 +2660,7 @@ function HatchingEggBreedLookup({
   const matchingBreeds = useMemo(() => {
     const matches = normalizedValue
       ? speciesBreeds.filter((breed) =>
-          normalizeLookupText(breed.breed_name).includes(normalizedValue),
+          normalizeHatchingEggBreedName(breed.breed_name).includes(normalizedValue),
         )
       : speciesBreeds;
 
@@ -2641,7 +2669,16 @@ function HatchingEggBreedLookup({
   const selectedBreed = selectedBreedId
     ? breeds.find((breed) => breed.id === selectedBreedId)
     : null;
-  const canUseCustomName = value.trim().length > 0;
+  const exactMatchingBreed = findMatchingHatchingEggPlatformBreed({
+    breeds,
+    name: value,
+    speciesId,
+  });
+  const canUseCustomName = canUseCustomHatchingEggBreedName({
+    breeds,
+    name: value,
+    speciesId,
+  });
 
   function closeSoon() {
     window.setTimeout(() => setIsOpen(false), 120);
@@ -2714,7 +2751,8 @@ function HatchingEggBreedLookup({
             </button>
           ))}
 
-          <div className="mt-2 border-t border-stone-100 pt-2">
+          {!exactMatchingBreed ? (
+            <div className="mt-2 border-t border-stone-100 pt-2">
             <button
               className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-emerald-800 transition hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none disabled:text-stone-400 disabled:hover:bg-transparent"
               disabled={!canUseCustomName}
@@ -2729,7 +2767,8 @@ function HatchingEggBreedLookup({
                 ? `Use custom name: ${value.trim()}`
                 : "Use custom name"}
             </button>
-          </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </label>
@@ -2978,10 +3017,6 @@ function getFormSnapshot(form: HatchingEggFormState) {
   });
 }
 
-function normalizeLookupText(value: string) {
-  return value.trim().replace(/\s+/g, " ").toLowerCase();
-}
-
 function findMatchingHatchingEggDescriptionGroup({
   currentItemId,
   itemName,
@@ -2991,12 +3026,12 @@ function findMatchingHatchingEggDescriptionGroup({
   itemName: string;
   rows: HatchingEggGroupRow[];
 }) {
-  const groupKey = normalizeLookupText(itemName);
+  const groupKey = normalizeHatchingEggBreedName(itemName);
 
   if (!groupKey) return null;
 
   const matchingRows = rows.filter(
-    (row) => normalizeLookupText(row.item_name) === groupKey,
+    (row) => normalizeHatchingEggBreedName(row.item_name) === groupKey,
   );
   const matchingOtherRows = matchingRows.filter(
     (row) => row.hatching_egg_inventory_item_id !== currentItemId,
