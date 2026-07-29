@@ -1576,10 +1576,10 @@ export function InventoryManagement() {
 
       <SellerCard className="p-3 [&_input]:w-full [&_label]:min-w-0 [&_select]:w-full">
         <div className="grid gap-3 lg:hidden">
-          <label className="grid gap-1 text-[13px] font-bold text-stone-700">
+          <label className="grid gap-1 text-sm font-bold text-stone-700">
             Search
             <input
-              className="min-h-11 w-full rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+              className="min-h-11 w-full rounded-md border border-stone-300 bg-white px-3 text-[0.95rem] font-medium text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
               placeholder={getSearchPlaceholder(activeTab)}
               value={activeFilters.search}
               onChange={(event) =>
@@ -2107,10 +2107,10 @@ function InventorySummaryCard({
         <span className="mx-auto flex size-7 items-center justify-center rounded-full bg-emerald-900/5">
           <Image src={glyph} alt="" width={16} height={16} />
         </span>
-        <p className="mt-1 truncate text-xs font-bold uppercase tracking-[0.035em] text-stone-500">
+        <p className="mt-1 flex min-h-7 items-center justify-center text-center text-[0.68rem] font-bold uppercase leading-3.5 tracking-[0.02em] text-stone-500">
           {label}
         </p>
-        <p className="mt-1 truncate text-lg font-bold leading-none text-stone-950">
+        <p className="mt-1 truncate text-[1.05rem] font-bold leading-none text-stone-950">
           {value}
         </p>
       </div>
@@ -2936,9 +2936,13 @@ function FlatInventoryCard({
                   />
                 </>
               ) : null}
-              <div className="rounded-md bg-stone-50 px-2.5 py-2">
+              <InventoryCardField
+                label="Reserved"
+                value={String(item.reservedQuantity)}
+              />
+              <div className="col-start-1 rounded-md bg-stone-50 px-2.5 py-2">
                 <dt className="text-sm font-bold uppercase tracking-[0.05em] text-stone-500 sm:text-xs sm:font-semibold">
-                  Available
+                  Still Available
                 </dt>
                 <dd className="mt-1">
                   <AvailableQuantityControl
@@ -2948,10 +2952,6 @@ function FlatInventoryCard({
                   />
                 </dd>
               </div>
-              <InventoryCardField
-                label="Reserved"
-                value={String(item.reservedQuantity)}
-              />
               <div className="rounded-md bg-stone-50 px-2.5 py-2">
                 <dt className="text-sm font-bold uppercase tracking-[0.05em] text-stone-500 sm:text-xs sm:font-semibold">
                   Price
