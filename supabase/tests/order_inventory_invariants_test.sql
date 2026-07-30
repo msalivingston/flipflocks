@@ -2,38 +2,79 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(51);
+select plan(54);
 
 -- The concurrency probe uses committed fixtures in two independent sessions.
--- Everything is deterministic, removed before and after the probe, and limited
--- to the disposable local database used by `supabase test db`.
+-- An exclusive advisory lock acts as a deterministic start gate. Both checkout
+-- sessions must be waiting for a shared transaction lock before the gate opens.
 create temporary table concurrency_probe (
   available boolean not null,
+  infrastructure_sqlstate text,
+  infrastructure_message text,
+  infrastructure_context text,
+  first_outcome text,
+  first_order_id uuid,
+  first_sqlstate text,
+  first_message text,
+  second_outcome text,
+  second_order_id uuid,
+  second_sqlstate text,
+  second_message text,
   success_count integer,
+  unavailable_count integer,
   remaining_quantity integer,
   order_count integer,
-  detail text
+  idempotency_count integer,
+  authoritative_idempotency_count integer
 ) on commit drop;
 
 do $probe$
 declare
-  v_connection_string text := format('dbname=%L', current_database());
-  v_first_success boolean;
-  v_second_success boolean;
+  v_connection_string text := format(
+    'hostaddr=%s port=5432 dbname=%s user=postgres password=postgres',
+    host(inet_server_addr()),
+    current_database()
+  );
+  v_gate_key bigint := 741852963;
+  v_first_pid integer;
+  v_second_pid integer;
+  v_waiter_count integer;
+  v_wait_deadline timestamptz;
+  v_first_outcome text;
+  v_first_order_id uuid;
+  v_first_sqlstate text;
+  v_first_message text;
+  v_second_outcome text;
+  v_second_order_id uuid;
+  v_second_sqlstate text;
+  v_second_message text;
   v_remaining_quantity integer;
   v_order_count integer;
+  v_idempotency_count integer;
+  v_authoritative_idempotency_count integer;
+  v_infrastructure_sqlstate text;
+  v_infrastructure_message text;
+  v_infrastructure_context text;
+  v_gate_locked boolean := false;
 begin
   if not exists (
     select 1
     from pg_available_extensions
     where name = 'dblink'
   ) then
-    insert into concurrency_probe (available, detail)
-    values (false, 'dblink is not available in this PostgreSQL image');
+    insert into concurrency_probe (
+      available,
+      infrastructure_message
+    )
+    values (
+      false,
+      'dblink is not available in this PostgreSQL image'
+    );
     return;
   end if;
 
   execute 'create extension if not exists dblink with schema extensions';
+
   execute format(
     'select extensions.dblink_connect(%L, %L)',
     'order_inventory_first',
@@ -49,7 +90,10 @@ begin
     'select extensions.dblink_exec(%L, %L)',
     'order_inventory_first',
     $remote$
+      set "request.jwt.claim.role" = 'service_role';
+
       drop function if exists public.__order_inventory_test_checkout_attempt(text);
+      drop function if exists public.__order_inventory_test_checkout_attempt(text, bigint);
       delete from public.stores
       where id = 'c1000000-0000-4000-8000-000000000010';
       delete from auth.users
@@ -134,14 +178,32 @@ begin
         current_date
       );
 
-      create function public.__order_inventory_test_checkout_attempt(p_key text)
-      returns boolean
+      create function public.__order_inventory_test_checkout_attempt(
+        p_key text,
+        p_gate_key bigint
+      )
+      returns table (
+        outcome text,
+        order_id uuid,
+        error_sqlstate text,
+        error_message text
+      )
       language plpgsql
       security definer
       set search_path = public
       as $function$
+      declare
+        v_error_sqlstate text;
+        v_error_message text;
       begin
-        perform 1
+        perform pg_advisory_xact_lock_shared(p_gate_key);
+
+        return query
+        select
+          'success'::text,
+          checkout.order_id,
+          null::text,
+          null::text
         from public.create_pay_at_pickup_order_v2(
           p_store_id => 'c1000000-0000-4000-8000-000000000010',
           p_idempotency_key => p_key,
@@ -160,41 +222,175 @@ begin
           p_delivery_city => 'Testville',
           p_delivery_state => 'CO',
           p_delivery_postal_code => '80000'
-        );
-        return true;
+        ) as checkout;
       exception
         when others then
-          return false;
+          get stacked diagnostics
+            v_error_sqlstate = returned_sqlstate,
+            v_error_message = message_text;
+
+          if v_error_sqlstate = 'P0001'
+            and v_error_message in (
+              'Insufficient inventory quantity available.',
+              'One or more inventory items are not available for checkout.'
+            ) then
+            return query
+            select
+              'inventory_unavailable'::text,
+              null::uuid,
+              v_error_sqlstate,
+              v_error_message;
+          else
+            return query
+            select
+              'infrastructure_error'::text,
+              null::uuid,
+              v_error_sqlstate,
+              v_error_message;
+          end if;
       end;
       $function$;
     $remote$
   );
 
   execute format(
+    $query$
+      select pid
+      from extensions.dblink(%L, %L) as result(pid integer)
+    $query$,
+    'order_inventory_first',
+    'select pg_backend_pid()'
+  )
+  into v_first_pid;
+
+  execute format(
+    $query$
+      select pid
+      from extensions.dblink(%L, %L) as result(pid integer)
+    $query$,
+    'order_inventory_second',
+    'select pg_backend_pid()'
+  )
+  into v_second_pid;
+
+  perform pg_advisory_lock(v_gate_key);
+  v_gate_locked := true;
+
+  execute format(
     'select extensions.dblink_send_query(%L, %L)',
     'order_inventory_first',
-    'select public.__order_inventory_test_checkout_attempt(''concurrent-first'')'
+    format(
+      'select * from public.__order_inventory_test_checkout_attempt(%L, %s)',
+      'concurrent-first',
+      v_gate_key
+    )
   );
   execute format(
     'select extensions.dblink_send_query(%L, %L)',
     'order_inventory_second',
-    'select public.__order_inventory_test_checkout_attempt(''concurrent-second'')'
+    format(
+      'select * from public.__order_inventory_test_checkout_attempt(%L, %s)',
+      'concurrent-second',
+      v_gate_key
+    )
   );
 
-  execute
-    'select completed from extensions.dblink_get_result(''order_inventory_first'') as result(completed boolean)'
-    into v_first_success;
-  execute
-    'select completed from extensions.dblink_get_result(''order_inventory_second'') as result(completed boolean)'
-    into v_second_success;
+  v_wait_deadline := clock_timestamp() + interval '10 seconds';
+  loop
+    select count(*)::integer
+    into v_waiter_count
+    from pg_locks
+    where locktype = 'advisory'
+      and pid in (v_first_pid, v_second_pid)
+      and granted = false;
+
+    exit when v_waiter_count = 2;
+
+    if clock_timestamp() >= v_wait_deadline then
+      raise exception using
+        errcode = '57014',
+        message = format(
+          'Concurrency barrier timed out: expected 2 advisory-lock waiters, observed %s.',
+          v_waiter_count
+        );
+    end if;
+  end loop;
+
+  perform pg_advisory_unlock(v_gate_key);
+  v_gate_locked := false;
+
+  execute $query$
+    select outcome, order_id, error_sqlstate, error_message
+    from extensions.dblink_get_result('order_inventory_first')
+      as result(
+        outcome text,
+        order_id uuid,
+        error_sqlstate text,
+        error_message text
+      )
+  $query$
+  into
+    v_first_outcome,
+    v_first_order_id,
+    v_first_sqlstate,
+    v_first_message;
+
+  -- libpq keeps an async connection busy until the terminating empty result
+  -- is consumed, even after the row-bearing result has been read.
+  execute $query$
+    select outcome, order_id, error_sqlstate, error_message
+    from extensions.dblink_get_result('order_inventory_first')
+      as result(
+        outcome text,
+        order_id uuid,
+        error_sqlstate text,
+        error_message text
+      )
+  $query$;
+
+  execute $query$
+    select outcome, order_id, error_sqlstate, error_message
+    from extensions.dblink_get_result('order_inventory_second')
+      as result(
+        outcome text,
+        order_id uuid,
+        error_sqlstate text,
+        error_message text
+      )
+  $query$
+  into
+    v_second_outcome,
+    v_second_order_id,
+    v_second_sqlstate,
+    v_second_message;
+
+  execute $query$
+    select outcome, order_id, error_sqlstate, error_message
+    from extensions.dblink_get_result('order_inventory_second')
+      as result(
+        outcome text,
+        order_id uuid,
+        error_sqlstate text,
+        error_message text
+      )
+  $query$;
 
   execute format(
     $query$
-      select remaining_quantity, order_count
+      select
+        remaining_quantity,
+        order_count,
+        idempotency_count,
+        authoritative_idempotency_count
       from extensions.dblink(
         %L,
         %L
-      ) as result(remaining_quantity integer, order_count integer)
+      ) as result(
+        remaining_quantity integer,
+        order_count integer,
+        idempotency_count integer,
+        authoritative_idempotency_count integer
+      )
     $query$,
     'order_inventory_first',
     $remote$
@@ -208,31 +404,70 @@ begin
           select count(*)::integer
           from public.orders
           where store_id = 'c1000000-0000-4000-8000-000000000010'
+        ),
+        (
+          select count(*)::integer
+          from public.order_idempotency_keys
+          where store_id = 'c1000000-0000-4000-8000-000000000010'
+        ),
+        (
+          select count(*)::integer
+          from public.order_idempotency_keys as idempotency
+          join public.orders
+            on orders.id = idempotency.order_id
+           and orders.store_id = idempotency.store_id
+          where idempotency.store_id = 'c1000000-0000-4000-8000-000000000010'
         )
     $remote$
   )
-  into v_remaining_quantity, v_order_count;
+  into
+    v_remaining_quantity,
+    v_order_count,
+    v_idempotency_count,
+    v_authoritative_idempotency_count;
 
   insert into concurrency_probe (
     available,
+    first_outcome,
+    first_order_id,
+    first_sqlstate,
+    first_message,
+    second_outcome,
+    second_order_id,
+    second_sqlstate,
+    second_message,
     success_count,
+    unavailable_count,
     remaining_quantity,
     order_count,
-    detail
+    idempotency_count,
+    authoritative_idempotency_count
   )
   values (
     true,
-    v_first_success::integer + v_second_success::integer,
+    v_first_outcome,
+    v_first_order_id,
+    v_first_sqlstate,
+    v_first_message,
+    v_second_outcome,
+    v_second_order_id,
+    v_second_sqlstate,
+    v_second_message,
+    (v_first_outcome = 'success')::integer
+      + (v_second_outcome = 'success')::integer,
+    (v_first_outcome = 'inventory_unavailable')::integer
+      + (v_second_outcome = 'inventory_unavailable')::integer,
     v_remaining_quantity,
     v_order_count,
-    null
+    v_idempotency_count,
+    v_authoritative_idempotency_count
   );
 
   execute format(
     'select extensions.dblink_exec(%L, %L)',
     'order_inventory_first',
     $remote$
-      drop function if exists public.__order_inventory_test_checkout_attempt(text);
+      drop function if exists public.__order_inventory_test_checkout_attempt(text, bigint);
       delete from public.stores
       where id = 'c1000000-0000-4000-8000-000000000010';
       delete from auth.users
@@ -243,12 +478,21 @@ begin
   execute 'select extensions.dblink_disconnect(''order_inventory_second'')';
 exception
   when others then
+    get stacked diagnostics
+      v_infrastructure_sqlstate = returned_sqlstate,
+      v_infrastructure_message = message_text,
+      v_infrastructure_context = pg_exception_context;
+
+    if v_gate_locked then
+      perform pg_advisory_unlock(v_gate_key);
+    end if;
+
     begin
       execute format(
         'select extensions.dblink_exec(%L, %L)',
         'order_inventory_first',
         $remote$
-          drop function if exists public.__order_inventory_test_checkout_attempt(text);
+          drop function if exists public.__order_inventory_test_checkout_attempt(text, bigint);
           delete from public.stores
           where id = 'c1000000-0000-4000-8000-000000000010';
           delete from auth.users
@@ -269,21 +513,80 @@ exception
       when others then null;
     end;
 
-    insert into concurrency_probe (available, detail)
-    values (true, sqlerrm);
+    insert into concurrency_probe (
+      available,
+      infrastructure_sqlstate,
+      infrastructure_message,
+      infrastructure_context
+    )
+    values (
+      true,
+      v_infrastructure_sqlstate,
+      v_infrastructure_message,
+      v_infrastructure_context
+    );
 end;
 $probe$;
 
+select diag(
+  format(
+    'Concurrency infrastructure error [%s]: %s; context: %s',
+    coalesce(infrastructure_sqlstate, 'unknown'),
+    coalesce(infrastructure_message, 'no message'),
+    coalesce(infrastructure_context, 'no context')
+  )
+)
+from concurrency_probe
+where available
+  and infrastructure_sqlstate is not null;
+
+select diag(
+  format(
+    'Concurrency outcomes: first=%s order=%s SQLSTATE=%s message=%s; second=%s order=%s SQLSTATE=%s message=%s',
+    coalesce(first_outcome, 'null'),
+    coalesce(first_order_id::text, 'null'),
+    coalesce(first_sqlstate, 'none'),
+    coalesce(first_message, 'none'),
+    coalesce(second_outcome, 'null'),
+    coalesce(second_order_id::text, 'null'),
+    coalesce(second_sqlstate, 'none'),
+    coalesce(second_message, 'none')
+  )
+)
+from concurrency_probe
+where available;
+
 select *
 from skip(
-  'dblink unavailable; final-unit concurrency assertion is pending',
-  3
+  coalesce(
+    (select infrastructure_message from concurrency_probe),
+    'dblink unavailable; final-unit concurrency assertions are pending'
+  ),
+  6
 )
 where (select not available from concurrency_probe)
 union all
 select ok(
-  success_count = 1,
-  'two concurrent checkouts for the final unit produce exactly one success'
+  infrastructure_sqlstate is null
+    and coalesce(first_outcome, '') <> 'infrastructure_error'
+    and coalesce(second_outcome, '') <> 'infrastructure_error',
+  'the dblink concurrency infrastructure completes without errors'
+)
+from concurrency_probe
+where available
+union all
+select is(
+  success_count,
+  1,
+  'exactly one concurrent checkout succeeds'
+)
+from concurrency_probe
+where available
+union all
+select is(
+  unavailable_count,
+  1,
+  'exactly one concurrent checkout fails because inventory is unavailable'
 )
 from concurrency_probe
 where available
@@ -299,7 +602,15 @@ union all
 select is(
   order_count,
   1,
-  'the losing concurrent checkout creates no order'
+  'only the successful concurrent checkout creates an order'
+)
+from concurrency_probe
+where available
+union all
+select ok(
+  idempotency_count = 1
+    and authoritative_idempotency_count = 1,
+  'only the successful authoritative idempotency record remains'
 )
 from concurrency_probe
 where available;
@@ -539,7 +850,7 @@ values (
   'a1000000-0000-4000-8000-000000000010',
   'Invariant Whole Bird',
   'Chicken',
-  'Whole Bird',
+  'Meat & Broth',
   50,
   30.00,
   'active',
@@ -618,11 +929,43 @@ create function pg_temp.test_edit_order(
 returns void
 language plpgsql
 as $function$
+declare
+  v_order public.orders%rowtype;
+  v_customer public.customers%rowtype;
 begin
+  select orders.*
+  into v_order
+  from public.orders as orders
+  where orders.id = p_order_id;
+
+  select customers.*
+  into v_customer
+  from public.customers as customers
+  where customers.id = v_order.customer_id;
+
   perform 1
   from public.seller_edit_order(
     p_order_id => p_order_id,
-    p_items => p_items
+    p_items => p_items,
+    p_customer_id => v_order.customer_id,
+    p_customer_email => v_order.buyer_email_snapshot,
+    p_customer_first_name => v_order.buyer_first_name_snapshot,
+    p_customer_last_name => v_order.buyer_last_name_snapshot,
+    p_customer_phone => v_order.buyer_phone_snapshot,
+    p_business_name => v_customer.business_name,
+    p_buyer_notes => v_order.buyer_notes,
+    p_fulfillment_method => v_order.fulfillment_method,
+    p_pickup_option_id => v_order.pickup_option_id,
+    p_pickup_note => v_order.pickup_note,
+    p_delivery_option_name_snapshot => v_order.delivery_option_name_snapshot,
+    p_delivery_fee_amount => v_order.delivery_fee_amount,
+    p_delivery_address_line1 => v_order.buyer_address_line1_snapshot,
+    p_delivery_address_line2 => v_order.buyer_address_line2_snapshot,
+    p_delivery_city => v_order.buyer_city_snapshot,
+    p_delivery_state => v_order.buyer_state_snapshot,
+    p_delivery_postal_code => v_order.buyer_postal_code_snapshot,
+    p_delivery_country => v_order.buyer_country_snapshot,
+    p_tax_fee_amount => v_order.tax_fee_amount
   );
 
   drop table if exists pg_temp.edit_existing_items;
