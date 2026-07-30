@@ -30,3 +30,16 @@ test("duplicate results warn without replacing the requested customer creation",
     /We could not check for an existing customer/,
   );
 });
+
+test("duplicate results trigger modal-local warning scroll and focus", async () => {
+  const source = await readFile(modalPath, "utf8");
+
+  assert.match(source, /if \(duplicates\.length === 0 \|\| !duplicateWarningRef\.current\) return/);
+  assert.match(
+    source,
+    /revealCustomerDuplicateWarning\(duplicateWarningRef\.current\)/,
+  );
+  assert.match(source, /\}, \[duplicates\]\)/);
+  assert.match(source, /ref=\{duplicateWarningRef\}/);
+  assert.match(source, /tabIndex=\{-1\}/);
+});

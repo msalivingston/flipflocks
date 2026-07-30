@@ -72,6 +72,16 @@ export function customerDuplicateMatchLabel(match: CustomerDuplicateMatch) {
   return "Possible match";
 }
 
+export function revealCustomerDuplicateWarning(
+  warning: Pick<HTMLElement, "focus" | "scrollIntoView">,
+) {
+  warning.scrollIntoView({
+    behavior: "smooth",
+    block: "nearest",
+  });
+  warning.focus({ preventScroll: true });
+}
+
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }

@@ -173,6 +173,8 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [archiveAcknowledged, setArchiveAcknowledged] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [restoreInventoryOnCancel, setRestoreInventoryOnCancel] =
+    useState(false);
   const [emailCancellationToBuyer, setEmailCancellationToBuyer] = useState(false);
   const [pendingResendConfirmationActionId, setPendingResendConfirmationActionId] =
     useState<string | null>(null);
@@ -554,7 +556,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     const { data: cancelData, error: cancelError } = await supabase.rpc("cancel_order", {
       p_order_id: order.order_id,
       p_canceled_reason: trimmedReason || null,
-      p_restore_inventory: true,
+      p_restore_inventory: restoreInventoryOnCancel,
       p_send_buyer_notification: shouldEmailCancellation,
     });
 
@@ -588,6 +590,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       );
     }
     setCancelReason("");
+    setRestoreInventoryOnCancel(false);
     setEmailCancellationToBuyer(false);
     setShowCancelPanel(false);
     setIsActionsMenuOpen(false);
@@ -785,6 +788,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setCancellationError(null);
     setArchiveError(null);
     setIsActionsMenuOpen(false);
+    setRestoreInventoryOnCancel(false);
     setEmailCancellationToBuyer(true);
     setShowArchiveDialog(false);
     setShowFulfillmentDialog(false);
@@ -1093,16 +1097,19 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           error={cancellationError}
           hasBuyerEmail={buyerHasEmail}
           isCanceling={isCanceling}
+          restoreInventoryOnCancel={restoreInventoryOnCancel}
           onCancel={cancelOrder}
           onClose={() => {
             if (isCanceling) return;
             setCancelReason("");
+            setRestoreInventoryOnCancel(false);
             setEmailCancellationToBuyer(false);
             setCancellationError(null);
             setShowCancelPanel(false);
           }}
           onEmailCancellationChange={setEmailCancellationToBuyer}
           onReasonChange={setCancelReason}
+          onRestoreInventoryChange={setRestoreInventoryOnCancel}
         />
       ) : null}
 
@@ -2559,20 +2566,24 @@ function CancellationDialog({
   error,
   hasBuyerEmail,
   isCanceling,
+  restoreInventoryOnCancel,
   onCancel,
   onClose,
   onEmailCancellationChange,
   onReasonChange,
+  onRestoreInventoryChange,
 }: {
   cancelReason: string;
   emailCancellationToBuyer: boolean;
   error: string | null;
   hasBuyerEmail: boolean;
   isCanceling: boolean;
+  restoreInventoryOnCancel: boolean;
   onCancel: () => void;
   onClose: () => void;
   onEmailCancellationChange: (value: boolean) => void;
   onReasonChange: (value: string) => void;
+  onRestoreInventoryChange: (value: boolean) => void;
 }) {
   return (
     <div
@@ -2589,13 +2600,34 @@ function CancellationDialog({
           Cancel order?
         </h2>
         <p className="mt-2 text-sm leading-6 text-stone-700">
-          This will cancel the order and restore eligible inventory.
+          This will cancel the order. Choose whether eligible inventory should
+          be restored.
         </p>
         {error ? (
           <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
             {error}
           </p>
         ) : null}
+        <label className="mt-4 flex gap-3 rounded-md border border-stone-200 bg-[#fffdf8] p-3 text-sm text-stone-700">
+          <input
+            checked={restoreInventoryOnCancel}
+            className="mt-1 size-6 rounded border-stone-300 text-red-700 focus:ring-red-500 sm:size-4"
+            disabled={isCanceling}
+            type="checkbox"
+            onChange={(event) =>
+              onRestoreInventoryChange(event.target.checked)
+            }
+          />
+          <span>
+            <span className="block font-semibold text-stone-950">
+              Restore inventory
+            </span>
+            <span className="mt-1 block leading-6 text-stone-600">
+              Return eligible inventory-backed items to available inventory.
+              Leave unchecked if you want to review inventory manually.
+            </span>
+          </span>
+        </label>
         <label className="mt-4 grid gap-1.5 text-sm font-semibold text-stone-950">
           Reason for cancellation
           <span className="text-xs font-semibold text-stone-500">Optional</span>

@@ -5,6 +5,7 @@ import {
   formatPhoneNumber,
   normalizeEmail,
   normalizePhone,
+  revealCustomerDuplicateWarning,
   validateAddCustomer,
 } from "./add-customer-validation.ts";
 
@@ -83,4 +84,23 @@ test("duplicate warning labels identify the matching fields", () => {
     }),
     "Email and phone match",
   );
+});
+
+test("duplicate results reveal and focus the warning without scrolling the page", () => {
+  const calls = [];
+  const warning = {
+    scrollIntoView(options) {
+      calls.push(["scrollIntoView", options]);
+    },
+    focus(options) {
+      calls.push(["focus", options]);
+    },
+  };
+
+  revealCustomerDuplicateWarning(warning);
+
+  assert.deepEqual(calls, [
+    ["scrollIntoView", { behavior: "smooth", block: "nearest" }],
+    ["focus", { preventScroll: true }],
+  ]);
 });

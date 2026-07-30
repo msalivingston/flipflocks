@@ -18,6 +18,7 @@ import {
   customerDuplicateMatchLabel,
   formatPhoneNumber,
   normalizeEmail,
+  revealCustomerDuplicateWarning,
   validateAddCustomer,
 } from "./add-customer-validation";
 
@@ -179,6 +180,7 @@ function CustomerModal({
   const { seller } = useSellerContext();
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  const duplicateWarningRef = useRef<HTMLDivElement | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
   const [values, setValues] = useState<AddCustomerValues>(() =>
     customer
@@ -237,6 +239,11 @@ function CustomerModal({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isSaving, onClose]);
+
+  useEffect(() => {
+    if (duplicates.length === 0 || !duplicateWarningRef.current) return;
+    revealCustomerDuplicateWarning(duplicateWarningRef.current);
+  }, [duplicates]);
 
   function updateValue(field: keyof AddCustomerValues, value: string) {
     setValues((current) => ({ ...current, [field]: value }));
@@ -557,6 +564,8 @@ function CustomerModal({
                 <div
                   aria-live="polite"
                   className="rounded-xl border border-amber-300 bg-amber-50 p-4"
+                  ref={duplicateWarningRef}
+                  tabIndex={-1}
                 >
                   <div className="flex gap-3">
                     <AlertTriangle
