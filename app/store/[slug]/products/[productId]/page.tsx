@@ -528,8 +528,8 @@ function buildProductGallery(
       alt_text: product.imageAlt,
       caption: null,
       display_context: "featured",
-      entity_id: product.listingBatchBreedId,
-      entity_type: "listing_batch_breed",
+      entity_id: product.sellerBreedProfileId,
+      entity_type: "resolved_product",
       height_px: null,
       is_featured: true,
       public_url: product.imageUrl,
@@ -552,35 +552,11 @@ async function loadProductGallery(slug: string, product: StorefrontProduct) {
     });
   }
 
-  const gallerySources = [
-    {
-      entityId: product.listingBatchBreedId,
-      entityType: "listing_batch_breed",
-    },
-    {
-      entityId: product.listingBatchId,
-      entityType: "listing_batch",
-    },
-    {
-      entityId: product.sellerBreedProfileId,
-      entityType: "seller_breed_profile",
-    },
-  ];
-  const results = await Promise.all(
-    gallerySources.map((source) =>
-      loadStoreGallery(slug, {
-        ...source,
-        limit: 8,
-      }),
-    ),
-  );
-  const error = results.find((result) => result.error)?.error ?? null;
-  const data = results.find((result) => result.data.length > 0)?.data ?? [];
-
-  return {
-    data,
-    error,
-  };
+  return loadStoreGallery(slug, {
+    entityId: product.sellerBreedProfileId,
+    entityType: "seller_breed_profile",
+    limit: 8,
+  });
 }
 
 function formatProductQuantityUnit(quantity: number, isHatchingEggProduct: boolean) {

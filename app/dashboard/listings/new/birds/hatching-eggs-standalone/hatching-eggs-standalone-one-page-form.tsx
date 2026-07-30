@@ -2532,7 +2532,7 @@ function HatchingEggPhotos({
       description="Manage the photos buyers see for this hatching egg item. The first photo will be the featured photo."
       emptyDescription="No hatching egg photos have been added yet."
       entityId={hatchingEggItemId}
-      entityType={"hatching_egg_inventory_item" as "inventory_item"}
+      entityType="hatching_egg_inventory_item"
       listingBatchId={hatchingEggItemId}
       mediaItems={mediaItems}
       mode="setup"

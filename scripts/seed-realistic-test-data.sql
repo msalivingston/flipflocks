@@ -939,17 +939,17 @@ SELECT
 FROM (
   VALUES
     ('willow-creek-poultry'::text, 'store'::text, 'willow-creek-poultry'::text, 'hero'::text, 0::integer, true::boolean, 'Willow Creek Poultry brooder barn'::text, 'Development media record for Willow Creek storefront.'::text),
-    ('willow-creek-poultry', 'listing_batch', 'willow-spring-chicks', 'gallery', 0, true, 'Rhode Island Red chicks in brooder', 'Spring chick hatch.'),
+    ('willow-creek-poultry', 'seller_breed_profile', 'Rhode Island Red', 'gallery', 0, true, 'Rhode Island Red chicks in brooder', 'Spring chick hatch.'),
     ('willow-creek-poultry', 'inventory_item', 'willow-started-pullets|Barred Plymouth Rock|female', 'gallery', 0, true, 'Started Barred Plymouth Rock pullets', 'Future pullet group.'),
     ('high-mesa-waterfowl', 'store', 'high-mesa-waterfowl', 'hero', 0, true, 'High Mesa duck yard', 'Development media record for waterfowl storefront.'),
-    ('high-mesa-waterfowl', 'listing_batch', 'highmesa-ducklings', 'gallery', 0, true, 'Ducklings near waterer', 'Duckling listing photo.'),
-    ('high-mesa-waterfowl', 'listing_batch', 'highmesa-goslings', 'gallery', 0, true, 'Goslings on pasture', 'Goose listing photo.'),
+    ('high-mesa-waterfowl', 'seller_breed_profile', 'Pekin Duck', 'gallery', 0, true, 'Ducklings near waterer', 'Duck breed photo.'),
+    ('high-mesa-waterfowl', 'seller_breed_profile', 'Embden Goose', 'gallery', 0, true, 'Goslings on pasture', 'Goose breed photo.'),
     ('cedar-ridge-homestead', 'store', 'cedar-ridge-homestead', 'hero', 0, true, 'Cedar Ridge mixed homestead yard', 'Intentionally informal storefront photo.'),
-    ('cedar-ridge-homestead', 'listing_batch', 'cedar-mixed-layers', 'gallery', 0, true, 'Mixed layer chicks in back brooder', 'Messy seller listing photo.'),
+    ('cedar-ridge-homestead', 'seller_breed_profile', 'Barnyard Layer Mix', 'gallery', 0, true, 'Mixed layer chicks in back brooder', 'Seller breed photo.'),
     ('cedar-ridge-homestead', 'equipment_inventory_item', 'Extra quail feeder', 'gallery', 0, true, 'Small quail feeder', 'Extra supply photo.'),
     ('cedar-ridge-homestead', 'processed_poultry_inventory_item', 'Pasture chicken halves', 'gallery', 0, true, 'Wrapped pasture chicken halves', 'Processed poultry photo.'),
     ('gunnison-valley-hatchery', 'store', 'gunnison-valley-hatchery', 'hero', 0, true, 'Hatching egg packing room', 'Development media record for hatchery storefront.'),
-    ('gunnison-valley-hatchery', 'listing_batch', 'gunnison-marans-eggs', 'gallery', 0, true, 'Dark brown Marans hatching eggs', 'Marans hatching egg photo.'),
+    ('gunnison-valley-hatchery', 'seller_breed_profile', 'Black Copper Marans', 'gallery', 0, true, 'Dark brown Marans hatching eggs', 'Marans breed photo.'),
     ('rocky-mountain-farm-supply', 'store', 'rocky-mountain-farm-supply', 'hero', 0, true, 'Farm supply warehouse shelving', 'Development media record for equipment storefront.'),
     ('rocky-mountain-farm-supply', 'equipment_inventory_item', 'Four-hole galvanized nest box', 'gallery', 0, true, 'Galvanized nest box', 'Equipment listing photo.'),
     ('rocky-mountain-farm-supply', 'equipment_inventory_item', 'Premier-style chick brooder plate 12x12', 'gallery', 0, true, 'Chick brooder plate', 'Brooder listing photo.')
@@ -1019,7 +1019,7 @@ SELECT
   media_entities.entity_type,
   CASE media_entities.entity_type
     WHEN 'store' THEN media_entities.store_id
-    WHEN 'listing_batch' THEN batches.listing_batch_id
+    WHEN 'seller_breed_profile' THEN profiles.id
     WHEN 'inventory_item' THEN inventory.inventory_item_id
     WHEN 'equipment_inventory_item' THEN equipment.equipment_inventory_item_id
     WHEN 'processed_poultry_inventory_item' THEN processed.processed_poultry_inventory_item_id
@@ -1031,9 +1031,10 @@ SELECT
   media_entities.caption,
   'active'
 FROM dev_seed_media_entities AS media_entities
-LEFT JOIN dev_seed_batches AS batches
-  ON media_entities.entity_type = 'listing_batch'
- AND batches.batch_key = media_entities.entity_key
+LEFT JOIN public.seller_breed_profiles AS profiles
+  ON media_entities.entity_type = 'seller_breed_profile'
+ AND profiles.store_id = media_entities.store_id
+ AND profiles.display_name = media_entities.entity_key
 LEFT JOIN dev_seed_inventory AS inventory
   ON media_entities.entity_type = 'inventory_item'
  AND (
@@ -1047,7 +1048,7 @@ LEFT JOIN dev_seed_processed AS processed
  AND processed.product_name = media_entities.entity_key
 WHERE CASE media_entities.entity_type
     WHEN 'store' THEN media_entities.store_id
-    WHEN 'listing_batch' THEN batches.listing_batch_id
+    WHEN 'seller_breed_profile' THEN profiles.id
     WHEN 'inventory_item' THEN inventory.inventory_item_id
     WHEN 'equipment_inventory_item' THEN equipment.equipment_inventory_item_id
     WHEN 'processed_poultry_inventory_item' THEN processed.processed_poultry_inventory_item_id

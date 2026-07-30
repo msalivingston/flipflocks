@@ -11,8 +11,14 @@ const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
 const BUCKET_NAME = "seller-media";
 const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp"] as const;
 const ALLOWED_TYPES = new Set<string>(allowedMimeTypes);
-
-type SupportedMimeType = (typeof allowedMimeTypes)[number];
+const ALLOWED_ENTITY_TYPES = new Set([
+  "store",
+  "seller_breed_profile",
+  "inventory_item",
+  "equipment_inventory_item",
+  "processed_poultry_inventory_item",
+  "hatching_egg_inventory_item",
+]);
 
 type PublicErrorCode =
   | "invalid_request"
@@ -335,6 +341,19 @@ Deno.serve(async (req) => {
     }
 
     const formData = await req.formData();
+    const storeId = normalizeRequiredText(formData.get("store_id"), "store_id");
+    const entityType = normalizeRequiredText(
+      formData.get("entity_type"),
+      "entity_type",
+    ).toLowerCase();
+
+    if (!ALLOWED_ENTITY_TYPES.has(entityType)) {
+      throw new PublicSafeError(
+        "invalid_request",
+        "Unsupported media entity type",
+      );
+    }
+
     const fileValue = formData.get("file");
 
     if (!(fileValue instanceof File)) {
@@ -362,8 +381,6 @@ Deno.serve(async (req) => {
       return errorResponse("invalid_image", "Unable to validate image dimensions", 400);
     }
 
-    const storeId = normalizeRequiredText(formData.get("store_id"), "store_id");
-    const entityType = normalizeRequiredText(formData.get("entity_type"), "entity_type");
     const entityId = normalizeRequiredText(formData.get("entity_id"), "entity_id");
     const displayContext = normalizeOptionalText(formData.get("display_context")) ?? "gallery";
     const altText = normalizeOptionalText(formData.get("alt_text"));

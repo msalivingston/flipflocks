@@ -2739,8 +2739,6 @@ async function loadOrderItemMedia(
     .in("entity_id", entityIds)
     .in("entity_type", [
       "inventory_item",
-      "listing_batch",
-      "listing_batch_breed",
       "seller_breed_profile",
       "equipment_inventory_item",
       "processed_poultry_inventory_item",
@@ -2830,8 +2828,6 @@ function getItemMediaEntityKeys(item: SellerOrderItemRow) {
 
   return [
     { type: "inventory_item", id: item.inventory_item_id },
-    { type: "listing_batch_breed", id: item.listing_batch_breed_id },
-    { type: "listing_batch", id: item.listing_batch_id },
     { type: "seller_breed_profile", id: item.seller_breed_profile_id },
   ];
 }

@@ -26,12 +26,11 @@ type PhotoError = {
 
 type PhotoManagerMode = "setup" | "public-content" | "readonly";
 type PhotoEntityType =
-  | "listing_batch"
   | "inventory_item"
-  | "listing_batch_breed"
   | "seller_breed_profile"
   | "equipment_inventory_item"
-  | "processed_poultry_inventory_item";
+  | "processed_poultry_inventory_item"
+  | "hatching_egg_inventory_item";
 
 const acceptedImageTypes = sellerAcceptedImageTypes;
 const maxImageSizeBytes = sellerMaxImageSizeBytes;
@@ -48,7 +47,7 @@ export function ListingPhotosSection({
   description,
   emptyDescription,
   entityId,
-  entityType = "listing_batch",
+  entityType,
   listingBatchId,
   mode = "readonly",
   mediaItems,
@@ -61,7 +60,7 @@ export function ListingPhotosSection({
   description?: string;
   emptyDescription?: string;
   entityId?: string;
-  entityType?: PhotoEntityType;
+  entityType: PhotoEntityType;
   listingBatchId: string;
   mode?: PhotoManagerMode;
   mediaItems: ListingPhotoItem[];

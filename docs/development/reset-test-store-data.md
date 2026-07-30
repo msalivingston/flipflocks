@@ -130,8 +130,7 @@ The orphan check returns counts only. It verifies:
 - `listing_batch_breeds` without a parent `listing_batch`
 - `inventory_items` without a parent `listing_batch`
 - `inventory_items` without a parent `listing_batch_breed`
-- `media_links` pointing to missing `listing_batch` records
-- `media_links` pointing to missing `listing_batch_breed` records
+- legacy `listing_batch` or `listing_batch_breed` media links, which are no longer supported
 - `media_links` pointing to missing `inventory_item` records
 - `media_assets` with no remaining `media_links`
 - `inventory_activity_events` pointing to missing listing records
