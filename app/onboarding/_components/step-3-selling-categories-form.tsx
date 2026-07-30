@@ -3,7 +3,10 @@
 import Image from "next/image";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { LOCKED_PLAN_MESSAGES, normalizePlanId } from "@/lib/plan-capabilities";
+import {
+  getPlanCapabilities,
+  LOCKED_PLAN_MESSAGES,
+} from "@/lib/plan-capabilities";
 import type { LockedPlanFeature } from "@/lib/plan-capabilities";
 
 type Step3SellingCategoriesFormProps = {
@@ -59,8 +62,7 @@ export function Step3SellingCategoriesForm({
   onComplete,
   planKey,
 }: Step3SellingCategoriesFormProps) {
-  const normalizedPlan = normalizePlanId(planKey);
-  const isSmallFlock = normalizedPlan === "small_flock";
+  const isSmallFlock = !getPlanCapabilities(planKey).hatchingEggsEnabled;
   const [selectedCategories, setSelectedCategories] = useState<
     Record<CategoryKey, boolean>
   >({

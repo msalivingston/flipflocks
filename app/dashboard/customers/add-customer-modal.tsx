@@ -15,7 +15,7 @@ import { useSellerContext } from "../_components/seller-context";
 import {
   type AddCustomerErrors,
   type AddCustomerValues,
-  findPossibleDuplicate,
+  customerDuplicateMatchLabel,
   formatPhoneNumber,
   normalizeEmail,
   validateAddCustomer,
@@ -35,11 +35,14 @@ const initialValues: AddCustomerValues = {
 };
 
 type DuplicateCustomer = {
-  id: string;
+  customer_id: string;
   first_name: string | null;
   last_name: string | null;
+  business_name: string | null;
   email: string | null;
   phone: string | null;
+  email_matches: boolean;
+  phone_matches: boolean;
 };
 
 type EditableCustomerResult = {
@@ -195,7 +198,7 @@ function CustomerModal({
   );
   const [errors, setErrors] = useState<AddCustomerErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const [duplicate, setDuplicate] = useState<DuplicateCustomer | null>(null);
+  const [duplicates, setDuplicates] = useState<DuplicateCustomer[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -238,7 +241,7 @@ function CustomerModal({
   function updateValue(field: keyof AddCustomerValues, value: string) {
     setValues((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
-    setDuplicate(null);
+    setDuplicates([]);
     setFormError(null);
   }
 
@@ -268,26 +271,18 @@ function CustomerModal({
 
     if (!createAnyway) {
       const existingResult = await supabase
-        .from("customers")
-        .select("id, first_name, last_name, email, phone")
-        .eq("store_id", seller.store_id)
-        .limit(500)
-        .returns<DuplicateCustomer[]>();
+        .rpc("seller_find_possible_customer_duplicates", {
+          p_store_id: seller.store_id,
+          p_email: values.email,
+          p_phone: values.phone,
+          p_exclude_customer_id: customer?.customer_id ?? null,
+        });
+      const duplicateMatches = Array.isArray(existingResult.data)
+        ? (existingResult.data as DuplicateCustomer[])
+        : [];
 
-      if (existingResult.error) {
-        setFormError("We could not check for an existing customer. Please try again.");
-        setIsSaving(false);
-        return;
-      }
-
-      const possibleDuplicate = findPossibleDuplicate(
-        (existingResult.data ?? []).filter(
-          (existing) => existing.id !== customer?.customer_id,
-        ),
-        values,
-      );
-      if (possibleDuplicate) {
-        setDuplicate(possibleDuplicate);
+      if (!existingResult.error && duplicateMatches.length > 0) {
+        setDuplicates(duplicateMatches);
         setIsSaving(false);
         return;
       }
@@ -372,15 +367,14 @@ function CustomerModal({
   }
 
   function handleDialogKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Enter" && duplicate && event.target instanceof HTMLButtonElement) {
+    if (
+      event.key === "Enter" &&
+      duplicates.length > 0 &&
+      event.target instanceof HTMLButtonElement
+    ) {
       event.stopPropagation();
     }
   }
-
-  const duplicateName = duplicate
-    ? [duplicate.first_name, duplicate.last_name].filter(Boolean).join(" ") ||
-      "Existing customer"
-    : "";
 
   return (
     <div
@@ -559,7 +553,7 @@ function CustomerModal({
                 />
               </Field>
 
-              {duplicate ? (
+              {duplicates.length > 0 ? (
                 <div
                   aria-live="polite"
                   className="rounded-xl border border-amber-300 bg-amber-50 p-4"
@@ -574,26 +568,60 @@ function CustomerModal({
                         Possible duplicate
                       </p>
                       <p className="mt-1 text-sm leading-6 text-stone-700">
-                        A customer with this phone number or email may already
-                        exist.
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-stone-900">
-                        {duplicateName}
+                        {duplicates.length === 1
+                          ? "A customer with matching contact information may already exist."
+                          : `${duplicates.length} customers with matching contact information may already exist.`}
                       </p>
                     </div>
                   </div>
-                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <div className="mt-3 grid gap-2">
+                    {duplicates.map((duplicate) => {
+                      const duplicateName =
+                        [duplicate.first_name, duplicate.last_name]
+                          .filter(Boolean)
+                          .join(" ") || "Existing customer";
+
+                      return (
+                        <div
+                          key={duplicate.customer_id}
+                          className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-white/70 p-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-semibold text-stone-900">
+                              {duplicateName}
+                            </p>
+                            {duplicate.business_name ? (
+                              <p className="text-sm text-stone-600">
+                                {duplicate.business_name}
+                              </p>
+                            ) : null}
+                            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                              {customerDuplicateMatchLabel(duplicate)}
+                            </p>
+                            <p className="mt-1 break-words text-sm text-stone-600">
+                              {[duplicate.email, duplicate.phone]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </p>
+                          </div>
+                          <button
+                            className="seller-secondary-button min-h-10 shrink-0 px-3"
+                            type="button"
+                            onClick={() =>
+                              router.push(
+                                `/dashboard/customers/${duplicate.customer_id}`,
+                              )
+                            }
+                          >
+                            View
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-4">
                     <button
-                      className="seller-secondary-button min-h-11"
-                      type="button"
-                      onClick={() =>
-                        router.push(`/dashboard/customers/${duplicate.id}`)
-                      }
-                    >
-                      View Customer
-                    </button>
-                    <button
-                      className="seller-primary-button min-h-11"
+                      className="seller-primary-button min-h-11 w-full"
                       disabled={isSaving}
                       type="button"
                       onClick={() => void saveCustomer(true)}

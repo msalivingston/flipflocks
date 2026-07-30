@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  findPossibleDuplicate,
+  customerDuplicateMatchLabel,
   formatPhoneNumber,
+  normalizeEmail,
+  normalizePhone,
   validateAddCustomer,
 } from "./add-customer-validation.ts";
 
@@ -54,24 +56,31 @@ test("phone formatting is supported", () => {
   assert.equal(formatPhoneNumber("9707658099"), "(970) 765-8099");
 });
 
-test("duplicate matching normalizes email and phone", () => {
-  const customer = {
-    id: "customer-1",
-    email: "sam@example.com",
-    phone: "(970) 765-8099",
-  };
+test("duplicate lookup inputs normalize email and phone consistently", () => {
+  assert.equal(normalizeEmail(" SAM@example.com "), "sam@example.com");
+  assert.equal(normalizePhone("+1 (970) 765-8099"), "9707658099");
+});
+
+test("duplicate warning labels identify the matching fields", () => {
   assert.equal(
-    findPossibleDuplicate([customer], {
-      email: " SAM@example.com ",
-      phone: "",
+    customerDuplicateMatchLabel({
+      email_matches: true,
+      phone_matches: false,
     }),
-    customer,
+    "Email match",
   );
   assert.equal(
-    findPossibleDuplicate([customer], {
-      email: "",
-      phone: "970-765-8099",
+    customerDuplicateMatchLabel({
+      email_matches: false,
+      phone_matches: true,
     }),
-    customer,
+    "Phone match",
+  );
+  assert.equal(
+    customerDuplicateMatchLabel({
+      email_matches: true,
+      phone_matches: true,
+    }),
+    "Email and phone match",
   );
 });

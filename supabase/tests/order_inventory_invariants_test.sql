@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(54);
+select plan(73);
 
 -- The concurrency probe uses committed fixtures in two independent sessions.
 -- An exclusive advisory lock acts as a deterministic start gate. Both checkout
@@ -151,6 +151,12 @@ begin
         'live',
         'hosted',
         true
+      );
+
+      insert into public.seller_billing_status (store_id, plan_key)
+      values (
+        'c1000000-0000-4000-8000-000000000010',
+        'full_flock'
       );
 
       insert into public.equipment_inventory_items (
@@ -698,6 +704,11 @@ values
     'hosted',
     true
   );
+
+insert into public.seller_billing_status (store_id, plan_key)
+values
+  ('a1000000-0000-4000-8000-000000000010', 'full_flock'),
+  ('a1000000-0000-4000-8000-000000000011', 'full_flock');
 
 select ok(
   exists (
@@ -1407,6 +1418,23 @@ select is(
   'cancellation records restored_quantity consistently for all four sources'
 );
 
+select results_eq(
+  $test$
+    select order_status, payment_status
+    from public.orders
+    where id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'cancel-all-sources'
+    )
+  $test$,
+  $expected$
+    values ('canceled'::text, 'canceled'::text)
+  $expected$,
+  'an eligible pay-at-pickup order is canceled with its unpaid payment state canceled'
+);
+
 select throws_ok(
   $test$
     select *
@@ -1520,6 +1548,278 @@ select throws_ok(
 select lives_ok(
   $test$
     select pg_temp.test_checkout(
+      'pending-pay-at-pickup-cancellation',
+      '[{"item_type":"equipment_inventory","item_id":"a1000000-0000-4000-8000-000000000050","quantity":1}]'::jsonb
+    )
+  $test$,
+  'a pay-at-pickup order for pending-state cancellation is created'
+);
+
+update public.orders
+set order_status = 'pending'
+where id = (
+  select order_id
+  from public.order_idempotency_keys
+  where store_id = 'a1000000-0000-4000-8000-000000000010'
+    and idempotency_key = 'pending-pay-at-pickup-cancellation'
+);
+
+select lives_ok(
+  $test$
+    select *
+    from public.cancel_order(
+      (
+        select order_id
+        from public.order_idempotency_keys
+        where store_id = 'a1000000-0000-4000-8000-000000000010'
+          and idempotency_key = 'pending-pay-at-pickup-cancellation'
+      ),
+      'Pending pay-at-pickup cancellation',
+      true,
+      false
+    )
+  $test$,
+  'a pending pay-at-pickup order can be canceled'
+);
+
+select results_eq(
+  $test$
+    select order_status, payment_status
+    from public.orders
+    where id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'pending-pay-at-pickup-cancellation'
+    )
+  $test$,
+  $expected$
+    values ('canceled'::text, 'canceled'::text)
+  $expected$,
+  'pending pay-at-pickup cancellation records canceled states'
+);
+
+select is(
+  (select quantity_available from public.equipment_inventory_items where id = 'a1000000-0000-4000-8000-000000000050'),
+  48,
+  'pending pay-at-pickup cancellation restores inventory'
+);
+
+select lives_ok(
+  $test$
+    select pg_temp.test_checkout(
+      'unpaid-online-cancellation',
+      '[{"item_type":"processed_poultry_inventory","item_id":"a1000000-0000-4000-8000-000000000060","quantity":2}]'::jsonb
+    )
+  $test$,
+  'an order for unpaid online cancellation is created'
+);
+
+update public.orders
+set
+  payment_method = 'stripe_checkout',
+  payment_status = 'unpaid',
+  payment_provider = 'stripe',
+  provider_payment_status = 'unpaid'
+where id = (
+  select order_id
+  from public.order_idempotency_keys
+  where store_id = 'a1000000-0000-4000-8000-000000000010'
+    and idempotency_key = 'unpaid-online-cancellation'
+);
+
+select lives_ok(
+  $test$
+    select *
+    from public.cancel_order(
+      (
+        select order_id
+        from public.order_idempotency_keys
+        where store_id = 'a1000000-0000-4000-8000-000000000010'
+          and idempotency_key = 'unpaid-online-cancellation'
+      ),
+      'Unpaid online cancellation',
+      true,
+      false
+    )
+  $test$,
+  'an unpaid online order can be canceled'
+);
+
+select results_eq(
+  $test$
+    select order_status, payment_status
+    from public.orders
+    where id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'unpaid-online-cancellation'
+    )
+  $test$,
+  $expected$
+    values ('canceled'::text, 'canceled'::text)
+  $expected$,
+  'unpaid online cancellation records the canceled order and payment states'
+);
+
+select is(
+  (select quantity_available from public.processed_poultry_inventory_items where id = 'a1000000-0000-4000-8000-000000000060'),
+  50,
+  'eligible unpaid online cancellation restores inventory'
+);
+
+select lives_ok(
+  $test$
+    select pg_temp.test_checkout(
+      'paid-online-cancellation',
+      '[{"inventory_item_id":"a1000000-0000-4000-8000-000000000040","quantity":2}]'::jsonb
+    )
+  $test$,
+  'an order for paid online cancellation rejection is created'
+);
+
+update public.orders
+set
+  payment_method = 'stripe_checkout',
+  payment_status = 'paid',
+  payment_provider = 'stripe',
+  provider_payment_status = 'paid',
+  paid_at = now()
+where id = (
+  select order_id
+  from public.order_idempotency_keys
+  where store_id = 'a1000000-0000-4000-8000-000000000010'
+    and idempotency_key = 'paid-online-cancellation'
+);
+
+select throws_ok(
+  $test$
+    select *
+    from public.cancel_order(
+      (
+        select order_id
+        from public.order_idempotency_keys
+        where store_id = 'a1000000-0000-4000-8000-000000000010'
+          and idempotency_key = 'paid-online-cancellation'
+      ),
+      'Blocked paid online cancellation',
+      true,
+      true
+    )
+  $test$,
+  'P0001',
+  'Paid online orders cannot be canceled until Stripe refunds are supported.',
+  'a paid online order is rejected before cancellation side effects'
+);
+
+select results_eq(
+  $test$
+    select order_status, canceled_at is null
+    from public.orders
+    where id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'paid-online-cancellation'
+    )
+  $test$,
+  $expected$
+    values ('open'::text, true)
+  $expected$,
+  'rejected paid online cancellation leaves order status and canceled timestamp unchanged'
+);
+
+select is(
+  (
+    select payment_status
+    from public.orders
+    where id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'paid-online-cancellation'
+    )
+  ),
+  'paid',
+  'rejected paid online cancellation leaves payment status unchanged'
+);
+
+select is(
+  (select quantity_available from public.inventory_items where id = 'a1000000-0000-4000-8000-000000000040'),
+  46,
+  'rejected paid online cancellation leaves inventory deducted'
+);
+
+select is(
+  (
+    select restored_quantity
+    from public.order_items
+    where order_id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'paid-online-cancellation'
+    )
+  ),
+  0,
+  'rejected paid online cancellation records no inventory restoration'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from public.order_events
+    where order_id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'paid-online-cancellation'
+    )
+      and event_type = 'order_canceled'
+  ),
+  0,
+  'rejected paid online cancellation creates no cancellation event'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from public.inventory_activity_events
+    where metadata ->> 'order_id' = (
+      select order_id::text
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'paid-online-cancellation'
+    )
+      and note = 'Canceled order inventory restoration'
+  ),
+  0,
+  'rejected paid online cancellation creates no inventory audit event'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from public.email_notifications
+    where order_id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'paid-online-cancellation'
+    )
+      and notification_type in (
+        'buyer_order_canceled',
+        'seller_order_canceled_copy'
+      )
+  ),
+  0,
+  'rejected paid online cancellation queues no cancellation notifications'
+);
+
+select lives_ok(
+  $test$
+    select pg_temp.test_checkout(
       'fulfilled-order',
       '[{"inventory_item_id":"a1000000-0000-4000-8000-000000000040","quantity":1}]'::jsonb
     )
@@ -1541,6 +1841,26 @@ select lives_ok(
     )
   $test$,
   'the current fulfillment RPC marks the order fulfilled'
+);
+
+select throws_ok(
+  $test$
+    select *
+    from public.cancel_order(
+      (
+        select order_id
+        from public.order_idempotency_keys
+        where store_id = 'a1000000-0000-4000-8000-000000000010'
+          and idempotency_key = 'fulfilled-order'
+      ),
+      'Fulfilled cancellation attempt',
+      true,
+      false
+    )
+  $test$,
+  'P0001',
+  'Only pending or open orders can be canceled.',
+  'fulfilled orders remain ineligible for cancellation'
 );
 
 select throws_ok(

@@ -1,4 +1,8 @@
 import { formatMoneyInput } from "./order-form-calculations";
+import {
+  classifyOrderItemCategory,
+  formatOrderItemCategoryLabel,
+} from "./order-item-category";
 import type {
   InventoryCategory,
   InventoryItemType,
@@ -15,6 +19,7 @@ export type EditableOrderItemRow = {
   breed_description_snapshot: string | null;
   breed_display_name_snapshot: string | null;
   inventory_type_snapshot: string | null;
+  batch_type_snapshot: string | null;
   custom_inventory_label_snapshot: string | null;
   order_item_source: string | null;
   custom_item_name_snapshot: string | null;
@@ -23,6 +28,8 @@ export type EditableOrderItemRow = {
   item_category_snapshot: string | null;
   unit_price_snapshot: number | null;
   quantity: number;
+  fulfilled_quantity: number;
+  remaining_unfulfilled_quantity: number;
 };
 
 export type OrderItemMappingGap = {
@@ -112,10 +119,17 @@ function getInventoryItemType(
 
   if (
     item.order_item_source === "listing_inventory" ||
-    item.order_item_source == null
+    item.order_item_source === "inventory"
   ) {
     return "listing_inventory";
   }
+
+  if (item.hatching_egg_inventory_item_id) return "hatching_egg_inventory";
+  if (item.equipment_inventory_item_id) return "equipment_inventory";
+  if (item.processed_poultry_inventory_item_id) {
+    return "processed_poultry_inventory";
+  }
+  if (item.inventory_item_id) return "listing_inventory";
 
   return null;
 }
@@ -133,23 +147,20 @@ function getInventoryItemId(item: EditableOrderItemRow) {
     return item.hatching_egg_inventory_item_id;
   }
 
-  return item.inventory_item_id;
+  return (
+    item.inventory_item_id ||
+    item.hatching_egg_inventory_item_id ||
+    item.equipment_inventory_item_id ||
+    item.processed_poultry_inventory_item_id
+  );
 }
 
 function getSavedItemCategory(item: EditableOrderItemRow): InventoryCategory {
-  if (item.order_item_source === "equipment_inventory") return "equipment";
-  if (item.order_item_source === "processed_poultry_inventory") {
-    return "processed_poultry";
-  }
-  if (item.order_item_source === "hatching_egg_inventory") {
-    return "hatching_eggs";
-  }
-  if (
-    item.inventory_type_snapshot === "hatching_eggs" ||
-    item.item_category_snapshot === "hatching_eggs"
-  ) {
-    return "hatching_eggs";
-  }
+  const category = classifyOrderItemCategory(item);
+
+  if (category === "equipment_supplies") return "equipment";
+  if (category === "poultry_products") return "processed_poultry";
+  if (category === "hatching_eggs") return "hatching_eggs";
 
   return "poultry";
 }
@@ -164,43 +175,35 @@ function getSavedItemName(item: EditableOrderItemRow) {
 }
 
 function getSavedItemDetail(item: EditableOrderItemRow) {
-  const category = getSavedItemCategoryLabel(getSavedItemCategory(item));
+  const orderCategory = classifyOrderItemCategory(item);
+  const category = formatOrderItemCategoryLabel(orderCategory);
 
-  if (item.order_item_source === "equipment_inventory") {
-    return [item.item_category_snapshot, item.custom_inventory_label_snapshot, category]
+  if (orderCategory === "equipment_supplies") {
+    return [category, item.item_category_snapshot, item.custom_inventory_label_snapshot]
       .filter(Boolean)
       .join(" - ");
   }
 
-  if (item.order_item_source === "processed_poultry_inventory") {
-    return [item.item_category_snapshot, item.custom_inventory_label_snapshot, category]
+  if (orderCategory === "poultry_products") {
+    return [category, item.item_category_snapshot, item.custom_inventory_label_snapshot]
       .filter(Boolean)
       .join(" - ");
   }
 
-  if (item.order_item_source === "hatching_egg_inventory") {
+  if (orderCategory === "hatching_eggs") {
     return [
+      category,
       item.species_name_snapshot,
       item.breed_description_snapshot,
-      category,
     ]
       .filter(Boolean)
       .join(" - ");
   }
 
   return [
-    item.custom_inventory_label_snapshot || item.inventory_type_snapshot,
     category,
+    item.custom_inventory_label_snapshot || item.inventory_type_snapshot,
   ]
     .filter(Boolean)
     .join(" - ");
-}
-
-function getSavedItemCategoryLabel(category: InventoryCategory) {
-  if (category === "poultry") return "Live poultry";
-  if (category === "hatching_eggs") return "Hatching eggs";
-  if (category === "processed_poultry") return "Poultry product";
-  if (category === "equipment") return "Equipment";
-
-  return "Inventory";
 }

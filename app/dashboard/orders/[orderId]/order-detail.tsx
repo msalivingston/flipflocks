@@ -27,6 +27,21 @@ import {
   formatPaymentMethod,
   getOrderLifecycleState,
 } from "../order-formatters";
+import {
+  canArchiveOrder,
+  canCancelOrder,
+  canEditOrder,
+  canMarkOrderFulfilled,
+  canMarkOrderPaid,
+  canMarkOrderUnpaid,
+  canResendOrderConfirmation,
+  canUnarchiveOrder,
+  canUnfulfillOrder,
+} from "../order-action-predicates";
+import {
+  classifyOrderItemCategory,
+  formatOrderItemCategoryLabel,
+} from "../_lib/order-item-category";
 
 type SellerOrderDetailRow = {
   order_id: string;
@@ -92,6 +107,8 @@ type SellerOrderItemRow = {
   custom_item_name_snapshot: string | null;
   equipment_inventory_item_id: string | null;
   processed_poultry_inventory_item_id: string | null;
+  hatching_egg_inventory_item_id: string | null;
+  batch_type_snapshot: string | null;
   product_type_snapshot: string | null;
   item_name_snapshot: string | null;
   item_category_snapshot: string | null;
@@ -192,7 +209,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         supabase
           .from("seller_order_item_detail")
           .select(
-            "order_item_id, inventory_item_id, listing_batch_id, listing_batch_breed_id, seller_breed_profile_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, equipment_inventory_item_id, processed_poultry_inventory_item_id, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
+            "order_item_id, inventory_item_id, listing_batch_id, listing_batch_breed_id, seller_breed_profile_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, batch_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
           )
           .eq("store_id", seller.store_id)
           .eq("order_id", orderId)
@@ -265,12 +282,28 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       ),
     [data.items],
   );
+  const hasAdjustedItemQuantities = useMemo(
+    () =>
+      data.items.some(
+        (item) =>
+          item.fulfilled_quantity > 0 ||
+          item.remaining_unfulfilled_quantity <
+            item.quantity - item.fulfilled_quantity,
+      ),
+    [data.items],
+  );
+  const orderActionSnapshot = {
+    ...order,
+    has_adjusted_item_quantities: hasAdjustedItemQuantities,
+    order_status: order?.order_status ?? null,
+    remaining_unfulfilled_quantity: remainingPickupQuantity,
+  };
   const isDeliveryOrder = order?.fulfillment_method === "delivery";
   const deliveryOptionName = order?.delivery_option_name_snapshot?.trim() ?? "";
   const deliveryFeeAmount = order?.delivery_fee_amount ?? 0;
   const buyerHasEmail = Boolean(order?.buyer_email_snapshot?.trim());
-  const canResendOrderConfirmation = Boolean(
-    order && buyerHasEmail && canResendConfirmation(order),
+  const canResendConfirmationAction = Boolean(
+    order && buyerHasEmail && canResendOrderConfirmation(order),
   );
 
   useEffect(() => {
@@ -648,7 +681,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       return;
     }
 
-    if (!canResendConfirmation(order)) {
+    if (!canResendOrderConfirmation(order)) {
       setActionError("This order is not eligible for confirmation resend.");
       return;
     }
@@ -725,7 +758,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       return;
     }
 
-    if (!canResendConfirmation(order)) {
+    if (!canResendOrderConfirmation(order)) {
       setActionError("This order is not eligible for confirmation resend.");
       return;
     }
@@ -825,16 +858,16 @@ export function OrderDetail({ orderId }: { orderId: string }) {
             </p>
           </div>
           <QuickActionsMenu
-            canArchive={canArchiveOrder(order)}
-            canCancel={canCancelOrder(order)}
-            canMarkComplete={canMarkComplete(order, remainingPickupQuantity)}
-            canMarkPaid={canMarkPaymentPaid(order)}
-            canMarkUnfulfilled={canMarkUnfulfilled(order)}
-            canMarkUnpaid={canMarkPaymentUnpaid(order)}
-            canResendConfirmation={canResendOrderConfirmation}
-            canUnarchive={canUnarchiveOrder(order)}
+            canArchive={canArchiveOrder(orderActionSnapshot)}
+            canCancel={canCancelOrder(orderActionSnapshot)}
+            canMarkComplete={canMarkOrderFulfilled(orderActionSnapshot)}
+            canMarkPaid={canMarkOrderPaid(orderActionSnapshot)}
+            canMarkUnfulfilled={canUnfulfillOrder(orderActionSnapshot)}
+            canMarkUnpaid={canMarkOrderUnpaid(orderActionSnapshot)}
+            canResendConfirmation={canResendConfirmationAction}
+            canUnarchive={canUnarchiveOrder(orderActionSnapshot)}
             editHref={
-              canEditOrder(order)
+              canEditOrder(orderActionSnapshot)
                 ? `/dashboard/orders/${order.order_id}/edit`
                 : undefined
             }
@@ -933,7 +966,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
               <Image src="/glyphs/clipboard.png" alt="" width={18} height={18} />
               Print order
             </button>
-            {canEditOrder(order) ? (
+            {canEditOrder(orderActionSnapshot) ? (
               <Link
                 className={orderDetailButtonClass}
                 href={`/dashboard/orders/${order.order_id}/edit`}
@@ -943,14 +976,14 @@ export function OrderDetail({ orderId }: { orderId: string }) {
               </Link>
             ) : null}
             <QuickActionsMenu
-              canArchive={canArchiveOrder(order)}
-              canCancel={canCancelOrder(order)}
-              canMarkComplete={canMarkComplete(order, remainingPickupQuantity)}
-              canMarkPaid={canMarkPaymentPaid(order)}
-              canMarkUnfulfilled={canMarkUnfulfilled(order)}
-              canMarkUnpaid={canMarkPaymentUnpaid(order)}
-              canResendConfirmation={canResendOrderConfirmation}
-              canUnarchive={canUnarchiveOrder(order)}
+              canArchive={canArchiveOrder(orderActionSnapshot)}
+              canCancel={canCancelOrder(orderActionSnapshot)}
+              canMarkComplete={canMarkOrderFulfilled(orderActionSnapshot)}
+              canMarkPaid={canMarkOrderPaid(orderActionSnapshot)}
+              canMarkUnfulfilled={canUnfulfillOrder(orderActionSnapshot)}
+              canMarkUnpaid={canMarkOrderUnpaid(orderActionSnapshot)}
+              canResendConfirmation={canResendConfirmationAction}
+              canUnarchive={canUnarchiveOrder(orderActionSnapshot)}
               isBusy={isSaving || isCanceling || isResendingConfirmation || isArchiving}
               isOpen={isActionsMenuOpen}
               onArchive={openArchiveDialog}
@@ -1075,7 +1108,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
 
       {showFulfillmentDialog ? (
         <FulfillmentDialog
-          canMarkPaid={canMarkPaymentPaid(order)}
+          canMarkPaid={canMarkOrderPaid(orderActionSnapshot)}
           error={fulfillmentError}
           isSaving={isSaving}
           onClose={() => {
@@ -1272,31 +1305,36 @@ function OrderItemRow({
   item: SellerOrderItemRow;
   media: SellerMediaRow | null;
 }) {
-  const isCustomItem = item.order_item_source === "custom";
-  const isEquipmentItem = item.order_item_source === "equipment_inventory";
-  const isProcessedPoultryItem =
-    item.order_item_source === "processed_poultry_inventory";
+  const category = classifyOrderItemCategory(item);
+  const categoryLabel = formatOrderItemCategoryLabel(category);
+  const isCustomItem = category === "custom_or_unknown";
+  const isEquipmentItem = category === "equipment_supplies";
+  const isProcessedPoultryItem = category === "poultry_products";
+  const isHatchingEggItem = category === "hatching_eggs";
   const label = formatInventoryLabel({
     custom_inventory_label: item.custom_inventory_label_snapshot,
     inventory_type: item.inventory_type_snapshot,
   });
-  const itemTitle = isEquipmentItem || isProcessedPoultryItem
-    ? item.item_name_snapshot || item.breed_display_name_snapshot
-    : item.custom_item_name_snapshot || item.breed_display_name_snapshot;
-  const subtitle = isCustomItem
-    ? "Custom item"
-    : isEquipmentItem
+  const itemTitle =
+    isEquipmentItem || isProcessedPoultryItem || isHatchingEggItem
+      ? item.item_name_snapshot ||
+        item.custom_item_name_snapshot ||
+        item.breed_display_name_snapshot ||
+        "Order item"
+      : item.custom_item_name_snapshot ||
+        item.breed_display_name_snapshot ||
+        item.item_name_snapshot ||
+        "Order item";
+  const categoryMetadata =
+    isEquipmentItem || isProcessedPoultryItem
       ? [item.item_category_snapshot, item.custom_inventory_label_snapshot]
-          .filter(Boolean)
-          .join(" - ") || "Equipment & Supplies"
-      : isProcessedPoultryItem
-        ? [item.item_category_snapshot, item.custom_inventory_label_snapshot]
-            .filter(Boolean)
-            .join(" - ") || "Processed Poultry"
-      : item.species_name_snapshot;
+      : isCustomItem
+        ? []
+        : [item.species_name_snapshot];
 
   const details = [
-    subtitle,
+    categoryLabel,
+    ...categoryMetadata,
     !isCustomItem && !isEquipmentItem && !isProcessedPoultryItem
       ? formatSellerItemDetail(label)
       : null,
@@ -1772,66 +1810,6 @@ function formatSellerItemDetail(value: string | null) {
 
 function formatPhoneHref(value: string) {
   return value.replace(/[^\d+]/g, "");
-}
-
-function canCancelOrder(order: SellerOrderDetailRow) {
-  return (
-    order.payment_method === "pay_at_pickup" &&
-    ["pending", "open"].includes(order.order_status)
-  );
-}
-
-function canMarkComplete(
-  order: SellerOrderDetailRow,
-  remainingPickupQuantity: number,
-) {
-  return (
-    ["pending", "open"].includes(order.order_status) &&
-    remainingPickupQuantity > 0
-  );
-}
-
-function canMarkPaymentPaid(order: SellerOrderDetailRow) {
-  return (
-    order.payment_provider === "offline" &&
-    order.payment_method === "pay_at_pickup" &&
-    ["pay_at_pickup", "unpaid"].includes(order.payment_status ?? "") &&
-    ["pending", "open", "fulfilled"].includes(order.order_status)
-  );
-}
-
-function canMarkUnfulfilled(order: SellerOrderDetailRow) {
-  return order.order_status === "fulfilled" && !order.canceled_at;
-}
-
-function canMarkPaymentUnpaid(order: SellerOrderDetailRow) {
-  return (
-    order.payment_provider === "offline" &&
-    order.payment_method === "pay_at_pickup" &&
-    order.payment_status === "paid" &&
-    ["pending", "open", "fulfilled"].includes(order.order_status)
-  );
-}
-
-function canEditOrder(order: SellerOrderDetailRow) {
-  return (
-    !order.canceled_at &&
-    !order.fulfilled_at &&
-    order.order_status !== "canceled" &&
-    order.order_status !== "fulfilled"
-  );
-}
-
-function canArchiveOrder(order: SellerOrderDetailRow) {
-  return !order.archived_at;
-}
-
-function canUnarchiveOrder(order: SellerOrderDetailRow) {
-  return Boolean(order.archived_at);
-}
-
-function canResendConfirmation(order: SellerOrderDetailRow) {
-  return !order.canceled_at && order.order_status !== "canceled";
 }
 
 function getArchiveWarningReasons(order: SellerOrderDetailRow) {

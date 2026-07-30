@@ -102,7 +102,7 @@ export const PLAN_CAPABILITIES: Record<PlanId, PlanCapabilities> = {
 };
 
 export function normalizePlanId(value: string | null | undefined): PlanId {
-  return value === "small_flock" ? "small_flock" : "full_flock";
+  return value === "full_flock" ? "full_flock" : "small_flock";
 }
 
 export function getPlanCapabilities(

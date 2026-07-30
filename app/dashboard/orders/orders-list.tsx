@@ -21,11 +21,22 @@ import {
   type PrintableStoreLogo,
 } from "./_components/order-print-document";
 import {
+  classifyOrderItemCategory,
+  formatOrderItemCategoryLabel,
+} from "./_lib/order-item-category";
+import {
   formatCurrency,
   formatDateTime,
   formatInventoryLabel,
   getOrderLifecycleState,
 } from "./order-formatters";
+import {
+  canBulkArchiveOrder,
+  canBulkMarkOrderFulfilled,
+  canBulkMarkOrderPaid,
+  canBulkUnarchiveOrder,
+  type OrderActionSnapshot,
+} from "./order-action-predicates";
 import { downloadPickupSummaryReports } from "./pickup-summary-report-downloads";
 import {
   type PickupSummaryExportFormat,
@@ -83,9 +94,14 @@ type SellerOrderRow = {
 type SellerOrderItemRow = {
   order_id: string;
   order_item_id: string;
+  inventory_item_id: string | null;
+  equipment_inventory_item_id: string | null;
+  processed_poultry_inventory_item_id: string | null;
+  hatching_egg_inventory_item_id: string | null;
   species_name_snapshot: string | null;
   breed_display_name_snapshot: string | null;
   inventory_type_snapshot: string | null;
+  batch_type_snapshot: string | null;
   custom_inventory_label_snapshot: string | null;
   hatch_date_snapshot: string | null;
   available_date_snapshot: string | null;
@@ -97,6 +113,8 @@ type SellerOrderItemRow = {
   item_category_snapshot: string | null;
   unit_price_snapshot: number | null;
   quantity: number;
+  fulfilled_quantity: number;
+  remaining_unfulfilled_quantity: number;
   line_subtotal: number | null;
 };
 
@@ -326,7 +344,7 @@ export function OrdersList() {
         const itemResult = await supabase
           .from("seller_order_item_detail")
           .select(
-            "order_id, order_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, line_subtotal",
+            "order_id, order_item_id, inventory_item_id, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, batch_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
           )
           .eq("store_id", seller.store_id)
           .in("order_id", orderIds)
@@ -611,12 +629,16 @@ export function OrdersList() {
   }
 
   function openBulkFulfillmentDialog() {
-    const eligibleOrders = selectedVisibleOrders.filter(isBulkFulfillmentEligible);
+    const eligibleOrders = selectedVisibleOrders.filter((order) =>
+      canBulkMarkOrderFulfilled(
+        toOrderActionSnapshot(order, orderItemsByOrderId[order.order_id]),
+      ),
+    );
 
     setBulkActionDialog({
       eligibleCount: eligibleOrders.length,
       kind: "fulfill",
-      payableCount: eligibleOrders.filter(isBulkPaymentEligible).length,
+      payableCount: eligibleOrders.filter(canBulkMarkOrderPaid).length,
       selectedCount: selectedVisibleOrders.length,
       skippedCount: selectedVisibleOrders.length - eligibleOrders.length,
     });
@@ -627,7 +649,7 @@ export function OrdersList() {
   }
 
   function openBulkMarkPaidDialog() {
-    const eligibleOrders = selectedVisibleOrders.filter(isBulkPaymentEligible);
+    const eligibleOrders = selectedVisibleOrders.filter(canBulkMarkOrderPaid);
 
     setBulkActionDialog({
       eligibleCount: eligibleOrders.length,
@@ -665,7 +687,7 @@ export function OrdersList() {
   }
 
   function openBulkUnarchiveDialog() {
-    const eligibleOrders = selectedVisibleOrders.filter(isBulkUnarchiveEligible);
+    const eligibleOrders = selectedVisibleOrders.filter(canBulkUnarchiveOrder);
 
     setBulkActionDialog({
       eligibleCount: eligibleOrders.length,
@@ -2314,15 +2336,7 @@ function getPickupSummaryLines(orders: PickupSummaryOrder[]) {
 }
 
 function isPickupSummaryBirdLine(item: SellerOrderItemRow) {
-  if (
-    item.order_item_source === "custom" ||
-    item.order_item_source === "equipment_inventory" ||
-    item.order_item_source === "processed_poultry_inventory"
-  ) {
-    return false;
-  }
-
-  return item.inventory_type_snapshot !== "hatching_eggs";
+  return classifyOrderItemCategory(item) === "live_birds";
 }
 
 function formatPickupSummarySex(item: SellerOrderItemRow) {
@@ -3302,36 +3316,6 @@ function getCombinedOrderStatus(order: SellerOrderRow): CombinedOrderStatus {
   };
 }
 
-function isBulkFulfillmentEligible(order: SellerOrderRow) {
-  return (
-    !order.archived_at &&
-    !isOrderCanceled(order) &&
-    order.order_status !== "fulfilled"
-  );
-}
-
-function isBulkPaymentEligible(order: SellerOrderRow) {
-  return (
-    !order.archived_at &&
-    !isOrderCanceled(order) &&
-    order.payment_provider === "offline" &&
-    order.payment_method === "pay_at_pickup" &&
-    (order.order_status === "pending" ||
-      order.order_status === "open" ||
-      order.order_status === "fulfilled") &&
-    (order.payment_status === "pay_at_pickup" ||
-      order.payment_status === "unpaid")
-  );
-}
-
-function isBulkArchiveEligible(order: SellerOrderRow) {
-  return !order.archived_at;
-}
-
-function isBulkUnarchiveEligible(order: SellerOrderRow) {
-  return Boolean(order.archived_at);
-}
-
 function isOrderCanceled(order: SellerOrderRow) {
   return order.order_status === "canceled" || Boolean(order.canceled_at);
 }
@@ -3353,7 +3337,7 @@ function isOrderUnpaidForArchive(order: SellerOrderRow) {
 }
 
 function getBulkArchiveSummary(orders: SellerOrderRow[]) {
-  const eligibleOrders = orders.filter(isBulkArchiveEligible);
+  const eligibleOrders = orders.filter(canBulkArchiveOrder);
   const unfulfilledCount = eligibleOrders.filter(isOrderUnfulfilledForArchive).length;
   const unpaidCount = eligibleOrders.filter(isOrderUnpaidForArchive).length;
   const bothCount = eligibleOrders.filter(
@@ -3366,6 +3350,20 @@ function getBulkArchiveSummary(orders: SellerOrderRow[]) {
     needsAcknowledgement: unfulfilledCount > 0 || unpaidCount > 0,
     unpaidCount,
     unfulfilledCount,
+  };
+}
+
+function toOrderActionSnapshot(
+  order: SellerOrderRow,
+  items: SellerOrderItemRow[] | undefined,
+): OrderActionSnapshot {
+  return {
+    ...order,
+    remaining_unfulfilled_quantity: (items ?? []).reduce(
+      (total, item) =>
+        total + Math.max(item.remaining_unfulfilled_quantity, 0),
+      0,
+    ),
   };
 }
 
@@ -3508,36 +3506,38 @@ function formatOrderItems(order: SellerOrderRow) {
 }
 
 function formatOrderItemSummary(item: SellerOrderItemRow) {
-  const isCustomItem = item.order_item_source === "custom";
-  const isEquipmentItem = item.order_item_source === "equipment_inventory";
-  const isProcessedPoultryItem =
-    item.order_item_source === "processed_poultry_inventory";
+  const category = classifyOrderItemCategory(item);
+  const categoryLabel = formatOrderItemCategoryLabel(category);
+  const isCustomItem = category === "custom_or_unknown";
+  const isEquipmentItem = category === "equipment_supplies";
+  const isProcessedPoultryItem = category === "poultry_products";
+  const isHatchingEggItem = category === "hatching_eggs";
   const inventoryLabel = formatInventoryLabel({
     custom_inventory_label: item.custom_inventory_label_snapshot,
     inventory_type: item.inventory_type_snapshot,
   });
   const title =
-    isEquipmentItem || isProcessedPoultryItem
-      ? item.item_name_snapshot || item.breed_display_name_snapshot
-      : item.custom_item_name_snapshot || item.breed_display_name_snapshot;
+    isEquipmentItem || isProcessedPoultryItem || isHatchingEggItem
+      ? item.item_name_snapshot ||
+        item.custom_item_name_snapshot ||
+        item.breed_display_name_snapshot
+      : item.custom_item_name_snapshot ||
+        item.breed_display_name_snapshot ||
+        item.item_name_snapshot;
   const fallbackTitle =
     item.item_name_snapshot ||
     item.custom_item_name_snapshot ||
     item.breed_display_name_snapshot ||
     "Order item";
-  const category = isCustomItem
-    ? "Custom item"
-    : isEquipmentItem
+  const categoryMetadata =
+    isEquipmentItem || isProcessedPoultryItem
       ? [item.item_category_snapshot, item.custom_inventory_label_snapshot]
-          .filter(Boolean)
-          .join(" - ") || "Equipment & Supplies"
-      : isProcessedPoultryItem
-        ? [item.item_category_snapshot, item.custom_inventory_label_snapshot]
-            .filter(Boolean)
-            .join(" - ") || "Processed Poultry"
-        : item.species_name_snapshot;
+      : isCustomItem
+        ? []
+        : [item.species_name_snapshot];
   const details = [
-    category,
+    categoryLabel,
+    ...categoryMetadata,
     !isCustomItem && !isEquipmentItem && !isProcessedPoultryItem
       ? formatSellerItemDetail(inventoryLabel)
       : null,

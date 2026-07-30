@@ -4,6 +4,7 @@ import {
 } from "../../_lib/listing-formatters";
 import { formatCurrency } from "../order-formatters";
 import { isPositiveWholeNumber } from "./order-form-calculations";
+import { formatOrderItemCategoryLabel } from "./order-item-category";
 import type {
   BrowseInventoryFilter,
   EquipmentInventoryRow,
@@ -180,10 +181,18 @@ export function getInventoryCategorySort(category: BrowseInventoryFilter) {
 }
 
 export function formatInventoryCategoryLabel(category: BrowseInventoryFilter) {
-  if (category === "poultry") return "Live Birds";
-  if (category === "hatching_eggs") return "Hatching Eggs";
-  if (category === "processed_poultry") return "Poultry Products";
-  if (category === "equipment") return "Equipment & Supplies";
+  if (category === "poultry") {
+    return formatOrderItemCategoryLabel("live_birds");
+  }
+  if (category === "hatching_eggs") {
+    return formatOrderItemCategoryLabel("hatching_eggs");
+  }
+  if (category === "processed_poultry") {
+    return formatOrderItemCategoryLabel("poultry_products");
+  }
+  if (category === "equipment") {
+    return formatOrderItemCategoryLabel("equipment_supplies");
+  }
 
   return "Inventory";
 }

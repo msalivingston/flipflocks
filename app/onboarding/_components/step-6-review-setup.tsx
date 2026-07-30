@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { PLAN_CAPABILITIES, normalizePlanId } from "@/lib/plan-capabilities";
+import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { storeSetupSuccessSoundKey } from "@/lib/success-sound";
 
 type Step6ReviewSetupProps = {
@@ -405,7 +405,7 @@ function formatBuyerLocation(store: StoreReview | null) {
 
 function formatPlanAccess(billing: BillingReview | null) {
   if (!billing) return "Not saved";
-  const plan = PLAN_CAPABILITIES[normalizePlanId(billing.plan_key)];
+  const plan = getPlanCapabilities(billing.plan_key);
 
   if (
     billing.subscription_status === "comped" ||
@@ -437,7 +437,7 @@ function formatBillingPlan(billing: BillingReview | null) {
 function formatPlanName(billing: BillingReview | null) {
   if (!billing) return "Not saved";
 
-  return PLAN_CAPABILITIES[normalizePlanId(billing.plan_key)].displayName;
+  return getPlanCapabilities(billing.plan_key).displayName;
 }
 
 function friendlyReviewError(message: string) {

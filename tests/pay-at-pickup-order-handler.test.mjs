@@ -164,6 +164,55 @@ test("normal checkout is rate checked before summary and order creation", async 
   assert.equal(harness.emailWorkerCalls, 1);
 });
 
+test("a complete delivery checkout reaches the existing order RPC", async () => {
+  const harness = createHarness();
+  const response = await harness.handler(
+    requestFor({
+      ...validPayload("delivery-checkout"),
+      fulfillment_method: "delivery",
+      delivery_option_id: "30000000-0000-4000-8000-000000000001",
+    }),
+  );
+
+  assert.equal(response.status, 201);
+  const orderCall = harness.calls.find(
+    (call) => call.name === "create_pay_at_pickup_order_v2",
+  );
+  assert.equal(
+    orderCall.args.p_delivery_option_id,
+    "30000000-0000-4000-8000-000000000001",
+  );
+  assert.equal(orderCall.args.p_fulfillment_method, "delivery");
+});
+
+test("pickup and delivery reject missing required address data before database activity", async () => {
+  for (const fulfillmentMethod of ["pickup", "delivery"]) {
+    for (const field of [
+      "delivery_address_line1",
+      "delivery_city",
+      "delivery_state",
+      "delivery_postal_code",
+    ]) {
+      const harness = createHarness();
+      const payload = {
+        ...validPayload(`${fulfillmentMethod}-${field}`),
+        fulfillment_method: fulfillmentMethod,
+        ...(fulfillmentMethod === "delivery"
+          ? { delivery_option_id: "30000000-0000-4000-8000-000000000001" }
+          : {}),
+        [field]: " ",
+      };
+      const response = await harness.handler(requestFor(payload));
+      const body = await response.json();
+
+      assert.equal(response.status, 400);
+      assert.equal(body.error, "invalid_request");
+      assert.deepEqual(harness.calls, []);
+      assert.equal(harness.emailWorkerCalls, 0);
+    }
+  }
+});
+
 test("same idempotency key retry reaches the authoritative order RPC", async () => {
   const harness = createHarness({
     rateLimit: (_args, calls) => ({

@@ -40,6 +40,13 @@ import {
   formatDate,
   toPublicImageUrl,
 } from "../storefront-ui";
+import type {
+  CheckoutFulfillmentMethod,
+  CheckoutValidationScope,
+} from "./checkout-validation";
+import {
+  validateCheckout,
+} from "./checkout-validation";
 
 type BuyerForm = {
   buyerEmail: string;
@@ -58,7 +65,7 @@ type BuyerForm = {
   deliveryOptionId: string;
 };
 
-type FulfillmentMethod = "pickup" | "delivery";
+type FulfillmentMethod = CheckoutFulfillmentMethod;
 type CheckoutStep = "contact" | "fulfillment" | "review";
 
 type CheckoutSummary = {
@@ -406,63 +413,24 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
     scrollStepIntoView(step);
   }
 
-  function validateContactStep() {
-    const requiredFields: Array<keyof BuyerForm> = [
-      "buyerFirstName",
-      "buyerLastName",
-      "buyerEmail",
-      "buyerPhone",
-    ];
-    const missingField = requiredFields.find((field) => !form[field].trim());
+  function validateCheckoutPath(scope: CheckoutValidationScope) {
+    const issue = validateCheckout({
+      form,
+      requirePickupOption: usesManualPickupOptions,
+      scope,
+    });
 
-    if (missingField) {
-      setErrorMessage("Please complete your contact information.");
-      setActiveStep("contact");
-      focusCheckoutField(missingField);
-      return false;
-    }
+    if (!issue) return true;
 
-    return true;
-  }
-
-  function validateFulfillmentStep() {
-    if (
-      form.fulfillmentMethod === "pickup" &&
-      usesManualPickupOptions &&
-      !form.pickupOptionId
-    ) {
-      setErrorMessage("Please choose a pickup option.");
-      setActiveStep("fulfillment");
-      focusCheckoutField("pickupOptionId");
-      return false;
-    }
-
-    if (form.fulfillmentMethod === "delivery") {
-      if (!form.deliveryOptionId) {
-        setErrorMessage("Please choose a delivery option.");
-        setActiveStep("fulfillment");
-        focusCheckoutField("deliveryOptionId");
-        return false;
-      }
-
-      const missingAddressField = (
-        ["addressLine1", "city", "state", "postalCode"] as Array<keyof BuyerForm>
-      ).find((field) => !form[field].trim());
-
-      if (missingAddressField) {
-        setErrorMessage("Please complete your delivery address.");
-        setActiveStep("fulfillment");
-        focusCheckoutField(missingAddressField);
-        return false;
-      }
-    }
-
-    return true;
+    setErrorMessage(issue.message);
+    setActiveStep(issue.step);
+    focusCheckoutField(issue.field);
+    return false;
   }
 
   function handleContactContinue() {
     setErrorMessage(null);
-    if (!validateContactStep()) return;
+    if (!validateCheckoutPath("contact")) return;
 
     setCompletedSteps((current) => ({ ...current, contact: true }));
     setActiveStep("fulfillment");
@@ -471,7 +439,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
 
   function handleFulfillmentContinue() {
     setErrorMessage(null);
-    if (!validateFulfillmentStep()) return;
+    if (!validateCheckoutPath("fulfillment")) return;
 
     setCompletedSteps((current) => ({ ...current, fulfillment: true }));
     setActiveStep("review");
@@ -481,8 +449,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
   function handleReviewSubmit() {
     setErrorMessage(null);
     if (placeOrderDisabledForDemo) return;
-    if (!validateContactStep()) return;
-    if (!validateFulfillmentStep()) return;
+    if (!validateCheckoutPath("all")) return;
 
     setCompletedSteps((current) => ({
       ...current,
@@ -504,20 +471,6 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
 
     if (summary && !summary.is_checkout_available) {
       setErrorMessage(toBuyerOrderError(summary.message ?? undefined));
-      return;
-    }
-
-    if (
-      form.fulfillmentMethod === "pickup" &&
-      usesManualPickupOptions &&
-      !form.pickupOptionId
-    ) {
-      setErrorMessage("Please choose a pickup option.");
-      return;
-    }
-
-    if (form.fulfillmentMethod === "delivery" && !form.deliveryOptionId) {
-      setErrorMessage("Please choose a delivery option.");
       return;
     }
 
@@ -580,9 +533,9 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
     }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await submitOrder();
+    handleReviewSubmit();
   }
 
   if (success) {
@@ -807,71 +760,85 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
               ) : null}
 
               {form.fulfillmentMethod === "delivery" ? (
-                <>
-                  <label className="grid gap-1.5 text-sm font-bold text-stone-900">
-                    Delivery option
-                    <select
-                      className="min-h-11 rounded-md border border-[#ded7c8] bg-white px-3 text-base text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
-                      name="deliveryOptionId"
-                      onChange={(event) =>
-                        updateField("deliveryOptionId", event.target.value)
-                      }
-                      required
-                      value={form.deliveryOptionId}
-                    >
-                      <option value="">Choose a delivery option</option>
-                      {deliveryOptions.map((option) => (
-                        <option
-                          key={option.delivery_option_id}
-                          value={option.delivery_option_id}
-                        >
-                          {formatDeliveryOptionLabel(option)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <TextField
-                    autoComplete="address-line1"
-                    label="Address line 1"
-                    name="addressLine1"
-                    onChange={(value) => updateField("addressLine1", value)}
-                    value={form.addressLine1}
-                  />
-                  <TextField
-                    autoComplete="address-line2"
-                    label="Address line 2"
-                    name="addressLine2"
-                    onChange={(value) => updateField("addressLine2", value)}
-                    required={false}
-                    value={form.addressLine2}
-                  />
-                  <TextField
-                    autoComplete="address-level2"
-                    label="City"
-                    name="city"
-                    onChange={(value) => updateField("city", value)}
-                    value={form.city}
-                  />
-                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
-                    <TextField
-                      autoComplete="address-level1"
-                      label="State"
-                      maxLength={40}
-                      name="state"
-                      onChange={(value) => updateField("state", value)}
-                      value={form.state}
-                    />
-                    <TextField
-                      autoComplete="postal-code"
-                      label="ZIP"
-                      maxLength={20}
-                      name="postalCode"
-                      onChange={(value) => updateField("postalCode", value)}
-                      value={form.postalCode}
-                    />
-                  </div>
-                </>
+                <label className="grid gap-1.5 text-sm font-bold text-stone-900">
+                  Delivery option
+                  <select
+                    className="min-h-11 rounded-md border border-[#ded7c8] bg-white px-3 text-base text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                    name="deliveryOptionId"
+                    onChange={(event) =>
+                      updateField("deliveryOptionId", event.target.value)
+                    }
+                    required
+                    value={form.deliveryOptionId}
+                  >
+                    <option value="">Choose a delivery option</option>
+                    {deliveryOptions.map((option) => (
+                      <option
+                        key={option.delivery_option_id}
+                        value={option.delivery_option_id}
+                      >
+                        {formatDeliveryOptionLabel(option)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               ) : null}
+
+              <div className="grid gap-3">
+                <div>
+                  <p className="text-sm font-bold text-stone-900">
+                    {form.fulfillmentMethod === "delivery"
+                      ? "Delivery address"
+                      : "Pickup contact address"}
+                  </p>
+                  {form.fulfillmentMethod === "pickup" ? (
+                    <p className="mt-1 text-sm leading-5 text-stone-600">
+                      This is your contact address. Pickup will follow the
+                      seller&apos;s pickup details.
+                    </p>
+                  ) : null}
+                </div>
+                <TextField
+                  autoComplete="address-line1"
+                  label="Address line 1"
+                  name="addressLine1"
+                  onChange={(value) => updateField("addressLine1", value)}
+                  value={form.addressLine1}
+                />
+                <TextField
+                  autoComplete="address-line2"
+                  label="Address line 2"
+                  name="addressLine2"
+                  onChange={(value) => updateField("addressLine2", value)}
+                  required={false}
+                  value={form.addressLine2}
+                />
+                <TextField
+                  autoComplete="address-level2"
+                  label="City"
+                  name="city"
+                  onChange={(value) => updateField("city", value)}
+                  value={form.city}
+                />
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
+                  <TextField
+                    autoComplete="address-level1"
+                    label="State"
+                    maxLength={40}
+                    name="state"
+                    onChange={(value) => updateField("state", value)}
+                    value={form.state}
+                  />
+                  <TextField
+                    autoComplete="postal-code"
+                    label="ZIP"
+                    maxLength={20}
+                    name="postalCode"
+                    onChange={(value) => updateField("postalCode", value)}
+                    value={form.postalCode}
+                  />
+                </div>
+              </div>
 
               {form.fulfillmentMethod === "pickup" &&
               store.pickup_method === "notes" ? (

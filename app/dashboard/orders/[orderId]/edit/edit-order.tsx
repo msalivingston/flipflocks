@@ -64,6 +64,7 @@ import {
   formatCurrency,
   formatPaymentMethod,
 } from "../../order-formatters";
+import { canEditOrder } from "../../order-action-predicates";
 
 type CustomerRow = {
   customer_id: string;
@@ -118,6 +119,7 @@ type EditOrderState = {
   customers: CustomerRow[];
   deliveryOptions: DeliveryOption[];
   inventory: InventorySearchRow[];
+  hasAdjustedItemQuantities: boolean;
   mappingGaps: OrderItemMappingGap[];
   order: EditableOrderRow | null;
   pickupMethod: PickupMethod;
@@ -133,6 +135,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
     customers: [],
     deliveryOptions: [],
     inventory: [],
+    hasAdjustedItemQuantities: false,
     mappingGaps: [],
     order: null,
     pickupMethod: "notes",
@@ -216,7 +219,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
         supabase
           .from("seller_order_item_detail")
           .select(
-            "order_item_id, inventory_item_id, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, species_name_snapshot, breed_description_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, order_item_source, custom_item_name_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity",
+            "order_item_id, inventory_item_id, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, species_name_snapshot, breed_description_snapshot, breed_display_name_snapshot, inventory_type_snapshot, batch_type_snapshot, custom_inventory_label_snapshot, order_item_source, custom_item_name_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity",
           )
           .eq("store_id", seller.store_id)
           .eq("order_id", orderId)
@@ -346,6 +349,12 @@ export function EditOrder({ orderId }: { orderId: string }) {
           listingRows: listingResult.data ?? [],
           processedPoultryRows: processedPoultryResult.data ?? [],
         }),
+        hasAdjustedItemQuantities: (itemResult.data ?? []).some(
+          (item) =>
+            item.fulfilled_quantity > 0 ||
+            item.remaining_unfulfilled_quantity <
+              item.quantity - item.fulfilled_quantity,
+        ),
         mappingGaps: mappedItems.gaps,
         order,
         pickupMethod,
@@ -467,7 +476,12 @@ export function EditOrder({ orderId }: { orderId: string }) {
   }, [isBrowseOpen]);
 
   const order = data.order;
-  const isEditable = order ? canEditOrder(order) : false;
+  const isEditable = order
+    ? canEditOrder({
+        ...order,
+        has_adjusted_item_quantities: data.hasAdjustedItemQuantities,
+      })
+    : false;
   const selectedCustomer = data.customers.find(
     (customer) => customer.customer_id === selectedCustomerId,
   );
@@ -1177,15 +1191,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
         </div>
       </div>
     </>
-  );
-}
-
-function canEditOrder(order: EditableOrderRow) {
-  return (
-    !order.canceled_at &&
-    !order.fulfilled_at &&
-    order.order_status !== "canceled" &&
-    order.order_status !== "fulfilled"
   );
 }
 

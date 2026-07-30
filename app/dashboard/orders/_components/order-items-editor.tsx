@@ -6,6 +6,7 @@ import { formatCurrency } from "../order-formatters";
 import {
   filterInventory,
   formatBrowseInventoryMetadata,
+  formatInventoryCategoryLabel,
   formatInventoryMetadata,
   getBrowseInventoryRows,
 } from "../_lib/order-form-inventory";
@@ -240,10 +241,19 @@ function BrowseInventoryDialog({
   const rows = getBrowseInventoryRows(inventory, filter, query).slice(0, 60);
   const filters: { label: string; value: BrowseInventoryFilter }[] = [
     { label: "All", value: "all" },
-    { label: "Live poultry", value: "poultry" },
-    { label: "Hatching eggs", value: "hatching_eggs" },
-    { label: "Poultry products", value: "processed_poultry" },
-    { label: "Equipment", value: "equipment" },
+    { label: formatInventoryCategoryLabel("poultry"), value: "poultry" },
+    {
+      label: formatInventoryCategoryLabel("hatching_eggs"),
+      value: "hatching_eggs",
+    },
+    {
+      label: formatInventoryCategoryLabel("processed_poultry"),
+      value: "processed_poultry",
+    },
+    {
+      label: formatInventoryCategoryLabel("equipment"),
+      value: "equipment",
+    },
   ];
 
   return (

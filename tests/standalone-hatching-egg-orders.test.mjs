@@ -46,6 +46,9 @@ const inventoryModule = loadTypeScriptModule(
 const editMappingModule = loadTypeScriptModule(
   "app/dashboard/orders/_lib/order-edit-mapping.ts",
 );
+const storefrontModule = loadTypeScriptModule(
+  "app/store/[slug]/storefront-data.ts",
+);
 
 const standaloneEgg = {
   hatching_egg_inventory_item_id: "egg-1",
@@ -104,6 +107,47 @@ test("does not offer zero-quantity standalone eggs", () => {
     quantity_available: 0,
   });
   assert.deepEqual(inventoryModule.getBrowseInventoryRows([row], "all", ""), []);
+});
+
+test("storefront purchase options preserve the public view can_checkout value", () => {
+  const storefrontEgg = {
+    store_id: "store-1",
+    store_slug: "test-store",
+    hatching_egg_inventory_item_id: "egg-1",
+    item_type: "hatching_egg_inventory",
+    hatching_egg_product_id: "he-1",
+    normalized_item_name: "blue ameraucana eggs",
+    item_name: "Blue Ameraucana Eggs",
+    species_id: "species-1",
+    species_name: "Chicken",
+    species_slug: "chicken",
+    description: "Blue-shell hatching eggs",
+    quantity_available: 12,
+    buyer_availability_code: "ready_now",
+    buyer_availability_label: "Ready now",
+    available_date: "2026-08-15",
+    is_available_now: true,
+    can_checkout: false,
+    unit_price: 6.5,
+    minimum_order_quantity: 6,
+    featured_image_url: null,
+    featured_image_alt_text: null,
+    created_at: "2026-07-30T00:00:00Z",
+    updated_at: "2026-07-30T00:00:00Z",
+  };
+
+  assert.equal(
+    storefrontModule.toHatchingEggPurchaseOption(storefrontEgg).canCheckout,
+    false,
+  );
+  assert.equal(
+    storefrontModule.toHatchingEggPurchaseOption({
+      ...storefrontEgg,
+      can_checkout: true,
+      quantity_available: 6,
+    }).canCheckout,
+    true,
+  );
 });
 
 test("uses the standalone hatching egg payload type", () => {

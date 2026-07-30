@@ -18,6 +18,10 @@ import {
   formatPaymentMethod,
   getOrderLifecycleState,
 } from "../orders/order-formatters";
+import {
+  classifyOrderItemCategory,
+  formatOrderItemCategoryLabel,
+} from "../orders/_lib/order-item-category";
 
 type ReportTab = "sales" | "items" | "customers";
 type DateRange =
@@ -33,7 +37,8 @@ type ItemTypeFilter =
   | "Live Birds"
   | "Hatching Eggs"
   | "Poultry Products"
-  | "Equipment";
+  | "Equipment & Supplies"
+  | "Custom / Other";
 
 type SellerReportOrderRow = {
   order_id: string;
@@ -60,6 +65,8 @@ type SellerReportItemRow = {
   inventory_item_id: string | null;
   equipment_inventory_item_id: string | null;
   processed_poultry_inventory_item_id: string | null;
+  hatching_egg_inventory_item_id: string | null;
+  order_item_source: string | null;
   species_name_snapshot: string | null;
   breed_display_name_snapshot: string | null;
   inventory_type_snapshot: string | null;
@@ -175,7 +182,8 @@ const itemTypeOptions: { label: string; value: ItemTypeFilter }[] = [
   { label: "Live Birds", value: "Live Birds" },
   { label: "Hatching Eggs", value: "Hatching Eggs" },
   { label: "Poultry Products", value: "Poultry Products" },
-  { label: "Equipment", value: "Equipment" },
+  { label: "Equipment & Supplies", value: "Equipment & Supplies" },
+  { label: "Custom / Other", value: "Custom / Other" },
 ];
 
 const dash = "\u2014";
@@ -236,7 +244,7 @@ export function ReportsDashboard() {
         supabase
           .from("seller_order_item_detail")
           .select(
-            "order_id, order_item_id, inventory_item_id, equipment_inventory_item_id, processed_poultry_inventory_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, batch_type_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, custom_item_name_snapshot, unit_price_snapshot, quantity, line_subtotal",
+            "order_id, order_item_id, inventory_item_id, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, order_item_source, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, batch_type_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, custom_item_name_snapshot, unit_price_snapshot, quantity, line_subtotal",
           )
           .eq("store_id", seller.store_id)
           .order("created_at", { ascending: false })
@@ -1662,7 +1670,10 @@ function buildItemSummaries(items: SellerReportItemRow[]) {
   for (const item of items) {
     const itemType = getBroadItemType(item);
     const name = getItemName(item, itemType);
-    const species = itemType === "Equipment" ? dash : item.species_name_snapshot || dash;
+    const species =
+      itemType === "Equipment & Supplies" || itemType === "Custom / Other"
+        ? dash
+        : item.species_name_snapshot || dash;
     const breed =
       itemType === "Live Birds" || itemType === "Hatching Eggs"
         ? item.breed_display_name_snapshot || dash
@@ -2051,35 +2062,7 @@ function getDateRangeLabel(settings: DateSettings) {
 function getBroadItemType(
   item: SellerReportItemRow,
 ): Exclude<ItemTypeFilter, "all"> {
-  const raw = [
-    item.inventory_type_snapshot,
-    item.batch_type_snapshot,
-    item.product_type_snapshot,
-    item.item_category_snapshot,
-    item.item_name_snapshot,
-    item.custom_item_name_snapshot,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  if (item.equipment_inventory_item_id || raw.includes("equipment")) {
-    return "Equipment";
-  }
-
-  if (
-    item.processed_poultry_inventory_item_id ||
-    raw.includes("processed") ||
-    raw.includes("product")
-  ) {
-    return "Poultry Products";
-  }
-
-  if (raw.includes("hatching") || raw.includes("egg")) {
-    return "Hatching Eggs";
-  }
-
-  return "Live Birds";
+  return formatOrderItemCategoryLabel(classifyOrderItemCategory(item));
 }
 
 function getItemName(
@@ -2089,8 +2072,8 @@ function getItemName(
   if (item.custom_item_name_snapshot) return item.custom_item_name_snapshot;
   if (item.item_name_snapshot) return item.item_name_snapshot;
 
-  if (itemType === "Equipment") {
-    return item.custom_inventory_label_snapshot || "Equipment";
+  if (itemType === "Equipment & Supplies") {
+    return item.custom_inventory_label_snapshot || "Equipment & Supplies";
   }
 
   const breed = item.breed_display_name_snapshot || "Item";

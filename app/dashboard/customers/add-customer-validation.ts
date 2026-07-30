@@ -15,6 +15,11 @@ export type AddCustomerErrors = Partial<
   Record<"firstName" | "lastName" | "phone" | "email", string>
 >;
 
+export type CustomerDuplicateMatch = {
+  email_matches: boolean;
+  phone_matches: boolean;
+};
+
 export function validateAddCustomer(values: AddCustomerValues) {
   const errors: AddCustomerErrors = {};
 
@@ -58,21 +63,13 @@ export function formatPhoneNumber(value: string) {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
-export function findPossibleDuplicate<
-  T extends { email: string | null; phone: string | null },
->(customers: T[], values: Pick<AddCustomerValues, "email" | "phone">) {
-  const email = normalizeEmail(values.email);
-  const phone = normalizePhone(values.phone);
-
-  if (!email && !phone) return null;
-
-  return (
-    customers.find(
-      (customer) =>
-        (email && normalizeEmail(customer.email) === email) ||
-        (phone && normalizePhone(customer.phone) === phone),
-    ) ?? null
-  );
+export function customerDuplicateMatchLabel(match: CustomerDuplicateMatch) {
+  if (match.email_matches && match.phone_matches) {
+    return "Email and phone match";
+  }
+  if (match.email_matches) return "Email match";
+  if (match.phone_matches) return "Phone match";
+  return "Possible match";
 }
 
 function isValidEmail(value: string) {
