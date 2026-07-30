@@ -8,7 +8,7 @@ import type { SellerContext } from "@/app/dashboard/_lib/seller-types";
 import { OnboardingShell } from "./onboarding-shell";
 import { Step2FarmBasicsForm } from "./step-2-farm-basics-form";
 import { Step3SellingCategoriesForm } from "./step-3-selling-categories-form";
-import { Step4PickupInstructionsForm } from "./step-4-pickup-instructions-form";
+import { Step4PickupPolicyForm } from "./step-4-pickup-instructions-form";
 import { Step5PlanAccessForm } from "./step-5-plan-access-form";
 import { Step6ReviewSetup } from "./step-6-review-setup";
 
@@ -32,7 +32,7 @@ type StorePickupSettings = {
   buyer_contact_email_enabled: boolean | null;
   buyer_contact_phone_enabled: boolean | null;
   buyer_contact_text_enabled: boolean | null;
-  pickup_instructions: string | null;
+  pickup_policy: string | null;
 };
 
 export function OnboardingFlow() {
@@ -168,7 +168,7 @@ export function OnboardingFlow() {
           supabase
             .from("stores")
             .select(
-              "pickup_instructions, buyer_contact_email_enabled, buyer_contact_text_enabled, buyer_contact_phone_enabled",
+              "pickup_policy, buyer_contact_email_enabled, buyer_contact_text_enabled, buyer_contact_phone_enabled",
             )
             .eq("id", primarySeller.store_id)
             .maybeSingle(),
@@ -308,7 +308,7 @@ export function OnboardingFlow() {
         body="These instructions appear at checkout and again in the buyer's order confirmation email. You can edit them anytime."
         compactOnMobile
         currentStep={5}
-        headline="Set your pickup instructions"
+        headline="Set your pickup policy"
         subhead="Make pickup clear from the start"
       >
         <div className="space-y-3">
@@ -317,14 +317,14 @@ export function OnboardingFlow() {
               {error}
             </p>
           ) : null}
-          <Step4PickupInstructionsForm
+          <Step4PickupPolicyForm
             initialValues={{
               buyerContactEmailEnabled:
                 pickupSettings?.buyer_contact_email_enabled,
               buyerContactPhoneEnabled:
                 pickupSettings?.buyer_contact_phone_enabled,
               buyerContactTextEnabled: pickupSettings?.buyer_contact_text_enabled,
-              pickupInstructions: pickupSettings?.pickup_instructions,
+              pickupPolicy: pickupSettings?.pickup_policy,
             }}
             onBack={() => {
               setError(null);

@@ -244,7 +244,7 @@ export default function PickupDeliveryTab({
               />
             </div>
             <TextField
-              helper="Add directions, landmarks, appointment details, or other pickup instructions."
+              helper="Add directions, landmarks, appointment details, or other pickup location details."
               label="Pickup directions or general location"
               onChange={onPickupLocationTextChange}
               placeholder="Farm pickup by appointment near the north gate"

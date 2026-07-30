@@ -87,7 +87,6 @@ type StoreAdminForm = {
   communication_email: string;
   pickup_method: "notes" | "manual_options";
   pickup_location_text: string;
-  pickup_instructions: string;
   pickup_address_line1: string;
   pickup_address_line2: string;
   pickup_city: string;
@@ -121,7 +120,6 @@ type CustomPolicyDraft = {
 type StoreDefaults = {
   store_id: string;
   pickup_method: "notes" | "manual_options" | null;
-  pickup_instructions: string | null;
   pickup_location_text: string | null;
   pickup_address_line1: string | null;
   pickup_address_line2: string | null;
@@ -360,7 +358,6 @@ const blankForm: StoreAdminForm = {
   communication_email: "",
   pickup_method: "notes",
   pickup_location_text: "",
-  pickup_instructions: "",
   pickup_address_line1: "",
   pickup_address_line2: "",
   pickup_city: "",
@@ -471,7 +468,7 @@ export function StoreAdmin() {
           supabase
             .from("seller_store_defaults")
             .select(
-              "store_id, pickup_method, pickup_instructions, pickup_location_text, pickup_address_line1, pickup_address_line2, pickup_city, pickup_state, pickup_postal_code, pickup_country, default_pickup_option_id, default_pickup_option_label, delivery_enabled, communication_email, order_notification_email, currency",
+              "store_id, pickup_method, pickup_location_text, pickup_address_line1, pickup_address_line2, pickup_city, pickup_state, pickup_postal_code, pickup_country, default_pickup_option_id, default_pickup_option_label, delivery_enabled, communication_email, order_notification_email, currency",
             )
             .eq("store_id", seller.store_id)
             .maybeSingle()
@@ -1728,7 +1725,6 @@ export function StoreAdmin() {
     const defaultsPayload = {
       pickup_method: form.pickup_method,
       pickup_location_text: form.pickup_location_text,
-      pickup_instructions: form.pickup_instructions,
       pickup_address_line1: form.pickup_address_line1,
       pickup_address_line2: form.pickup_address_line2,
       pickup_city: form.pickup_city,
@@ -1819,7 +1815,6 @@ export function StoreAdmin() {
       public_phone: form.public_phone.trim(),
       communication_email: form.communication_email.trim().toLowerCase(),
       pickup_location_text: form.pickup_location_text.trim(),
-      pickup_instructions: form.pickup_instructions.trim(),
       pickup_address_line1: form.pickup_address_line1.trim(),
       pickup_address_line2: form.pickup_address_line2.trim(),
       pickup_city: form.pickup_city.trim(),
@@ -5036,8 +5031,6 @@ function buildInitialForm(
     pickup_method:
       defaults?.pickup_method === "manual_options" ? "manual_options" : "notes",
     pickup_location_text: defaults?.pickup_location_text ?? "",
-    pickup_instructions:
-      defaults?.pickup_instructions ?? seller.pickup_instructions ?? "",
     pickup_address_line1: defaults?.pickup_address_line1 ?? "",
     pickup_address_line2: defaults?.pickup_address_line2 ?? "",
     pickup_city: defaults?.pickup_city ?? "",

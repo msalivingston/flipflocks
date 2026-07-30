@@ -168,7 +168,7 @@ export function StorefrontTrustStrip({
 }) {
   const items = buildTrustItems({
     location: formatLocation(store),
-    showPickup: Boolean(store.pickup_instructions || store.pickup_policy),
+    showPickup: Boolean(store.pickup_policy),
   });
 
   if (items.length === 0) return null;

@@ -5,24 +5,24 @@ import { supabase } from "@/lib/supabase";
 
 type ContactPreference = "email" | "text" | "phone";
 
-type Step4PickupInstructionsFormProps = {
+type Step4PickupPolicyFormProps = {
   initialValues?: {
     buyerContactEmailEnabled?: boolean | null;
     buyerContactPhoneEnabled?: boolean | null;
     buyerContactTextEnabled?: boolean | null;
-    pickupInstructions?: string | null;
+    pickupPolicy?: string | null;
   };
   onBack: () => void;
   onComplete: () => void;
 };
 
 type Step4Errors = {
-  pickupInstructions?: string;
+  pickupPolicy?: string;
   contactPreferences?: string;
   form?: string;
 };
 
-const defaultPickupInstructions =
+const defaultPickupPolicy =
   "All pickups are by appointment and need at least 24 hours advance notice. At pickup, please come prepared with appropriate transport for your birds. Pet carriers sized appropriately work well. If you bring cardboard boxes, please cut air holes in advance. Please do not bring plastic tubs unless they have appropriate ventilation. Younger birds should have something so they are not standing on slick surfaces.";
 
 const contactOptions: Array<{
@@ -34,13 +34,13 @@ const contactOptions: Array<{
   { key: "phone", label: "Phone call" },
 ];
 
-export function Step4PickupInstructionsForm({
+export function Step4PickupPolicyForm({
   initialValues,
   onBack,
   onComplete,
-}: Step4PickupInstructionsFormProps) {
-  const [pickupInstructions, setPickupInstructions] = useState(
-    initialValues?.pickupInstructions ?? defaultPickupInstructions,
+}: Step4PickupPolicyFormProps) {
+  const [pickupPolicy, setPickupPolicy] = useState(
+    initialValues?.pickupPolicy ?? defaultPickupPolicy,
   );
   const [contactPreferences, setContactPreferences] = useState<
     Record<ContactPreference, boolean>
@@ -64,7 +64,7 @@ export function Step4PickupInstructionsForm({
 
     const nextErrors = validateStep4({
       contactPreferences,
-      pickupInstructions,
+      pickupPolicy,
     });
 
     if (Object.keys(nextErrors).length > 0) {
@@ -79,7 +79,7 @@ export function Step4PickupInstructionsForm({
       p_pickup: {
         email_enabled: contactPreferences.email,
         phone_enabled: contactPreferences.phone,
-        pickup_instructions: pickupInstructions.trim(),
+        pickup_policy: pickupPolicy.trim(),
         text_enabled: contactPreferences.text,
       },
     });
@@ -96,16 +96,16 @@ export function Step4PickupInstructionsForm({
   return (
     <section className="rounded-[0.95rem] bg-white px-4 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-7 lg:py-6">
       <h2 className="font-serif text-[1.45rem] font-semibold leading-tight text-stone-950 sm:text-[1.7rem]">
-        Pickup instructions
+        Pickup policy
       </h2>
 
       <form className="mt-4 space-y-4" onSubmit={handleSubmit} noValidate>
         <div>
           <label
             className="text-sm font-bold text-stone-950 sm:text-[13px]"
-            htmlFor="pickup-instructions"
+            htmlFor="pickup-policy"
           >
-            Default pickup instructions *
+            Default pickup policy *
           </label>
           <p className="mt-1 text-sm leading-5 text-stone-500 sm:text-xs">
             Shown to buyers at checkout and included in their order
@@ -113,25 +113,25 @@ export function Step4PickupInstructionsForm({
           </p>
           <textarea
             aria-describedby={
-              errors.pickupInstructions ? "pickup-instructions-error" : undefined
+              errors.pickupPolicy ? "pickup-policy-error" : undefined
             }
-            aria-invalid={Boolean(errors.pickupInstructions)}
+            aria-invalid={Boolean(errors.pickupPolicy)}
             className={`mt-1 min-h-[180px] w-full resize-y rounded-md border bg-white px-3 py-2 text-base font-medium leading-6 text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:ring-2 focus:ring-[#246f38]/25 sm:text-[14px] ${
-              errors.pickupInstructions
+              errors.pickupPolicy
                 ? "border-red-400 focus:border-red-500"
                 : "border-stone-300 focus:border-[#246f38]"
             }`}
-            id="pickup-instructions"
-            onChange={(event) => setPickupInstructions(event.target.value)}
+            id="pickup-policy"
+            onChange={(event) => setPickupPolicy(event.target.value)}
             rows={8}
-            value={pickupInstructions}
+            value={pickupPolicy}
           />
-          {errors.pickupInstructions ? (
+          {errors.pickupPolicy ? (
             <p
               className="mt-1 text-xs font-semibold text-red-700 sm:text-[13px]"
-              id="pickup-instructions-error"
+              id="pickup-policy-error"
             >
-              {errors.pickupInstructions}
+              {errors.pickupPolicy}
             </p>
           ) : null}
         </div>
@@ -198,7 +198,7 @@ export function Step4PickupInstructionsForm({
             disabled={isSubmitting}
             type="submit"
           >
-            {isSubmitting ? "Saving pickup instructions..." : "Continue"}
+            {isSubmitting ? "Saving pickup policy..." : "Continue"}
           </button>
         </div>
       </form>
@@ -208,15 +208,15 @@ export function Step4PickupInstructionsForm({
 
 function validateStep4({
   contactPreferences,
-  pickupInstructions,
+  pickupPolicy,
 }: {
   contactPreferences: Record<ContactPreference, boolean>;
-  pickupInstructions: string;
+  pickupPolicy: string;
 }) {
   const nextErrors: Step4Errors = {};
 
-  if (!pickupInstructions.trim()) {
-    nextErrors.pickupInstructions = "Enter pickup instructions.";
+  if (!pickupPolicy.trim()) {
+    nextErrors.pickupPolicy = "Enter a pickup policy.";
   }
 
   if (
@@ -232,8 +232,8 @@ function validateStep4({
 
 function friendlyPickupError(message: string) {
   if (message.toLowerCase().includes("selling categories")) {
-    return "Please finish selling categories before pickup instructions.";
+    return "Please finish selling categories before the pickup policy.";
   }
 
-  return message || "We could not save your pickup instructions. Please try again.";
+  return message || "We could not save your pickup policy. Please try again.";
 }

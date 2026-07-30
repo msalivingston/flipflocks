@@ -889,8 +889,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                   View policies
                 </summary>
                 <div className="mt-2 grid gap-2 whitespace-pre-line">
-                  <p>{store.pickup_instructions || "Pickup details coming soon."}</p>
-                  {store.pickup_policy ? <p>{store.pickup_policy}</p> : null}
+                  <p>{store.pickup_policy || "Pickup details coming soon."}</p>
                   {store.cancellation_policy ? (
                     <p>{store.cancellation_policy}</p>
                   ) : null}
@@ -1308,8 +1307,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
                 Pickup and policies
               </h2>
               <div className="mt-2 grid gap-1.5 whitespace-pre-line text-xs leading-5 text-stone-600">
-                <p>{store.pickup_instructions || "Pickup details coming soon."}</p>
-                {store.pickup_policy ? <p>{store.pickup_policy}</p> : null}
+                <p>{store.pickup_policy || "Pickup details coming soon."}</p>
                 {store.cancellation_policy ? (
                   <p>{store.cancellation_policy}</p>
                 ) : null}

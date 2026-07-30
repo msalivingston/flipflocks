@@ -28,7 +28,6 @@ export type StorefrontHome = {
   cancellation_policy: string | null;
   other_policies?: string | null;
   custom_policies?: StorefrontCustomPolicy[] | null;
-  pickup_instructions: string | null;
   pickup_method: "notes" | "manual_options" | string | null;
   public_email: string | null;
   public_phone: string | null;

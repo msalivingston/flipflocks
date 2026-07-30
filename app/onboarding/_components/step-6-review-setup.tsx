@@ -24,7 +24,7 @@ type StoreReview = {
   equipment_supplies_enabled: boolean | null;
   hatching_eggs_enabled: boolean | null;
   location_display_preference: string | null;
-  pickup_instructions: string | null;
+  pickup_policy: string | null;
   processed_poultry_enabled: boolean | null;
   public_city: string | null;
   public_state: string | null;
@@ -54,7 +54,7 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFullDescription, setShowFullDescription] = useState(false);
-  const [showFullPickupInstructions, setShowFullPickupInstructions] =
+  const [showFullPickupPolicy, setShowFullPickupPolicy] =
     useState(false);
 
   useEffect(() => {
@@ -70,7 +70,7 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
             supabase
               .from("stores")
               .select(
-                "store_name, about_text, public_city, public_state, billing_address_line1, billing_city, billing_state, billing_postal_code, location_display_preference, hatching_eggs_enabled, processed_poultry_enabled, equipment_supplies_enabled, pickup_instructions, buyer_contact_email_enabled, buyer_contact_text_enabled, buyer_contact_phone_enabled",
+                "store_name, about_text, public_city, public_state, billing_address_line1, billing_city, billing_state, billing_postal_code, location_display_preference, hatching_eggs_enabled, processed_poultry_enabled, equipment_supplies_enabled, pickup_policy, buyer_contact_email_enabled, buyer_contact_text_enabled, buyer_contact_phone_enabled",
               )
               .eq("id", storeId)
               .maybeSingle<StoreReview>(),
@@ -165,12 +165,12 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
     descriptionIsLong && !showFullDescription
       ? `${description.slice(0, 260).trim()}...`
       : description;
-  const pickupInstructions = store?.pickup_instructions?.trim() ?? "";
-  const pickupInstructionsIsLong = pickupInstructions.length > 260;
-  const displayedPickupInstructions =
-    pickupInstructionsIsLong && !showFullPickupInstructions
-      ? `${pickupInstructions.slice(0, 260).trim()}...`
-      : pickupInstructions;
+  const pickupPolicy = store?.pickup_policy?.trim() ?? "";
+  const pickupPolicyIsLong = pickupPolicy.length > 260;
+  const displayedPickupPolicy =
+    pickupPolicyIsLong && !showFullPickupPolicy
+      ? `${pickupPolicy.slice(0, 260).trim()}...`
+      : pickupPolicy;
 
   return (
     <section className="rounded-[0.95rem] bg-white px-4 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-7 lg:py-6">
@@ -228,20 +228,20 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
         <ReviewSection title="Pickup">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-stone-500">
-              Pickup instructions
+              Pickup policy
             </p>
             <p className="mt-1 whitespace-pre-line text-sm font-medium leading-6 text-stone-700">
-              {displayedPickupInstructions || "No pickup instructions saved."}
+              {displayedPickupPolicy || "No pickup policy saved."}
             </p>
-            {pickupInstructionsIsLong ? (
+            {pickupPolicyIsLong ? (
               <button
                 className="mt-1 text-sm font-bold text-[#246f38] underline-offset-4 hover:underline"
                 onClick={() =>
-                  setShowFullPickupInstructions((current) => !current)
+                  setShowFullPickupPolicy((current) => !current)
                 }
                 type="button"
               >
-                {showFullPickupInstructions ? "View less" : "View more"}
+                {showFullPickupPolicy ? "View less" : "View more"}
               </button>
             ) : null}
           </div>

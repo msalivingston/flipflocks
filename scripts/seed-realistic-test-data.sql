@@ -46,8 +46,7 @@ FROM (
       true::boolean,
       'Farm pickup by appointment near Montrose.'::text,
       'Pickup windows are confirmed after the order is received. Bring a clean carrier for started birds and layers.'::text,
-      'Orders may be canceled before pickup confirmation. No-shows may be declined for future holds.'::text,
-      'Pull through the east gate and park by the brooder barn.'::text
+      'Orders may be canceled before pickup confirmation. No-shows may be declined for future holds.'::text
     ),
     (
       'highmesa@example.test',
@@ -65,8 +64,7 @@ FROM (
       false,
       'Farm pickup west of Delta.',
       'Waterfowl pickup is by appointment. Please bring a ventilated crate with absorbent bedding.',
-      'Pickup changes are fine with advance notice. Deposits are not handled in this dev data set.',
-      'Text when you reach the lower gate; waterfowl are staged separately from chickens.'
+      'Pickup changes are fine with advance notice. Deposits are not handled in this dev data set.'
     ),
     (
       'cedarridge@example.test',
@@ -84,8 +82,7 @@ FROM (
       true,
       'Pickup near Paonia by text confirmation.',
       'Pickup is flexible but must be confirmed before arrival. Some items are staged in different sheds.',
-      'Cancellations are handled case by case.',
-      'Use the gravel driveway and avoid blocking the hay trailer.'
+      'Cancellations are handled case by case.'
     ),
     (
       'gunnisonhatchery@example.test',
@@ -103,8 +100,7 @@ FROM (
       false,
       'Egg pickup in Gunnison by appointment.',
       'Hatching eggs are collected to order when possible. Bring cartons or ask for recycled cartons at pickup.',
-      'Please cancel before collection day if plans change.',
-      'Meet at the packing room door on the north side of the barn.'
+      'Please cancel before collection day if plans change.'
     ),
     (
       'rockymountainfarmsupply@example.test',
@@ -122,8 +118,7 @@ FROM (
       false,
       'Warehouse pickup in Grand Junction.',
       'Equipment pickup is available weekdays. Large items require a truck or trailer.',
-      'Used equipment is sold as described in the listing.',
-      'Use the loading door behind the feed mill.'
+      'Used equipment is sold as described in the listing.'
     )
 ) AS sellers (
   test_user_email,
@@ -141,8 +136,7 @@ FROM (
   show_public_phone,
   pickup_location_text,
   pickup_policy,
-  cancellation_policy,
-  pickup_instructions
+  cancellation_policy
 );
 
 DO $$
@@ -211,7 +205,6 @@ INSERT INTO public.stores (
   about_text,
   pickup_policy,
   cancellation_policy,
-  pickup_instructions,
   pickup_location_text,
   public_email,
   public_phone,
@@ -236,7 +229,6 @@ SELECT
   about_text,
   pickup_policy,
   cancellation_policy,
-  pickup_instructions,
   pickup_location_text,
   public_email,
   public_phone,
@@ -262,7 +254,6 @@ SET
   about_text = store_map.about_text,
   pickup_policy = store_map.pickup_policy,
   cancellation_policy = store_map.cancellation_policy,
-  pickup_instructions = store_map.pickup_instructions,
   pickup_location_text = store_map.pickup_location_text,
   public_email = store_map.public_email,
   public_phone = store_map.public_phone,

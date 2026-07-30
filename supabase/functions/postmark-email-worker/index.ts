@@ -74,7 +74,6 @@ type StoreRow = {
   communication_email?: string | null;
   order_notification_email?: string | null;
   pickup_policy?: string | null;
-  pickup_instructions: string | null;
   pickup_location_text?: string | null;
   pickup_address_line1?: string | null;
   pickup_address_line2?: string | null;
@@ -261,7 +260,7 @@ async function fetchEmailContext(
       supabase
         .from("stores")
         .select(
-          "id, store_name, store_slug, public_email, public_phone, show_public_phone, communication_email, order_notification_email, pickup_policy, pickup_instructions, pickup_location_text, pickup_address_line1, pickup_address_line2, pickup_city, pickup_state, pickup_postal_code, pickup_country, website_url, currency",
+          "id, store_name, store_slug, public_email, public_phone, show_public_phone, communication_email, order_notification_email, pickup_policy, pickup_location_text, pickup_address_line1, pickup_address_line2, pickup_city, pickup_state, pickup_postal_code, pickup_country, website_url, currency",
         )
         .eq("id", order.store_id)
         .maybeSingle<StoreRow>(),
@@ -571,7 +570,6 @@ function renderOrderDocumentEmail(
       fact("Method", "Pickup"),
       fact("Pickup option", order.pickup_option_label_snapshot || order.pickup_note),
       fact("Pickup directions", store.pickup_location_text),
-      fact("Pickup instructions", store.pickup_instructions),
     ];
   const cancellationRows = isCanceledEmail(options.eventType)
     ? [

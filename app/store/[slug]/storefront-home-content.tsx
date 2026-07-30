@@ -69,7 +69,7 @@ export function StorefrontHomeContent({
     `${store.store_name} shares pickup details and current products from the farm.`,
   );
   const pickupPreview = previewText(
-    store.pickup_instructions || store.pickup_policy,
+    store.pickup_policy,
     "Pickup details will be confirmed after your order is placed.",
   );
   const heroTitle = store.store_tagline || store.store_name;
