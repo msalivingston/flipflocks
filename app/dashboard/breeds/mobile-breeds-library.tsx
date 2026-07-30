@@ -193,19 +193,38 @@ export function MobileBreedsLibrary({
     const profile = profiles.find((item) => item.id === autoExpandProfileId);
     if (!profile) return;
 
-    lastAutoExpandedProfileIdRef.current = autoExpandProfileId;
-    setDescriptionDraft(getProfileDescription(profile, libraryByBreedId));
-    setDescriptionError(null);
-    setSavedDescriptionProfileId(null);
-    setExpandedProfileId(profile.id);
+    let firstScrollFrameId: number | null = null;
+    let secondScrollFrameId: number | null = null;
+    let openFrameId: number | null = window.requestAnimationFrame(() => {
+      lastAutoExpandedProfileIdRef.current = autoExpandProfileId;
+      setDescriptionDraft(getProfileDescription(profile, libraryByBreedId));
+      setDescriptionError(null);
+      setSavedDescriptionProfileId(null);
+      setExpandedProfileId(profile.id);
 
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        document
-          .getElementById(`mobile-breed-${profile.id}-details`)
-          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      firstScrollFrameId = window.requestAnimationFrame(() => {
+        secondScrollFrameId = window.requestAnimationFrame(() => {
+          document
+            .getElementById(`mobile-breed-${profile.id}-details`)
+            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
       });
     });
+
+    return () => {
+      if (openFrameId !== null) {
+        window.cancelAnimationFrame(openFrameId);
+        openFrameId = null;
+      }
+      if (firstScrollFrameId !== null) {
+        window.cancelAnimationFrame(firstScrollFrameId);
+        firstScrollFrameId = null;
+      }
+      if (secondScrollFrameId !== null) {
+        window.cancelAnimationFrame(secondScrollFrameId);
+        secondScrollFrameId = null;
+      }
+    };
   }, [autoExpandProfileId, libraryByBreedId, profiles]);
 
   useEffect(() => {

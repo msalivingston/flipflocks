@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { notFound } from "next/navigation";
 
 const glyphs = [
   "calendar.png",
@@ -40,6 +41,10 @@ const glyphs = [
 ].sort();
 
 export default function DevGlyphsPage() {
+  if (process.env.NODE_ENV !== "development") {
+    notFound();
+  }
+
   return (
     <main className="min-h-screen bg-stone-50 text-stone-950">
       <section className="border-b border-stone-200 bg-white">
