@@ -1,6 +1,5 @@
-import { ListingsFoundation } from "./listings-foundation";
+import { redirect } from "next/navigation";
 
 export default function SellerListingsPage() {
-  return <ListingsFoundation />;
+  redirect("/dashboard/inventory");
 }
-

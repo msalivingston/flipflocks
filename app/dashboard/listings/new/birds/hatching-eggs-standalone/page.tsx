@@ -1,5 +1,5 @@
-import { HatchingEggsStandaloneOnePageForm } from "./hatching-eggs-standalone-one-page-form";
+import { redirect } from "next/navigation";
 
 export default function HatchingEggsStandaloneCreatePage() {
-  return <HatchingEggsStandaloneOnePageForm />;
+  redirect("/dashboard/listings/new/birds/hatching-eggs");
 }

@@ -1,11 +1,5 @@
-import { SimpleListingForm } from "./single-breed-basics-form";
+import { redirect } from "next/navigation";
 
-export default async function SimpleListingPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ draft?: string }>;
-}) {
-  const { draft } = await searchParams;
-
-  return <SimpleListingForm draftListingBatchId={draft} />;
+export default function SimpleListingPage() {
+  redirect("/dashboard/inventory/add-v2/live-birds");
 }

@@ -19,7 +19,6 @@ export type LiveBirdOfferingType =
 
 export type LockedPlanFeature =
   | "flock_group"
-  | "group_listing"
   | "hatching_eggs"
   | "equipment_supplies"
   | "processed_poultry"
@@ -36,7 +35,6 @@ export type PlanCapabilities = {
   allowedLiveBirdOfferingTypes: LiveBirdOfferingType[];
   lockedFeatures: LockedPlanFeature[];
   flockGroupListingsEnabled: boolean;
-  groupListingRouteEnabled: boolean;
   hatchingEggsEnabled: boolean;
   equipmentSuppliesEnabled: boolean;
   processedPoultryEnabled: boolean;
@@ -61,7 +59,6 @@ export const PLAN_CAPABILITIES: Record<PlanId, PlanCapabilities> = {
     ],
     lockedFeatures: [
       "flock_group",
-      "group_listing",
       "hatching_eggs",
       "equipment_supplies",
       "processed_poultry",
@@ -69,7 +66,6 @@ export const PLAN_CAPABILITIES: Record<PlanId, PlanCapabilities> = {
       "active_bird_limit",
     ],
     flockGroupListingsEnabled: false,
-    groupListingRouteEnabled: false,
     hatchingEggsEnabled: false,
     equipmentSuppliesEnabled: false,
     processedPoultryEnabled: false,
@@ -98,7 +94,6 @@ export const PLAN_CAPABILITIES: Record<PlanId, PlanCapabilities> = {
     ],
     lockedFeatures: [],
     flockGroupListingsEnabled: true,
-    groupListingRouteEnabled: true,
     hatchingEggsEnabled: true,
     equipmentSuppliesEnabled: true,
     processedPoultryEnabled: true,
@@ -135,8 +130,6 @@ export function isLiveBirdOfferingAllowed(
 export const LOCKED_PLAN_MESSAGES: Record<LockedPlanFeature, string> = {
   flock_group:
     "Flock and group listings are included with Market. Coop is designed for occasional live bird sales of single birds, pairs, and trios.",
-  group_listing:
-    "Group listings are included with Market. Coop keeps live bird selling simple with single birds, pairs, and trios.",
   hatching_eggs: "Hatching egg listings are included with Market.",
   equipment_supplies:
     "Equipment and supply listings are included with Market.",

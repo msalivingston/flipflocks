@@ -1,4 +1,4 @@
-import { ListingDetail } from "./listing-detail";
+import { redirect } from "next/navigation";
 
 export default async function SellerListingDetailPage({
   params,
@@ -7,5 +7,5 @@ export default async function SellerListingDetailPage({
 }) {
   const { listingBatchId } = await params;
 
-  return <ListingDetail listingBatchId={listingBatchId} />;
+  redirect(`/dashboard/inventory/${listingBatchId}/edit`);
 }

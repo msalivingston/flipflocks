@@ -1,11 +1,5 @@
-import { GroupListingForm } from "./batch-listing-form";
+import { redirect } from "next/navigation";
 
-export default async function GroupListingPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ draft?: string }>;
-}) {
-  const { draft } = await searchParams;
-
-  return <GroupListingForm draftListingBatchId={draft} />;
+export default function GroupListingPage() {
+  redirect("/dashboard/inventory/add-v2/live-birds");
 }
