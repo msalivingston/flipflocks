@@ -17,6 +17,7 @@ import {
 
 export function AdminStoresList() {
   const [stores, setStores] = useState<AdminStoreListRow[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,6 +66,16 @@ export function AdminStoresList() {
     }),
     [stores],
   );
+  const filteredStores = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    if (!query) return stores;
+
+    return stores.filter((store) =>
+      [store.store_name, store.store_slug, store.owner_email]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLocaleLowerCase().includes(query)),
+    );
+  }, [searchQuery, stores]);
 
   return (
     <>
@@ -105,67 +116,124 @@ export function AdminStoresList() {
               />
             </div>
 
-            <AdminCard>
-              <div className="grid divide-y divide-stone-100 xl:hidden">
-                {stores.map((store) => (
-                  <MobileStoreRow key={store.store_id} store={store} />
-                ))}
-              </div>
+            <StoreSearch
+              onChange={setSearchQuery}
+              resultCount={filteredStores.length}
+              totalCount={stores.length}
+              value={searchQuery}
+            />
 
-              <div className="hidden overflow-x-auto xl:block">
-                <table className="w-full min-w-[1060px] table-fixed border-collapse text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-stone-200 bg-stone-50 text-[0.68rem] font-bold uppercase tracking-[0.08em] text-stone-500">
-                      <th className="w-[17%] px-3 py-2.5">Store</th>
-                      <th className="w-[17%] px-3 py-2.5">Owner</th>
-                      <th className="w-[9%] px-3 py-2.5">Plan</th>
-                      <th className="w-[14%] px-3 py-2.5">Store State</th>
-                      <th className="w-[14%] px-3 py-2.5">Modules</th>
-                      <th className="w-[10%] px-3 py-2.5">Orders</th>
-                      <th className="w-[10%] px-3 py-2.5">Admin Hold</th>
-                      <th className="w-[9%] px-3 py-2.5">Open</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stores.map((store) => (
-                      <tr
-                        className="border-b border-stone-100 align-middle last:border-0"
-                        key={store.store_id}
-                      >
-                        <td className="px-3 py-3">
-                          <StoreIdentity store={store} />
-                        </td>
-                        <td className="px-3 py-3">
-                          <OwnerIdentity store={store} />
-                        </td>
-                        <td className="px-3 py-3">
-                          <PlanSummary />
-                        </td>
-                        <td className="px-3 py-3">
-                          <StoreState store={store} />
-                        </td>
-                        <td className="px-3 py-3">
-                          <ModuleSummary store={store} />
-                        </td>
-                        <td className="px-3 py-3">
-                          <OrderSummary store={store} />
-                        </td>
-                        <td className="px-3 py-3">
-                          <HoldSummary store={store} />
-                        </td>
-                        <td className="px-3 py-3">
-                          <OpenButton store={store} />
-                        </td>
-                      </tr>
+            <AdminCard>
+              {filteredStores.length === 0 ? (
+                <div className="px-5 py-10 text-center">
+                  <p className="font-bold text-stone-900">No accounts found</p>
+                  <p className="mt-1 text-sm text-stone-500">
+                    Try a different store name or owner email.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="grid divide-y divide-stone-100 xl:hidden">
+                    {filteredStores.map((store) => (
+                      <MobileStoreRow key={store.store_id} store={store} />
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </div>
+
+                  <div className="hidden overflow-x-auto xl:block">
+                    <table className="w-full min-w-[1060px] table-fixed border-collapse text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-stone-200 bg-stone-50 text-[0.68rem] font-bold uppercase tracking-[0.08em] text-stone-500">
+                          <th className="w-[17%] px-3 py-2.5">Store</th>
+                          <th className="w-[17%] px-3 py-2.5">Owner</th>
+                          <th className="w-[9%] px-3 py-2.5">Plan</th>
+                          <th className="w-[14%] px-3 py-2.5">Store State</th>
+                          <th className="w-[14%] px-3 py-2.5">Modules</th>
+                          <th className="w-[10%] px-3 py-2.5">Orders</th>
+                          <th className="w-[10%] px-3 py-2.5">Admin Hold</th>
+                          <th className="w-[9%] px-3 py-2.5">Open</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredStores.map((store) => (
+                          <tr
+                            className="border-b border-stone-100 align-middle last:border-0"
+                            key={store.store_id}
+                          >
+                            <td className="px-3 py-3">
+                              <StoreIdentity store={store} />
+                            </td>
+                            <td className="px-3 py-3">
+                              <OwnerIdentity store={store} />
+                            </td>
+                            <td className="px-3 py-3">
+                              <PlanSummary />
+                            </td>
+                            <td className="px-3 py-3">
+                              <StoreState store={store} />
+                            </td>
+                            <td className="px-3 py-3">
+                              <ModuleSummary store={store} />
+                            </td>
+                            <td className="px-3 py-3">
+                              <OrderSummary store={store} />
+                            </td>
+                            <td className="px-3 py-3">
+                              <HoldSummary store={store} />
+                            </td>
+                            <td className="px-3 py-3">
+                              <OpenButton store={store} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </AdminCard>
           </>
         ) : null}
       </div>
     </>
+  );
+}
+
+function StoreSearch({
+  onChange,
+  resultCount,
+  totalCount,
+  value,
+}: {
+  onChange: (value: string) => void;
+  resultCount: number;
+  totalCount: number;
+  value: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <label className="relative block w-full sm:max-w-md">
+        <span className="sr-only">Search accounts</span>
+        <Image
+          alt=""
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60"
+          height={18}
+          src="/glyphs/looking-glass.png"
+          width={18}
+        />
+        <input
+          className="min-h-10 w-full rounded-lg border border-stone-300 bg-white py-2 pl-10 pr-3 text-sm text-stone-900 shadow-sm outline-none placeholder:text-stone-400 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/15"
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Search by store name or owner email"
+          type="search"
+          value={value}
+        />
+      </label>
+      {value.trim() ? (
+        <p className="shrink-0 text-xs font-semibold text-stone-500" aria-live="polite">
+          {resultCount} of {totalCount} accounts
+        </p>
+      ) : null}
+    </div>
   );
 }
 
