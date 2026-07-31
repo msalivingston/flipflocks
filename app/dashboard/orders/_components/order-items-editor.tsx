@@ -17,21 +17,12 @@ import type {
   OrderLine,
 } from "../_lib/order-form-types";
 
-type InventoryAdjustmentControl = {
-  checked: boolean;
-  label: string;
-  lineId: string;
-  lineName: string;
-  removed: boolean;
-};
-
 export function OrderItemsEditor({
-  allowInventoryOversell = false,
   browseAddedInventoryItemId,
   browseFilter,
   browseQuery,
   inventory,
-  inventoryAdjustmentControls = [],
+  inventoryQuantityCredits = {},
   inventoryQuery,
   isBrowseOpen,
   lines,
@@ -42,16 +33,14 @@ export function OrderItemsEditor({
   onBrowseOpenChange,
   onBrowseQueryChange,
   onInventoryQueryChange,
-  onInventoryAdjustmentChange,
   onRemoveLine,
   onUpdateLine,
 }: {
-  allowInventoryOversell?: boolean;
   browseAddedInventoryItemId: string | null;
   browseFilter: BrowseInventoryFilter;
   browseQuery: string;
   inventory: InventorySearchRow[];
-  inventoryAdjustmentControls?: InventoryAdjustmentControl[];
+  inventoryQuantityCredits?: Record<string, number>;
   inventoryQuery: string;
   isBrowseOpen: boolean;
   lines: OrderLine[];
@@ -62,7 +51,6 @@ export function OrderItemsEditor({
   onBrowseOpenChange: (isOpen: boolean | ((current: boolean) => boolean)) => void;
   onBrowseQueryChange: (query: string) => void;
   onInventoryQueryChange: (query: string) => void;
-  onInventoryAdjustmentChange?: (lineId: string, checked: boolean) => void;
   onRemoveLine: (lineId: string) => void;
   onUpdateLine: (lineId: string, updates: Partial<OrderLine>) => void;
 }) {
@@ -129,27 +117,20 @@ export function OrderItemsEditor({
               <div className="divide-y divide-stone-200">
                 {lines.map((line) => (
                   <OrderItemRow
-                    allowInventoryOversell={allowInventoryOversell}
                     inventory={inventory}
-                    inventoryAdjustment={inventoryAdjustmentControls.find(
-                      (control) => !control.removed && control.lineId === line.id,
-                    )}
+                    inventoryQuantityCredit={
+                      line.type === "inventory"
+                        ? inventoryQuantityCredits[
+                            `${line.inventoryItemType}:${line.inventoryItemId}`
+                          ] ?? 0
+                        : 0
+                    }
                     key={line.id}
                     line={line}
-                    onInventoryAdjustmentChange={onInventoryAdjustmentChange}
                     onRemove={() => onRemoveLine(line.id)}
                     updateLine={(updates) => onUpdateLine(line.id, updates)}
                   />
                 ))}
-                {inventoryAdjustmentControls
-                  .filter((control) => control.removed)
-                  .map((control) => (
-                    <RemovedInventoryAdjustmentRow
-                      control={control}
-                      key={control.lineId}
-                      onChange={onInventoryAdjustmentChange}
-                    />
-                  ))}
               </div>
             ) : (
               <p className="px-1 py-5 text-sm text-stone-600">
@@ -365,19 +346,15 @@ function BrowseInventoryDialog({
 }
 
 function OrderItemRow({
-  allowInventoryOversell,
   inventory,
-  inventoryAdjustment,
+  inventoryQuantityCredit,
   line,
-  onInventoryAdjustmentChange,
   onRemove,
   updateLine,
 }: {
-  allowInventoryOversell: boolean;
   inventory: InventorySearchRow[];
-  inventoryAdjustment: InventoryAdjustmentControl | undefined;
+  inventoryQuantityCredit: number;
   line: OrderLine;
-  onInventoryAdjustmentChange?: (lineId: string, checked: boolean) => void;
   onRemove: () => void;
   updateLine: (updates: Partial<OrderLine>) => void;
 }) {
@@ -392,11 +369,10 @@ function OrderItemRow({
   const quantity = Number(line.quantity || 0);
   const unitPrice = Number(line.unitPrice || 0);
   const exceedsAvailable =
-    !allowInventoryOversell &&
     line.type === "inventory" &&
     selectedItem != null &&
     isPositiveWholeNumber(line.quantity) &&
-    quantity > selectedItem.quantity_available;
+    quantity > selectedItem.quantity_available + inventoryQuantityCredit;
 
   return (
     <div className="py-3 lg:px-1 lg:py-2">
@@ -433,9 +409,7 @@ function OrderItemRow({
               </p>
               {exceedsAvailable ? (
                 <p className="mt-1 text-xs font-semibold text-amber-800">
-                  {selectedItem?.allowInventoryOverride
-                    ? "Quantity exceeds available inventory."
-                    : "Quantity exceeds available inventory and cannot be saved."}
+                  Quantity exceeds available inventory and cannot be saved.
                 </p>
               ) : null}
             </>
@@ -476,58 +450,7 @@ function OrderItemRow({
         </button>
       </div>
 
-      {inventoryAdjustment ? (
-        <InventoryAdjustmentCheckbox
-          checked={inventoryAdjustment.checked}
-          label={inventoryAdjustment.label}
-          lineId={inventoryAdjustment.lineId}
-          onChange={onInventoryAdjustmentChange}
-        />
-      ) : null}
     </div>
-  );
-}
-
-function RemovedInventoryAdjustmentRow({
-  control,
-  onChange,
-}: {
-  control: InventoryAdjustmentControl;
-  onChange?: (lineId: string, checked: boolean) => void;
-}) {
-  return (
-    <div className="px-1 py-2">
-      <p className="text-sm font-bold text-stone-950">Removed: {control.lineName}</p>
-      <InventoryAdjustmentCheckbox
-        checked={control.checked}
-        label={control.label}
-        lineId={control.lineId}
-        onChange={onChange}
-      />
-    </div>
-  );
-}
-
-function InventoryAdjustmentCheckbox({
-  checked,
-  label,
-  lineId,
-  onChange,
-}: {
-  checked: boolean;
-  label: string;
-  lineId: string;
-  onChange?: (lineId: string, checked: boolean) => void;
-}) {
-  return (
-    <label className="mt-2 flex items-center gap-2 rounded-md border border-stone-200 bg-white px-2 py-1.5 text-xs font-semibold text-stone-700">
-      <input
-        checked={checked}
-        type="checkbox"
-        onChange={(event) => onChange?.(lineId, event.target.checked)}
-      />
-      <span>{label}</span>
-    </label>
   );
 }
 

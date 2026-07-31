@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(73);
+select no_plan();
 
 -- The concurrency probe uses committed fixtures in two independent sessions.
 -- An exclusive advisory lock acts as a deterministic start gate. Both checkout
@@ -682,6 +682,40 @@ values
     '',
     '',
     ''
+  ),
+  (
+    'a1000000-0000-4000-8000-000000000003',
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated',
+    'authenticated',
+    'inventory-admin@example.test',
+    '',
+    now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{}'::jsonb,
+    now(),
+    now(),
+    '',
+    '',
+    '',
+    ''
+  ),
+  (
+    'a1000000-0000-4000-8000-000000000004',
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated',
+    'authenticated',
+    'inventory-staff@example.test',
+    '',
+    now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{}'::jsonb,
+    now(),
+    now(),
+    '',
+    '',
+    '',
+    ''
   );
 
 insert into public.stores (
@@ -733,6 +767,19 @@ values
     statement_timestamp(), statement_timestamp() + interval '7 days',
     statement_timestamp(), statement_timestamp() + interval '7 days',
     statement_timestamp() + interval '7 days', 'trial'
+  );
+
+insert into public.user_roles (user_id, role, store_id)
+values
+  (
+    'a1000000-0000-4000-8000-000000000003',
+    'admin',
+    null
+  ),
+  (
+    'a1000000-0000-4000-8000-000000000004',
+    'staff',
+    'a1000000-0000-4000-8000-000000000010'
   );
 
 select ok(
@@ -1903,6 +1950,527 @@ select throws_ok(
   'P0001',
   'Fulfilled orders cannot be edited.',
   'fulfilled orders cannot be edited'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from public.order_items
+    where order_id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'cancel-all-sources'
+    )
+      and order_item_source <> 'custom'
+      and inventory_debited_quantity = quantity
+  ),
+  4,
+  'strict checkout classifies the full debit for all four source-backed item types'
+);
+
+select is(
+  (
+    select inventory_debited_quantity
+    from public.order_items
+    where order_id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'manual-custom-line'
+    )
+      and order_item_source = 'custom'
+  ),
+  0,
+  'new custom order lines record a zero inventory debit'
+);
+
+create temporary table batch_d_reinstate_before (
+  item_type text primary key,
+  quantity_available integer not null
+) on commit drop;
+
+insert into batch_d_reinstate_before
+values
+  (
+    'listing_inventory',
+    (select quantity_available from public.inventory_items where id = 'a1000000-0000-4000-8000-000000000040')
+  ),
+  (
+    'equipment_inventory',
+    (select quantity_available from public.equipment_inventory_items where id = 'a1000000-0000-4000-8000-000000000050')
+  ),
+  (
+    'processed_poultry_inventory',
+    (select quantity_available from public.processed_poultry_inventory_items where id = 'a1000000-0000-4000-8000-000000000060')
+  ),
+  (
+    'hatching_egg_inventory',
+    (select quantity_available from public.hatching_egg_inventory_items where id = 'a1000000-0000-4000-8000-000000000070')
+  );
+
+select lives_ok(
+  $test$
+    select *
+    from public.reinstate_order(
+      (
+        select order_id
+        from public.order_idempotency_keys
+        where store_id = 'a1000000-0000-4000-8000-000000000010'
+          and idempotency_key = 'cancel-all-sources'
+      ),
+      'Strict multi-type reinstatement'
+    )
+  $test$,
+  'reinstatement succeeds across all four inventory-backed item types'
+);
+
+select is(
+  (select quantity_available from public.inventory_items where id = 'a1000000-0000-4000-8000-000000000040'),
+  (select quantity_available - 4 from batch_d_reinstate_before where item_type = 'listing_inventory'),
+  'reinstatement reconsumes the exact restored Live Poultry quantity'
+);
+
+select is(
+  (select quantity_available from public.equipment_inventory_items where id = 'a1000000-0000-4000-8000-000000000050'),
+  (select quantity_available - 4 from batch_d_reinstate_before where item_type = 'equipment_inventory'),
+  'reinstatement reconsumes the exact restored Equipment quantity'
+);
+
+select is(
+  (select quantity_available from public.processed_poultry_inventory_items where id = 'a1000000-0000-4000-8000-000000000060'),
+  (select quantity_available - 4 from batch_d_reinstate_before where item_type = 'processed_poultry_inventory'),
+  'reinstatement reconsumes the exact restored Poultry Products quantity'
+);
+
+select is(
+  (select quantity_available from public.hatching_egg_inventory_items where id = 'a1000000-0000-4000-8000-000000000070'),
+  (select quantity_available - 4 from batch_d_reinstate_before where item_type = 'hatching_egg_inventory'),
+  'reinstatement reconsumes the exact restored Hatching Eggs quantity'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from public.order_items
+    where order_id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'cancel-all-sources'
+    )
+      and restored_quantity = 0
+  ),
+  4,
+  'restored quantities reset only after successful multi-type consumption'
+);
+
+select results_eq(
+  $test$
+    select order_status, payment_status
+    from public.orders
+    where id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'cancel-all-sources'
+    )
+  $test$,
+  $expected$
+    values ('open'::text, 'pay_at_pickup'::text)
+  $expected$,
+  'successful reinstatement returns the order to the open pay-at-pickup state'
+);
+
+create temporary table batch_d_no_restore_before (
+  quantity_available integer not null
+) on commit drop;
+
+insert into batch_d_no_restore_before
+select quantity_available
+from public.hatching_egg_inventory_items
+where id = 'a1000000-0000-4000-8000-000000000070';
+
+select lives_ok(
+  $test$
+    select *
+    from public.reinstate_order(
+      (
+        select order_id
+        from public.order_idempotency_keys
+        where store_id = 'a1000000-0000-4000-8000-000000000010'
+          and idempotency_key = 'cancel-without-restoration'
+      ),
+      'Reinstate without prior restoration'
+    )
+  $test$,
+  'an order canceled without restoration can be reinstated'
+);
+
+select is(
+  (select quantity_available from public.hatching_egg_inventory_items where id = 'a1000000-0000-4000-8000-000000000070'),
+  (select quantity_available from batch_d_no_restore_before),
+  'reinstating an order canceled without restoration consumes zero inventory'
+);
+
+select lives_ok(
+  $test$
+    select *
+    from public.cancel_order(
+      (
+        select order_id
+        from public.order_idempotency_keys
+        where store_id = 'a1000000-0000-4000-8000-000000000010'
+          and idempotency_key = 'manual-custom-line'
+      ),
+      'Custom-only cancellation',
+      false,
+      false
+    )
+  $test$,
+  'a custom-only order can be canceled without inventory changes'
+);
+
+select lives_ok(
+  $test$
+    select *
+    from public.reinstate_order(
+      (
+        select order_id
+        from public.order_idempotency_keys
+        where store_id = 'a1000000-0000-4000-8000-000000000010'
+          and idempotency_key = 'manual-custom-line'
+      ),
+      'Custom-only reinstatement'
+    )
+  $test$,
+  'a custom-only canceled order can be reinstated'
+);
+
+create temporary table batch_d_edit_before (
+  quantity_available integer not null
+) on commit drop;
+
+insert into batch_d_edit_before
+select quantity_available
+from public.equipment_inventory_items
+where id = 'a1000000-0000-4000-8000-000000000050';
+
+select lives_ok(
+  $test$
+    select pg_temp.test_edit_order(
+      (
+        select order_id
+        from public.order_idempotency_keys
+        where store_id = 'a1000000-0000-4000-8000-000000000010'
+          and idempotency_key = 'editable-equipment-order'
+      ),
+      jsonb_build_array(
+        jsonb_build_object(
+          'order_item_id',
+          (
+            select id
+            from public.order_items
+            where order_id = (
+              select order_id
+              from public.order_idempotency_keys
+              where store_id = 'a1000000-0000-4000-8000-000000000010'
+                and idempotency_key = 'editable-equipment-order'
+            )
+          ),
+          'item_type', 'equipment_inventory',
+          'item_id', 'a1000000-0000-4000-8000-000000000050',
+          'quantity', 3,
+          'unit_price', 20.00,
+          'change_inventory', false
+        )
+      )
+    )
+  $test$,
+  'browser change_inventory=false cannot suppress a required edit debit'
+);
+
+select is(
+  (select quantity_available from public.equipment_inventory_items where id = 'a1000000-0000-4000-8000-000000000050'),
+  (select quantity_available - 1 from batch_d_edit_before),
+  'the edit consumes the exact increase despite the forged inventory opt-out'
+);
+
+select is(
+  (
+    select inventory_debited_quantity
+    from public.order_items
+    where order_id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'editable-equipment-order'
+    )
+  ),
+  3,
+  'the edited line debit ledger follows the persisted final quantity'
+);
+
+select throws_ok(
+  $test$
+    select pg_temp.test_edit_order(
+      (
+        select order_id
+        from public.order_idempotency_keys
+        where store_id = 'a1000000-0000-4000-8000-000000000010'
+          and idempotency_key = 'editable-equipment-order'
+      ),
+      jsonb_build_array(
+        jsonb_build_object(
+          'order_item_id',
+          (
+            select id
+            from public.order_items
+            where order_id = (
+              select order_id
+              from public.order_idempotency_keys
+              where store_id = 'a1000000-0000-4000-8000-000000000010'
+                and idempotency_key = 'editable-equipment-order'
+            )
+          ),
+          'item_type', 'equipment_inventory',
+          'item_id', 'a1000000-0000-4000-8000-000000000050',
+          'quantity', 999,
+          'unit_price', 20.00,
+          'change_inventory', false
+        )
+      )
+    )
+  $test$,
+  'P0001',
+  'Insufficient inventory quantity available.',
+  'an edit shortage is rejected instead of clamping inventory to zero'
+);
+
+select is(
+  (
+    select quantity
+    from public.order_items
+    where order_id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'editable-equipment-order'
+    )
+  ),
+  3,
+  'a failed edit leaves the persisted order-line quantity unchanged'
+);
+
+select throws_ok(
+  $test$
+    select *
+    from public.seller_create_manual_order(
+      p_store_id => 'a1000000-0000-4000-8000-000000000010',
+      p_idempotency_key => 'manual-oversell-rejected',
+      p_items => jsonb_build_array(
+        jsonb_build_object(
+          'item_type', 'inventory',
+          'inventory_item_id', 'a1000000-0000-4000-8000-000000000040',
+          'quantity', 999,
+          'unit_price', 12.00,
+          'allow_inventory_override', true
+        )
+      ),
+      p_customer_email => 'oversell@example.test',
+      p_customer_first_name => 'Strict',
+      p_customer_last_name => 'Inventory'
+    )
+  $test$,
+  'P0001',
+  'Insufficient inventory quantity available.',
+  'manual allow_inventory_override cannot authorize overselling'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from public.order_idempotency_keys
+    where store_id = 'a1000000-0000-4000-8000-000000000010'
+      and idempotency_key = 'manual-oversell-rejected'
+  ),
+  0,
+  'a rejected manual oversell leaves no order or idempotency record'
+);
+
+select lives_ok(
+  $test$
+    select pg_temp.test_checkout(
+      'ambiguous-historical-line',
+      '[{"item_type":"equipment_inventory","item_id":"a1000000-0000-4000-8000-000000000050","quantity":1}]'::jsonb
+    )
+  $test$,
+  'a strict line is created for the historical ambiguity guard'
+);
+
+update public.order_items
+set inventory_debited_quantity = null
+where order_id = (
+  select order_id
+  from public.order_idempotency_keys
+  where store_id = 'a1000000-0000-4000-8000-000000000010'
+    and idempotency_key = 'ambiguous-historical-line'
+);
+
+select throws_ok(
+  $test$
+    select *
+    from public.cancel_order(
+      (
+        select order_id
+        from public.order_idempotency_keys
+        where store_id = 'a1000000-0000-4000-8000-000000000010'
+          and idempotency_key = 'ambiguous-historical-line'
+      ),
+      'Blocked ambiguous restoration',
+      true,
+      false
+    )
+  $test$,
+  'P0001',
+  'Order inventory requires operational reconciliation before cancellation.',
+  'an ambiguous historical debit cannot be restored by assumption'
+);
+
+select results_eq(
+  $test$
+    select order_status, canceled_at is null
+    from public.orders
+    where id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'ambiguous-historical-line'
+    )
+  $test$,
+  $expected$
+    values ('open'::text, true)
+  $expected$,
+  'the ambiguous cancellation failure leaves the order unchanged'
+);
+
+select ok(
+  exists (
+    select 1
+    from public.order_events
+    where order_id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'editable-equipment-order'
+    )
+      and event_type = 'order_inventory_reconciled'
+      and actor_user_id = 'a1000000-0000-4000-8000-000000000001'
+      and metadata ->> 'operation' = 'order_edited'
+  ),
+  'successful inventory reconciliation records the actual authenticated actor'
+);
+
+select throws_ok(
+  $test$
+    select pg_temp.test_edit_order(
+      (
+        select order_id
+        from public.order_idempotency_keys
+        where store_id = 'a1000000-0000-4000-8000-000000000010'
+          and idempotency_key = 'paid-online-cancellation'
+      ),
+      '[]'::jsonb
+    )
+  $test$,
+  'P0001',
+  'Paid online orders cannot be edited.',
+  'a paid Stripe-backed order cannot be edited through the direct RPC'
+);
+
+select set_config(
+  'request.jwt.claim.sub',
+  'a1000000-0000-4000-8000-000000000003',
+  true
+);
+
+select lives_ok(
+  $test$
+    select pg_temp.test_edit_order(
+      (
+        select order_id
+        from public.order_idempotency_keys
+        where store_id = 'a1000000-0000-4000-8000-000000000010'
+          and idempotency_key = 'editable-equipment-order'
+      ),
+      jsonb_build_array(
+        jsonb_build_object(
+          'order_item_id',
+          (
+            select id
+            from public.order_items
+            where order_id = (
+              select order_id
+              from public.order_idempotency_keys
+              where store_id = 'a1000000-0000-4000-8000-000000000010'
+                and idempotency_key = 'editable-equipment-order'
+            )
+          ),
+          'item_type', 'equipment_inventory',
+          'item_id', 'a1000000-0000-4000-8000-000000000050',
+          'quantity', 4,
+          'unit_price', 20.00
+        )
+      )
+    )
+  $test$,
+  'a real platform administrator can perform the existing authorized order edit'
+);
+
+select ok(
+  exists (
+    select 1
+    from public.order_events
+    where order_id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'editable-equipment-order'
+    )
+      and event_type = 'order_inventory_reconciled'
+      and actor_user_id = 'a1000000-0000-4000-8000-000000000003'
+      and actor_type = 'admin'
+  ),
+  'the administrator reconciliation event records the actual authenticated admin'
+);
+
+select set_config(
+  'request.jwt.claim.sub',
+  'a1000000-0000-4000-8000-000000000004',
+  true
+);
+
+select throws_ok(
+  $test$
+    select pg_temp.test_edit_order(
+      (
+        select order_id
+        from public.order_idempotency_keys
+        where store_id = 'a1000000-0000-4000-8000-000000000010'
+          and idempotency_key = 'editable-equipment-order'
+      ),
+      '[]'::jsonb
+    )
+  $test$,
+  'P0001',
+  'Order is not available.',
+  'store staff remain denied because current order authority is owner-or-platform-admin'
+);
+
+select set_config(
+  'request.jwt.claim.sub',
+  'a1000000-0000-4000-8000-000000000001',
+  true
 );
 
 select * from finish();

@@ -32,7 +32,11 @@ export function canEditOrder(order: OrderActionSnapshot) {
     !isCanceledOrder(order) &&
     order.order_status !== "fulfilled" &&
     !order.fulfilled_at &&
-    !order.has_adjusted_item_quantities
+    !order.has_adjusted_item_quantities &&
+    !(
+      order.payment_method === "stripe_checkout" &&
+      order.payment_status !== "unpaid"
+    )
   );
 }
 

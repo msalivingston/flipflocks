@@ -36,7 +36,6 @@ import {
   formatInventorySearchLabel,
   getManualOrderPayloadItemType,
   normalizeSellableInventoryRows,
-  quantityExceedsAvailable,
 } from "../_lib/order-form-inventory";
 import type {
   BrowseInventoryFilter,
@@ -527,10 +526,6 @@ export function NewManualOrder() {
           line.type === "custom" ? formatCustomItemPayloadName(line) : undefined,
         quantity: Number(line.quantity),
         unit_price: line.discountedUnitPrice,
-        allow_inventory_override:
-          line.type === "inventory" && line.inventoryItemType === "listing_inventory"
-            ? quantityExceedsAvailable(line, inventory)
-            : undefined,
       })),
       p_customer_id:
         customerMode === "existing" ? selectedCustomer?.customer_id ?? null : null,

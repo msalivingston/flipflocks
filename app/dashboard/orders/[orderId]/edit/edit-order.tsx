@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../../../_components/seller-context";
 import {
@@ -26,8 +26,6 @@ import {
 } from "../../_lib/order-form-calculations";
 import {
   buildEditOrderPayload,
-  buildInventoryAdjustmentControls,
-  getInventoryChoiceKey,
   validateEditOrderForm,
 } from "../../_lib/order-edit-save";
 import {
@@ -169,9 +167,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
   >(null);
   const [buyerNotes, setBuyerNotes] = useState("");
   const [originalLines, setOriginalLines] = useState<OrderLine[]>([]);
-  const [inventoryAdjustmentChoices, setInventoryAdjustmentChoices] = useState<
-    Record<string, boolean>
-  >({});
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -359,7 +354,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
       setSelectedCustomerId(order?.customer_id ?? "");
       setLines(mappedItems.lines);
       setOriginalLines(mappedItems.lines);
-      setInventoryAdjustmentChoices({});
       setFulfillmentMethod(currentFulfillmentMethod);
       setPickupMode(pickupMethod);
       setPickupNote(order?.pickup_note ?? "");
@@ -521,14 +515,15 @@ export function EditOrder({ orderId }: { orderId: string }) {
   const pageTitle = order
     ? `Edit Order #${formatOrderNumber(order.order_number)}`
     : "Edit Order";
-  const inventoryAdjustmentControls = useMemo(
-    () =>
-      buildInventoryAdjustmentControls({
-        choices: inventoryAdjustmentChoices,
-        originalLines,
-        revisedLines: lines,
-      }),
-    [inventoryAdjustmentChoices, lines, originalLines],
+  const inventoryQuantityCredits = originalLines.reduce<Record<string, number>>(
+    (credits, line) => {
+      if (line.type !== "inventory" || !line.inventoryItemId) return credits;
+
+      const key = `${line.inventoryItemType}:${line.inventoryItemId}`;
+      credits[key] = (credits[key] ?? 0) + Number(line.quantity || 0);
+      return credits;
+    },
+    {},
   );
   const currentCustomerFacingFingerprint = buildCustomerFacingFingerprint({
     buyerNotes,
@@ -669,6 +664,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
       fulfillmentMethod,
       inventory: data.inventory,
       lines,
+      originalLines,
       pickupOptionId,
       usesConfiguredPickupOptions,
     });
@@ -708,7 +704,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
       discountAmount,
       fulfillmentMethod,
       inventory: data.inventory,
-      inventoryAdjustmentChoices,
       lines,
       orderId,
       originalLines,
@@ -776,7 +771,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
 
     const nextFingerprint = currentCustomerFacingFingerprint;
     setOriginalLines(lines);
-    setInventoryAdjustmentChoices({});
     if (shouldQueueUpdatedOrderEmail && !emailQueued) {
       setEmailUpdatedOrderOverride(true);
     } else {
@@ -798,17 +792,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
     setSaveError(null);
     setSaveMessage(null);
     setSaveWarning(null);
-  }
-
-  function changeInventoryAdjustment(lineId: string, checked: boolean) {
-    const line = [...lines, ...originalLines].find((candidate) => candidate.id === lineId);
-    const key = line ? getInventoryChoiceKey(line) : lineId;
-
-    setInventoryAdjustmentChoices((current) => ({
-      ...current,
-      [key]: checked,
-    }));
-    resetSaveMessages();
   }
 
   if (isLoading) {
@@ -992,12 +975,11 @@ export function EditOrder({ orderId }: { orderId: string }) {
             </SellerCard>
 
             <OrderItemsEditor
-              allowInventoryOversell
               browseAddedInventoryItemId={browseAddedInventoryItemId}
               browseFilter={browseFilter}
               browseQuery={browseQuery}
               inventory={data.inventory}
-              inventoryAdjustmentControls={inventoryAdjustmentControls}
+              inventoryQuantityCredits={inventoryQuantityCredits}
               inventoryQuery={inventoryQuery}
               isBrowseOpen={isBrowseOpen}
               lines={lines}
@@ -1008,7 +990,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
               onBrowseOpenChange={setIsBrowseOpen}
               onBrowseQueryChange={setBrowseQuery}
               onInventoryQueryChange={setInventoryQuery}
-              onInventoryAdjustmentChange={changeInventoryAdjustment}
               onRemoveLine={removeLine}
               onUpdateLine={updateLine}
             />

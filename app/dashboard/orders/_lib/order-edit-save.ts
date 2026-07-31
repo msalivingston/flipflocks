@@ -13,14 +13,6 @@ import type {
   OrderLine,
 } from "./order-form-types";
 
-export type InventoryAdjustmentControl = {
-  checked: boolean;
-  label: string;
-  lineId: string;
-  lineName: string;
-  removed: boolean;
-};
-
 export type EditOrderCustomerSnapshot = {
   customerId: string | null;
   email: string | null;
@@ -40,7 +32,6 @@ export type EditOrderPayloadOptions = {
   discountAmount: number;
   fulfillmentMethod: FulfillmentMethod;
   inventory: InventorySearchRow[];
-  inventoryAdjustmentChoices: Record<string, boolean>;
   lines: OrderLine[];
   orderId: string;
   originalLines: OrderLine[];
@@ -89,11 +80,6 @@ export function buildEditOrderPayload(
     p_order_id: options.orderId,
     p_items: discountedLines.map((line) => ({
       order_item_id: line.orderItemId ?? null,
-      change_inventory: getLineInventoryChoice({
-        choices: options.inventoryAdjustmentChoices,
-        line,
-        originalLines: options.originalLines,
-      }),
       item_type:
         line.type === "custom" ? "custom" : getManualOrderPayloadItemType(line),
       inventory_item_id:
@@ -118,8 +104,6 @@ export function buildEditOrderPayload(
       options.lines,
     ).map((line) => ({
       order_item_id: line.orderItemId,
-      change_inventory:
-        options.inventoryAdjustmentChoices[getInventoryChoiceKey(line)] ?? true,
     })),
     p_customer_id: options.customer.customerId,
     p_customer_email: trimOrNull(options.customer.email),
@@ -183,6 +167,7 @@ export function validateEditOrderForm({
   fulfillmentMethod,
   inventory,
   lines,
+  originalLines,
   pickupOptionId,
   usesConfiguredPickupOptions,
 }: {
@@ -194,11 +179,28 @@ export function validateEditOrderForm({
   fulfillmentMethod: FulfillmentMethod;
   inventory: InventorySearchRow[];
   lines: OrderLine[];
+  originalLines: OrderLine[];
   pickupOptionId: string;
   usesConfiguredPickupOptions: boolean;
 }) {
+  const editableInventory = inventory.map((item) => {
+    const previouslyDebitedQuantity = originalLines
+      .filter(
+        (line) =>
+          line.type === "inventory" &&
+          line.inventoryItemId === item.id &&
+          line.inventoryItemType === item.itemType,
+      )
+      .reduce((total, line) => total + Number(line.quantity || 0), 0);
+
+    return {
+      ...item,
+      quantity_available: item.quantity_available + previouslyDebitedQuantity,
+    };
+  });
+
   return validateSharedOrderForm({
-    allowInventoryOversell: true,
+    allowInventoryOversell: false,
     allowMissingSavedInventory: true,
     canUseDelivery,
     deliveryAddress,
@@ -206,90 +208,11 @@ export function validateEditOrderForm({
     discountType,
     discountValue,
     fulfillmentMethod,
-    inventory,
+    inventory: editableInventory,
     lines,
     pickupOptionId,
     usesConfiguredPickupOptions,
   });
-}
-
-export function buildInventoryAdjustmentControls({
-  choices,
-  originalLines,
-  revisedLines,
-}: {
-  choices: Record<string, boolean>;
-  originalLines: OrderLine[];
-  revisedLines: OrderLine[];
-}): InventoryAdjustmentControl[] {
-  const controls: InventoryAdjustmentControl[] = [];
-  const originalByOrderItemId = new Map(
-    originalLines
-      .filter((line) => line.orderItemId)
-      .map((line) => [line.orderItemId, line]),
-  );
-  const revisedOrderItemIds = new Set(
-    revisedLines.map((line) => line.orderItemId).filter(Boolean),
-  );
-
-  revisedLines.forEach((line) => {
-    if (line.type !== "inventory" || !line.inventoryItemId) return;
-
-    const key = getInventoryChoiceKey(line);
-    const originalLine = line.orderItemId
-      ? originalByOrderItemId.get(line.orderItemId)
-      : undefined;
-
-    if (!originalLine) {
-      controls.push({
-        checked: choices[key] ?? true,
-        label: "Change inventory",
-        lineId: line.id,
-        lineName: formatLineName(line),
-        removed: false,
-      });
-      return;
-    }
-
-    const delta = Number(line.quantity || 0) - Number(originalLine.quantity || 0);
-
-    if (delta === 0) return;
-
-    controls.push({
-      checked: choices[key] ?? true,
-      label: delta > 0 ? "Change inventory" : "Return difference to inventory",
-      lineId: line.id,
-      lineName: formatLineName(line),
-      removed: false,
-    });
-  });
-
-  originalLines.forEach((line) => {
-    if (
-      line.type !== "inventory" ||
-      !line.inventoryItemId ||
-      !line.orderItemId ||
-      revisedOrderItemIds.has(line.orderItemId)
-    ) {
-      return;
-    }
-
-    const key = getInventoryChoiceKey(line);
-
-    controls.push({
-      checked: choices[key] ?? true,
-      label: "Return quantity to inventory",
-      lineId: line.id,
-      lineName: formatLineName(line),
-      removed: true,
-    });
-  });
-
-  return controls;
-}
-
-export function getInventoryChoiceKey(line: OrderLine) {
-  return line.orderItemId ?? line.id;
 }
 
 function getRemovedInventoryLines(
@@ -307,41 +230,6 @@ function getRemovedInventoryLines(
       line.orderItemId &&
       !revisedByOrderItemId.has(line.orderItemId),
   );
-}
-
-function getLineInventoryChoice({
-  choices,
-  line,
-  originalLines,
-}: {
-  choices: Record<string, boolean>;
-  line: OrderLine;
-  originalLines: OrderLine[];
-}) {
-  if (line.type !== "inventory" || !line.inventoryItemId) return false;
-
-  if (!line.orderItemId) {
-    return choices[getInventoryChoiceKey(line)] ?? true;
-  }
-
-  const originalLine = originalLines.find(
-    (candidate) => candidate.orderItemId === line.orderItemId,
-  );
-
-  if (!originalLine) return choices[getInventoryChoiceKey(line)] ?? true;
-  if (Number(originalLine.quantity || 0) === Number(line.quantity || 0)) {
-    return false;
-  }
-
-  return choices[getInventoryChoiceKey(line)] ?? true;
-}
-
-function formatLineName(line: OrderLine) {
-  if (line.type === "custom") {
-    return line.customItemName.trim() || line.savedItemName || "Custom item";
-  }
-
-  return line.savedItemName || line.search.split(" - ")[0] || "Inventory item";
 }
 
 function trimOrNull(value: string | null | undefined) {

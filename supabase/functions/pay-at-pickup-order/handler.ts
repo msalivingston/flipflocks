@@ -57,7 +57,6 @@ type OrderRequest = {
   pickup_option_id?: string | null;
   fulfillment_method?: "pickup" | "delivery";
   delivery_option_id?: string | null;
-  uses_order_v2: boolean;
   items: CheckoutItem[];
 };
 
@@ -461,10 +460,6 @@ function parseOrderRequest(body: unknown): OrderRequest {
     throw new Error("Buyer email is invalid.");
   }
 
-  const usesOrderV2 =
-    Object.prototype.hasOwnProperty.call(record, "fulfillment_method") ||
-    Object.prototype.hasOwnProperty.call(record, "delivery_option_id");
-
   return {
     store_slug: storeSlug,
     idempotency_key: idempotencyKey,
@@ -491,7 +486,6 @@ function parseOrderRequest(body: unknown): OrderRequest {
     pickup_option_id: optionalUuid(record, "pickup_option_id"),
     fulfillment_method: optionalFulfillmentMethod(record),
     delivery_option_id: optionalUuid(record, "delivery_option_id"),
-    uses_order_v2: usesOrderV2,
     items: normalizeItems(record.items),
   };
 }
@@ -741,9 +735,7 @@ export function createPayAtPickupHandler(
     }, corsHeaders);
   }
 
-  const orderRpcName = orderRequest.uses_order_v2
-    ? "create_pay_at_pickup_order_v2"
-    : "create_pay_at_pickup_order";
+  const orderRpcName = "create_pay_at_pickup_order_v2";
   const orderRpcArgs: Record<string, unknown> = {
     p_store_id: storeId,
     p_idempotency_key: orderRequest.idempotency_key,
@@ -767,13 +759,9 @@ export function createPayAtPickupHandler(
     p_buyer_ip_address: buyerIp,
     p_buyer_user_agent: request.headers.get("user-agent"),
     p_pickup_option_id: orderRequest.pickup_option_id,
+    p_fulfillment_method: orderRequest.fulfillment_method ?? "pickup",
+    p_delivery_option_id: orderRequest.delivery_option_id,
   };
-
-  if (orderRequest.uses_order_v2) {
-    orderRpcArgs.p_fulfillment_method =
-      orderRequest.fulfillment_method ?? "pickup";
-    orderRpcArgs.p_delivery_option_id = orderRequest.delivery_option_id;
-  }
 
   const { data: orderRows, error: orderError } = await supabase.rpc(
     orderRpcName,
