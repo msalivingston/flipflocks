@@ -80,7 +80,7 @@ type CreatedOrder = {
   total_amount: number | null;
 };
 
-type ManualOrderEmailStatus = "sent" | "failed" | "no_email" | "unknown";
+type ManualOrderEmailStatus = "queued" | "failed" | "no_email" | "unknown";
 
 type CustomerMode = "existing" | "new";
 
@@ -616,6 +616,7 @@ export function NewManualOrder() {
 
     const emailStatus = await getManualOrderEmailStatus({
       canEmailBuyerConfirmation,
+      orderId: order.order_id,
       shouldSendBuyerConfirmation,
     });
     const params = new URLSearchParams({
@@ -1071,9 +1072,11 @@ function parseFullName(fullName: string) {
 
 async function getManualOrderEmailStatus({
   canEmailBuyerConfirmation,
+  orderId,
   shouldSendBuyerConfirmation,
 }: {
   canEmailBuyerConfirmation: boolean;
+  orderId: string;
   shouldSendBuyerConfirmation: boolean;
 }): Promise<ManualOrderEmailStatus> {
   if (!canEmailBuyerConfirmation) return "no_email";
@@ -1082,6 +1085,11 @@ async function getManualOrderEmailStatus({
   try {
     const { data, error } = await supabase.functions.invoke(
       "manual-order-email-kick",
+      {
+        body: {
+          order_id: orderId,
+        },
+      },
     );
 
     if (error) {
@@ -1090,7 +1098,7 @@ async function getManualOrderEmailStatus({
     }
 
     if (isManualOrderEmailKickResponse(data)) {
-      return data.success ? "sent" : "failed";
+      return data.success ? "queued" : "failed";
     }
   } catch (error) {
     console.warn(
@@ -1125,8 +1133,8 @@ function getManualOrderCreatedMessage({
     ? orderNumber
     : `#${orderNumber}`;
 
-  if (emailStatus === "sent") {
-    return `Order ${formattedOrderNumber} created and confirmation email sent.`;
+  if (emailStatus === "queued") {
+    return `Order ${formattedOrderNumber} created and confirmation email queued for delivery.`;
   }
 
   if (emailStatus === "no_email") {
@@ -1134,7 +1142,7 @@ function getManualOrderCreatedMessage({
   }
 
   if (emailStatus === "failed") {
-    return `Order ${formattedOrderNumber} created, but the confirmation email could not be sent.`;
+    return `Order ${formattedOrderNumber} created, but email processing could not be started automatically.`;
   }
 
   return `Order ${formattedOrderNumber} created.`;

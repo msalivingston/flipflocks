@@ -1,4 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.0";
+import {
+  deliverPostmarkMessage,
+  PostmarkDeliveryError,
+} from "./delivery-state.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("FLIPFLOCKS_PUBLIC_API_ORIGIN") ??
@@ -21,6 +25,7 @@ type ClaimedNotification = {
   processing_token: string;
   store_id: string;
   order_id: string;
+  dedupe_key: string;
   recipient_type: "buyer" | "seller" | string;
   recipient_email: string;
   notification_type: NotificationType | string;
@@ -147,10 +152,16 @@ type RenderedEmail = {
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
+type DispatchAttempt = {
+  dispatch_attempt_id: string;
+};
+
 const postmarkEndpoint = "https://api.postmarkapp.com/email";
 const maxNotificationsPerInvocation = 50;
 const workerSecretHeader = "x-flockfront-worker-secret";
 const emailPattern = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/;
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
@@ -225,11 +236,21 @@ function parseBatchSize(body: unknown): number {
   return Math.min(Math.max(Math.floor(value), 1), 25);
 }
 
+function parseOrderScope(body: unknown): string | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+
+  const value = (body as Record<string, unknown>).order_id;
+
+  if (value === undefined || value === null || value === "") return null;
+
+  if (typeof value !== "string" || !uuidPattern.test(value.trim())) {
+    throw new Error("order_id must be a valid UUID.");
+  }
+
+  return value.trim().toLowerCase();
+}
+
 async function readJsonBody(request: Request): Promise<unknown> {
-  const contentLength = Number(request.headers.get("content-length") ?? 0);
-
-  if (contentLength <= 0) return null;
-
   try {
     return await request.json();
   } catch {
@@ -401,6 +422,14 @@ function renderEmail(
   const options = orderEmailOptions(notification.notification_type, context);
   const sellerContactEmail = sellerOrderContactEmail(context.store);
   const buyerEmail = validEmailOrNull(context.order.buyer_email_snapshot);
+  const canonicalRecipient = options.recipientType === "buyer"
+    ? buyerEmail
+    : sellerContactEmail;
+
+  if (!canonicalRecipient) {
+    throw new Error("Canonical recipient email address is unavailable.");
+  }
+
   const replyTo = options.recipientType === "buyer" ? sellerContactEmail : buyerEmail;
   const orderUrl = options.includeDashboardLink
     ? `${siteOrigin.replace(/\/$/, "")}/dashboard/orders/${context.order.id}`
@@ -411,7 +440,7 @@ function renderEmail(
   });
 
   return {
-    to: notification.recipient_email,
+    to: canonicalRecipient,
     fromName: sanitizeHeaderValue(context.store.store_name) || "FlockFront",
     replyTo: replyTo ?? undefined,
     subject: sanitizeHeaderValue(options.subject),
@@ -660,16 +689,20 @@ function sellerOrderContactEmail(store: StoreRow): string | null {
 }
 
 async function sendPostmarkEmail({
+  dispatchAttemptId,
   email,
   fromEmail,
   messageStream,
+  notification,
   token,
 }: {
+  dispatchAttemptId: string;
   email: RenderedEmail;
   fromEmail: string;
   messageStream: string;
+  notification: ClaimedNotification;
   token: string;
-}): Promise<string | null> {
+}): Promise<string> {
   const recipient = validEmailOrNull(email.to);
   const replyTo = email.replyTo ? validEmailOrNull(email.replyTo) : null;
   const sender = validEmailOrNull(fromEmail);
@@ -686,14 +719,11 @@ async function sendPostmarkEmail({
     throw new Error("Sender email address is invalid.");
   }
 
-  const response = await fetch(postmarkEndpoint, {
-    method: "POST",
-    headers: {
-      "Accept": "application/json",
-      "Content-Type": "application/json",
-      "X-Postmark-Server-Token": token,
-    },
-    body: JSON.stringify({
+  const result = await deliverPostmarkMessage({
+    endpoint: postmarkEndpoint,
+    fetchImplementation: fetch,
+    token,
+    request: {
       From: formatFromAddress(email.fromName, sender),
       To: recipient,
       ReplyTo: replyTo,
@@ -701,38 +731,22 @@ async function sendPostmarkEmail({
       HtmlBody: email.html,
       TextBody: sanitizePlainText(email.text),
       MessageStream: messageStream,
-    }),
+      Tag: "flockfront-order-notification",
+      Metadata: {
+        notification_id: notification.notification_id,
+        dispatch_attempt_id: dispatchAttemptId,
+        order_id: notification.order_id,
+      },
+    },
   });
 
-  const responseBody = await readPostmarkResponse(response);
-
-  if (!response.ok) {
-    throw new Error(
-      responseBody.message || `Postmark send failed with status ${response.status}.`,
-    );
-  }
-
-  return responseBody.messageId;
-}
-
-async function readPostmarkResponse(
-  response: Response,
-): Promise<{ message: string | null; messageId: string | null }> {
-  try {
-    const body = await response.json() as Record<string, unknown>;
-    const message = textOrNull(body.Message) ?? textOrNull(body.message);
-    const messageId = textOrNull(body.MessageID) ?? textOrNull(body.messageId);
-
-    return { message, messageId };
-  } catch {
-    return { message: null, messageId: null };
-  }
+  return result.messageId;
 }
 
 async function markNotificationSent(
   supabase: SupabaseClient,
   notification: ClaimedNotification,
-  messageId: string | null,
+  messageId: string,
 ) {
   const { error } = await supabase.rpc("mark_email_notification_sent", {
     p_notification_id: notification.notification_id,
@@ -745,6 +759,30 @@ async function markNotificationSent(
   }
 }
 
+async function beginNotificationDispatch(
+  supabase: SupabaseClient,
+  notification: ClaimedNotification,
+): Promise<string> {
+  const { data, error } = await supabase.rpc(
+    "begin_email_notification_dispatch",
+    {
+      p_notification_id: notification.notification_id,
+      p_processing_token: notification.processing_token,
+    },
+  );
+
+  const rows = Array.isArray(data) ? data as DispatchAttempt[] : [];
+  const dispatchAttemptId = rows[0]?.dispatch_attempt_id;
+
+  if (error || !dispatchAttemptId || !uuidPattern.test(dispatchAttemptId)) {
+    throw new Error(
+      error?.message || "Notification dispatch state could not be started.",
+    );
+  }
+
+  return dispatchAttemptId;
+}
+
 async function markNotificationFailed(
   supabase: SupabaseClient,
   notification: ClaimedNotification,
@@ -754,13 +792,53 @@ async function markNotificationFailed(
     error instanceof Error ? error.message : String(error),
   );
 
-  await supabase.rpc("mark_email_notification_failed", {
-    p_notification_id: notification.notification_id,
-    p_processing_token: notification.processing_token,
-    p_last_error: message.slice(0, 1000),
-    p_retry_after: "5 minutes",
-    p_max_attempts: 5,
-  });
+  const { error: stateError } = await supabase.rpc(
+    "mark_email_notification_failed",
+    {
+      p_notification_id: notification.notification_id,
+      p_processing_token: notification.processing_token,
+      p_last_error: message.slice(0, 1000),
+      p_retry_after: "5 minutes",
+      p_max_attempts: 5,
+    },
+  );
+
+  if (stateError) {
+    throw new Error(
+      stateError.message || "Notification failed state could not be saved.",
+    );
+  }
+}
+
+async function markNotificationDeliveryUnknown(
+  supabase: SupabaseClient,
+  notification: ClaimedNotification,
+  error: unknown,
+  messageId: string | null,
+) {
+  const message = sanitizeStoredError(
+    error instanceof Error ? error.message : String(error),
+  );
+
+  const { error: stateError } = await supabase.rpc(
+    "mark_email_notification_delivery_unknown",
+    {
+      p_notification_id: notification.notification_id,
+      p_processing_token: notification.processing_token,
+      p_last_error: message.slice(0, 1000),
+      p_provider_message_id: messageId,
+    },
+  );
+
+  if (stateError) {
+    console.error(
+      "postmark-email-worker could not persist delivery_unknown",
+      JSON.stringify({
+        notification_id: notification.notification_id,
+        error: sanitizeStoredError(stateError.message).slice(0, 500),
+      }),
+    );
+  }
 }
 
 function buyerPrintOrderEmailShell({
@@ -1302,6 +1380,17 @@ Deno.serve(async (request: Request) => {
 
   const body = await readJsonBody(request);
   const batchSize = parseBatchSize(body);
+  let orderScope: string | null;
+
+  try {
+    orderScope = parseOrderScope(body);
+  } catch {
+    return jsonResponse(400, {
+      error: "invalid_request",
+      message: "order_id must be a valid UUID.",
+    });
+  }
+
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: {
       persistSession: false,
@@ -1313,17 +1402,23 @@ Deno.serve(async (request: Request) => {
   let batchCount = 0;
   let sentCount = 0;
   let failedCount = 0;
+  let deliveryUnknownCount = 0;
 
   while (claimedCount < maxNotificationsPerInvocation) {
     const remainingCapacity = maxNotificationsPerInvocation - claimedCount;
     const claimSize = Math.min(batchSize, remainingCapacity);
-    const { data, error } = await supabase.rpc(
-      "claim_phase_1_postmark_email_notifications",
-      {
+    const claimFunction = orderScope
+      ? "claim_phase_1_postmark_email_notifications_for_order"
+      : "claim_phase_1_postmark_email_notifications";
+    const claimArguments: Record<string, unknown> = {
+      ...(orderScope ? { p_order_id: orderScope } : {}),
         p_batch_size: claimSize,
         p_max_attempts: 5,
         p_stale_after: "15 minutes",
-      },
+    };
+    const { data, error } = await supabase.rpc(
+      claimFunction,
+      claimArguments,
     );
 
     if (error) {
@@ -1333,6 +1428,8 @@ Deno.serve(async (request: Request) => {
         batches: batchCount,
         sent: sentCount,
         failed: failedCount,
+        delivery_unknown: deliveryUnknownCount,
+        order_scope: orderScope,
       });
     }
 
@@ -1357,6 +1454,9 @@ Deno.serve(async (request: Request) => {
     );
 
     for (const notification of notifications) {
+      let dispatchStarted = false;
+      let providerMessageId: string | null = null;
+
       try {
         if (
           !isV1OrderEmailType(notification.notification_type)
@@ -1368,18 +1468,88 @@ Deno.serve(async (request: Request) => {
 
         const context = await fetchEmailContext(supabase, supabaseUrl, notification);
         const email = renderEmail(notification, context, fromEmail, siteOrigin);
-        const messageId = await sendPostmarkEmail({
+        const dispatchAttemptId = await beginNotificationDispatch(
+          supabase,
+          notification,
+        );
+        dispatchStarted = true;
+        providerMessageId = await sendPostmarkEmail({
+          dispatchAttemptId,
           email,
           fromEmail,
           messageStream,
+          notification,
           token: postmarkToken,
         });
 
-        await markNotificationSent(supabase, notification, messageId);
+        try {
+          await markNotificationSent(
+            supabase,
+            notification,
+            providerMessageId,
+          );
+        } catch (finalizationError) {
+          await markNotificationDeliveryUnknown(
+            supabase,
+            notification,
+            new Error(
+              "Postmark accepted the message, but sent-state finalization failed.",
+              { cause: finalizationError },
+            ),
+            providerMessageId,
+          );
+          deliveryUnknownCount += 1;
+          continue;
+        }
+
         sentCount += 1;
       } catch (sendError) {
-        await markNotificationFailed(supabase, notification, sendError);
-        failedCount += 1;
+        if (
+          dispatchStarted &&
+          (
+            !(sendError instanceof PostmarkDeliveryError) ||
+            sendError.outcome === "delivery_unknown"
+          )
+        ) {
+          await markNotificationDeliveryUnknown(
+            supabase,
+            notification,
+            sendError,
+            providerMessageId,
+          );
+          deliveryUnknownCount += 1;
+        } else {
+          try {
+            await markNotificationFailed(supabase, notification, sendError);
+            failedCount += 1;
+          } catch (failureStateError) {
+            if (dispatchStarted) {
+              await markNotificationDeliveryUnknown(
+                supabase,
+                notification,
+                new Error(
+                  "Postmark rejected the message, but retry-state finalization failed.",
+                  { cause: failureStateError },
+                ),
+                null,
+              );
+              deliveryUnknownCount += 1;
+            } else {
+              console.error(
+                "postmark-email-worker could not persist failed state",
+                JSON.stringify({
+                  notification_id: notification.notification_id,
+                  error: sanitizeStoredError(
+                    failureStateError instanceof Error
+                      ? failureStateError.message
+                      : String(failureStateError),
+                  ).slice(0, 500),
+                }),
+              );
+              failedCount += 1;
+            }
+          }
+        }
       }
     }
   }
@@ -1389,5 +1559,7 @@ Deno.serve(async (request: Request) => {
     batches: batchCount,
     sent: sentCount,
     failed: failedCount,
+    delivery_unknown: deliveryUnknownCount,
+    order_scope: orderScope,
   });
 });

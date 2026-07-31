@@ -3615,8 +3615,8 @@ function getManualOrderCreatedMessage({
     ? orderNumber
     : `#${orderNumber}`;
 
-  if (emailStatus === "sent") {
-    return `Order ${formattedOrderNumber} created and confirmation email sent.`;
+  if (emailStatus === "queued") {
+    return `Order ${formattedOrderNumber} created and confirmation email queued for delivery.`;
   }
 
   if (emailStatus === "no_email") {
@@ -3624,7 +3624,7 @@ function getManualOrderCreatedMessage({
   }
 
   if (emailStatus === "failed") {
-    return `Order ${formattedOrderNumber} created, but the confirmation email could not be sent.`;
+    return `Order ${formattedOrderNumber} created, but email processing could not be started automatically.`;
   }
 
   return `Order ${formattedOrderNumber} created.`;

@@ -62,6 +62,7 @@ type OrderRequest = {
 };
 
 type OrderConfirmationRow = {
+  order_id?: unknown;
   order_number?: unknown;
   order_status?: unknown;
   payment_method?: unknown;
@@ -498,6 +499,7 @@ function parseOrderRequest(body: unknown): OrderRequest {
 async function triggerPostmarkEmailWorker(
   supabaseUrl: string,
   serviceRoleKey: string,
+  orderId: string,
   env: HandlerDependencies["env"],
   fetchImplementation: typeof fetch,
 ): Promise<void> {
@@ -521,6 +523,7 @@ async function triggerPostmarkEmailWorker(
       },
       body: JSON.stringify({
         batch_size: 10,
+        order_id: orderId,
         source: "pay-at-pickup-order",
       }),
     });
@@ -835,16 +838,22 @@ export function createPayAtPickupHandler(
     }, corsHeaders);
   }
 
-  const order = sanitizeOrderConfirmation(
-    Array.isArray(orderRows) ? orderRows[0] : null,
-  );
+  const rawOrder = Array.isArray(orderRows) ? orderRows[0] : null;
+  const order = sanitizeOrderConfirmation(rawOrder);
+  const createdOrderId = typeof rawOrder?.order_id === "string" &&
+      uuidPattern.test(rawOrder.order_id)
+    ? rawOrder.order_id
+    : null;
 
-  await triggerPostmarkEmailWorker(
-    supabaseUrl,
-    serviceRoleKey,
-    dependencies.env,
-    fetchImplementation,
-  );
+  if (createdOrderId) {
+    await triggerPostmarkEmailWorker(
+      supabaseUrl,
+      serviceRoleKey,
+      createdOrderId,
+      dependencies.env,
+      fetchImplementation,
+    );
+  }
 
   return jsonResponse(201, {
     order,

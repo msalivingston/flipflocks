@@ -5,6 +5,7 @@ import { createPayAtPickupHandler } from "../supabase/functions/pay-at-pickup-or
 
 const STORE_ID = "10000000-0000-4000-8000-000000000001";
 const ITEM_ID = "20000000-0000-4000-8000-000000000001";
+const ORDER_ID = "40000000-0000-4000-8000-000000000001";
 
 function validPayload(idempotencyKey = "checkout-key-1") {
   return {
@@ -60,6 +61,7 @@ function createHarness({
 } = {}) {
   const calls = [];
   let emailWorkerCalls = 0;
+  const emailWorkerBodies = [];
 
   const client = {
     async rpc(name, args) {
@@ -98,6 +100,7 @@ function createHarness({
       ) {
         return {
           data: [{
+            order_id: ORDER_ID,
             order_number: "1001",
             order_status: "open",
             payment_method: "pay_at_pickup",
@@ -126,8 +129,9 @@ function createHarness({
   const handler = createPayAtPickupHandler({
     createServiceClient: () => client,
     env: (name) => values[name],
-    fetch: async () => {
+    fetch: async (_url, init) => {
       emailWorkerCalls += 1;
+      emailWorkerBodies.push(JSON.parse(init.body));
       return new Response(null, { status: 204 });
     },
   });
@@ -137,6 +141,7 @@ function createHarness({
     get emailWorkerCalls() {
       return emailWorkerCalls;
     },
+    emailWorkerBodies,
     handler,
   };
 }
@@ -162,6 +167,7 @@ test("normal checkout is rate checked before summary and order creation", async 
   assert.equal(limiterCall.args.p_store_limit, 120);
   assert.equal(limiterCall.args.p_buyer_ip, "203.0.113.10");
   assert.equal(harness.emailWorkerCalls, 1);
+  assert.equal(harness.emailWorkerBodies[0].order_id, ORDER_ID);
 });
 
 test("a complete delivery checkout reaches the existing order RPC", async () => {

@@ -176,8 +176,6 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [restoreInventoryOnCancel, setRestoreInventoryOnCancel] =
     useState(false);
   const [emailCancellationToBuyer, setEmailCancellationToBuyer] = useState(false);
-  const [pendingResendConfirmationActionId, setPendingResendConfirmationActionId] =
-    useState<string | null>(null);
   const [isPrintPortalReady, setIsPrintPortalReady] = useState(false);
   const [showCancelPanel, setShowCancelPanel] = useState(false);
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
@@ -572,12 +570,12 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         cancelResult?.seller_copy_queued,
     );
     const emailProcessingStarted = emailQueued
-      ? await kickPostmarkEmailWorker()
+      ? await kickPostmarkEmailWorker(order.order_id)
       : false;
 
     setActionMessage(
       shouldEmailCancellation && emailQueued && emailProcessingStarted
-        ? "Order canceled and customer emailed."
+        ? "Order canceled and customer email queued for delivery."
         : "Order canceled.",
     );
     if (shouldEmailCancellation && !emailQueued) {
@@ -694,19 +692,14 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setActionMessage(null);
     setActionWarning(null);
 
-    const emailActionId =
-      pendingResendConfirmationActionId ?? crypto.randomUUID();
-
     const { data: resendData, error: resendError } = await supabase.rpc(
       "seller_resend_order_confirmation",
       {
-        p_email_action_id: emailActionId,
         p_order_id: order.order_id,
       },
     );
 
     if (resendError) {
-      setPendingResendConfirmationActionId(emailActionId);
       setActionError(
         "The order was not changed, but the confirmation email could not be queued. Please try again.",
       );
@@ -719,17 +712,15 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     const notificationQueued = Boolean(resendResult?.notification_queued);
 
     if (!notificationQueued) {
-      setPendingResendConfirmationActionId(emailActionId);
       setActionError("This order does not have a customer email address.");
       setIsResendingConfirmation(false);
       setShowResendConfirmationDialog(false);
       return;
     }
 
-    const kickSucceeded = await kickPostmarkEmailWorker();
+    const kickSucceeded = await kickPostmarkEmailWorker(order.order_id);
 
     if (!kickSucceeded) {
-      setPendingResendConfirmationActionId(null);
       setActionWarning(
         "Order confirmation was queued, but email processing could not be started automatically.",
       );
@@ -738,8 +729,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       return;
     }
 
-    setPendingResendConfirmationActionId(null);
-    setActionMessage("Order confirmation resent.");
+    setActionMessage("Order confirmation queued for delivery.");
     setShowResendConfirmationDialog(false);
     setIsResendingConfirmation(false);
   }
@@ -1848,10 +1838,15 @@ function formatArchiveWarningSentence(reasons: string[]) {
   return "";
 }
 
-async function kickPostmarkEmailWorker() {
+async function kickPostmarkEmailWorker(orderId: string) {
   try {
     const { data, error } = await supabase.functions.invoke<{ success?: boolean }>(
       "manual-order-email-kick",
+      {
+        body: {
+          order_id: orderId,
+        },
+      },
     );
 
     if (error) {

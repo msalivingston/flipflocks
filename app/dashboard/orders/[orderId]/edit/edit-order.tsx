@@ -182,10 +182,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
   const [emailUpdatedOrderOverride, setEmailUpdatedOrderOverride] = useState<
     boolean | null
   >(null);
-  const [pendingUpdateEmailAction, setPendingUpdateEmailAction] = useState<{
-    actionId: string;
-    fingerprint: string;
-  } | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -408,7 +404,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
           : "",
       );
       setEmailUpdatedOrderOverride(null);
-      setPendingUpdateEmailAction(null);
       setIsLoading(false);
     }
 
@@ -734,15 +729,9 @@ export function EditOrder({ orderId }: { orderId: string }) {
     let emailQueued = false;
     let emailWarning: string | null = null;
     const shouldQueueUpdatedOrderEmail = emailUpdatedOrder && canEmailUpdatedOrder;
-    const emailActionId = shouldQueueUpdatedOrderEmail
-      ? pendingUpdateEmailAction?.fingerprint === currentCustomerFacingFingerprint
-        ? pendingUpdateEmailAction.actionId
-        : crypto.randomUUID()
-      : null;
 
-    if (shouldQueueUpdatedOrderEmail && emailActionId) {
+    if (shouldQueueUpdatedOrderEmail) {
       const emailResult = await supabase.rpc("seller_enqueue_updated_order_email", {
-        p_email_action_id: emailActionId,
         p_order_id: orderId,
       });
 
@@ -765,6 +754,22 @@ export function EditOrder({ orderId }: { orderId: string }) {
         if (!emailQueued) {
           emailWarning =
             "Order updated, but the customer email was not queued. Check that the customer has an email address. Save again to retry the email.";
+        } else {
+          const kickResult = await supabase.functions.invoke<{
+            success?: boolean;
+          }>(
+            "manual-order-email-kick",
+            {
+              body: {
+                order_id: orderId,
+              },
+            },
+          );
+
+          if (kickResult.error || kickResult.data?.success !== true) {
+            emailWarning =
+              "The customer email is queued, but processing could not be started automatically. Delivery may be delayed.";
+          }
         }
       }
     }
@@ -772,18 +777,17 @@ export function EditOrder({ orderId }: { orderId: string }) {
     const nextFingerprint = currentCustomerFacingFingerprint;
     setOriginalLines(lines);
     setInventoryAdjustmentChoices({});
-    if (shouldQueueUpdatedOrderEmail && !emailQueued && emailActionId) {
-      setPendingUpdateEmailAction({
-        actionId: emailActionId,
-        fingerprint: nextFingerprint,
-      });
+    if (shouldQueueUpdatedOrderEmail && !emailQueued) {
       setEmailUpdatedOrderOverride(true);
     } else {
       setSavedCustomerFacingFingerprint(nextFingerprint);
-      setPendingUpdateEmailAction(null);
       setEmailUpdatedOrderOverride(null);
     }
-    setSaveMessage(emailQueued ? "Order updated and customer emailed." : "Order updated.");
+    setSaveMessage(
+      emailQueued
+        ? "Order updated and customer email queued for delivery."
+        : "Order updated.",
+    );
     setSaveWarning(emailWarning);
     setIsSaving(false);
     router.refresh();
