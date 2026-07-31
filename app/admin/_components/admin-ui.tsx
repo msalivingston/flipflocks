@@ -110,9 +110,11 @@ export function AdminStatusBadge({ value }: { value: string | boolean | null }) 
 }
 
 export function AdminCopyButton({
+  className = "",
   label = "Copy",
   value,
 }: {
+  className?: string;
   label?: string;
   value: string;
 }) {
@@ -130,7 +132,7 @@ export function AdminCopyButton({
 
   return (
     <button
-      className="seller-small-button"
+      className={`seller-small-button ${className}`}
       onClick={copyValue}
       type="button"
     >

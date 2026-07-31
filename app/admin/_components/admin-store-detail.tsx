@@ -17,8 +17,6 @@ import {
   AdminCopyButton,
   AdminErrorState,
   AdminLoadingState,
-  AdminMetric,
-  AdminPageHeader,
   AdminStatusBadge,
   formatDateTime,
   formatMoney,
@@ -91,18 +89,35 @@ export function AdminStoreDetail({ storeId }: { storeId: string }) {
 
   return (
     <>
-      <AdminPageHeader
-        action={
-          <Link className="seller-secondary-button" href="/admin/stores">
+      <header className="border-b border-[#c9ddd6] bg-white">
+        <div className="mx-auto flex min-h-16 w-full max-w-7xl flex-col gap-3 px-5 py-3 sm:px-7 md:flex-row md:items-center md:justify-between">
+          <Link
+            className="inline-flex items-center gap-2 text-sm font-bold text-stone-700 transition hover:text-[#145447]"
+            href="/admin/stores"
+          >
+            <span aria-hidden="true">←</span>
             Back to Stores
           </Link>
-        }
-        description="Operational support details and narrowly scoped store controls."
-        eyebrow="Platform Admin"
-        title={store?.store_name ?? "Store Detail"}
-      />
+          {store ? (
+            <div className="flex flex-wrap gap-2">
+              <Link
+                className="inline-flex min-h-10 items-center justify-center rounded-md bg-[#145447] px-4 text-sm font-bold text-white transition hover:bg-[#0f3f35] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#78b5a5] focus-visible:ring-offset-2"
+                href={`/store/${store.store_slug}`}
+                target="_blank"
+              >
+                Public Storefront
+              </Link>
+              <AdminCopyButton
+                className="!border-[#145447] !bg-[#145447] !text-white hover:!bg-[#0f3f35]"
+                label="Copy Store ID"
+                value={store.store_id}
+              />
+            </div>
+          ) : null}
+        </div>
+      </header>
 
-      <div className="mx-auto grid w-full max-w-7xl gap-4 px-5 py-5 sm:px-7">
+      <div className="mx-auto grid w-full max-w-7xl gap-3 px-5 py-4 sm:px-7">
         {isLoading ? <AdminLoadingState label="Loading store detail" /> : null}
 
         {!isLoading && error ? (
@@ -124,7 +139,7 @@ export function AdminStoreDetail({ storeId }: { storeId: string }) {
           <>
             <StoreIdentityCard store={store} />
 
-            <div className="grid gap-4 xl:grid-cols-2">
+            <div className="grid gap-3 lg:grid-cols-2">
               <SalesSummaryCard operations={operations} />
               <PlanStorefrontCard operations={operations} store={store} />
             </div>
@@ -135,13 +150,10 @@ export function AdminStoreDetail({ storeId }: { storeId: string }) {
               store={store}
             />
 
-            <div className="grid gap-4 xl:grid-cols-2">
+            <div className="grid gap-3 lg:grid-cols-2">
               <OrderSummaryCard operations={operations} />
               <AdminCard>
-                <SectionHeader
-                  description="Recent platform-admin actions for this store."
-                  title="Admin Activity"
-                />
+                <SectionHeader title="Admin Activity" />
                 <RecentActivityList activity={activity} />
               </AdminCard>
             </div>
@@ -162,64 +174,47 @@ export function AdminStoreDetail({ storeId }: { storeId: string }) {
 function StoreIdentityCard({ store }: { store: AdminStoreDetailRow }) {
   return (
     <AdminCard>
-      <div className="grid gap-5 p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h2 className="text-xl font-bold text-stone-950">
-                {store.store_name}
-              </h2>
-              <AdminStatusBadge value={store.store_status} />
-            </div>
-            <p className="mt-1 text-sm font-semibold text-stone-500">
-              /store/{store.store_slug}
-            </p>
-            <p className="mt-2 text-sm text-stone-700">
-              <span className="font-bold">Owner:</span>{" "}
-              {store.owner_email ?? "Email not available"}
-            </p>
-            <p className="mt-1 text-xs font-semibold text-stone-500">
-              Joined {formatDate(store.created_at)}
-            </p>
+      <div className="grid gap-5 p-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)] lg:items-center">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-xl font-bold text-stone-950 sm:text-2xl">
+              {store.store_name}
+            </h1>
+            <AdminStatusBadge value={store.store_status} />
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              className="seller-small-button"
-              href={`/store/${store.store_slug}`}
-              target="_blank"
-            >
-              Public Storefront
-            </Link>
-            <AdminCopyButton label="Copy Store ID" value={store.store_id} />
-          </div>
+          <p className="mt-1 truncate text-sm font-semibold text-stone-500">
+            /store/{store.store_slug}
+          </p>
+          <p className="mt-2 truncate text-sm text-stone-700">
+            <span className="font-bold">Owner:</span>{" "}
+            {store.owner_email ?? "Email not available"}
+          </p>
+          <p className="mt-1 text-xs font-semibold text-stone-500">
+            Joined {formatDate(store.created_at)}
+          </p>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <DetailField copy label="Store ID" value={store.store_id} />
-          <DetailField
-            copy
-            label="Owner User ID"
-            value={store.owner_user_id}
-          />
-          <DetailField
-            copy={Boolean(store.owner_email)}
-            label="Owner Email"
-            value={store.owner_email ?? "Not available"}
-          />
-          <DetailField copy label="Store Slug" value={store.store_slug} />
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatusField label="Store Status" value={store.store_status} />
-          <StatusField
-            label="Storefront Enabled"
-            value={store.storefront_enabled ? "Enabled" : "Disabled"}
-          />
-          <StatusField label="Storefront Mode" value={store.storefront_mode} />
-          <StatusField
-            label="Admin Hold"
-            value={store.admin_hold_reason ? "On hold" : "Not on hold"}
-          />
+        <div className="grid gap-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <DetailField label="Store ID" value={store.store_id} />
+            <DetailField label="Owner User ID" value={store.owner_user_id} />
+            <DetailField label="Store Slug" value={store.store_slug} />
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-4">
+            <StatusField label="Store Status" value={store.store_status} />
+            <StatusField
+              label="Storefront Enabled"
+              value={store.storefront_enabled ? "Enabled" : "Disabled"}
+            />
+            <StatusField
+              label="Storefront Mode"
+              value={store.storefront_mode}
+            />
+            <StatusField
+              label="Admin Hold"
+              value={store.admin_hold_reason ? "On hold" : "Not on hold"}
+            />
+          </div>
         </div>
       </div>
     </AdminCard>
@@ -233,11 +228,8 @@ function SalesSummaryCard({
 }) {
   return (
     <AdminCard>
-      <SectionHeader
-        description="All-time seller order activity."
-        title="Sales Summary"
-      />
-      <div className="grid gap-3 px-5 sm:grid-cols-3">
+      <SectionHeader title="Sales Summary" />
+      <div className="grid gap-2 px-4 sm:grid-cols-3">
         <SummaryMetric
           icon="/glyphs/reports.png"
           label="Recorded Gross Sales"
@@ -254,16 +246,11 @@ function SalesSummaryCard({
           value={String(operations.open_order_count)}
         />
       </div>
-      <div className="px-5 pb-5 pt-4 text-xs leading-5 text-stone-500">
-        <p>
-          Sales include seller orders across all categories and do not include
-          FlockFront subscription fees.
-        </p>
-        <p>
-          Matches seller Reports: non-canceled order totals are recorded
-          regardless of payment status; refunds are not subtracted.
-        </p>
-      </div>
+      <p className="px-4 pb-4 pt-3 text-xs leading-5 text-stone-500">
+        Sales include seller orders across all categories, excluding FlockFront
+        subscription fees. Recorded gross follows seller Reports: non-canceled
+        totals regardless of payment status, without subtracting refunds.
+      </p>
     </AdminCard>
   );
 }
@@ -285,11 +272,8 @@ function PlanStorefrontCard({
 
   return (
     <AdminCard>
-      <SectionHeader
-        description="Current effective plan and public storefront state."
-        title="Plan & Storefront"
-      />
-      <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2">
+      <SectionHeader title="Plan & Storefront" />
+      <div className="grid gap-2 px-4 pb-4 sm:grid-cols-3">
         <SummaryMetric
           icon="/glyphs/shopping-bag.png"
           label="Current Plan"
@@ -303,13 +287,14 @@ function PlanStorefrontCard({
         </SummaryMetric>
         <SummaryMetric
           icon="/glyphs/storefront.png"
-          label="Storefront"
+          label="Storefront Status"
           value={store.storefront_enabled ? "Enabled" : "Disabled"}
-        >
-          <p className="mt-1 text-xs font-semibold capitalize text-stone-500">
-            {store.storefront_mode}
-          </p>
-        </SummaryMetric>
+        />
+        <SummaryMetric
+          icon="/glyphs/storefront.png"
+          label="Storefront Mode"
+          value={store.storefront_mode}
+        />
       </div>
     </AdminCard>
   );
@@ -322,11 +307,8 @@ function OrderSummaryCard({
 }) {
   return (
     <AdminCard>
-      <SectionHeader
-        description="Compact lifecycle counts for support."
-        title="Order Summary"
-      />
-      <div className="grid grid-cols-2 gap-3 px-5 pb-5 sm:grid-cols-4">
+      <SectionHeader title="Order Summary" />
+      <div className="grid grid-cols-2 gap-2 px-4 pb-4 sm:grid-cols-4">
         <OrderCount label="Open" value={operations.open_order_count} />
         <OrderCount
           label="Fulfilled"
@@ -349,69 +331,74 @@ function OrderSummaryCard({
 
 function StoreDataCard({ store }: { store: AdminStoreDetailRow }) {
   return (
-    <AdminCard>
-      <SectionHeader
-        description="Existing support-safe store and module counts."
-        title="Store Data"
-      />
-      <div className="grid gap-3 px-5 sm:grid-cols-2 xl:grid-cols-6">
-        <AdminMetric label="Sale groups" value={store.listing_batch_count} />
-        <AdminMetric
-          label="Inventory rows"
-          value={store.inventory_item_count}
-        />
-        <AdminMetric
-          label="Available birds"
-          value={store.total_inventory_quantity}
-        />
-        <AdminMetric label="Customers" value={store.customer_count} />
-        <AdminMetric
-          label="Equipment items"
-          value={store.equipment_item_count}
-        />
-        <AdminMetric
-          label="Poultry products"
-          value={store.processed_poultry_item_count}
-        />
+    <details className="group rounded-lg border border-stone-200 bg-white">
+      <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-bold text-stone-700 marker:hidden">
+        <span>Store Data</span>
+        <span
+          aria-hidden="true"
+          className="text-stone-400 transition group-open:rotate-180"
+        >
+          ▾
+        </span>
+      </summary>
+      <div className="border-t border-stone-100 px-4 py-3">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 xl:grid-cols-6">
+          <DataMetric label="Sale groups" value={store.listing_batch_count} />
+          <DataMetric
+            label="Inventory rows"
+            value={store.inventory_item_count}
+          />
+          <DataMetric
+            label="Available birds"
+            value={store.total_inventory_quantity}
+          />
+          <DataMetric label="Customers" value={store.customer_count} />
+          <DataMetric
+            label="Equipment items"
+            value={store.equipment_item_count}
+          />
+          <DataMetric
+            label="Poultry products"
+            value={store.processed_poultry_item_count}
+          />
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-x-4 gap-y-3 border-t border-stone-100 pt-3 sm:grid-cols-3">
+          <StatusField
+            label="Hatching Eggs"
+            value={store.hatching_eggs_enabled ? "Enabled" : "Disabled"}
+          />
+          <StatusField
+            label="Equipment / Supplies"
+            value={store.equipment_supplies_enabled ? "Enabled" : "Disabled"}
+          />
+          <StatusField
+            label="Processed Poultry"
+            value={store.processed_poultry_enabled ? "Enabled" : "Disabled"}
+          />
+        </div>
       </div>
-      <div className="grid gap-3 p-5 sm:grid-cols-3">
-        <StatusField
-          label="Hatching Eggs"
-          value={store.hatching_eggs_enabled ? "Enabled" : "Disabled"}
-        />
-        <StatusField
-          label="Equipment / Supplies"
-          value={store.equipment_supplies_enabled ? "Enabled" : "Disabled"}
-        />
-        <StatusField
-          label="Processed Poultry"
-          value={store.processed_poultry_enabled ? "Enabled" : "Disabled"}
-        />
-      </div>
-    </AdminCard>
+    </details>
   );
 }
 
 function DetailField({
-  copy = false,
   label,
   value,
 }: {
-  copy?: boolean;
   label: string;
   value: string;
 }) {
   return (
-    <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
-      <p className="text-xs font-bold uppercase tracking-[0.08em] text-stone-500">
+    <div className="min-w-0 border-stone-200 sm:border-l sm:pl-3 sm:first:border-l-0 sm:first:pl-0">
+      <p className="text-xs font-semibold text-stone-500">
         {label}
       </p>
-      <div className="mt-2 flex items-center gap-2">
-        <code className="min-w-0 flex-1 truncate text-xs font-semibold text-stone-800">
-          {value}
-        </code>
-        {copy ? <AdminCopyButton value={value} /> : null}
-      </div>
+      <code
+        className="mt-1 block truncate text-xs font-semibold text-stone-800"
+        title={value}
+      >
+        {value}
+      </code>
     </div>
   );
 }
@@ -424,8 +411,8 @@ function StatusField({
   value: string | boolean;
 }) {
   return (
-    <div className="rounded-lg border border-stone-200 bg-white p-3">
-      <p className="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-stone-500">
+    <div className="min-w-0 border-stone-200 sm:border-l sm:pl-3 sm:first:border-l-0 sm:first:pl-0">
+      <p className="mb-1.5 text-xs font-semibold text-stone-500">
         {label}
       </p>
       <AdminStatusBadge value={value} />
@@ -434,16 +421,13 @@ function StatusField({
 }
 
 function SectionHeader({
-  description,
   title,
 }: {
-  description: string;
   title: string;
 }) {
   return (
-    <div className="px-5 pb-4 pt-5">
-      <h2 className="text-lg font-bold text-stone-950">{title}</h2>
-      <p className="mt-1 text-sm leading-6 text-stone-600">{description}</p>
+    <div className="px-4 pb-3 pt-4">
+      <h2 className="text-base font-bold text-stone-950">{title}</h2>
     </div>
   );
 }
@@ -460,13 +444,13 @@ function SummaryMetric({
   value: string;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-3 rounded-lg bg-[#f7faf8] p-3">
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#e4f2ec]">
-        <Image alt="" height={24} src={icon} width={24} />
+    <div className="flex min-w-0 items-center gap-2.5 rounded-lg bg-[#f7faf8] px-3 py-2.5">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#e4f2ec]">
+        <Image alt="" height={21} src={icon} width={21} />
       </span>
       <div className="min-w-0">
         <p className="text-xs font-semibold text-stone-500">{label}</p>
-        <p className="mt-0.5 truncate text-lg font-bold text-stone-950">
+        <p className="mt-0.5 truncate text-base font-bold capitalize text-stone-950 sm:text-lg">
           {value}
         </p>
         {children}
@@ -485,8 +469,8 @@ function OrderCount({
   value: number;
 }) {
   return (
-    <div className="rounded-lg border border-stone-200 bg-[#fbfcfb] p-3">
-      <p className="text-xl font-bold text-stone-950">{value}</p>
+    <div className="rounded-md border border-stone-200 bg-[#fbfcfb] px-3 py-2.5">
+      <p className="text-lg font-bold text-stone-950">{value}</p>
       <p
         className={`mt-1 text-xs font-bold ${
           tone === "positive"
@@ -502,6 +486,21 @@ function OrderCount({
   );
 }
 
+function DataMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | string;
+}) {
+  return (
+    <div>
+      <p className="text-xs font-semibold text-stone-500">{label}</p>
+      <p className="mt-0.5 text-base font-bold text-stone-800">{value}</p>
+    </div>
+  );
+}
+
 function RecentActivityList({ activity }: { activity: AdminActivityRow[] }) {
   if (activity.length === 0) {
     return (
@@ -512,22 +511,22 @@ function RecentActivityList({ activity }: { activity: AdminActivityRow[] }) {
   }
 
   return (
-    <div className="grid gap-0 border-t border-stone-100">
+    <div className="max-h-64 overflow-y-auto border-t border-stone-100">
       {activity.map((event) => {
         const change = formatActivityChange(event.metadata);
 
         return (
           <div
-            className="border-b border-stone-100 p-4 last:border-0"
+            className="border-b border-stone-100 px-4 py-2.5 last:border-0"
             key={event.admin_activity_event_id}
           >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="font-bold text-stone-950">
+                <p className="text-sm font-bold text-stone-950">
                   {formatAdminAction(event.action_type)}
                 </p>
                 {event.reason ? (
-                  <p className="mt-1 text-sm leading-6 text-stone-600">
+                  <p className="mt-0.5 text-xs leading-5 text-stone-600">
                     {event.reason}
                   </p>
                 ) : null}
@@ -542,7 +541,7 @@ function RecentActivityList({ activity }: { activity: AdminActivityRow[] }) {
               </p>
             </div>
             {event.actor_user_id ? (
-              <p className="mt-2 truncate text-xs font-semibold text-stone-500">
+              <p className="mt-1 truncate text-[11px] font-semibold text-stone-500">
                 Admin user: {event.actor_user_id}
               </p>
             ) : null}

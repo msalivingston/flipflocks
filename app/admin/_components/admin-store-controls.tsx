@@ -148,17 +148,17 @@ export function AdminStoreControls({
   return (
     <>
       <section className="rounded-lg border border-[#ceddd7] bg-white shadow-sm">
-        <div className="flex flex-col gap-1 border-b border-stone-100 px-5 py-4 sm:flex-row sm:items-baseline sm:gap-3">
-          <h2 className="text-lg font-bold text-stone-950">Store Controls</h2>
-          <p className="text-sm text-stone-600">
-            Narrow, audited controls for this store.
+        <div className="flex flex-col gap-1 border-b border-stone-100 px-4 py-3 sm:flex-row sm:items-baseline sm:gap-3">
+          <h2 className="text-base font-bold text-stone-950">Store Controls</h2>
+          <p className="text-xs text-stone-500">
+            Use these controls to manage this store.
           </p>
         </div>
 
         {feedback ? (
           <div
             aria-live="polite"
-            className={`mx-4 mt-4 rounded-md border px-3 py-2 text-sm font-semibold ${
+            className={`mx-3 mt-3 rounded-md border px-3 py-2 text-sm font-semibold ${
               feedback.tone === "success"
                 ? "border-emerald-200 bg-emerald-50 text-emerald-900"
                 : "border-red-200 bg-red-50 text-red-900"
@@ -168,7 +168,7 @@ export function AdminStoreControls({
           </div>
         ) : null}
 
-        <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-2.5 p-3 md:grid-cols-2 lg:grid-cols-4">
           <ControlCard
             actionLabel={
               store.storefront_enabled
@@ -333,10 +333,10 @@ function ControlCard({
   tone: "neutral" | "positive" | "restrictive";
 }) {
   return (
-    <div className="flex min-h-40 flex-col rounded-lg border border-stone-200 bg-[#fbfcfb] p-4">
-      <div className="flex items-center gap-3">
-        <span className="flex size-9 items-center justify-center rounded-full bg-[#e8f4ef]">
-          <Image alt="" height={22} src={icon} width={22} />
+    <div className="flex min-h-28 flex-col rounded-lg border border-stone-200 bg-[#fbfcfb] p-3">
+      <div className="flex items-center gap-2.5">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#e8f4ef]">
+          <Image alt="" height={19} src={icon} width={19} />
         </span>
         <div>
           <p className="text-sm font-bold text-stone-950">{label}</p>
@@ -354,10 +354,10 @@ function ControlCard({
         </div>
       </div>
       <button
-        className={`mt-auto min-h-10 rounded-md border px-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+        className={`mt-3 min-h-9 rounded-md border px-3 text-xs font-bold text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${
           tone === "restrictive"
-            ? "border-red-200 text-red-700 hover:bg-red-50"
-            : "border-[#9ec7ba] text-[#145447] hover:bg-[#eef7f3]"
+            ? "border-red-700 bg-red-700 hover:bg-red-800 focus-visible:ring-red-300"
+            : "border-[#145447] bg-[#145447] hover:bg-[#0f3f35] focus-visible:ring-[#78b5a5]"
         }`}
         disabled={isSubmitting}
         onClick={onAction}
