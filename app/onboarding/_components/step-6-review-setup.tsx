@@ -32,11 +32,15 @@ type StoreReview = {
 };
 
 type BillingReview = {
-  applied_promo_code: string | null;
-  billing_plan: string | null;
-  plan_key: string | null;
+  effective_billing_cadence: string | null;
+  effective_plan_key: string | null;
+  entitlement_access_until: string | null;
+  entitlement_reason: string | null;
+  has_active_entitlement: boolean;
+  requested_billing_cadence: string | null;
+  requested_plan_key: string | null;
+  store_id: string;
   subscription_status: string | null;
-  trial_ends_at: string | null;
 };
 
 type ReviewData = {
@@ -74,13 +78,7 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
               )
               .eq("id", storeId)
               .maybeSingle<StoreReview>(),
-            supabase
-              .from("seller_billing_status")
-              .select(
-                "plan_key, billing_plan, subscription_status, trial_ends_at, applied_promo_code",
-              )
-              .eq("store_id", storeId)
-              .maybeSingle<BillingReview>(),
+            supabase.rpc("get_seller_context"),
           ]),
           8000,
         );
@@ -95,7 +93,10 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
         }
 
         setReviewData({
-          billing: billingResult.data ?? null,
+          billing:
+            ((billingResult.data ?? []) as BillingReview[]).find(
+              (row) => row.store_id === storeId,
+            ) ?? null,
           store: storeResult.data ?? null,
         });
       } catch (loadError) {
@@ -254,15 +255,19 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
         </ReviewSection>
 
         <ReviewSection title="Plan access">
-          <ReviewRow label="Plan" value={formatPlanName(billing)} />
-          <ReviewRow label="Billing" value={formatBillingPlan(billing)} />
+          <ReviewRow
+            label="Requested plan"
+            value={formatRequestedPlanName(billing)}
+          />
+          <ReviewRow
+            label="Requested billing"
+            value={formatRequestedBillingPlan(billing)}
+          />
+          <ReviewRow
+            label="Effective plan"
+            value={formatEffectivePlanName(billing)}
+          />
           <ReviewRow label="Access" value={formatPlanAccess(billing)} />
-          {billing?.applied_promo_code ? (
-            <ReviewRow
-              label="Promo code"
-              value={billing.applied_promo_code.toUpperCase()}
-            />
-          ) : null}
         </ReviewSection>
 
         <div className="rounded-lg border border-[#dbe8d8] bg-[#eff8ed] px-4 py-3">
@@ -405,39 +410,42 @@ function formatBuyerLocation(store: StoreReview | null) {
 
 function formatPlanAccess(billing: BillingReview | null) {
   if (!billing) return "Not saved";
-  const plan = getPlanCapabilities(billing.plan_key);
-
-  if (
-    billing.subscription_status === "comped" ||
-    billing.billing_plan === "comped"
-  ) {
-    return "Beta access applied, no payment required during beta";
+  if (!billing.has_active_entitlement) {
+    return `Inactive (${formatAccessReason(billing.entitlement_reason)})`;
   }
-
-  if (billing.billing_plan === "yearly") {
-    return `7-day free trial, then $${plan.yearlyPrice}/year`;
+  if (billing.entitlement_reason === "trial") {
+    return `7-day trial active until ${formatDate(billing.entitlement_access_until)}`;
   }
-
-  return `7-day free trial, then $${plan.monthlyPrice}/month`;
+  if (billing.entitlement_reason === "admin_comp") {
+    return `Administrative comp active until ${formatDate(billing.entitlement_access_until)}`;
+  }
+  return `Active until ${formatDate(billing.entitlement_access_until)}`;
 }
 
-function formatBillingPlan(billing: BillingReview | null) {
-  if (!billing) return "Not saved";
-
-  if (
-    billing.subscription_status === "comped" ||
-    billing.billing_plan === "comped"
-  ) {
-    return "Comped";
-  }
-
-  return billing.billing_plan === "yearly" ? "Annual" : "Monthly";
+function formatRequestedBillingPlan(billing: BillingReview | null) {
+  if (!billing?.requested_billing_cadence) return "Not saved";
+  return billing.requested_billing_cadence === "yearly" ? "Annual" : "Monthly";
 }
 
-function formatPlanName(billing: BillingReview | null) {
-  if (!billing) return "Not saved";
+function formatRequestedPlanName(billing: BillingReview | null) {
+  if (!billing?.requested_plan_key) return "Not saved";
+  return getPlanCapabilities(billing.requested_plan_key).displayName;
+}
 
-  return getPlanCapabilities(billing.plan_key).displayName;
+function formatEffectivePlanName(billing: BillingReview | null) {
+  if (!billing?.effective_plan_key) return "No active plan";
+  return getPlanCapabilities(billing.effective_plan_key).displayName;
+}
+
+function formatAccessReason(reason: string | null) {
+  return (reason ?? "inactive").replaceAll("_", " ");
+}
+
+function formatDate(value: string | null) {
+  if (!value) return "the recorded cutoff";
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+  }).format(new Date(value));
 }
 
 function friendlyReviewError(message: string) {

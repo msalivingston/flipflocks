@@ -262,12 +262,16 @@ function PlanStorefrontCard({
   operations: AdminStoreOperationsSummaryRow;
   store: AdminStoreDetailRow;
 }) {
-  const plan = getPlanCapabilities(operations.plan_key);
+  const requestedPlan = getPlanCapabilities(operations.requested_plan_key);
+  const effectivePlan = operations.plan_key
+    ? getPlanCapabilities(operations.plan_key)
+    : null;
   const configuredPrice =
-    operations.billing_plan === "yearly" && plan.yearlyPrice !== null
-      ? `${formatMoney(plan.yearlyPrice)} / year`
-      : operations.billing_plan === "monthly"
-        ? `${formatMoney(plan.monthlyPrice)} / month`
+    operations.requested_billing_cadence === "yearly" &&
+    requestedPlan.yearlyPrice !== null
+      ? `${formatMoney(requestedPlan.yearlyPrice)} / year`
+      : operations.requested_billing_cadence === "monthly"
+        ? `${formatMoney(requestedPlan.monthlyPrice)} / month`
         : null;
 
   return (
@@ -276,8 +280,8 @@ function PlanStorefrontCard({
       <div className="grid gap-2 px-4 pb-4 sm:grid-cols-3">
         <SummaryMetric
           icon="/glyphs/shopping-bag.png"
-          label="Current Plan"
-          value={plan.displayName}
+          label="Requested Plan"
+          value={requestedPlan.displayName}
         >
           {configuredPrice ? (
             <p className="mt-1 text-xs font-semibold text-stone-500">
@@ -287,17 +291,32 @@ function PlanStorefrontCard({
         </SummaryMetric>
         <SummaryMetric
           icon="/glyphs/storefront.png"
-          label="Storefront Status"
-          value={store.storefront_enabled ? "Enabled" : "Disabled"}
-        />
+          label="Effective Access"
+          value={
+            operations.has_active_entitlement
+              ? `${effectivePlan?.displayName ?? "Active"}`
+              : "Inactive"
+          }
+        >
+          <p className="mt-1 text-xs font-semibold text-stone-500">
+            {formatEntitlementReason(operations.entitlement_reason)}
+            {operations.entitlement_access_until
+              ? ` · until ${formatDateTime(operations.entitlement_access_until)}`
+              : ""}
+          </p>
+        </SummaryMetric>
         <SummaryMetric
           icon="/glyphs/storefront.png"
-          label="Storefront Mode"
-          value={store.storefront_mode}
+          label="Storefront Status"
+          value={store.storefront_enabled ? "Enabled" : "Disabled"}
         />
       </div>
     </AdminCard>
   );
+}
+
+function formatEntitlementReason(value: string | null) {
+  return (value ?? "inactive").replaceAll("_", " ");
 }
 
 function OrderSummaryCard({

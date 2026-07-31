@@ -12,7 +12,13 @@ import type {
   AdminStoreOperationsSummaryRow,
 } from "../_lib/admin-types";
 
-type DialogState = "disable-storefront" | "hold" | "plan" | "note" | null;
+type DialogState =
+  | "disable-storefront"
+  | "hold"
+  | "grant-comp"
+  | "revoke-comp"
+  | "note"
+  | null;
 
 export function AdminStoreControls({
   onRefresh,
@@ -25,18 +31,23 @@ export function AdminStoreControls({
 }) {
   const [dialog, setDialog] = useState<DialogState>(null);
   const [holdReason, setHoldReason] = useState("");
+  const [compReason, setCompReason] = useState("");
+  const [compExpiresAt, setCompExpiresAt] = useState("");
   const [note, setNote] = useState(operations.internal_note ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{
     tone: "error" | "success";
     message: string;
   } | null>(null);
-  const currentPlan = getPlanCapabilities(operations.plan_key);
-  const nextPlanId: PlanId =
-    currentPlan.id === "small_flock" ? "full_flock" : "small_flock";
-  const nextPlan = getPlanCapabilities(nextPlanId);
+  const currentPlan = getPlanCapabilities(
+    operations.plan_key ?? operations.requested_plan_key,
+  );
+  const [compPlan, setCompPlan] = useState<PlanId>(currentPlan.id);
   const hasNote = Boolean(operations.internal_note?.trim());
   const isOnHold = Boolean(store.admin_hold_reason);
+  const hasActiveComp =
+    operations.has_active_entitlement &&
+    operations.entitlement_reason === "admin_comp";
 
   async function runOperation(
     operation: () => PromiseLike<{ error: { message: string } | null }>,
@@ -118,15 +129,51 @@ export function AdminStoreControls({
     );
   }
 
-  async function changePlan() {
-    await runOperation(
+  async function grantComp() {
+    if (!compReason.trim() || !compExpiresAt) {
+      setFeedback({
+        tone: "error",
+        message: "Choose a plan, expiration, and reason for the comp.",
+      });
+      return;
+    }
+
+    const succeeded = await runOperation(
       () =>
-        supabase.rpc("admin_change_store_plan", {
-          p_plan_key: nextPlanId,
+        supabase.rpc("admin_grant_store_comp", {
+          p_expires_at: new Date(compExpiresAt).toISOString(),
+          p_plan_key: compPlan,
+          p_reason: compReason.trim(),
           p_store_id: store.store_id,
         }),
-      `Plan changed to ${nextPlan.displayName}.`,
+      `Administrative ${getPlanCapabilities(compPlan).displayName} access granted.`,
     );
+
+    if (succeeded) {
+      setCompReason("");
+      setCompExpiresAt("");
+    }
+  }
+
+  async function revokeComp() {
+    if (!compReason.trim()) {
+      setFeedback({
+        tone: "error",
+        message: "Enter a reason before revoking the comp.",
+      });
+      return;
+    }
+
+    const succeeded = await runOperation(
+      () =>
+        supabase.rpc("admin_revoke_store_comp", {
+          p_reason: compReason.trim(),
+          p_store_id: store.store_id,
+        }),
+      "Administrative comp revoked.",
+    );
+
+    if (succeeded) setCompReason("");
   }
 
   async function saveNote() {
@@ -198,13 +245,19 @@ export function AdminStoreControls({
             tone={isOnHold ? "restrictive" : "positive"}
           />
           <ControlCard
-            actionLabel="Change Plan"
+            actionLabel={hasActiveComp ? "Revoke Comp" : "Grant Comp"}
             icon="/glyphs/shopping-bag.png"
             isSubmitting={isSubmitting}
-            label="Plan"
-            onAction={() => setDialog("plan")}
-            status={`${currentPlan.displayName} Plan`}
-            tone="positive"
+            label="Entitlement"
+            onAction={() =>
+              setDialog(hasActiveComp ? "revoke-comp" : "grant-comp")
+            }
+            status={
+              operations.has_active_entitlement
+                ? `${currentPlan.displayName} · Active`
+                : "No active access"
+            }
+            tone={operations.has_active_entitlement ? "positive" : "neutral"}
           />
           <ControlCard
             actionLabel="View / Edit"
@@ -262,24 +315,80 @@ export function AdminStoreControls({
         </AdminDialog>
       ) : null}
 
-      {dialog === "plan" ? (
+      {dialog === "grant-comp" ? (
         <AdminDialog
-          confirmLabel={`Change to ${nextPlan.displayName}`}
+          confirmDisabled={!compReason.trim() || !compExpiresAt}
+          confirmLabel="Grant Comp"
           isSubmitting={isSubmitting}
           onCancel={() => setDialog(null)}
-          onConfirm={changePlan}
-          title={`Change plan to ${nextPlan.displayName}?`}
+          onConfirm={grantComp}
+          title="Grant administrative comp access"
         >
           <p>
-            This changes the effective plan from {currentPlan.displayName} to{" "}
-            {nextPlan.displayName}. Shared plan capability rules will still
-            apply, and an incompatible downgrade will be rejected.
+            This is an audited, time-limited access grant. It does not create or
+            impersonate a Stripe subscription.
           </p>
-          <p className="mt-3 text-xs font-semibold text-stone-500">
-            This is a pre-Stripe administrative override. Stores with a linked
-            Stripe subscription must be changed through the future billing
-            integration.
+          <label className="mt-4 grid gap-1.5 text-sm font-bold text-stone-800">
+            Plan
+            <select
+              className="min-h-10 rounded-md border border-stone-300 bg-white px-3 font-normal text-stone-950 outline-none focus:border-[#176252] focus:ring-2 focus:ring-[#b8dcd1]"
+              onChange={(event) => setCompPlan(event.target.value as PlanId)}
+              value={compPlan}
+            >
+              <option value="small_flock">Coop</option>
+              <option value="full_flock">Market</option>
+            </select>
+          </label>
+          <label className="mt-3 grid gap-1.5 text-sm font-bold text-stone-800">
+            Access expires
+            <input
+              className="min-h-10 rounded-md border border-stone-300 px-3 font-normal text-stone-950 outline-none focus:border-[#176252] focus:ring-2 focus:ring-[#b8dcd1]"
+              onChange={(event) => setCompExpiresAt(event.target.value)}
+              required
+              type="datetime-local"
+              value={compExpiresAt}
+            />
+          </label>
+          <label className="mt-3 grid gap-1.5 text-sm font-bold text-stone-800">
+            Reason
+            <textarea
+              className="min-h-24 rounded-md border border-stone-300 px-3 py-2 font-normal text-stone-950 outline-none focus:border-[#176252] focus:ring-2 focus:ring-[#b8dcd1]"
+              maxLength={500}
+              onChange={(event) => setCompReason(event.target.value)}
+              placeholder="Why this store is receiving comped access"
+              required
+              value={compReason}
+            />
+          </label>
+        </AdminDialog>
+      ) : null}
+
+      {dialog === "revoke-comp" ? (
+        <AdminDialog
+          confirmDisabled={!compReason.trim()}
+          confirmLabel="Revoke Comp"
+          isSubmitting={isSubmitting}
+          onCancel={() => setDialog(null)}
+          onConfirm={revokeComp}
+          restrictive
+          title="Revoke administrative comp access"
+        >
+          <p>
+            Access ends immediately and the storefront is disabled for seller
+            review. The original grant and this revocation remain in the audit
+            history.
           </p>
+          <label className="mt-4 grid gap-1.5 text-sm font-bold text-stone-800">
+            Reason
+            <textarea
+              className="min-h-24 rounded-md border border-stone-300 px-3 py-2 font-normal text-stone-950 outline-none focus:border-[#176252] focus:ring-2 focus:ring-[#b8dcd1]"
+              maxLength={500}
+              onChange={(event) => setCompReason(event.target.value)}
+              placeholder="Why this comp is being revoked"
+              required
+              value={compReason}
+            />
+          </label>
         </AdminDialog>
       ) : null}
 

@@ -36,8 +36,15 @@ export type AdminStoreDetailRow = AdminStoreListRow & {
 
 export type AdminStoreOperationsSummaryRow = {
   store_id: string;
-  plan_key: string;
+  requested_plan_key: string | null;
+  requested_billing_cadence: string | null;
+  plan_key: string | null;
   billing_plan: string | null;
+  subscription_status: string | null;
+  has_active_entitlement: boolean;
+  entitlement_reason: string | null;
+  entitlement_access_until: string | null;
+  entitlement_held: boolean;
   has_linked_stripe_subscription: boolean;
   internal_note: string | null;
   recorded_gross_sales: number | null;

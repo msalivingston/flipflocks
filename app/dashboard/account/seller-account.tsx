@@ -15,16 +15,6 @@ type AccountUser = {
   name: string | null;
 };
 
-type BillingStatus = {
-  store_id: string;
-  plan_key: string | null;
-  billing_plan: string | null;
-  subscription_status: string | null;
-  current_period_end: string | null;
-  storefront_access_until: string | null;
-  trial_ends_at: string | null;
-};
-
 type BillingAddress = {
   billing_address_line1: string | null;
   billing_address_line2: string | null;
@@ -56,9 +46,6 @@ export function SellerAccount() {
     email: null,
     name: null,
   });
-  const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(
-    null,
-  );
   const [billingAddress, setBillingAddress] = useState<BillingAddress | null>(
     null,
   );
@@ -94,16 +81,8 @@ export function SellerAccount() {
       setIsLoading(true);
       setLoadError(null);
 
-      const [userResult, billingResult, addressResult] = await Promise.all([
+      const [userResult, addressResult] = await Promise.all([
         supabase.auth.getUser(),
-        supabase
-          .from("seller_billing_status")
-          .select(
-            "store_id, plan_key, billing_plan, subscription_status, current_period_end, storefront_access_until, trial_ends_at",
-          )
-          .eq("store_id", seller.store_id)
-          .maybeSingle()
-          .returns<BillingStatus>(),
         supabase
           .from("stores")
           .select(
@@ -116,8 +95,7 @@ export function SellerAccount() {
 
       if (!isMounted) return;
 
-      const firstError =
-        userResult.error ?? billingResult.error ?? addressResult.error;
+      const firstError = userResult.error ?? addressResult.error;
 
       if (firstError) {
         setLoadError(firstError.message);
@@ -133,7 +111,6 @@ export function SellerAccount() {
       const nextAddress = addressResult.data ?? null;
 
       setAccountUser(nextUser);
-      setBillingStatus(billingResult.data ?? null);
       setBillingAddress(nextAddress);
       setContactForm({
         email: nextUser.email ?? "",
@@ -161,22 +138,24 @@ export function SellerAccount() {
 
   const billing = useMemo(
     () => ({
-      planKey: billingStatus?.plan_key ?? seller?.plan_key ?? null,
-      status:
-        billingStatus?.subscription_status ??
-        seller?.subscription_status ??
-        null,
-      renewalDate:
-        billingStatus?.current_period_end ??
-        billingStatus?.storefront_access_until ??
-        seller?.storefront_access_until ??
-        null,
-      trialEndsAt:
-        billingStatus?.trial_ends_at ?? seller?.trial_ends_at ?? null,
+      accessReason: seller?.entitlement_reason ?? null,
+      accessUntil: seller?.entitlement_access_until ?? null,
+      effectiveBillingCadence: seller?.effective_billing_cadence ?? null,
+      effectivePlanKey: seller?.effective_plan_key ?? null,
+      hasActiveEntitlement: seller?.has_active_entitlement ?? false,
+      requestedBillingCadence: seller?.requested_billing_cadence ?? null,
+      requestedPlanKey: seller?.requested_plan_key ?? null,
+      status: seller?.subscription_status ?? null,
+      trialEndsAt: seller?.trial_ends_at ?? null,
     }),
-    [billingStatus, seller],
+    [seller],
   );
-  const planCapabilities = getPlanCapabilities(billing.planKey);
+  const requestedPlan = billing.requestedPlanKey
+    ? getPlanCapabilities(billing.requestedPlanKey)
+    : null;
+  const effectivePlan = billing.effectivePlanKey
+    ? getPlanCapabilities(billing.effectivePlanKey)
+    : null;
   const hasBillingAddress = Boolean(
     billingAddress?.billing_address_line1 ||
       billingAddress?.billing_city ||
@@ -573,9 +552,24 @@ export function SellerAccount() {
           <InfoRows
             compact
             rows={[
-              ["Current plan", planCapabilities.displayName],
+              ["Requested plan", requestedPlan?.displayName ?? "No requested plan"],
+              [
+                "Requested billing",
+                formatBillingCadence(billing.requestedBillingCadence),
+              ],
+              ["Effective plan", effectivePlan?.displayName ?? "No active plan"],
+              [
+                "Effective billing",
+                formatBillingCadence(billing.effectiveBillingCadence),
+              ],
               ["Subscription status", formatValue(billing.status)],
-              ["Renewal/end date", formatDateTime(billing.renewalDate)],
+              [
+                "Access",
+                billing.hasActiveEntitlement
+                  ? `Active (${formatValue(billing.accessReason)})`
+                  : `Inactive (${formatValue(billing.accessReason)})`,
+              ],
+              ["Access end date", formatDateTime(billing.accessUntil)],
               ["Trial status", getTrialStatus(billing.status, billing.trialEndsAt)],
               ["Trial end date", formatDateTime(billing.trialEndsAt)],
             ]}
@@ -802,6 +796,12 @@ function formatDateTime(value: string | null | undefined) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+function formatBillingCadence(value: string | null | undefined) {
+  if (value === "yearly") return "Annual";
+  if (value === "monthly") return "Monthly";
+  return null;
 }
 
 function getTrialStatus(

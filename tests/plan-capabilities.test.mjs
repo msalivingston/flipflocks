@@ -138,6 +138,13 @@ test("active plan-sensitive UI consumes the shared capability authority", () => 
 
   assert.match(categoryStep, /getPlanCapabilities\(planKey\)/);
   assert.doesNotMatch(categoryStep, /planKey\s*[!=]==?\s*["']full_flock/);
-  assert.match(reviewStep, /getPlanCapabilities\(billing\.plan_key\)/);
+  assert.match(
+    reviewStep,
+    /getPlanCapabilities\(billing\.requested_plan_key\)/,
+  );
+  assert.match(
+    reviewStep,
+    /getPlanCapabilities\(billing\.effective_plan_key\)/,
+  );
   assert.doesNotMatch(reviewStep, /PLAN_CAPABILITIES\[normalizePlanId/);
 });

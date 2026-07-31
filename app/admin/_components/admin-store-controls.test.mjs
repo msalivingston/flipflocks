@@ -15,7 +15,8 @@ test("store controls call only the intended narrow admin RPCs", () => {
   for (const rpcName of [
     "admin_set_storefront_enabled",
     "admin_set_store_hold",
-    "admin_change_store_plan",
+    "admin_grant_store_comp",
+    "admin_revoke_store_comp",
     "admin_update_store_internal_note",
   ]) {
     assert.match(controlsSource, new RegExp(`supabase\\.rpc\\("${rpcName}"`));
@@ -42,7 +43,11 @@ test("restrictive controls retain confirmation and reason requirements", () => {
   );
   assert.match(
     controlsSource,
-    /dialog === "plan"[\s\S]*title=\{`Change plan to \$\{nextPlan\.displayName\}\?`\}/,
+    /dialog === "grant-comp"[\s\S]*title="Grant administrative comp access"/,
+  );
+  assert.match(
+    controlsSource,
+    /dialog === "revoke-comp"[\s\S]*title="Revoke administrative comp access"/,
   );
   assert.match(
     controlsSource,
@@ -51,6 +56,10 @@ test("restrictive controls retain confirmation and reason requirements", () => {
   assert.match(
     controlsSource,
     /if \(!holdReason\.trim\(\)\)[\s\S]*Enter a short reason/,
+  );
+  assert.match(
+    controlsSource,
+    /confirmDisabled=\{!compReason\.trim\(\) \|\| !compExpiresAt\}/,
   );
 });
 

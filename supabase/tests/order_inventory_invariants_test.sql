@@ -153,10 +153,18 @@ begin
         true
       );
 
-      insert into public.seller_billing_status (store_id, plan_key)
+      insert into public.seller_billing_status (
+        store_id, requested_plan_key, requested_billing_cadence, plan_key,
+        billing_plan, subscription_status, trial_started_at, trial_ends_at,
+        current_period_start, current_period_end, storefront_access_until,
+        billing_state_authority
+      )
       values (
         'c1000000-0000-4000-8000-000000000010',
-        'full_flock'
+        'full_flock', 'monthly', 'full_flock', 'monthly', 'trialing',
+        statement_timestamp(), statement_timestamp() + interval '7 days',
+        statement_timestamp(), statement_timestamp() + interval '7 days',
+        statement_timestamp() + interval '7 days', 'trial'
       );
 
       insert into public.equipment_inventory_items (
@@ -705,10 +713,27 @@ values
     true
   );
 
-insert into public.seller_billing_status (store_id, plan_key)
+insert into public.seller_billing_status (
+  store_id, requested_plan_key, requested_billing_cadence, plan_key,
+  billing_plan, subscription_status, trial_started_at, trial_ends_at,
+  current_period_start, current_period_end, storefront_access_until,
+  billing_state_authority
+)
 values
-  ('a1000000-0000-4000-8000-000000000010', 'full_flock'),
-  ('a1000000-0000-4000-8000-000000000011', 'full_flock');
+  (
+    'a1000000-0000-4000-8000-000000000010',
+    'full_flock', 'monthly', 'full_flock', 'monthly', 'trialing',
+    statement_timestamp(), statement_timestamp() + interval '7 days',
+    statement_timestamp(), statement_timestamp() + interval '7 days',
+    statement_timestamp() + interval '7 days', 'trial'
+  ),
+  (
+    'a1000000-0000-4000-8000-000000000011',
+    'full_flock', 'monthly', 'full_flock', 'monthly', 'trialing',
+    statement_timestamp(), statement_timestamp() + interval '7 days',
+    statement_timestamp(), statement_timestamp() + interval '7 days',
+    statement_timestamp() + interval '7 days', 'trial'
+  );
 
 select ok(
   exists (

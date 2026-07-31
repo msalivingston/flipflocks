@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(41);
+select no_plan();
 select set_config('request.jwt.claim.role', 'service_role', true);
 
 insert into auth.users (
@@ -112,10 +112,46 @@ alter table public.seller_billing_status
 alter table public.seller_billing_status
   alter column plan_key drop not null;
 
+insert into public.seller_billing_status (
+  store_id,
+  plan_key,
+  billing_plan,
+  subscription_status,
+  storefront_access_until,
+  billing_state_authority,
+  comp_granted_by_user_id,
+  comp_grant_reason,
+  comp_granted_at,
+  comp_access_until
+)
+values
+  (
+    'e3000000-0000-4000-8000-000000000011',
+    'small_flock',
+    'comped',
+    'comped',
+    statement_timestamp() + interval '30 days',
+    'admin_comp',
+    'e3000000-0000-4000-8000-000000000001',
+    'Plan capability test fixture',
+    statement_timestamp(),
+    statement_timestamp() + interval '30 days'
+  ),
+  (
+    'e3000000-0000-4000-8000-000000000012',
+    'full_flock',
+    'comped',
+    'comped',
+    statement_timestamp() + interval '30 days',
+    'admin_comp',
+    'e3000000-0000-4000-8000-000000000001',
+    'Plan capability test fixture',
+    statement_timestamp(),
+    statement_timestamp() + interval '30 days'
+  );
+
 insert into public.seller_billing_status (store_id, plan_key)
 values
-  ('e3000000-0000-4000-8000-000000000011', 'small_flock'),
-  ('e3000000-0000-4000-8000-000000000012', 'full_flock'),
   ('e3000000-0000-4000-8000-000000000013', null),
   ('e3000000-0000-4000-8000-000000000014', ' FULL_FLOCK '),
   ('e3000000-0000-4000-8000-000000000015', 'future_market_plan');
@@ -506,13 +542,28 @@ select ok(
 delete from public.seller_billing_status
 where store_id = 'e3000000-0000-4000-8000-000000000012';
 
+select lives_ok(
+  $$update public.equipment_inventory_items
+    set quantity_available = 0, visibility_status = 'hidden'
+    where id = 'e3000000-0000-4000-8000-000000000050'$$,
+  'an inactive seller may reduce and hide existing inventory'
+);
+select throws_ok(
+  $$update public.equipment_inventory_items
+    set quantity_available = 1
+    where id = 'e3000000-0000-4000-8000-000000000050'$$,
+  'P0001',
+  'Active selling access is required.',
+  'an inactive seller cannot increase inventory'
+);
+
 select throws_ok(
   $$select public.validate_hatching_eggs_module_enabled(
     'e3000000-0000-4000-8000-000000000012'
   )$$,
   'P0001',
-  'Hatching egg listings are included with Market.',
-  'standalone Hatching Egg writes reject a missing effective Market plan'
+  'Active selling access is required.',
+  'standalone Hatching Egg writes reject missing active entitlement'
 );
 
 select ok(

@@ -18,13 +18,6 @@ type Step5PlanAccessFormProps = {
 
 type BillingCadence = "monthly" | "yearly";
 
-type PromoState = {
-  appliedCode: string | null;
-  error: string | null;
-};
-
-const acceptedBetaPromoCode = "FOUNDINGFLOCK";
-
 const planCards: Array<{
   badge?: string;
   cta: string;
@@ -66,67 +59,19 @@ export function Step5PlanAccessForm({
   );
   const [selectedBillingPlan, setSelectedBillingPlan] =
     useState<BillingCadence>(normalizeBillingCadence(initialBillingPlan));
-  const [promoCode, setPromoCode] = useState("");
-  const [promo, setPromo] = useState<PromoState>({
-    appliedCode: null,
-    error: null,
-  });
-  const [isPromoOpen, setIsPromoOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function normalizePromoCode(value: string) {
-    return value.trim().toUpperCase();
-  }
-
-  function applyPromoCode() {
-    const normalizedCode = normalizePromoCode(promoCode);
-
-    if (!normalizedCode) {
-      setPromo({ appliedCode: null, error: null });
-      return;
-    }
-
-    if (normalizedCode !== acceptedBetaPromoCode) {
-      setPromo({
-        appliedCode: null,
-        error: "That promo code is not valid right now.",
-      });
-      return;
-    }
-
-    setPromo({ appliedCode: acceptedBetaPromoCode, error: null });
-    setPromoCode(acceptedBetaPromoCode);
-  }
-
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    const normalizedCode = normalizePromoCode(promoCode);
-    let appliedCode = promo.appliedCode;
-
-    if (normalizedCode && normalizedCode !== promo.appliedCode) {
-      if (normalizedCode !== acceptedBetaPromoCode) {
-        setPromo({
-          appliedCode: null,
-          error: "Apply a valid promo code, or leave the field blank.",
-        });
-        setIsPromoOpen(true);
-        return;
-      }
-
-      appliedCode = acceptedBetaPromoCode;
-      setPromo({ appliedCode, error: null });
-    }
 
     setFormError(null);
     setIsSubmitting(true);
 
     const { error } = await supabase.rpc("seller_save_onboarding_plan_access", {
       p_plan: {
-        billing_plan: selectedBillingPlan,
-        plan_key: selectedPlan,
-        promo_code: appliedCode,
+        requested_billing_cadence: selectedBillingPlan,
+        requested_plan_key: selectedPlan,
       },
     });
 
@@ -139,7 +84,6 @@ export function Step5PlanAccessForm({
     onComplete(selectedPlan, selectedBillingPlan);
   }
 
-  const hasBetaAccess = promo.appliedCode === acceptedBetaPromoCode;
   const selectedPlanDetails = PLAN_CAPABILITIES[selectedPlan];
 
   return (
@@ -221,71 +165,6 @@ export function Step5PlanAccessForm({
           <p className="text-sm font-bold text-[#16572a]">
             7-day free trial · $0 due today
           </p>
-        </div>
-
-        <div className="rounded-lg border border-dashed border-stone-300 bg-white">
-          <button
-            className="flex min-h-11 w-full items-center justify-between px-4 text-left text-sm font-extrabold text-[#16572a] transition hover:bg-[#eff8ed] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2"
-            disabled={isSubmitting}
-            onClick={() => setIsPromoOpen((current) => !current)}
-            type="button"
-          >
-            <span>Have a promo code?</span>
-            <span aria-hidden="true">{isPromoOpen ? "Hide" : "Show"}</span>
-          </button>
-          {isPromoOpen ? (
-            <div className="border-t border-stone-200 px-4 py-3">
-              <label
-                className="text-sm font-bold text-stone-950 sm:text-[13px]"
-                htmlFor="promo-code"
-              >
-                Promo code
-              </label>
-              <div className="mt-1 grid gap-2 sm:grid-cols-[1fr_auto]">
-                <input
-                  aria-describedby={promo.error ? "promo-code-error" : undefined}
-                  aria-invalid={Boolean(promo.error)}
-                  className={`min-h-12 rounded-md border bg-white px-3 text-base font-medium text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:ring-2 focus:ring-[#246f38]/25 sm:min-h-10 sm:text-[14px] ${
-                    promo.error
-                      ? "border-red-400 focus:border-red-500"
-                      : "border-stone-300 focus:border-[#246f38]"
-                  }`}
-                  disabled={isSubmitting}
-                  id="promo-code"
-                  onChange={(event) => {
-                    setPromoCode(event.target.value);
-                    if (promo.error) {
-                      setPromo((current) => ({ ...current, error: null }));
-                    }
-                  }}
-                  placeholder="Beta or promo code"
-                  type="text"
-                  value={promoCode}
-                />
-                <button
-                  className="min-h-12 rounded-md border border-[#246f38] bg-white px-4 text-base font-bold text-[#246f38] shadow-sm transition hover:bg-[#eff8ed] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-10 sm:text-sm"
-                  disabled={isSubmitting}
-                  onClick={applyPromoCode}
-                  type="button"
-                >
-                  Apply
-                </button>
-              </div>
-              {promo.error ? (
-                <p
-                  className="mt-1 text-xs font-semibold text-red-700 sm:text-[13px]"
-                  id="promo-code-error"
-                >
-                  {promo.error}
-                </p>
-              ) : null}
-              {hasBetaAccess ? (
-                <p className="mt-1 text-xs font-bold text-[#246f38] sm:text-[13px]">
-                  Beta access applied.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
         </div>
 
         {formError ? (
@@ -478,10 +357,6 @@ function friendlyPlanAccessError(message: string) {
 
   if (message.toLowerCase().includes("plan")) {
     return "Choose Coop or Market before continuing.";
-  }
-
-  if (message.toLowerCase().includes("promo")) {
-    return "That promo code is not valid right now.";
   }
 
   return message || "We could not save your plan. Please try again.";

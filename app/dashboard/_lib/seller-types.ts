@@ -37,6 +37,15 @@ export type SellerContext = {
   subscription_status: string | null;
   storefront_access_until: string | null;
   trial_ends_at: string | null;
+  requested_plan_key: string | null;
+  requested_billing_cadence: string | null;
+  effective_plan_key: string | null;
+  effective_billing_cadence: string | null;
+  has_active_entitlement: boolean;
+  entitlement_reason: string | null;
+  entitlement_access_until: string | null;
+  entitlement_held: boolean;
+  cancel_at_period_end: boolean;
   profile_complete: boolean;
   billing_complete: boolean;
   terms_accepted: boolean;

@@ -139,10 +139,26 @@ values
     'a5000000-0000-4000-8000-000000000010'
   );
 
-insert into public.seller_billing_status (store_id, plan_key)
+insert into public.seller_billing_status (
+  store_id,
+  requested_plan_key,
+  requested_billing_cadence,
+  plan_key,
+  billing_plan,
+  subscription_status,
+  trial_started_at,
+  trial_ends_at,
+  current_period_start,
+  current_period_end,
+  storefront_access_until,
+  billing_state_authority
+)
 values (
   'a5000000-0000-4000-8000-000000000010',
-  'small_flock'
+  'small_flock', 'monthly', 'small_flock', 'monthly', 'trialing',
+  statement_timestamp(), statement_timestamp() + interval '7 days',
+  statement_timestamp(), statement_timestamp() + interval '7 days',
+  statement_timestamp() + interval '7 days', 'trial'
 );
 
 insert into public.customers (
@@ -404,27 +420,23 @@ select lives_ok(
     'a5000000-0000-4000-8000-000000000010',
     'full_flock'
   )$$,
-  'a platform admin can change Coop to Market'
+  'a platform admin can change the requested plan'
 );
 
 select is(
-  public.get_store_plan_key('a5000000-0000-4000-8000-000000000010'),
+  (
+    select requested_plan_key
+    from public.seller_billing_status
+    where store_id = 'a5000000-0000-4000-8000-000000000010'
+  ),
   'full_flock',
-  'Market uses the exact shared full_flock plan key'
-);
-
-select lives_ok(
-  $$select public.admin_change_store_plan(
-    'a5000000-0000-4000-8000-000000000010',
-    'small_flock'
-  )$$,
-  'a platform admin can change Market to Coop'
+  'the requested plan records Market'
 );
 
 select is(
   public.get_store_plan_key('a5000000-0000-4000-8000-000000000010'),
   'small_flock',
-  'Coop uses the exact shared small_flock plan key'
+  'changing a request does not overwrite the effective trial plan'
 );
 
 select is(
@@ -434,8 +446,8 @@ select is(
     where target_store_id = 'a5000000-0000-4000-8000-000000000010'
       and action_type = 'store_plan_changed'
   ),
-  2::bigint,
-  'each successful plan change creates exactly one activity record'
+  1::bigint,
+  'a requested-plan change creates one activity record'
 );
 
 select throws_ok(
@@ -455,62 +467,86 @@ select is(
     where target_store_id = 'a5000000-0000-4000-8000-000000000010'
       and action_type = 'store_plan_changed'
   ),
-  2::bigint,
+  1::bigint,
   'a rejected plan value creates no activity'
 );
 
-select public.admin_change_store_plan(
-  'a5000000-0000-4000-8000-000000000010',
-  'full_flock'
+select set_config(
+  'request.jwt.claim.sub',
+  'a5000000-0000-4000-8000-000000000002',
+  true
 );
 
-update public.stores
-set hatching_eggs_enabled = true
-where id = 'a5000000-0000-4000-8000-000000000010';
-
 select throws_ok(
-  $$select public.admin_change_store_plan(
+  $$select public.admin_grant_store_comp(
     'a5000000-0000-4000-8000-000000000010',
-    'small_flock'
+    'full_flock',
+    'seller attempt',
+    statement_timestamp() + interval '30 days'
   )$$,
   'P0001',
-  'Coop includes live birds only. Upgrade to Market to enable hatching eggs, equipment, or processed poultry.',
-  'a plan downgrade reuses the shared module capability guard'
+  'Not authorized to perform admin operations.',
+  'a seller cannot grant comp access'
+);
+
+select set_config(
+  'request.jwt.claim.sub',
+  'a5000000-0000-4000-8000-000000000001',
+  true
+);
+
+select throws_ok(
+  $$select public.admin_grant_store_comp(
+    'a5000000-0000-4000-8000-000000000010',
+    'full_flock',
+    ' ',
+    statement_timestamp() + interval '30 days'
+  )$$,
+  'P0001',
+  'A reason between 1 and 500 characters is required.',
+  'an administrative comp requires an explicit reason'
+);
+
+select lives_ok(
+  $$select public.admin_grant_store_comp(
+    'a5000000-0000-4000-8000-000000000010',
+    'full_flock',
+    'Approved support comp',
+    statement_timestamp() + interval '30 days'
+  )$$,
+  'a platform admin can grant an explicit expiring comp'
+);
+
+select is(
+  (
+    select comp_granted_by_user_id
+    from public.seller_billing_status
+    where store_id = 'a5000000-0000-4000-8000-000000000010'
+  ),
+  'a5000000-0000-4000-8000-000000000001'::uuid,
+  'the comp records the actual platform admin actor'
 );
 
 select is(
   public.get_store_plan_key('a5000000-0000-4000-8000-000000000010'),
   'full_flock',
-  'a rejected capability downgrade rolls the plan back'
+  'an active Market comp supplies Market capabilities'
 );
 
-select is(
-  (
-    select count(*)
-    from public.admin_activity_events
-    where target_store_id = 'a5000000-0000-4000-8000-000000000010'
-      and action_type = 'store_plan_changed'
-  ),
-  3::bigint,
-  'a rejected capability downgrade creates no activity'
-);
-
-update public.stores
-set hatching_eggs_enabled = false
-where id = 'a5000000-0000-4000-8000-000000000010';
-
-update public.seller_billing_status
-set stripe_subscription_id = 'sub_platform_admin_test'
-where store_id = 'a5000000-0000-4000-8000-000000000010';
-
-select throws_ok(
-  $$select public.admin_change_store_plan(
+select lives_ok(
+  $$select public.admin_revoke_store_comp(
     'a5000000-0000-4000-8000-000000000010',
-    'small_flock'
+    'Support comp ended'
   )$$,
-  'P0001',
-  'This store has a linked Stripe subscription. Change its plan through the billing integration.',
-  'the pre-Stripe override rejects a linked Stripe subscription'
+  'a platform admin can revoke the comp explicitly'
+);
+
+select is(
+  public.store_has_active_entitlement(
+    'a5000000-0000-4000-8000-000000000010'
+  ),
+  false,
+  'revocation ends access immediately'
 );
 
 select is(
@@ -518,15 +554,18 @@ select is(
     select count(*)
     from public.admin_activity_events
     where target_store_id = 'a5000000-0000-4000-8000-000000000010'
-      and action_type = 'store_plan_changed'
+      and action_type in ('store_comp_granted', 'store_comp_revoked')
   ),
-  3::bigint,
-  'a rejected Stripe-linked plan change creates no activity'
+  2::bigint,
+  'grant and revocation are both audited'
 );
 
-update public.seller_billing_status
-set stripe_subscription_id = null
-where store_id = 'a5000000-0000-4000-8000-000000000010';
+select public.admin_grant_store_comp(
+  'a5000000-0000-4000-8000-000000000010',
+  'full_flock',
+  'Keep remaining order fixtures entitled',
+  statement_timestamp() + interval '30 days'
+);
 
 select lives_ok(
   $$select public.admin_update_store_internal_note(

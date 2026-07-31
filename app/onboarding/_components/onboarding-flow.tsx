@@ -119,8 +119,16 @@ export function OnboardingFlow() {
 
         setSeller(primarySeller);
         setOnboardingStoreId(primarySeller?.store_id ?? null);
-        setSelectedPlanKey(primarySeller?.plan_key ?? null);
-        setSelectedBillingPlan(primarySeller?.billing_plan ?? null);
+        setSelectedPlanKey(
+          primarySeller?.requested_plan_key ??
+            primarySeller?.effective_plan_key ??
+            null,
+        );
+        setSelectedBillingPlan(
+          primarySeller?.requested_billing_cadence ??
+            primarySeller?.effective_billing_cadence ??
+            null,
+        );
 
         if (!primarySeller?.profile_complete) {
           setView("step2");
@@ -238,8 +246,16 @@ export function OnboardingFlow() {
             </p>
           ) : null}
           <Step5PlanAccessForm
-            initialBillingPlan={selectedBillingPlan ?? seller?.billing_plan}
-            initialPlanKey={selectedPlanKey ?? seller?.plan_key}
+            initialBillingPlan={
+              selectedBillingPlan ??
+              seller?.requested_billing_cadence ??
+              seller?.effective_billing_cadence
+            }
+            initialPlanKey={
+              selectedPlanKey ??
+              seller?.requested_plan_key ??
+              seller?.effective_plan_key
+            }
             onBack={() => {
               setError(null);
               setView("step2");
@@ -250,7 +266,11 @@ export function OnboardingFlow() {
               setSelectedBillingPlan(billingPlan);
               setSeller((current) =>
                 current
-                  ? { ...current, billing_plan: billingPlan, plan_key: planKey }
+                  ? {
+                      ...current,
+                      requested_billing_cadence: billingPlan,
+                      requested_plan_key: planKey,
+                    }
                   : current,
               );
               setView("step4");
@@ -295,7 +315,11 @@ export function OnboardingFlow() {
               setError(null);
               setView("step5");
             }}
-            planKey={selectedPlanKey ?? seller?.plan_key}
+            planKey={
+              selectedPlanKey ??
+              seller?.requested_plan_key ??
+              seller?.effective_plan_key
+            }
           />
         </div>
       </OnboardingShell>
