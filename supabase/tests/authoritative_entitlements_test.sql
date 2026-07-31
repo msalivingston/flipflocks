@@ -263,6 +263,9 @@ select throws_ok(
 );
 
 -- Resolver state matrix.
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claim.sub', '', true);
+
 insert into public.stores (
   id, owner_user_id, store_name, store_slug, store_status, storefront_mode,
   storefront_enabled
@@ -603,6 +606,16 @@ select is(
 
 -- Future Stripe contract: trusted price mapping, idempotency, and ordering.
 select set_config('request.jwt.claim.role', 'service_role', true);
+update public.seller_billing_status
+set
+  requested_plan_key = 'small_flock',
+  plan_key = 'small_flock'
+where seller_billing_status.store_id = 'c3000000-0000-4000-8000-000000000020';
+select is(
+  public.get_store_plan_key('c3000000-0000-4000-8000-000000000020'),
+  'small_flock',
+  'the provider fixture starts from an active Coop trial before its plan change'
+);
 update public.stores
 set store_status = 'live', storefront_enabled = true
 where id = 'c3000000-0000-4000-8000-000000000020';
@@ -616,7 +629,7 @@ values ('price_verified_market_monthly', false, '', 'full_flock', 'monthly');
 select lives_ok(
   $$select public.apply_verified_stripe_subscription_event(
     'evt_verified_1',
-    statement_timestamp(),
+    '2026-07-30 12:00:00+00'::timestamptz,
     'customer.subscription.updated',
     'sha256:verified-1',
     'c3000000-0000-4000-8000-000000000020',
@@ -632,10 +645,43 @@ select lives_ok(
   )$$,
   'a service-only verified provider event can apply trusted state'
 );
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.apply_verified_stripe_subscription_event(text,timestamptz,text,text,uuid,text,text,text,text,timestamptz,timestamptz,boolean,boolean,text)',
+    'execute'
+  )
+  and not has_function_privilege(
+    'anon',
+    'public.apply_verified_stripe_subscription_event(text,timestamptz,text,text,uuid,text,text,text,text,timestamptz,timestamptz,boolean,boolean,text)',
+    'execute'
+  )
+  and not has_function_privilege(
+    'authenticated',
+    'public.apply_verified_stripe_subscription_event(text,timestamptz,text,text,uuid,text,text,text,text,timestamptz,timestamptz,boolean,boolean,text)',
+    'execute'
+  ),
+  'the corrected provider contract remains service-role-only'
+);
 select is(
   public.get_store_plan_key('c3000000-0000-4000-8000-000000000020'),
   'full_flock',
   'provider plan is derived from the trusted price catalog'
+);
+select is(
+  (
+    select concat_ws(
+      ':',
+      seller_billing_status.stripe_customer_id,
+      seller_billing_status.stripe_subscription_id,
+      seller_billing_status.billing_state_authority,
+      seller_billing_status.subscription_status
+    )
+    from public.seller_billing_status
+    where seller_billing_status.store_id = 'c3000000-0000-4000-8000-000000000020'
+  ),
+  'cus_verified_foreign:sub_verified_foreign:stripe:active',
+  'the provider event updates the intended store billing snapshot'
 );
 select is(
   (
@@ -649,7 +695,7 @@ select is(
 select lives_ok(
   $$select public.apply_verified_stripe_subscription_event(
     'evt_verified_1',
-    statement_timestamp(),
+    '2026-07-30 12:00:00+00'::timestamptz,
     'customer.subscription.updated',
     'sha256:verified-1',
     'c3000000-0000-4000-8000-000000000020',
@@ -674,12 +720,33 @@ select is(
   1::bigint,
   'provider event deduplication stores one event'
 );
+select throws_ok(
+  $$select public.apply_verified_stripe_subscription_event(
+    'evt_verified_1',
+    '2026-07-30 12:00:00+00'::timestamptz,
+    'customer.subscription.updated',
+    'sha256:verified-1-changed',
+    'c3000000-0000-4000-8000-000000000020',
+    'cus_verified_foreign',
+    'sub_verified_foreign',
+    'price_verified_market_monthly',
+    'active',
+    statement_timestamp(),
+    statement_timestamp() + interval '30 days',
+    false,
+    false,
+    ''
+  )$$,
+  'P0001',
+  'Provider event id was reused with different content.',
+  'an event id cannot be reused with changed content'
+);
 select is(
   (
     select applied
     from public.apply_verified_stripe_subscription_event(
       'evt_verified_stale',
-      statement_timestamp() - interval '1 day',
+      '2026-07-29 12:00:00+00'::timestamptz,
       'customer.subscription.updated',
       'sha256:verified-stale',
       'c3000000-0000-4000-8000-000000000020',
@@ -705,6 +772,80 @@ select is(
   ),
   'active',
   'stale provider state does not replace the newer subscription status'
+);
+select throws_ok(
+  $$select public.apply_verified_stripe_subscription_event(
+    'evt_verified_cross_store',
+    '2026-07-30 13:00:00+00'::timestamptz,
+    'customer.subscription.updated',
+    'sha256:verified-cross-store',
+    'c3000000-0000-4000-8000-000000000010',
+    'cus_verified_foreign',
+    'sub_verified_foreign',
+    'price_verified_market_monthly',
+    'active',
+    statement_timestamp(),
+    statement_timestamp() + interval '30 days',
+    false,
+    false,
+    ''
+  )$$,
+  'P0001',
+  'Provider customer or subscription is already bound to another store.',
+  'provider customer and subscription identifiers cannot move to another store'
+);
+select throws_ok(
+  $$select public.apply_verified_stripe_subscription_event(
+    'evt_verified_wrong_account',
+    '2026-07-30 13:00:00+00'::timestamptz,
+    'customer.subscription.updated',
+    'sha256:verified-wrong-account',
+    'c3000000-0000-4000-8000-000000000010',
+    'cus_verified_wrong_account',
+    'sub_verified_wrong_account',
+    'price_verified_market_monthly',
+    'active',
+    statement_timestamp(),
+    statement_timestamp() + interval '30 days',
+    false,
+    false,
+    'acct_other'
+  )$$,
+  'P0001',
+  'Stripe price is not registered for this environment and account.',
+  'provider price mappings are isolated by Stripe account'
+);
+select throws_ok(
+  $$select public.apply_verified_stripe_subscription_event(
+    'evt_verified_wrong_mode',
+    '2026-07-30 13:00:00+00'::timestamptz,
+    'customer.subscription.updated',
+    'sha256:verified-wrong-mode',
+    'c3000000-0000-4000-8000-000000000010',
+    'cus_verified_wrong_mode',
+    'sub_verified_wrong_mode',
+    'price_verified_market_monthly',
+    'active',
+    statement_timestamp(),
+    statement_timestamp() + interval '30 days',
+    false,
+    true,
+    ''
+  )$$,
+  'P0001',
+  'Stripe price is not registered for this environment and account.',
+  'provider price mappings are isolated by live and test mode'
+);
+select is(
+  (
+    select count(*)
+    from public.billing_entitlement_events
+    where billing_entitlement_events.store_id = 'c3000000-0000-4000-8000-000000000020'
+      and billing_entitlement_events.provider_event_id = 'evt_verified_1'
+      and billing_entitlement_events.event_type = 'provider_state_applied'
+  ),
+  1::bigint,
+  'the provider audit event records the intended store exactly once'
 );
 
 select * from finish();

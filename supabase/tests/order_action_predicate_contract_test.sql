@@ -23,9 +23,11 @@ where n.nspname = 'public'
     'seller_bulk_mark_orders_paid',
     'seller_bulk_unarchive_orders',
     'seller_edit_order',
+    'seller_edit_order_batch_d_internal',
     'seller_mark_order_unfulfilled',
     'seller_record_order_fulfillment',
-    'seller_unarchive_order'
+    'seller_unarchive_order',
+    'cancel_order_batch_d_internal'
   );
 
 select ok(
@@ -39,10 +41,18 @@ select ok(
 
 select ok(
   (
-    select definition like '%payment_method = ''stripe_checkout''%'
-      and definition like '%payment_status <> ''unpaid''%'
-    from active_order_action_functions
-    where function_name = 'cancel_order'
+    select wrapper.definition like '%cancel_order_batch_d_internal(%'
+      and retained.definition like '%payment_method = ''stripe_checkout''%'
+      and retained.definition like '%payment_status <> ''unpaid''%'
+      and not has_function_privilege(
+        'authenticated',
+        'public.cancel_order_batch_d_internal(uuid,text,boolean,boolean)',
+        'execute'
+      )
+    from active_order_action_functions as wrapper
+    cross join active_order_action_functions as retained
+    where wrapper.function_name = 'cancel_order'
+      and retained.function_name = 'cancel_order_batch_d_internal'
   ),
   'cancel_order blocks online payment states other than unpaid'
 );
@@ -107,21 +117,32 @@ select ok(
 
 select ok(
   (
-    select definition like '%canceled_at is not null%'
-      and definition like '%order_status = ''canceled''%'
-      and definition like '%fulfilled_at is not null%'
-      and definition like '%order_status = ''fulfilled''%'
-    from active_order_action_functions
-    where function_name = 'seller_edit_order'
+    select wrapper.definition like '%seller_edit_order_batch_d_internal(%'
+      and retained.definition like '%canceled_at is not null%'
+      and retained.definition like '%order_status = ''canceled''%'
+      and retained.definition like '%fulfilled_at is not null%'
+      and retained.definition like '%order_status = ''fulfilled''%'
+      and not has_function_privilege(
+        'authenticated',
+        'public.seller_edit_order_batch_d_internal(uuid,jsonb,jsonb,uuid,text,text,text,text,text,text,text,uuid,text,uuid,text,numeric,text,text,text,text,text,text,numeric)',
+        'execute'
+      )
+    from active_order_action_functions as wrapper
+    cross join active_order_action_functions as retained
+    where wrapper.function_name = 'seller_edit_order'
+      and retained.function_name = 'seller_edit_order_batch_d_internal'
   ),
   'order editing rejects canceled and fulfilled orders'
 );
 
 select ok(
   (
-    select definition like '%fulfilled_quantity <> 0 or restored_quantity <> 0%'
-    from active_order_action_functions
-    where function_name = 'seller_edit_order'
+    select wrapper.definition like '%seller_edit_order_batch_d_internal(%'
+      and retained.definition like '%fulfilled_quantity <> 0 or restored_quantity <> 0%'
+    from active_order_action_functions as wrapper
+    cross join active_order_action_functions as retained
+    where wrapper.function_name = 'seller_edit_order'
+      and retained.function_name = 'seller_edit_order_batch_d_internal'
   ),
   'order editing rejects partially fulfilled or restored lines'
 );

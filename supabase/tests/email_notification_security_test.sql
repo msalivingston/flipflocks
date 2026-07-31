@@ -551,12 +551,21 @@ select throws_ok(
   'authenticated cannot call the raw suppression primitive'
 );
 
+select throws_ok(
+  $$select count(*) from public.email_notifications$$,
+  '42501',
+  'permission denied for table email_notifications',
+  'authenticated cannot inspect the service-owned email outbox directly'
+);
+
 select lives_ok(
   $$select * from public.seller_enqueue_updated_order_email(
     'b6000000-0000-4000-8000-000000000030'
   )$$,
   'legitimate owner can enqueue an updated-order pair'
 );
+
+reset role;
 
 select results_eq(
   $test$
@@ -579,6 +588,8 @@ select results_eq(
   'updated-order pair uses canonical buyer and seller recipients'
 );
 
+set local role authenticated;
+
 select lives_ok(
   $$select * from public.seller_enqueue_updated_order_email(
     'b6000000-0000-4000-8000-000000000030',
@@ -595,6 +606,8 @@ select lives_ok(
   'changing the obsolete browser token still resolves to the same trusted event'
 );
 
+reset role;
+
 select is(
   (
     select count(*)
@@ -608,6 +621,8 @@ select is(
   2::bigint,
   'random browser tokens cannot bypass event deduplication'
 );
+
+set local role authenticated;
 
 select lives_ok(
   $$select * from public.seller_resend_order_confirmation(
@@ -959,8 +974,6 @@ values (
   'Noncanonical',
   '{}'::jsonb
 );
-
-set local role service_role;
 
 select is(
   (

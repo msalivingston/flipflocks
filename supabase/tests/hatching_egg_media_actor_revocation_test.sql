@@ -161,20 +161,20 @@ values
     'f1000000-0000-4000-8000-000000000001',
     'Hatching Media Owner Store',
     'hatching-media-owner-store',
-    'live',
+    'draft',
     'hosted',
-    true,
-    true
+    false,
+    false
   ),
   (
     'f1000000-0000-4000-8000-000000000011',
     'f1000000-0000-4000-8000-000000000002',
     'Hatching Media Foreign Store',
     'hatching-media-foreign-store',
-    'live',
+    'draft',
     'hosted',
-    true,
-    true
+    false,
+    false
   );
 
 insert into public.user_roles (user_id, role, store_id)
@@ -216,6 +216,16 @@ values
     statement_timestamp(), statement_timestamp() + interval '7 days',
     statement_timestamp() + interval '7 days', 'trial'
   );
+
+update public.stores
+set
+  store_status = 'live',
+  storefront_enabled = true,
+  hatching_eggs_enabled = true
+where stores.id in (
+  'f1000000-0000-4000-8000-000000000010',
+  'f1000000-0000-4000-8000-000000000011'
+);
 
 with chicken as (
   select species.id

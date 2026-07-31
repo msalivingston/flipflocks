@@ -16,8 +16,13 @@ const enforcementPath = resolve(
   root,
   "supabase/migrations/20260730181000_enforce_authoritative_store_entitlements.sql",
 );
+const providerCorrectionPath = resolve(
+  root,
+  "supabase/migrations/20260730212000_fix_provider_subscription_event_ambiguity.sql",
+);
 const foundation = readFileSync(foundationPath, "utf8");
 const enforcement = readFileSync(enforcementPath, "utf8");
+const providerCorrection = readFileSync(providerCorrectionPath, "utf8");
 
 function sourceFiles(directory) {
   const files = [];
@@ -148,6 +153,31 @@ test("provider state has one service-only, price-mapped, ordered contract", () =
   );
 });
 
+test("provider correction preserves the contract and removes output-column ambiguity", () => {
+  assert.match(
+    providerCorrection,
+    /create or replace function public\.apply_verified_stripe_subscription_event\([\s\S]*returns table \(\s*applied boolean,\s*store_id uuid,\s*subscription_status text,\s*access_until timestamptz\s*\)/,
+  );
+  assert.match(providerCorrection, /security definer\s*set search_path = pg_catalog, public/);
+  assert.match(providerCorrection, /coalesce\(auth\.role\(\), ''\) <> 'service_role'/);
+  assert.match(
+    providerCorrection,
+    /on conflict on constraint seller_billing_status_store_id_key do update/,
+  );
+  assert.doesNotMatch(providerCorrection, /on conflict\s*\(\s*store_id\s*\)/);
+  assert.match(providerCorrection, /from public\.billing_provider_events as provider_event/);
+  assert.match(providerCorrection, /from public\.seller_billing_status as billing_snapshot/);
+  assert.match(providerCorrection, /returning billing_snapshot\.\* into v_billing/);
+  assert.match(
+    providerCorrection,
+    /revoke all on function public\.apply_verified_stripe_subscription_event[\s\S]*from public, anon, authenticated/,
+  );
+  assert.match(
+    providerCorrection,
+    /grant execute on function public\.apply_verified_stripe_subscription_event[\s\S]*to service_role/,
+  );
+});
+
 test("public reads, launch, capabilities, and final order insertion use entitlement enforcement", () => {
   const publicViews = [
     "public_storefronts",
@@ -171,7 +201,25 @@ test("public reads, launch, capabilities, and final order insertion use entitlem
     assert.match(enforcement, new RegExp(`'${view}'`));
   }
 
+  assert.equal(
+    publicViews.length,
+    15,
+    "all fifteen direct public PostgREST views remain covered",
+  );
+  assert.match(
+    enforcement,
+    /v_definition := regexp_replace\(v_definition, ';\[\[:space:\]\]\*\$', ''\)/,
+  );
+  assert.match(
+    enforcement,
+    /select entitlement_filtered\.\* from \(%s\) as entitlement_filtered/,
+  );
   assert.match(enforcement, /store_has_active_entitlement\(entitlement_filtered\.store_id\)/);
+  assert.doesNotMatch(
+    enforcement,
+    /from public\.%I(?:\s+as)?\s+entitlement_filtered/,
+    "the replacement must wrap the captured definition, not reference itself",
+  );
   assert.match(enforcement, /resolve_store_entitlement\(v_store\.id\)/);
   assert.match(
     enforcement,

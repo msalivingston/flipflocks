@@ -209,8 +209,17 @@ select is(
     from public.get_seller_context()
     where store_id = 'e3000000-0000-4000-8000-000000000010'
   ),
+  null::text,
+  'seller context exposes no effective plan for a store without entitlement'
+);
+select is(
+  (
+    select plan_key
+    from public.get_seller_context()
+    where store_id = 'e3000000-0000-4000-8000-000000000011'
+  ),
   'small_flock',
-  'seller context exposes the same fail-safe Coop plan'
+  'seller context exposes Coop for an active entitled Coop store'
 );
 
 select throws_ok(

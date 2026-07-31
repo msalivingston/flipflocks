@@ -970,6 +970,7 @@ begin
 
     select pg_get_viewdef(format('public.%I', v_name)::regclass, true)
     into v_definition;
+    v_definition := regexp_replace(v_definition, ';[[:space:]]*$', '');
     execute format(
       'create or replace view public.%I with (security_barrier = true) as select entitlement_filtered.* from (%s) as entitlement_filtered where public.store_has_active_entitlement(entitlement_filtered.store_id)',
       v_name,
