@@ -34,6 +34,20 @@ export type AdminStoreDetailRow = AdminStoreListRow & {
   admin_suspension_previous_store_status: string | null;
 };
 
+export type AdminStoreOperationsSummaryRow = {
+  store_id: string;
+  plan_key: string;
+  billing_plan: string | null;
+  has_linked_stripe_subscription: boolean;
+  internal_note: string | null;
+  recorded_gross_sales: number | null;
+  total_order_count: number;
+  open_order_count: number;
+  fulfilled_order_count: number;
+  canceled_order_count: number;
+  refunded_order_count: number;
+};
+
 export type AdminActivityRow = {
   admin_activity_event_id: string;
   actor_user_id: string | null;

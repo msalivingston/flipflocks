@@ -86,11 +86,17 @@ export function AdminStatusBadge({ value }: { value: string | boolean | null }) 
     typeof value === "boolean" ? (value ? "Yes" : "No") : value ?? "Unknown";
   const normalized = String(label).toLowerCase();
   const tone =
-    normalized === "live" || normalized === "yes" || normalized === "active"
+    normalized === "live" ||
+    normalized === "yes" ||
+    normalized === "active" ||
+    normalized === "enabled" ||
+    normalized === "not on hold"
       ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
       : normalized === "suspended" ||
           normalized === "no" ||
-          normalized === "failed"
+          normalized === "failed" ||
+          normalized === "disabled" ||
+          normalized === "on hold"
         ? "bg-red-50 text-red-800 ring-red-200"
         : "bg-stone-100 text-stone-700 ring-stone-200";
 
