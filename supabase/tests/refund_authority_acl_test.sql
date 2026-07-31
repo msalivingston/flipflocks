@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(16);
+select plan(17);
 
 select ok(
   (
@@ -80,6 +80,14 @@ select ok(
     'public.seller_record_offline_refund(uuid,text,numeric,text,text,text)',
     'execute'
   )
+  and not exists (
+    select 1
+    from pg_proc p
+    cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
+    where p.oid = 'public.seller_record_offline_refund(uuid,text,numeric,text,text,text)'::regprocedure
+      and acl.grantee = 0
+      and acl.privilege_type = 'EXECUTE'
+  )
   and not has_function_privilege(
     'anon',
     'public.seller_record_offline_refund(uuid,text,numeric,text,text,text)',
@@ -143,11 +151,19 @@ select ok(
 
 select ok(
   (
-    select proconfig @> array['search_path=public, pg_temp']::text[]
+    select proconfig @> array['search_path=public, extensions, pg_temp']::text[]
     from pg_proc
     where oid = 'public.seller_record_offline_refund(uuid,text,numeric,text,text,text)'::regprocedure
   ),
   'the offline action has a fixed search path'
+);
+
+select ok(
+  to_regprocedure('extensions.digest(text,text)') is not null
+  and pg_get_functiondef(
+    'public.seller_record_offline_refund(uuid,text,numeric,text,text,text)'::regprocedure
+  ) like '%digest(%',
+  'the offline idempotency hash resolves through the extensions pgcrypto schema'
 );
 
 select ok(

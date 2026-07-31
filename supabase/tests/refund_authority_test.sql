@@ -59,6 +59,28 @@ values
     'hosted', true, 'usd', 'USD'
   );
 
+insert into public.seller_billing_status (
+  store_id, requested_plan_key, requested_billing_cadence, plan_key,
+  billing_plan, subscription_status, trial_started_at, trial_ends_at,
+  current_period_start, current_period_end, storefront_access_until,
+  billing_state_authority
+)
+values
+  (
+    'e1000000-0000-4000-8000-000000000010',
+    'small_flock', 'monthly', 'small_flock', 'monthly', 'trialing',
+    statement_timestamp(), statement_timestamp() + interval '7 days',
+    statement_timestamp(), statement_timestamp() + interval '7 days',
+    statement_timestamp() + interval '7 days', 'trial'
+  ),
+  (
+    'e1000000-0000-4000-8000-000000000011',
+    'small_flock', 'monthly', 'small_flock', 'monthly', 'trialing',
+    statement_timestamp(), statement_timestamp() + interval '7 days',
+    statement_timestamp(), statement_timestamp() + interval '7 days',
+    statement_timestamp() + interval '7 days', 'trial'
+  );
+
 insert into public.user_roles (user_id, role, store_id)
 values
   ('e1000000-0000-4000-8000-000000000003', 'admin', null),
@@ -184,6 +206,7 @@ select results_eq(
       stripe_account_id is null,
       stripe_livemode is null,
       metadata = '{}'::jsonb,
+      length(request_hash) = 64,
       created_by_user_id
     from public.order_refunds
     where order_id = 'e1000000-0000-4000-8000-000000000101'
@@ -192,11 +215,11 @@ select results_eq(
   $expected$
     values (
       'offline_cash'::text, 'succeeded'::text, 'USD'::text,
-      true, true, true, true, true, true, true, true,
+      true, true, true, true, true, true, true, true, true,
       'e1000000-0000-4000-8000-000000000001'::uuid
     )
   $expected$,
-  'offline status, currency, actor, and null provider fields are database-derived'
+  'offline status, currency, actor, digest hash, and null provider fields are database-derived'
 );
 
 select is(

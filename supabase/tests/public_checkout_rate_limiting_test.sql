@@ -58,6 +58,20 @@ values (
   'hosted'
 );
 
+insert into public.seller_billing_status (
+  store_id, requested_plan_key, requested_billing_cadence, plan_key,
+  billing_plan, subscription_status, trial_started_at, trial_ends_at,
+  current_period_start, current_period_end, storefront_access_until,
+  billing_state_authority
+)
+values (
+  '90000000-0000-4000-8000-000000000002',
+  'small_flock', 'monthly', 'small_flock', 'monthly', 'trialing',
+  statement_timestamp(), statement_timestamp() + interval '7 days',
+  statement_timestamp(), statement_timestamp() + interval '7 days',
+  statement_timestamp() + interval '7 days', 'trial'
+);
+
 select is(
   (
     select allowed

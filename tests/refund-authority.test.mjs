@@ -9,6 +9,10 @@ const migrationPath = path.join(
   repositoryRoot,
   "supabase/migrations/20260730210000_secure_refund_authority.sql",
 );
+const digestCorrectionPath = path.join(
+  repositoryRoot,
+  "supabase/migrations/20260730211000_fix_offline_refund_digest_resolution.sql",
+);
 const batchDPath = path.join(
   repositoryRoot,
   "supabase/migrations/20260730200000_unified_order_inventory_reconciliation.sql",
@@ -42,6 +46,25 @@ test("Batch E is append-only and follows the inventory batch", async () => {
   assert.match(migration, /^-- Phase 1 Security Batch E:/);
   assert.match(migration, /begin;[\s\S]*commit;/);
   assert.doesNotMatch(migration, /drop table public\.order_refunds/i);
+});
+
+test("the append-only digest correction targets only the exact offline action", async () => {
+  const correction = await readFile(digestCorrectionPath, "utf8");
+
+  assert.ok(path.basename(migrationPath) < path.basename(digestCorrectionPath));
+  assert.match(
+    correction,
+    /alter function public\.seller_record_offline_refund\(\s*uuid,\s*text,\s*numeric,\s*text,\s*text,\s*text\s*\)/,
+  );
+  assert.match(
+    correction,
+    /set search_path = public, extensions, pg_temp/,
+  );
+  assert.doesNotMatch(correction, /grant execute|revoke all/i);
+  assert.doesNotMatch(
+    correction,
+    /seller_record_refund\(|record_stripe_refund_result\(/,
+  );
 });
 
 test("the generic refund surface and every overload are neutralized", async () => {
