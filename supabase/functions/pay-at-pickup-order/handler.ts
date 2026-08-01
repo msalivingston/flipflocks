@@ -80,9 +80,14 @@ type RateLimitRow = {
 
 const baseCorsHeaders = {
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, idempotency-key",
+    "authorization, x-client-info, apikey, content-type, x-retry-count, x-region, idempotency-key",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+const productionCorsOrigins = new Set([
+  "https://www.flockfront.com",
+  "https://flockfront.com",
+]);
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -119,30 +124,55 @@ function normalizeConfiguredOrigin(value: string | undefined): string | null {
   }
 }
 
-function resolveCorsPolicy(env: HandlerDependencies["env"]):
-  | { ok: true; allowedOrigin: string; headers: Record<string, string> }
-  | { ok: false; headers: Record<string, string> } {
+function resolveCorsPolicy(
+  requestOrigin: string | null,
+  env: HandlerDependencies["env"],
+): {
+  configurationValid: boolean;
+  originAllowed: boolean;
+  headers: Record<string, string>;
+} {
   const configuredOriginValue = env("FLIPFLOCKS_PUBLIC_API_ORIGIN")?.trim();
   const configuredOrigin = normalizeConfiguredOrigin(configuredOriginValue);
   const environment = env("FLIPFLOCKS_ENVIRONMENT")?.trim().toLowerCase();
   const isHosted = Boolean(env("DENO_DEPLOYMENT_ID")?.trim()) ||
     environment === "production" ||
     !isLocalSupabaseUrl(env("SUPABASE_URL"));
+  const configurationValid = !configuredOriginValue ||
+    Boolean(configuredOrigin && configuredOrigin === configuredOriginValue);
+  const useLocalWildcard = !isHosted && !configuredOriginValue;
+  const allowedOrigins = new Set(productionCorsOrigins);
 
-  if ((!configuredOrigin || configuredOrigin !== configuredOriginValue) && isHosted) {
-    return {
-      ok: false,
-      headers: { ...baseCorsHeaders },
-    };
+  if (configuredOrigin) {
+    allowedOrigins.add(configuredOrigin);
   }
 
-  const allowedOrigin = configuredOrigin || "*";
+  const normalizedRequestOrigin = normalizeConfiguredOrigin(
+    requestOrigin ?? undefined,
+  );
+  const originAllowed = !requestOrigin ||
+    useLocalWildcard ||
+    Boolean(
+      normalizedRequestOrigin &&
+        normalizedRequestOrigin === requestOrigin &&
+        allowedOrigins.has(normalizedRequestOrigin),
+    );
+  const responseOrigin = useLocalWildcard
+    ? "*"
+    : requestOrigin && originAllowed
+    ? requestOrigin
+    : !requestOrigin
+    ? configuredOrigin
+    : null;
+
   return {
-    ok: true,
-    allowedOrigin,
+    configurationValid,
+    originAllowed,
     headers: {
       ...baseCorsHeaders,
-      "Access-Control-Allow-Origin": allowedOrigin,
+      ...(responseOrigin
+        ? { "Access-Control-Allow-Origin": responseOrigin }
+        : {}),
       "Vary": "Origin",
     },
   };
@@ -547,9 +577,10 @@ export function createPayAtPickupHandler(
   const fetchImplementation = dependencies.fetch ?? fetch;
 
   return async (request: Request) => {
-    const corsPolicy = resolveCorsPolicy(dependencies.env);
+    const requestOrigin = request.headers.get("origin")?.trim() || null;
+    const corsPolicy = resolveCorsPolicy(requestOrigin, dependencies.env);
 
-    if (!corsPolicy.ok) {
+    if (!corsPolicy.configurationValid) {
       return jsonResponse(500, {
         error: "server_configuration_error",
         message: "Order service origin is not configured.",
@@ -557,13 +588,8 @@ export function createPayAtPickupHandler(
     }
 
     const corsHeaders = corsPolicy.headers;
-    const requestOrigin = request.headers.get("origin")?.trim();
 
-    if (
-      requestOrigin &&
-      corsPolicy.allowedOrigin !== "*" &&
-      requestOrigin !== corsPolicy.allowedOrigin
-    ) {
+    if (!corsPolicy.originAllowed) {
       return jsonResponse(403, {
         error: "origin_not_allowed",
         message: "This origin is not allowed to create orders.",

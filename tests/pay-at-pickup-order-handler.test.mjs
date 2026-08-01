@@ -322,6 +322,76 @@ test("configured origin is allowed and reflected exactly", async () => {
   );
 });
 
+test("production origins receive an empty successful preflight without database work", async () => {
+  for (const origin of [
+    "https://www.flockfront.com",
+    "https://flockfront.com",
+  ]) {
+    const harness = createHarness({
+      environment: {
+        FLIPFLOCKS_PUBLIC_API_ORIGIN: "",
+        DENO_DEPLOYMENT_ID: "hosted-deployment",
+      },
+    });
+    const response = await harness.handler(
+      requestFor(null, { origin, method: "OPTIONS" }),
+    );
+
+    assert.equal(response.status, 204);
+    assert.equal(await response.text(), "");
+    assert.equal(response.headers.get("access-control-allow-origin"), origin);
+    assert.equal(
+      response.headers.get("access-control-allow-methods"),
+      "POST, OPTIONS",
+    );
+
+    const allowedHeaders = response.headers
+      .get("access-control-allow-headers")
+      .split(/,\s*/);
+    for (const requiredHeader of [
+      "authorization",
+      "apikey",
+      "content-type",
+      "x-client-info",
+      "x-retry-count",
+      "x-region",
+    ]) {
+      assert.ok(allowedHeaders.includes(requiredHeader));
+    }
+
+    assert.deepEqual(harness.calls, []);
+    assert.equal(harness.emailWorkerCalls, 0);
+  }
+});
+
+test("production POST success and validation errors reflect the requesting origin", async () => {
+  const origin = "https://www.flockfront.com";
+  const harness = createHarness({
+    environment: {
+      FLIPFLOCKS_PUBLIC_API_ORIGIN: "https://flockfront.com",
+      DENO_DEPLOYMENT_ID: "hosted-deployment",
+    },
+  });
+
+  const successResponse = await harness.handler(
+    requestFor(validPayload(), { origin }),
+  );
+  assert.equal(successResponse.status, 201);
+  assert.equal(
+    successResponse.headers.get("access-control-allow-origin"),
+    origin,
+  );
+
+  const errorResponse = await harness.handler(
+    requestFor({ ...validPayload(), buyer_email: "not-an-email" }, { origin }),
+  );
+  assert.equal(errorResponse.status, 400);
+  assert.equal(
+    errorResponse.headers.get("access-control-allow-origin"),
+    origin,
+  );
+});
+
 test("a mismatched origin is rejected before database work", async () => {
   const harness = createHarness();
   const response = await harness.handler(
@@ -329,10 +399,24 @@ test("a mismatched origin is rejected before database work", async () => {
   );
 
   assert.equal(response.status, 403);
+  assert.equal(response.headers.get("access-control-allow-origin"), null);
   assert.equal(harness.calls.length, 0);
+  assert.equal(harness.emailWorkerCalls, 0);
 });
 
-test("hosted checkout fails closed when the public origin is missing", async () => {
+test("a disallowed preflight receives no permissive CORS approval", async () => {
+  const harness = createHarness();
+  const response = await harness.handler(
+    requestFor(null, { origin: "https://attacker.test", method: "OPTIONS" }),
+  );
+
+  assert.equal(response.status, 403);
+  assert.equal(response.headers.get("access-control-allow-origin"), null);
+  assert.deepEqual(harness.calls, []);
+  assert.equal(harness.emailWorkerCalls, 0);
+});
+
+test("hosted checkout without a configured origin denies unknown origins", async () => {
   const harness = createHarness({
     environment: {
       FLIPFLOCKS_PUBLIC_API_ORIGIN: "",
@@ -341,7 +425,7 @@ test("hosted checkout fails closed when the public origin is missing", async () 
   });
   const response = await harness.handler(requestFor(validPayload()));
 
-  assert.equal(response.status, 500);
+  assert.equal(response.status, 403);
   assert.equal(response.headers.get("access-control-allow-origin"), null);
   assert.equal(harness.calls.length, 0);
 });
