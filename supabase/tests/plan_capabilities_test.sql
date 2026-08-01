@@ -586,17 +586,25 @@ select ok(
 
 select ok(
   position(
+    'store_has_public_market_entitlement' in
+    pg_get_viewdef('public.public_storefront_hatching_egg_inventory'::regclass, true)
+  ) > 0
+  and position(
     'get_store_plan_key' in
     pg_get_viewdef('public.public_storefront_hatching_egg_inventory'::regclass, true)
-  ) > 0,
-  'the Hatching Eggs public view uses the database plan authority'
+  ) = 0,
+  'the Hatching Eggs public view uses the public-safe entitlement capability'
 );
 select ok(
   position(
+    'store_has_public_market_entitlement' in
+    pg_get_viewdef('public.public_storefront_media_gallery'::regclass, true)
+  ) > 0
+  and position(
     'get_store_plan_key' in
     pg_get_viewdef('public.public_storefront_media_gallery'::regclass, true)
-  ) > 0,
-  'the public media gallery uses the database plan authority for gated media'
+  ) = 0,
+  'the public media gallery uses the public-safe entitlement capability for gated media'
 );
 select ok(
   position(
