@@ -64,12 +64,10 @@ function validateStripeKeyMode(value, livemode, restrictedAllowed) {
   }
 }
 
-export function parseStripeSaasConfig(source) {
-  const operationalApiKey = required(source, "STRIPE_SAAS_API_KEY");
+function parseStripeSaasContext(source) {
   const platformAccountId = required(source, "STRIPE_PLATFORM_ACCOUNT_ID");
   const livemode = parseStrictBoolean(required(source, "STRIPE_SAAS_LIVEMODE"));
   const environmentId = required(source, "FLOCKFRONT_ENVIRONMENT_ID");
-  const catalogReadApiKey = source.STRIPE_SAAS_CATALOG_READ_KEY?.trim() || null;
   if (!/^acct_[A-Za-z0-9]+$/.test(platformAccountId)) {
     throw new StripeSaasError(
       "STRIPE_SAAS_CONFIG_ACCOUNT_INVALID",
@@ -88,16 +86,36 @@ export function parseStripeSaasConfig(source) {
       "FLOCKFRONT_ENVIRONMENT_ID is not recognized.",
     );
   }
-  validateStripeKeyMode(operationalApiKey, livemode, false);
-  if (catalogReadApiKey) validateStripeKeyMode(catalogReadApiKey, livemode, true);
   return Object.freeze({
-    operationalApiKey, catalogReadApiKey, platformAccountId, livemode,
-    environmentId, apiVersion: STRIPE_SAAS_API_VERSION,
+    platformAccountId, livemode, environmentId, apiVersion: STRIPE_SAAS_API_VERSION,
   });
 }
 
+export function parseStripeSaasConfig(source) {
+  const operationalApiKey = required(source, "STRIPE_SAAS_API_KEY");
+  const context = parseStripeSaasContext(source);
+  const catalogReadApiKey = source.STRIPE_SAAS_CATALOG_READ_KEY?.trim() || null;
+  validateStripeKeyMode(operationalApiKey, context.livemode, false);
+  if (catalogReadApiKey) validateStripeKeyMode(catalogReadApiKey, context.livemode, true);
+  return Object.freeze({
+    ...context, operationalApiKey, catalogReadApiKey,
+  });
+}
+
+export function parseStripeSaasCatalogConfig(source) {
+  const catalogReadApiKey = required(source, "STRIPE_SAAS_CATALOG_READ_KEY");
+  const context = parseStripeSaasContext(source);
+  validateStripeKeyMode(catalogReadApiKey, context.livemode, true);
+  if (!catalogReadApiKey.startsWith("rk_")) {
+    throw new StripeSaasError(
+      "STRIPE_SAAS_CONFIG_API_KEY_INVALID",
+      "The catalog verification key must be a Stripe restricted server key.",
+    );
+  }
+  return Object.freeze({ ...context, catalogReadApiKey });
+}
+
 export function parseCatalogApplyConfig(source) {
-  const stripe = parseStripeSaasConfig(source);
   const supabaseUrl = required(source, "SUPABASE_URL");
   const supabaseServiceRoleKey = required(source, "SUPABASE_SERVICE_ROLE_KEY");
   let parsedUrl;
@@ -111,7 +129,7 @@ export function parseCatalogApplyConfig(source) {
       "STRIPE_SAAS_CONFIG_SUPABASE_URL_INVALID", "SUPABASE_URL must use HTTP or HTTPS.",
     );
   }
-  return Object.freeze({ ...stripe, supabaseUrl, supabaseServiceRoleKey });
+  return Object.freeze({ supabaseUrl, supabaseServiceRoleKey });
 }
 
 export function redactStripeSaasConfig(config) {

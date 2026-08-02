@@ -7,7 +7,7 @@ import {
   StripeSaasError,
   getApprovedSaasPrice,
   parseCatalogApplyConfig,
-  parseStripeSaasConfig,
+  parseStripeSaasCatalogConfig,
   redactStripeSaasConfig,
 } from "../../supabase/functions/_shared/stripe-saas-runtime.mjs";
 
@@ -131,7 +131,7 @@ export async function runCatalogRegistration({
   write = (line) => process.stdout.write(`${line}\n`),
 }) {
   const args = parseCatalogArguments(argv);
-  const config = args.apply ? parseCatalogApplyConfig(env) : parseStripeSaasConfig(env);
+  const config = parseStripeSaasCatalogConfig(env);
   getApprovedSaasPrice(args.planKey, args.cadence);
   if (config.livemode) {
     throw new StripeSaasError(
@@ -151,13 +151,6 @@ export async function runCatalogRegistration({
       "Apply requires --confirm-account matching STRIPE_PLATFORM_ACCOUNT_ID.",
     );
   }
-  if (!config.catalogReadApiKey) {
-    throw new StripeSaasError(
-      "STRIPE_SAAS_UTILITY_CATALOG_READ_KEY_REQUIRED",
-      "STRIPE_SAAS_CATALOG_READ_KEY is required for catalog verification.",
-    );
-  }
-
   const stripe = createStripeClient(config.catalogReadApiKey);
   const price = await stripe.prices.retrieve(args.stripePriceId);
   const productId = typeof price.product === "string" ? price.product : price.product?.id;
@@ -187,7 +180,13 @@ export async function runCatalogRegistration({
     return Object.freeze({ status: "dry_run_verified", registration, summary });
   }
 
-  const supabase = createSupabaseClient(config.supabaseUrl, config.supabaseServiceRoleKey);
+  // Apply-only credentials are deliberately parsed after confirmations and
+  // provider verification so dry-run never needs or touches Supabase secrets.
+  const applyConfig = parseCatalogApplyConfig(env);
+  const supabase = createSupabaseClient(
+    applyConfig.supabaseUrl,
+    applyConfig.supabaseServiceRoleKey,
+  );
   const { data, error } = await supabase.rpc("register_verified_saas_price", registration);
   if (error) {
     throw new StripeSaasError(

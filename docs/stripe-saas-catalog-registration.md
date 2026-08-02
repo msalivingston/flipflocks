@@ -14,7 +14,7 @@ No Accounts permission is required. The utility does not call the Stripe Account
 
 | Variable | Classification | Purpose |
 |---|---|---|
-| `STRIPE_SAAS_API_KEY` | Secret | Future FlockFront SaaS billing operations; must match configured mode. |
+| `STRIPE_SAAS_API_KEY` | Secret, not used by this utility | Reserved for future FlockFront SaaS billing operations. Catalog dry-run and apply do not require or read it. |
 | `STRIPE_SAAS_CATALOG_READ_KEY` | Secret, required by this utility | Least-privilege Stripe restricted key for Product and Price reads. The utility does not fall back to the operational key. |
 | `STRIPE_PLATFORM_ACCOUNT_ID` | Safe identifier | Manually confirmed FlockFront platform account binding; must be `acct_1CTOghL1R5g4hhXt`. |
 | `STRIPE_SAAS_LIVEMODE` | Safe setting | Must be exactly `false` for Batch 4 tooling. |
@@ -28,13 +28,13 @@ Product and Price evidence is retrieved and verified from Stripe. The configured
 
 ## Usage
 
-Dry-run is the default and performs Stripe reads only:
+Dry-run is the default and performs Stripe reads only. It requires the catalog read key, platform account ID, sandbox-mode setting, and environment ID; it does not require `STRIPE_SAAS_API_KEY` or either Supabase variable:
 
 ```text
 npm run stripe:register-saas-price -- --plan=small_flock --cadence=monthly --price-id=<test-price-id>
 ```
 
-Apply additionally requires `--apply`, an exact environment confirmation, and an exact configured-account confirmation:
+Apply additionally requires `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `--apply`, an exact environment confirmation, and an exact configured-account confirmation. Supabase configuration is checked only after the confirmations and Stripe Product and Price verification succeed:
 
 ```text
 npm run stripe:register-saas-price -- --plan=small_flock --cadence=monthly --price-id=<test-price-id> --apply --confirm-environment=<environment-id> --confirm-account=acct_1CTOghL1R5g4hhXt

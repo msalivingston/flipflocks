@@ -6,6 +6,7 @@ import {
   STRIPE_SAAS_PLATFORM_ACCOUNT_ID,
   STRIPE_SAAS_SDK_VERSION,
   StripeSaasError,
+  parseStripeSaasCatalogConfig,
   parseStripeSaasConfig,
   redactStripeSaasConfig,
 } from "../supabase/functions/_shared/stripe-saas-runtime.mjs";
@@ -17,12 +18,20 @@ import {
 const testSecret = ["sk", "test", "Batch4FixtureKey"].join("_");
 const testRestricted = ["rk", "test", "Batch4ReadFixture"].join("_");
 const liveSecret = ["sk", "live", "Batch4FixtureKey"].join("_");
+const liveRestricted = ["rk", "live", "Batch4ReadFixture"].join("_");
 const serviceSecret = ["service", "role", "Batch4Fixture"].join("_");
 const accountId = STRIPE_SAAS_PLATFORM_ACCOUNT_ID;
 
 function environment(overrides = {}) {
   return {
     STRIPE_SAAS_API_KEY: testSecret,
+    ...catalogEnvironment(),
+    ...overrides,
+  };
+}
+
+function catalogEnvironment(overrides = {}) {
+  return {
     STRIPE_SAAS_CATALOG_READ_KEY: testRestricted,
     STRIPE_PLATFORM_ACCOUNT_ID: accountId,
     STRIPE_SAAS_LIVEMODE: "false",
@@ -74,7 +83,7 @@ function fixture(planKey = "small_flock", cadence = "monthly") {
       description: "must-not-print-product",
     },
     selection: { planKey, cadence, stripePriceId: priceId },
-    config: parseStripeSaasConfig(environment()),
+    config: parseStripeSaasCatalogConfig(catalogEnvironment()),
   };
 }
 
@@ -100,6 +109,24 @@ test("configuration fails closed and strictly binds keys, mode, account, and env
   assert.equal(parseStripeSaasConfig(environment({ STRIPE_SAAS_CATALOG_READ_KEY: "" })).catalogReadApiKey, null);
 });
 
+test("catalog configuration is independent of the required operational configuration", () => {
+  const catalog = parseStripeSaasCatalogConfig(catalogEnvironment());
+  assert.equal(catalog.catalogReadApiKey, testRestricted);
+  assert.ok(!("operationalApiKey" in catalog));
+  expectCode(
+    () => parseStripeSaasCatalogConfig(catalogEnvironment({ STRIPE_SAAS_CATALOG_READ_KEY: "" })),
+    "STRIPE_SAAS_CONFIG_STRIPE_SAAS_CATALOG_READ_KEY_MISSING",
+  );
+  expectCode(
+    () => parseStripeSaasCatalogConfig(catalogEnvironment({ STRIPE_SAAS_CATALOG_READ_KEY: testSecret })),
+    "STRIPE_SAAS_CONFIG_API_KEY_INVALID",
+  );
+  expectCode(
+    () => parseStripeSaasConfig(catalogEnvironment()),
+    "STRIPE_SAAS_CONFIG_STRIPE_SAAS_API_KEY_MISSING",
+  );
+});
+
 test("configuration errors and redacted diagnostics omit all secrets", () => {
   const config = parseStripeSaasConfig(environment());
   const serialized = JSON.stringify(redactStripeSaasConfig(config));
@@ -110,6 +137,14 @@ test("configuration errors and redacted diagnostics omit all secrets", () => {
     assert.fail("invalid key should throw");
   } catch (error) {
     assert.doesNotMatch(`${error.message} ${error.code}`, new RegExp(testSecret));
+  }
+  try {
+    parseStripeSaasCatalogConfig(catalogEnvironment({
+      STRIPE_SAAS_CATALOG_READ_KEY: `${testRestricted}!`,
+    }));
+    assert.fail("invalid catalog key should throw");
+  } catch (error) {
+    assert.doesNotMatch(`${error.message} ${error.code}`, new RegExp(testRestricted));
   }
 });
 
@@ -181,7 +216,7 @@ for (const [planKey, cadences] of Object.entries(approved)) {
       const calls = [];
       const result = await runCatalogRegistration({
         argv: [`--plan=${planKey}`, `--cadence=${cadence}`, `--price-id=${value.selection.stripePriceId}`],
-        env: environment(),
+        env: catalogEnvironment(),
         createStripeClient: () => mockedStripe(value, calls),
         createSupabaseClient: () => { throw new Error("dry-run must not create Supabase client"); },
         write: () => {},
@@ -208,7 +243,7 @@ test("an Accounts client that throws is never touched", async () => {
   };
   const result = await runCatalogRegistration({
     argv: ["--plan=small_flock", "--cadence=monthly", `--price-id=${value.selection.stripePriceId}`],
-    env: environment(),
+    env: catalogEnvironment(),
     createStripeClient: () => stripe,
     write: () => {},
   });
@@ -223,7 +258,7 @@ test("dry-run performs mock reads, emits redacted output, and makes no Supabase 
   let supabaseCreated = false;
   const result = await runCatalogRegistration({
     argv: [`--plan=${value.selection.planKey}`, `--cadence=${value.selection.cadence}`, `--price-id=${value.selection.stripePriceId}`],
-    env: environment(),
+    env: catalogEnvironment(),
     createStripeClient: () => mockedStripe(value, calls),
     createSupabaseClient: () => { supabaseCreated = true; throw new Error("unexpected"); },
     write: (line) => output.push(line),
@@ -246,7 +281,7 @@ test("apply requires matching environment confirmation before any client creatio
   await assert.rejects(
     runCatalogRegistration({
       argv: [`--plan=small_flock`, `--cadence=monthly`, `--price-id=${value.selection.stripePriceId}`, "--apply"],
-      env: environment({ SUPABASE_URL: "http://127.0.0.1:54321", SUPABASE_SERVICE_ROLE_KEY: serviceSecret }),
+      env: catalogEnvironment({ SUPABASE_URL: "http://127.0.0.1:54321", SUPABASE_SERVICE_ROLE_KEY: serviceSecret }),
       createStripeClient: () => { stripeCreated = true; return mockedStripe(value, []); },
       createSupabaseClient: () => { supabaseCreated = true; throw new Error("unexpected"); },
     }),
@@ -263,7 +298,7 @@ test("apply without account confirmation fails before Stripe or Supabase client 
   await assert.rejects(
     runCatalogRegistration({
       argv: ["--plan=small_flock", "--cadence=monthly", `--price-id=${value.selection.stripePriceId}`, "--apply", "--confirm-environment=local"],
-      env: environment({ SUPABASE_URL: "http://127.0.0.1:54321", SUPABASE_SERVICE_ROLE_KEY: serviceSecret }),
+      env: catalogEnvironment({ SUPABASE_URL: "http://127.0.0.1:54321", SUPABASE_SERVICE_ROLE_KEY: serviceSecret }),
       createStripeClient: () => { stripeCreated = true; return mockedStripe(value, []); },
       createSupabaseClient: () => { supabaseCreated = true; throw new Error("unexpected"); },
     }),
@@ -280,7 +315,7 @@ test("apply with wrong account confirmation fails before Stripe or Supabase clie
   await assert.rejects(
     runCatalogRegistration({
       argv: ["--plan=small_flock", "--cadence=monthly", `--price-id=${value.selection.stripePriceId}`, "--apply", "--confirm-environment=local", "--confirm-account=acct_WrongPlatform"],
-      env: environment({ SUPABASE_URL: "http://127.0.0.1:54321", SUPABASE_SERVICE_ROLE_KEY: serviceSecret }),
+      env: catalogEnvironment({ SUPABASE_URL: "http://127.0.0.1:54321", SUPABASE_SERVICE_ROLE_KEY: serviceSecret }),
       createStripeClient: () => { stripeCreated = true; return mockedStripe(value, []); },
       createSupabaseClient: () => { supabaseCreated = true; throw new Error("unexpected"); },
     }),
@@ -297,11 +332,11 @@ test("catalog verification requires the dedicated restricted key before client c
   await assert.rejects(
     runCatalogRegistration({
       argv: ["--plan=small_flock", "--cadence=monthly", `--price-id=${value.selection.stripePriceId}`],
-      env: environment({ STRIPE_SAAS_CATALOG_READ_KEY: "" }),
+      env: catalogEnvironment({ STRIPE_SAAS_CATALOG_READ_KEY: "" }),
       createStripeClient: () => { stripeCreated = true; return mockedStripe(value, []); },
       createSupabaseClient: () => { supabaseCreated = true; throw new Error("unexpected"); },
     }),
-    (error) => error.code === "STRIPE_SAAS_UTILITY_CATALOG_READ_KEY_REQUIRED",
+    (error) => error.code === "STRIPE_SAAS_CONFIG_STRIPE_SAAS_CATALOG_READ_KEY_MISSING",
   );
   assert.equal(stripeCreated, false);
   assert.equal(supabaseCreated, false);
@@ -312,9 +347,8 @@ test("live mode is refused before any provider client is created", async () => {
   await assert.rejects(
     runCatalogRegistration({
       argv: ["--plan=small_flock", "--cadence=monthly", "--price-id=price_Batch4Live"],
-      env: environment({
-        STRIPE_SAAS_API_KEY: liveSecret,
-        STRIPE_SAAS_CATALOG_READ_KEY: "",
+      env: catalogEnvironment({
+        STRIPE_SAAS_CATALOG_READ_KEY: liveRestricted,
         STRIPE_SAAS_LIVEMODE: "true",
       }),
       createStripeClient: () => { clientCreated = true; throw new Error("unexpected"); },
@@ -322,6 +356,48 @@ test("live mode is refused before any provider client is created", async () => {
     (error) => error.code === "STRIPE_SAAS_UTILITY_LIVE_MODE_REFUSED",
   );
   assert.equal(clientCreated, false);
+});
+
+test("apply requires Supabase URL only after Stripe verification", async () => {
+  const value = fixture();
+  const stripeCalls = [];
+  let supabaseCreated = false;
+  await assert.rejects(
+    runCatalogRegistration({
+      argv: [
+        "--plan=small_flock", "--cadence=monthly",
+        `--price-id=${value.selection.stripePriceId}`,
+        "--apply", "--confirm-environment=local", `--confirm-account=${accountId}`,
+      ],
+      env: catalogEnvironment(),
+      createStripeClient: () => mockedStripe(value, stripeCalls),
+      createSupabaseClient: () => { supabaseCreated = true; throw new Error("unexpected"); },
+    }),
+    (error) => error.code === "STRIPE_SAAS_CONFIG_SUPABASE_URL_MISSING",
+  );
+  assert.deepEqual(stripeCalls, ["price.retrieve", "product.retrieve"]);
+  assert.equal(supabaseCreated, false);
+});
+
+test("apply requires Supabase service-role key only after Stripe verification", async () => {
+  const value = fixture();
+  const stripeCalls = [];
+  let supabaseCreated = false;
+  await assert.rejects(
+    runCatalogRegistration({
+      argv: [
+        "--plan=small_flock", "--cadence=monthly",
+        `--price-id=${value.selection.stripePriceId}`,
+        "--apply", "--confirm-environment=local", `--confirm-account=${accountId}`,
+      ],
+      env: catalogEnvironment({ SUPABASE_URL: "http://127.0.0.1:54321" }),
+      createStripeClient: () => mockedStripe(value, stripeCalls),
+      createSupabaseClient: () => { supabaseCreated = true; throw new Error("unexpected"); },
+    }),
+    (error) => error.code === "STRIPE_SAAS_CONFIG_SUPABASE_SERVICE_ROLE_KEY_MISSING",
+  );
+  assert.deepEqual(stripeCalls, ["price.retrieve", "product.retrieve"]);
+  assert.equal(supabaseCreated, false);
 });
 
 test("apply calls only the registration RPC with the allowlisted typed request", async () => {
@@ -333,7 +409,7 @@ test("apply calls only the registration RPC with the allowlisted typed request",
       `--price-id=${value.selection.stripePriceId}`,
       "--apply", "--confirm-environment=local", `--confirm-account=${accountId}`,
     ],
-    env: environment({ SUPABASE_URL: "http://127.0.0.1:54321", SUPABASE_SERVICE_ROLE_KEY: serviceSecret }),
+    env: catalogEnvironment({ SUPABASE_URL: "http://127.0.0.1:54321", SUPABASE_SERVICE_ROLE_KEY: serviceSecret }),
     createStripeClient: () => mockedStripe(value, []),
     createSupabaseClient: () => ({
       rpc: async (name, request) => {

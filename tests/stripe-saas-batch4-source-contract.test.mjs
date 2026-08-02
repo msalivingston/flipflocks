@@ -38,7 +38,12 @@ test("official server SDK and API version are exactly pinned across runtimes", a
 
 test("catalog utility is read-only toward Stripe and defaults to dry-run", async () => {
   const utility = await readFile(utilityPath, "utf8");
+  const runtime = await readFile(runtimePath, "utf8");
   assert.match(utility, /let apply = false/);
+  assert.match(utility, /parseStripeSaasCatalogConfig\(env\)/);
+  assert.doesNotMatch(utility, /\boperationalApiKey\b|STRIPE_SAAS_API_KEY/);
+  assert.match(runtime, /export function parseStripeSaasConfig\(source\)[\s\S]*?required\(source, "STRIPE_SAAS_API_KEY"\)/);
+  assert.match(runtime, /export function parseStripeSaasCatalogConfig\(source\)[\s\S]*?required\(source, "STRIPE_SAAS_CATALOG_READ_KEY"\)/);
   assert.doesNotMatch(utility, /accounts\s*\.\s*retrieve|stripe\s*\.\s*accounts/);
   assert.match(utility, /stripe\.prices\.retrieve\(args\.stripePriceId\)/);
   assert.match(utility, /stripe\.products\.retrieve\(productId\)/);
