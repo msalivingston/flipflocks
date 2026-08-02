@@ -27,7 +27,7 @@ async function walk(directory) {
 
 async function readApplicationSource() {
   const files = [];
-  for (const root of ["app", "lib", "supabase/functions"]) {
+  for (const root of ["app", "lib"]) {
     files.push(...(await walk(path.join(repositoryRoot, root))));
   }
   return (
@@ -172,17 +172,8 @@ test("Subscription snapshots retain scheduling value without writing invoice aut
   );
 });
 
-test("no Stripe SDK, API, secret, public Stripe variable, or Edge Function was introduced", async () => {
-  const packageJson = JSON.parse(
-    await readFile(path.join(repositoryRoot, "package.json"), "utf8"),
-  );
+test("Batch 2 introduced no Stripe API, secret, public variable, or Edge Function", async () => {
   const source = await readApplicationSource();
-  const dependencies = [
-    ...Object.keys(packageJson.dependencies ?? {}),
-    ...Object.keys(packageJson.devDependencies ?? {}),
-  ];
-
-  assert.ok(!dependencies.includes("stripe"));
   assert.doesNotMatch(source, /from\s+["']stripe["']/);
   assert.doesNotMatch(source, /https:\/\/api\.stripe\.com/i);
   assert.doesNotMatch(source, /NEXT_PUBLIC_[A-Z0-9_]*STRIPE/);

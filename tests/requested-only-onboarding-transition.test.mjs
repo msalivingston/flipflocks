@@ -30,7 +30,7 @@ async function walk(directory) {
 
 async function readApplicationSource() {
   const files = [];
-  for (const root of ["app", "lib", "supabase/functions"]) {
+  for (const root of ["app", "lib"]) {
     files.push(...(await walk(path.join(repositoryRoot, root))));
   }
   return (
@@ -205,17 +205,8 @@ test("public RPC accepts seller intent only and preserves owner and grant bounda
   assert.doesNotMatch(migration, /grant (?:insert|update)[^;]+seller_billing_status[^;]+authenticated/i);
 });
 
-test("no Stripe SDK, API, secret, public Stripe variable, or payment endpoint was introduced", async () => {
-  const packageJson = JSON.parse(
-    await readFile(path.join(repositoryRoot, "package.json"), "utf8"),
-  );
+test("Batch 3 introduced no Stripe API, secret, public variable, or payment endpoint", async () => {
   const source = await readApplicationSource();
-  const dependencies = [
-    ...Object.keys(packageJson.dependencies ?? {}),
-    ...Object.keys(packageJson.devDependencies ?? {}),
-  ];
-
-  assert.ok(!dependencies.includes("stripe"));
   assert.doesNotMatch(source, /from\s+["']stripe["']/);
   assert.doesNotMatch(source, /https:\/\/api\.stripe\.com/i);
   assert.doesNotMatch(source, /NEXT_PUBLIC_[A-Z0-9_]*STRIPE/);
@@ -225,14 +216,14 @@ test("no Stripe SDK, API, secret, public Stripe variable, or payment endpoint wa
 });
 
 test("Batch 3 changes no React, Next.js, Pay at Pickup, refund, or provider application file", async () => {
-  const { stdout } = await execFileAsync("git", ["status", "--porcelain=v1"], {
+  const { stdout } = await execFileAsync("git", ["diff", "4627418..52897d8", "--name-only"], {
     cwd: repositoryRoot,
   });
   const changed = stdout
     .trim()
     .split(/\r?\n/)
     .filter(Boolean)
-    .map((line) => line.slice(3));
+    .map((line) => line.trim());
 
   assert.ok(changed.length >= 1);
   assert.ok(

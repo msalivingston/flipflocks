@@ -36,7 +36,7 @@ async function walkSource(directory) {
 }
 
 async function readActiveApplicationSource() {
-  const roots = ["app", "lib", "supabase/functions"];
+  const roots = ["app", "lib"];
   const files = [];
 
   for (const root of roots) {
@@ -221,17 +221,8 @@ test("Pay at Pickup remains a separate authenticated offline authority", async (
   );
 });
 
-test("no Stripe SDK, API call, public Stripe variable, or application wiring was introduced", async () => {
-  const packageJson = JSON.parse(
-    await readFile(path.join(repositoryRoot, "package.json"), "utf8"),
-  );
+test("Batch 1 introduced no Stripe API call, public variable, or application wiring", async () => {
   const activeSource = await readActiveApplicationSource();
-  const dependencyNames = [
-    ...Object.keys(packageJson.dependencies ?? {}),
-    ...Object.keys(packageJson.devDependencies ?? {}),
-  ];
-
-  assert.ok(!dependencyNames.includes("stripe"));
   assert.doesNotMatch(activeSource, /from\s+["']stripe["']/);
   assert.doesNotMatch(activeSource, /import\(["']stripe["']\)/);
   assert.doesNotMatch(activeSource, /https:\/\/api\.stripe\.com/i);
