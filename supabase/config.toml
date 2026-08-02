@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.manual-order-email-kick]
 verify_jwt = true
+
+[functions.stripe-saas-checkout]
+verify_jwt = true
