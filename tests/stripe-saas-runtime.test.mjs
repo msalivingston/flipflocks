@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import test from "node:test";
 
 import {
@@ -11,9 +12,12 @@ import {
   redactStripeSaasConfig,
 } from "../supabase/functions/_shared/stripe-saas-runtime.mjs";
 import {
+  LOCAL_CATALOG_DEFAULTS,
+  resolveCatalogUtilityEnvironment,
   runCatalogRegistration,
   verifySaasPrice,
 } from "../scripts/stripe/register-saas-price.mjs";
+import { readHiddenTerminalLine } from "../scripts/stripe/secure-secret-prompt.mjs";
 
 const testSecret = ["sk", "test", "Batch4FixtureKey"].join("_");
 const testRestricted = ["rk", "test", "Batch4ReadFixture"].join("_");
@@ -91,6 +95,37 @@ function expectCode(fn, code) {
   assert.throws(fn, (error) => error instanceof StripeSaasError && error.code === code);
 }
 
+class MockTTYInput extends EventEmitter {
+  constructor({ tty = true } = {}) {
+    super();
+    this.isTTY = tty;
+    this.isRaw = false;
+    this.paused = true;
+    this.rawModes = [];
+  }
+
+  setRawMode(value) {
+    this.rawModes.push(value);
+    this.isRaw = value;
+  }
+
+  isPaused() { return this.paused; }
+  resume() { this.paused = false; }
+  pause() { this.paused = true; }
+}
+
+class MockTTYOutput {
+  constructor({ tty = true } = {}) {
+    this.isTTY = tty;
+    this.value = "";
+  }
+
+  write(chunk) {
+    this.value += String(chunk);
+    return true;
+  }
+}
+
 test("SDK and API versions are explicit constants", () => {
   assert.equal(STRIPE_SAAS_SDK_VERSION, "22.3.2");
   assert.equal(STRIPE_SAAS_API_VERSION, "2026-06-24.dahlia");
@@ -125,6 +160,103 @@ test("catalog configuration is independent of the required operational configura
     () => parseStripeSaasConfig(catalogEnvironment()),
     "STRIPE_SAAS_CONFIG_STRIPE_SAAS_API_KEY_MISSING",
   );
+  expectCode(
+    () => parseStripeSaasCatalogConfig({ STRIPE_SAAS_CATALOG_READ_KEY: testRestricted }),
+    "STRIPE_SAAS_CONFIG_STRIPE_PLATFORM_ACCOUNT_ID_MISSING",
+  );
+});
+
+test("local catalog defaults are isolated to the utility", async () => {
+  assert.deepEqual(LOCAL_CATALOG_DEFAULTS, {
+    STRIPE_PLATFORM_ACCOUNT_ID: accountId,
+    STRIPE_SAAS_LIVEMODE: "false",
+    FLOCKFRONT_ENVIRONMENT_ID: "local",
+  });
+  const source = await resolveCatalogUtilityEnvironment({
+    env: { STRIPE_SAAS_CATALOG_READ_KEY: testRestricted },
+    promptForCatalogKey: () => { throw new Error("environment key must avoid prompt"); },
+  });
+  assert.equal(source.STRIPE_PLATFORM_ACCOUNT_ID, accountId);
+  assert.equal(source.STRIPE_SAAS_LIVEMODE, "false");
+  assert.equal(source.FLOCKFRONT_ENVIRONMENT_ID, "local");
+  assert.ok(!("STRIPE_SAAS_API_KEY" in source));
+});
+
+test("environment catalog key takes precedence without prompting", async () => {
+  let prompted = false;
+  const source = await resolveCatalogUtilityEnvironment({
+    env: { STRIPE_SAAS_CATALOG_READ_KEY: testRestricted },
+    promptForCatalogKey: async () => { prompted = true; return "must-not-be-used"; },
+  });
+  assert.equal(prompted, false);
+  assert.equal(source.STRIPE_SAAS_CATALOG_READ_KEY, testRestricted);
+});
+
+test("missing catalog key is accepted only from a valid hidden prompt result", async () => {
+  let prompted = 0;
+  const source = await resolveCatalogUtilityEnvironment({
+    env: {},
+    promptForCatalogKey: async () => { prompted += 1; return `${testRestricted}\r\n`; },
+  });
+  assert.equal(prompted, 1);
+  assert.equal(source.STRIPE_SAAS_CATALOG_READ_KEY, testRestricted);
+});
+
+test("blank and malformed prompted keys fail without disclosing input", async () => {
+  await assert.rejects(
+    resolveCatalogUtilityEnvironment({ env: {}, promptForCatalogKey: async () => "\r\n" }),
+    (error) => error.code === "STRIPE_SAAS_UTILITY_CATALOG_READ_KEY_BLANK",
+  );
+  const malformed = ["sk", "test", "PromptMustStaySecret"].join("_");
+  await assert.rejects(
+    resolveCatalogUtilityEnvironment({ env: {}, promptForCatalogKey: async () => malformed }),
+    (error) => {
+      assert.equal(error.code, "STRIPE_SAAS_UTILITY_CATALOG_READ_KEY_INVALID");
+      assert.doesNotMatch(`${error.code} ${error.message}`, new RegExp(malformed));
+      return true;
+    },
+  );
+});
+
+test("hidden prompt suppresses pasted input and restores terminal state", async () => {
+  const input = new MockTTYInput();
+  const output = new MockTTYOutput();
+  const resultPromise = readHiddenTerminalLine({ input, output });
+  input.emit("data", Buffer.from(`${testRestricted}\r\n`));
+  assert.equal(await resultPromise, testRestricted);
+  assert.equal(output.value, "Paste Stripe restricted test key: \n");
+  assert.doesNotMatch(output.value, new RegExp(testRestricted));
+  assert.deepEqual(input.rawModes, [true, false]);
+  assert.equal(input.isRaw, false);
+  assert.equal(input.paused, true);
+});
+
+test("hidden prompt restores terminal state after failure and interruption", async () => {
+  for (const [event, value, code] of [
+    ["error", new Error("fixture stream failure"), "STRIPE_SAAS_UTILITY_SECRET_INPUT_FAILED"],
+    ["data", "\u0003", "STRIPE_SAAS_UTILITY_SECRET_INPUT_INTERRUPTED"],
+  ]) {
+    const input = new MockTTYInput();
+    const output = new MockTTYOutput();
+    const resultPromise = readHiddenTerminalLine({ input, output });
+    input.emit(event, value);
+    await assert.rejects(resultPromise, (error) => error.code === code);
+    assert.deepEqual(input.rawModes, [true, false]);
+    assert.equal(input.isRaw, false);
+    assert.equal(input.paused, true);
+    assert.equal(output.value, "Paste Stripe restricted test key: \n");
+  }
+});
+
+test("missing key fails clearly when no interactive terminal is available", async () => {
+  const input = new MockTTYInput({ tty: false });
+  const output = new MockTTYOutput();
+  await assert.rejects(
+    readHiddenTerminalLine({ input, output }),
+    (error) => error.code === "STRIPE_SAAS_UTILITY_INTERACTIVE_KEY_REQUIRED",
+  );
+  assert.equal(output.value, "");
+  assert.deepEqual(input.rawModes, []);
 });
 
 test("configuration errors and redacted diagnostics omit all secrets", () => {
@@ -229,6 +361,25 @@ for (const [planKey, cadences] of Object.entries(approved)) {
   }
 }
 
+test("catalog utility runs from plan, cadence, and Price ID arguments with a prompted key", async () => {
+  const value = fixture();
+  let prompted = 0;
+  const calls = [];
+  const result = await runCatalogRegistration({
+    argv: ["--plan=small_flock", "--cadence=monthly", `--price-id=${value.selection.stripePriceId}`],
+    env: {},
+    promptForCatalogKey: async () => { prompted += 1; return testRestricted; },
+    createStripeClient: () => mockedStripe(value, calls),
+    createSupabaseClient: () => { throw new Error("dry-run must not create Supabase client"); },
+    write: () => {},
+  });
+  assert.equal(result.status, "dry_run_verified");
+  assert.equal(prompted, 1);
+  assert.deepEqual(calls, ["price.retrieve", "product.retrieve"]);
+  assert.equal(result.registration.p_stripe_account_id, accountId);
+  assert.equal(result.registration.p_stripe_livemode, false);
+});
+
 test("an Accounts client that throws is never touched", async () => {
   const value = fixture();
   let accountTouched = false;
@@ -325,7 +476,7 @@ test("apply with wrong account confirmation fails before Stripe or Supabase clie
   assert.equal(supabaseCreated, false);
 });
 
-test("catalog verification requires the dedicated restricted key before client creation", async () => {
+test("blank prompted catalog key is rejected before client creation", async () => {
   const value = fixture();
   let stripeCreated = false;
   let supabaseCreated = false;
@@ -333,10 +484,11 @@ test("catalog verification requires the dedicated restricted key before client c
     runCatalogRegistration({
       argv: ["--plan=small_flock", "--cadence=monthly", `--price-id=${value.selection.stripePriceId}`],
       env: catalogEnvironment({ STRIPE_SAAS_CATALOG_READ_KEY: "" }),
+      promptForCatalogKey: async () => "\r\n",
       createStripeClient: () => { stripeCreated = true; return mockedStripe(value, []); },
       createSupabaseClient: () => { supabaseCreated = true; throw new Error("unexpected"); },
     }),
-    (error) => error.code === "STRIPE_SAAS_CONFIG_STRIPE_SAAS_CATALOG_READ_KEY_MISSING",
+    (error) => error.code === "STRIPE_SAAS_UTILITY_CATALOG_READ_KEY_BLANK",
   );
   assert.equal(stripeCreated, false);
   assert.equal(supabaseCreated, false);

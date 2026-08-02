@@ -12,6 +12,7 @@ const migrationPath = path.join(root, "supabase/migrations/20260801105000_truste
 const runtimePath = path.join(root, "supabase/functions/_shared/stripe-saas-runtime.mjs");
 const clientPath = path.join(root, "supabase/functions/_shared/stripe-saas-client.ts");
 const utilityPath = path.join(root, "scripts/stripe/register-saas-price.mjs");
+const promptPath = path.join(root, "scripts/stripe/secure-secret-prompt.mjs");
 
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -38,10 +39,16 @@ test("official server SDK and API version are exactly pinned across runtimes", a
 
 test("catalog utility is read-only toward Stripe and defaults to dry-run", async () => {
   const utility = await readFile(utilityPath, "utf8");
+  const prompt = await readFile(promptPath, "utf8");
   const runtime = await readFile(runtimePath, "utf8");
   assert.match(utility, /let apply = false/);
-  assert.match(utility, /parseStripeSaasCatalogConfig\(env\)/);
+  assert.match(utility, /parseStripeSaasCatalogConfig\(configSource\)/);
   assert.doesNotMatch(utility, /\boperationalApiKey\b|STRIPE_SAAS_API_KEY/);
+  assert.doesNotMatch(`${utility}\n${prompt}`, /node:fs|writeFile|appendFile|createWriteStream/);
+  assert.doesNotMatch(utility, /--(?:catalog-)?(?:read-)?key|--stripe-key|--api-key/);
+  assert.match(prompt, /input\.setRawMode\(true\)/);
+  assert.match(prompt, /input\.setRawMode\(priorRawMode\)/);
+  assert.doesNotMatch(prompt, /output\.write\([^)]*(?:value|character|chunk)/);
   assert.match(runtime, /export function parseStripeSaasConfig\(source\)[\s\S]*?required\(source, "STRIPE_SAAS_API_KEY"\)/);
   assert.match(runtime, /export function parseStripeSaasCatalogConfig\(source\)[\s\S]*?required\(source, "STRIPE_SAAS_CATALOG_READ_KEY"\)/);
   assert.doesNotMatch(utility, /accounts\s*\.\s*retrieve|stripe\s*\.\s*accounts/);
@@ -93,6 +100,9 @@ test("documentation requires only sandbox Product and Price read permissions", a
   assert.match(documentation, /does not call the Stripe Accounts API/);
   assert.match(documentation, /validated operator configuration, not provider-retrieved evidence/);
   assert.match(documentation, /--confirm-environment=<environment-id>[\s\S]*--confirm-account=acct_1CTOghL1R5g4hhXt/);
+  assert.match(documentation, /Paste Stripe restricted test key:/);
+  assert.doesNotMatch(documentation, /PowerShell|SecureString|clipboard script|text file/i);
+  assert.doesNotMatch(documentation, /STRIPE_SAAS_CATALOG_READ_KEY\s*=/);
 });
 
 test("no onboarding, entitlement, Pay at Pickup, refund, or Connect application file changed", async () => {
@@ -101,7 +111,7 @@ test("no onboarding, entitlement, Pay at Pickup, refund, or Connect application 
   const allowed = [
     "docs/stripe-saas-catalog-registration.md",
     "scripts/stripe/register-saas-price.mjs",
-    "supabase/functions/_shared/stripe-saas-runtime.mjs",
+    "scripts/stripe/secure-secret-prompt.mjs",
     "tests/stripe-saas-runtime.test.mjs",
     "tests/stripe-saas-batch4-source-contract.test.mjs",
   ];

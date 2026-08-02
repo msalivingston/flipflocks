@@ -2,14 +2,23 @@ import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { pathToFileURL } from "node:url";
 
+import { promptForStripeRestrictedTestKey } from "./secure-secret-prompt.mjs";
+
 import {
   STRIPE_SAAS_API_VERSION,
+  STRIPE_SAAS_PLATFORM_ACCOUNT_ID,
   StripeSaasError,
   getApprovedSaasPrice,
   parseCatalogApplyConfig,
   parseStripeSaasCatalogConfig,
   redactStripeSaasConfig,
 } from "../../supabase/functions/_shared/stripe-saas-runtime.mjs";
+
+export const LOCAL_CATALOG_DEFAULTS = Object.freeze({
+  STRIPE_PLATFORM_ACCOUNT_ID: STRIPE_SAAS_PLATFORM_ACCOUNT_ID,
+  STRIPE_SAAS_LIVEMODE: "false",
+  FLOCKFRONT_ENVIRONMENT_ID: "local",
+});
 
 export function parseCatalogArguments(argv) {
   const values = new Map();
@@ -123,15 +132,46 @@ export function createLocalSupabaseAdminClient(url, serviceRoleKey) {
   });
 }
 
+export async function resolveCatalogUtilityEnvironment({
+  env,
+  promptForCatalogKey = promptForStripeRestrictedTestKey,
+}) {
+  const source = { ...env };
+  for (const [name, value] of Object.entries(LOCAL_CATALOG_DEFAULTS)) {
+    if (source[name] === undefined) source[name] = value;
+  }
+
+  if (!source.STRIPE_SAAS_CATALOG_READ_KEY?.trim()) {
+    const prompted = await promptForCatalogKey();
+    const catalogReadKey = String(prompted).replace(/(?:\r\n|\r|\n)$/, "");
+    if (!catalogReadKey) {
+      throw new StripeSaasError(
+        "STRIPE_SAAS_UTILITY_CATALOG_READ_KEY_BLANK",
+        "A Stripe restricted test key is required.",
+      );
+    }
+    if (!/^rk_test_[A-Za-z0-9]+$/.test(catalogReadKey)) {
+      throw new StripeSaasError(
+        "STRIPE_SAAS_UTILITY_CATALOG_READ_KEY_INVALID",
+        "The prompted key must be a Stripe rk_test_ restricted key.",
+      );
+    }
+    source.STRIPE_SAAS_CATALOG_READ_KEY = catalogReadKey;
+  }
+  return source;
+}
+
 export async function runCatalogRegistration({
   argv,
   env,
   createStripeClient = createLocalStripeReadClient,
   createSupabaseClient = createLocalSupabaseAdminClient,
+  promptForCatalogKey = promptForStripeRestrictedTestKey,
   write = (line) => process.stdout.write(`${line}\n`),
 }) {
   const args = parseCatalogArguments(argv);
-  const config = parseStripeSaasCatalogConfig(env);
+  const configSource = await resolveCatalogUtilityEnvironment({ env, promptForCatalogKey });
+  const config = parseStripeSaasCatalogConfig(configSource);
   getApprovedSaasPrice(args.planKey, args.cadence);
   if (config.livemode) {
     throw new StripeSaasError(
@@ -182,7 +222,7 @@ export async function runCatalogRegistration({
 
   // Apply-only credentials are deliberately parsed after confirmations and
   // provider verification so dry-run never needs or touches Supabase secrets.
-  const applyConfig = parseCatalogApplyConfig(env);
+  const applyConfig = parseCatalogApplyConfig(configSource);
   const supabase = createSupabaseClient(
     applyConfig.supabaseUrl,
     applyConfig.supabaseServiceRoleKey,
