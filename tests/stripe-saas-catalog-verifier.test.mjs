@@ -76,6 +76,13 @@ function mockedClient(values, calls) {
   };
 }
 
+function localFormWithKey(key, onAcquire = () => {}) {
+  return async ({ verifyKey }) => {
+    onAcquire();
+    return verifyKey(key, () => {});
+  };
+}
+
 test("approved verifier manifest binds all four exact Prices to two exact Products", () => {
   assert.deepEqual(
     APPROVED_SAAS_CATALOG_MANIFEST.map((entry) => [
@@ -100,7 +107,7 @@ test("one key acquisition and one Stripe client verify all four Prices", async (
   const inputEnvironment = {};
   const result = await verifyApprovedSaasCatalog({
     env: inputEnvironment,
-    promptForCatalogKey: async () => { keyAcquisitions += 1; return restrictedKey; },
+    runLocalForm: localFormWithKey(restrictedKey, () => { keyAcquisitions += 1; }),
     createStripeClient: (key) => {
       clientCreations += 1;
       assert.equal(key, restrictedKey);
@@ -117,7 +124,7 @@ test("one key acquisition and one Stripe client verify all four Prices", async (
   assert.deepEqual(calls.filter(([type]) => type === "product").map(([, id]) => id),
     ["prod_UzoyVYb4UGqW3m", "prod_Uzoz8CeVMRC3zQ"]);
   assert.equal(result.results.filter(({ status }) => status === "PASS").length, 4);
-  assert.equal(output.filter((line) => /\bPASS$/.test(line)).length, 4);
+  assert.equal(output.filter((line) => /\bPASS$/.test(line)).length, 8);
   assert.doesNotMatch(output.join("\n"), new RegExp(restrictedKey));
   assert.deepEqual(inputEnvironment, {});
 });
@@ -129,7 +136,7 @@ test("one failed Price does not prevent the other three checks", async () => {
   const output = [];
   const result = await verifyApprovedSaasCatalog({
     env: {},
-    promptForCatalogKey: async () => restrictedKey,
+    runLocalForm: localFormWithKey(restrictedKey),
     createStripeClient: () => mockedClient(values, calls),
     write: (line) => output.push(line),
   });
@@ -139,8 +146,8 @@ test("one failed Price does not prevent the other three checks", async () => {
   assert.deepEqual(result.results.map(({ status }) => status), ["PASS", "FAIL", "PASS", "PASS"]);
   assert.equal(result.results[1].failureCode, "STRIPE_SAAS_VERIFY_AMOUNT_MISMATCH");
   assert.equal(calls.filter(([type]) => type === "price").length, 4);
-  assert.equal(output.filter((line) => /\bPASS$/.test(line)).length, 3);
-  assert.equal(output.filter((line) => /\bFAIL \(/.test(line)).length, 1);
+  assert.equal(output.filter((line) => /\bPASS$/.test(line)).length, 6);
+  assert.equal(output.filter((line) => /\bFAIL \(/.test(line)).length, 2);
 });
 
 test("unexpected provider errors are redacted and remaining Prices continue", async () => {
@@ -158,7 +165,7 @@ test("unexpected provider errors are redacted and remaining Prices continue", as
   };
   const result = await verifyApprovedSaasCatalog({
     env: {},
-    promptForCatalogKey: async () => restrictedKey,
+    runLocalForm: localFormWithKey(restrictedKey),
     createStripeClient: () => client,
     write: (line) => output.push(line),
   });
@@ -168,3 +175,15 @@ test("unexpected provider errors are redacted and remaining Prices continue", as
   assert.doesNotMatch(output.join("\n"), new RegExp(restrictedKey));
 });
 
+test("automation environment key bypasses the local browser form", async () => {
+  const values = fixtures();
+  let formOpened = false;
+  const result = await verifyApprovedSaasCatalog({
+    env: { STRIPE_SAAS_CATALOG_READ_KEY: restrictedKey },
+    runLocalForm: async () => { formOpened = true; throw new Error("unexpected browser form"); },
+    createStripeClient: () => mockedClient(values, []),
+    write: () => {},
+  });
+  assert.equal(result.passed, true);
+  assert.equal(formOpened, false);
+});

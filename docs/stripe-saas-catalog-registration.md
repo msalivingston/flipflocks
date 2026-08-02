@@ -34,9 +34,11 @@ The approved operator workflow verifies all four sandbox Prices in one process, 
 npm run stripe:verify-saas-catalog
 ```
 
-It always performs read-only dry-run verification, makes no Supabase mutation, continues after an individual Price failure, and prints one final PASS/FAIL table. Coop monthly and yearly must resolve to the approved Coop Product; Market monthly and yearly must resolve to the approved Market Product.
+When no automation key is already configured, the command opens a temporary local browser form titled **Verify FlockFront Stripe Catalog**. Paste the restricted test key into the password field and select **Verify**. The form is served only from a random, single-use `127.0.0.1` URL, expires shortly, saves nothing, and closes its listener immediately after submission.
 
-If the restricted key is not already available to the process, it is requested once and retained only for this verifier process. It is never printed or persisted. Dry-run does not require `STRIPE_SAAS_API_KEY` or either Supabase variable.
+Verification progress and the final PASS/FAIL table appear in both the browser and terminal. The verifier always performs read-only dry-run verification, makes no Supabase mutation, and continues after an individual Price failure. Coop monthly and yearly must resolve to the approved Coop Product; Market monthly and yearly must resolve to the approved Market Product.
+
+For automation, an existing `STRIPE_SAAS_CATALOG_READ_KEY` is used without opening the browser. The verifier never uses terminal raw-mode input, clipboard acquisition, a key file, `STRIPE_SAAS_API_KEY`, or Supabase configuration.
 
 ### Individual Price debugging
 

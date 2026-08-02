@@ -2,9 +2,10 @@ import { pathToFileURL } from "node:url";
 
 import {
   createLocalStripeReadClient,
-  resolveCatalogUtilityEnvironment,
+  LOCAL_CATALOG_DEFAULTS,
   verifySaasPrice,
 } from "./register-saas-price.mjs";
+import { runLocalCatalogVerificationForm } from "./local-catalog-key-form.mjs";
 import {
   StripeSaasError,
   parseStripeSaasCatalogConfig,
@@ -62,16 +63,22 @@ function writeSummary(results, write) {
   }
 }
 
-export async function verifyApprovedSaasCatalog({
+export async function verifyApprovedSaasCatalogWithKey({
+  catalogReadKey,
   env,
   createStripeClient = createLocalStripeReadClient,
-  promptForCatalogKey,
+  onResult = () => {},
   write = (line) => process.stdout.write(`${line}\n`),
 }) {
-  const configSource = await resolveCatalogUtilityEnvironment({
-    env,
-    ...(promptForCatalogKey ? { promptForCatalogKey } : {}),
-  });
+  const configSource = {
+    STRIPE_PLATFORM_ACCOUNT_ID: env?.STRIPE_PLATFORM_ACCOUNT_ID
+      ?? LOCAL_CATALOG_DEFAULTS.STRIPE_PLATFORM_ACCOUNT_ID,
+    STRIPE_SAAS_LIVEMODE: env?.STRIPE_SAAS_LIVEMODE
+      ?? LOCAL_CATALOG_DEFAULTS.STRIPE_SAAS_LIVEMODE,
+    FLOCKFRONT_ENVIRONMENT_ID: env?.FLOCKFRONT_ENVIRONMENT_ID
+      ?? LOCAL_CATALOG_DEFAULTS.FLOCKFRONT_ENVIRONMENT_ID,
+    STRIPE_SAAS_CATALOG_READ_KEY: catalogReadKey,
+  };
   const config = parseStripeSaasCatalogConfig(configSource);
   if (config.livemode) {
     throw new StripeSaasError(
@@ -99,13 +106,19 @@ export async function verifyApprovedSaasCatalog({
         products.set(entry.stripeProductId, product);
       }
       verifySaasPrice({ price, product, config, selection: entry });
-      results.push(Object.freeze({ ...entry, status: "PASS", failureCode: null }));
+      const result = Object.freeze({ ...entry, status: "PASS", failureCode: null });
+      results.push(result);
+      write(`Checking ${entry.label}... PASS`);
+      onResult(result);
     } catch (error) {
-      results.push(Object.freeze({
+      const result = Object.freeze({
         ...entry,
         status: "FAIL",
         failureCode: safeFailureCode(error),
-      }));
+      });
+      results.push(result);
+      write(`Checking ${entry.label}... FAIL (${result.failureCode})`);
+      onResult(result);
     }
   }
 
@@ -113,6 +126,32 @@ export async function verifyApprovedSaasCatalog({
   return Object.freeze({
     passed: results.every(({ status }) => status === "PASS"),
     results: Object.freeze(results),
+  });
+}
+
+export async function verifyApprovedSaasCatalog({
+  env,
+  createStripeClient = createLocalStripeReadClient,
+  runLocalForm = runLocalCatalogVerificationForm,
+  write = (line) => process.stdout.write(`${line}\n`),
+}) {
+  const configuredKey = env?.STRIPE_SAAS_CATALOG_READ_KEY?.trim();
+  if (configuredKey) {
+    return verifyApprovedSaasCatalogWithKey({
+      catalogReadKey: configuredKey,
+      env,
+      createStripeClient,
+      write,
+    });
+  }
+  return runLocalForm({
+    verifyKey: (catalogReadKey, reportBrowserProgress) => verifyApprovedSaasCatalogWithKey({
+      catalogReadKey,
+      env,
+      createStripeClient,
+      onResult: reportBrowserProgress,
+      write,
+    }),
   });
 }
 
@@ -132,4 +171,3 @@ async function main() {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await main();
 }
-

@@ -15,6 +15,7 @@ const utilityPath = path.join(root, "scripts/stripe/register-saas-price.mjs");
 const promptPath = path.join(root, "scripts/stripe/secure-secret-prompt.mjs");
 const clipboardPath = path.join(root, "scripts/stripe/windows-clipboard-secret.mjs");
 const verifierPath = path.join(root, "scripts/stripe/verify-saas-catalog.mjs");
+const localFormPath = path.join(root, "scripts/stripe/local-catalog-key-form.mjs");
 
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -49,6 +50,7 @@ test("catalog utility is read-only toward Stripe and defaults to dry-run", async
   const clipboard = await readFile(clipboardPath, "utf8");
   const runtime = await readFile(runtimePath, "utf8");
   const verifier = await readFile(verifierPath, "utf8");
+  const localForm = await readFile(localFormPath, "utf8");
   assert.match(utility, /let apply = false/);
   assert.match(utility, /parseStripeSaasCatalogConfig\(configSource\)/);
   assert.doesNotMatch(utility, /\boperationalApiKey\b|STRIPE_SAAS_API_KEY/);
@@ -76,6 +78,16 @@ test("catalog utility is read-only toward Stripe and defaults to dry-run", async
   assert.match(verifier, /for \(const entry of APPROVED_SAAS_CATALOG_MANIFEST\)/);
   assert.match(verifier, /if \(!result\.passed\) process\.exitCode = 1/);
   assert.doesNotMatch(verifier, /process\.env\s*\.|Object\.assign\(process\.env/);
+  assert.doesNotMatch(verifier, /promptFor|readHidden|rawMode|clipboard|key-from-clipboard/i);
+  assert.doesNotMatch(`${verifier}\n${localForm}`, /node:fs|writeFile|appendFile|createWriteStream/);
+  assert.match(localForm, /server\.listen\(0, LOOPBACK_HOST/);
+  assert.match(localForm, /const LOOPBACK_HOST = "127\.0\.0\.1"/);
+  assert.match(localForm, /randomBytesFn\(32\)/);
+  assert.match(localForm, /type=\"password\"/);
+  for (const header of ["Cache-Control", "Referrer-Policy", "Content-Security-Policy", "X-Content-Type-Options"]) {
+    assert.match(localForm, new RegExp(header));
+  }
+  assert.doesNotMatch(localForm, /<script|console\.(?:log|error)|request body/i);
 });
 
 test("migration exposes only service-role catalog contracts and seeds no IDs", async () => {
@@ -105,7 +117,7 @@ test("Batch 4 adds no billing endpoint, browser variable, or browser Stripe pack
 test("production Batch 4 files contain no committed provider object identifiers", async () => {
   const files = [
     migrationPath, runtimePath, clientPath, utilityPath, promptPath, clipboardPath,
-    verifierPath,
+    verifierPath, localFormPath,
     path.join(root, "docs/stripe-saas-catalog-registration.md"),
   ];
   const source = (await Promise.all(files.map((file) => readFile(file, "utf8"))))
@@ -130,6 +142,9 @@ test("documentation requires only sandbox Product and Price read permissions", a
   assert.match(documentation, /validated operator configuration, not provider-retrieved evidence/);
   assert.match(documentation, /--confirm-environment=<environment-id>[\s\S]*--confirm-account=acct_1CTOghL1R5g4hhXt/);
   assert.match(documentation, /npm run stripe:verify-saas-catalog/);
+  assert.match(documentation, /temporary local browser form/);
+  assert.match(documentation, /127\.0\.0\.1/);
+  assert.match(documentation, /never uses terminal raw-mode input, clipboard acquisition, a key file/);
   assert.doesNotMatch(documentation, /PowerShell|SecureString|clipboard script|text file/i);
   assert.doesNotMatch(documentation, /STRIPE_SAAS_CATALOG_READ_KEY\s*=/);
 });
@@ -139,9 +154,10 @@ test("no onboarding, entitlement, Pay at Pickup, refund, or Connect application 
   const changed = stdout.split(/\r?\n/).filter((line) => line.trim()).map((line) => line.slice(3));
   const allowed = [
     "docs/stripe-saas-catalog-registration.md",
-    "package.json",
+    "scripts/stripe/local-catalog-key-form.mjs",
     "scripts/stripe/verify-saas-catalog.mjs",
     "tests/stripe-saas-catalog-verifier.test.mjs",
+    "tests/stripe-saas-local-key-form.test.mjs",
     "tests/stripe-saas-batch4-source-contract.test.mjs",
   ];
   assert.deepEqual(changed.sort(), allowed.sort());
