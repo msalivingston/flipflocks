@@ -49,6 +49,7 @@ export function parseCatalogArguments(argv) {
     stripePriceId,
     apply,
     confirmationEnvironmentId: values.get("confirm-environment") ?? null,
+    confirmationAccountId: values.get("confirm-account") ?? null,
   });
 }
 
@@ -60,15 +61,16 @@ function taxCodeId(taxCode) {
 
 // Converts only approved typed provider attributes. Raw Stripe objects never cross
 // the database boundary.
-export function verifySaasPrice({ account, price, product, config, selection }) {
+export function verifySaasPrice({ price, product, config, selection }) {
   const expected = getApprovedSaasPrice(selection.planKey, selection.cadence);
   const requireMatch = (condition, code, message) => {
     if (!condition) throw new StripeSaasError(code, message);
   };
 
-  requireMatch(account?.id === config.platformAccountId, "STRIPE_SAAS_VERIFY_ACCOUNT_MISMATCH", "Stripe platform account does not match configuration.");
   requireMatch(price?.id === selection.stripePriceId, "STRIPE_SAAS_VERIFY_PRICE_ID_MISMATCH", "Retrieved Price does not match the requested identifier.");
-  requireMatch(Boolean(price?.livemode) === config.livemode && Boolean(product?.livemode) === config.livemode, "STRIPE_SAAS_VERIFY_MODE_MISMATCH", "Stripe object mode does not match configuration.");
+  requireMatch(price?.livemode === false, "STRIPE_SAAS_VERIFY_PRICE_LIVE_MODE", "Stripe Price must be a sandbox object.");
+  requireMatch(product?.livemode === false, "STRIPE_SAAS_VERIFY_PRODUCT_LIVE_MODE", "Stripe Product must be a sandbox object.");
+  requireMatch(price.livemode === product.livemode, "STRIPE_SAAS_VERIFY_MODE_DISAGREEMENT", "Stripe Price and Product modes must agree.");
   requireMatch(price?.active === true, "STRIPE_SAAS_VERIFY_PRICE_INACTIVE", "Stripe Price must be active.");
   requireMatch(product?.active === true, "STRIPE_SAAS_VERIFY_PRODUCT_INACTIVE", "Stripe Product must be active.");
   requireMatch(typeof price?.product === "string" && price.product === product?.id, "STRIPE_SAAS_VERIFY_PRODUCT_MISMATCH", "Stripe Price Product does not match the retrieved Product.");
@@ -87,7 +89,7 @@ export function verifySaasPrice({ account, price, product, config, selection }) 
   return Object.freeze({
     p_stripe_price_id: price.id,
     p_stripe_product_id: product.id,
-    p_stripe_account_id: account.id,
+    p_stripe_account_id: config.platformAccountId,
     p_stripe_livemode: config.livemode,
     p_plan_key: expected.planKey,
     p_billing_cadence: expected.cadence,
@@ -139,13 +141,24 @@ export async function runCatalogRegistration({
   }
   if (args.apply && args.confirmationEnvironmentId !== config.environmentId) {
     throw new StripeSaasError(
-      "STRIPE_SAAS_UTILITY_CONFIRMATION_REQUIRED",
+      "STRIPE_SAAS_UTILITY_ENVIRONMENT_CONFIRMATION_REQUIRED",
       "Apply requires --confirm-environment matching FLOCKFRONT_ENVIRONMENT_ID.",
     );
   }
+  if (args.apply && args.confirmationAccountId !== config.platformAccountId) {
+    throw new StripeSaasError(
+      "STRIPE_SAAS_UTILITY_ACCOUNT_CONFIRMATION_REQUIRED",
+      "Apply requires --confirm-account matching STRIPE_PLATFORM_ACCOUNT_ID.",
+    );
+  }
+  if (!config.catalogReadApiKey) {
+    throw new StripeSaasError(
+      "STRIPE_SAAS_UTILITY_CATALOG_READ_KEY_REQUIRED",
+      "STRIPE_SAAS_CATALOG_READ_KEY is required for catalog verification.",
+    );
+  }
 
-  const stripe = createStripeClient(config.catalogReadApiKey ?? config.operationalApiKey);
-  const account = await stripe.accounts.retrieve();
+  const stripe = createStripeClient(config.catalogReadApiKey);
   const price = await stripe.prices.retrieve(args.stripePriceId);
   const productId = typeof price.product === "string" ? price.product : price.product?.id;
   if (!productId) {
@@ -154,9 +167,11 @@ export async function runCatalogRegistration({
     );
   }
   const product = await stripe.products.retrieve(productId);
-  const registration = verifySaasPrice({ account, price, product, config, selection: args });
+  const registration = verifySaasPrice({ price, product, config, selection: args });
   const summary = {
-    mode: "test",
+    stripeMode: "sandbox",
+    configuredPlatformAccount: config.platformAccountId,
+    accountBindingSource: "validated configuration",
     action: args.apply ? "apply" : "dry-run",
     configuration: redactStripeSaasConfig(config),
     planKey: registration.p_plan_key,

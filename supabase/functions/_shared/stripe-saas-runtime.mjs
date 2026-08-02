@@ -1,6 +1,7 @@
 /** Server-only FlockFront SaaS Stripe constants and validation. No import-time I/O. */
 export const STRIPE_SAAS_SDK_VERSION = "22.3.2";
 export const STRIPE_SAAS_API_VERSION = "2026-06-24.dahlia";
+export const STRIPE_SAAS_PLATFORM_ACCOUNT_ID = "acct_1CTOghL1R5g4hhXt";
 export const STRIPE_SAAS_ENVIRONMENT_IDS = Object.freeze([
   "local", "development", "test", "preview", "staging", "production",
 ]);
@@ -73,6 +74,12 @@ export function parseStripeSaasConfig(source) {
     throw new StripeSaasError(
       "STRIPE_SAAS_CONFIG_ACCOUNT_INVALID",
       "STRIPE_PLATFORM_ACCOUNT_ID must be a Stripe acct_ identifier.",
+    );
+  }
+  if (platformAccountId !== STRIPE_SAAS_PLATFORM_ACCOUNT_ID) {
+    throw new StripeSaasError(
+      "STRIPE_SAAS_CONFIG_ACCOUNT_MISMATCH",
+      "STRIPE_PLATFORM_ACCOUNT_ID does not match the approved FlockFront platform account.",
     );
   }
   if (!STRIPE_SAAS_ENVIRONMENT_IDS.includes(environmentId)) {

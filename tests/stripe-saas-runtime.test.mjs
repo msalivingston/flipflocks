@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   STRIPE_SAAS_API_VERSION,
+  STRIPE_SAAS_PLATFORM_ACCOUNT_ID,
   STRIPE_SAAS_SDK_VERSION,
   StripeSaasError,
   parseStripeSaasConfig,
@@ -17,7 +18,7 @@ const testSecret = ["sk", "test", "Batch4FixtureKey"].join("_");
 const testRestricted = ["rk", "test", "Batch4ReadFixture"].join("_");
 const liveSecret = ["sk", "live", "Batch4FixtureKey"].join("_");
 const serviceSecret = ["service", "role", "Batch4Fixture"].join("_");
-const accountId = ["acct", "Batch4Fixture"].join("_");
+const accountId = STRIPE_SAAS_PLATFORM_ACCOUNT_ID;
 
 function environment(overrides = {}) {
   return {
@@ -46,7 +47,6 @@ function fixture(planKey = "small_flock", cadence = "monthly") {
   const priceId = `price_Batch4${planKey.replaceAll("_", "")}${cadence}`;
   const productId = `prod_Batch4${planKey.replaceAll("_", "")}`;
   return {
-    account: { id: accountId, object: "account", email: "must-not-print@example.test" },
     price: {
       id: priceId,
       object: "price",
@@ -91,6 +91,7 @@ test("configuration fails closed and strictly binds keys, mode, account, and env
   expectCode(() => parseStripeSaasConfig(environment({ STRIPE_SAAS_API_KEY: "" })), "STRIPE_SAAS_CONFIG_STRIPE_SAAS_API_KEY_MISSING");
   expectCode(() => parseStripeSaasConfig(environment({ STRIPE_PLATFORM_ACCOUNT_ID: "" })), "STRIPE_SAAS_CONFIG_STRIPE_PLATFORM_ACCOUNT_ID_MISSING");
   expectCode(() => parseStripeSaasConfig(environment({ STRIPE_PLATFORM_ACCOUNT_ID: "platform" })), "STRIPE_SAAS_CONFIG_ACCOUNT_INVALID");
+  expectCode(() => parseStripeSaasConfig(environment({ STRIPE_PLATFORM_ACCOUNT_ID: "acct_DifferentPlatform" })), "STRIPE_SAAS_CONFIG_ACCOUNT_MISMATCH");
   expectCode(() => parseStripeSaasConfig(environment({ STRIPE_SAAS_LIVEMODE: "yes" })), "STRIPE_SAAS_CONFIG_LIVEMODE_INVALID");
   expectCode(() => parseStripeSaasConfig(environment({ STRIPE_SAAS_LIVEMODE: "true" })), "STRIPE_SAAS_CONFIG_KEY_MODE_MISMATCH");
   expectCode(() => parseStripeSaasConfig(environment({ STRIPE_SAAS_API_KEY: liveSecret })), "STRIPE_SAAS_CONFIG_KEY_MODE_MISMATCH");
@@ -148,8 +149,8 @@ const mismatches = [
   ["STRIPE_SAAS_VERIFY_PRICE_TYPE_MISMATCH", (f) => { f.price.type = "one_time"; }],
   ["STRIPE_SAAS_VERIFY_USAGE_TYPE_MISMATCH", (f) => { f.price.recurring.usage_type = "metered"; }],
   ["STRIPE_SAAS_VERIFY_BILLING_SCHEME_MISMATCH", (f) => { f.price.billing_scheme = "tiered"; }],
-  ["STRIPE_SAAS_VERIFY_ACCOUNT_MISMATCH", (f) => { f.account.id = "acct_Batch4Other"; }],
-  ["STRIPE_SAAS_VERIFY_MODE_MISMATCH", (f) => { f.price.livemode = true; }],
+  ["STRIPE_SAAS_VERIFY_PRICE_LIVE_MODE", (f) => { f.price.livemode = true; }],
+  ["STRIPE_SAAS_VERIFY_PRODUCT_LIVE_MODE", (f) => { f.product.livemode = true; }],
 ];
 
 for (const [code, mutate] of mismatches) {
@@ -160,13 +161,60 @@ for (const [code, mutate] of mismatches) {
   });
 }
 
+test("Price and Product mode disagreement is rejected", () => {
+  const value = fixture();
+  value.product.livemode = true;
+  expectCode(() => verifySaasPrice(value), "STRIPE_SAAS_VERIFY_PRODUCT_LIVE_MODE");
+});
+
 function mockedStripe(value, calls) {
   return {
-    accounts: { retrieve: async () => { calls.push("account.retrieve"); return value.account; } },
     prices: { retrieve: async () => { calls.push("price.retrieve"); return value.price; } },
     products: { retrieve: async () => { calls.push("product.retrieve"); return value.product; } },
   };
 }
+
+for (const [planKey, cadences] of Object.entries(approved)) {
+  for (const cadence of Object.keys(cadences)) {
+    test(`approved ${planKey} ${cadence} sandbox dry-run succeeds with Product and Price reads only`, async () => {
+      const value = fixture(planKey, cadence);
+      const calls = [];
+      const result = await runCatalogRegistration({
+        argv: [`--plan=${planKey}`, `--cadence=${cadence}`, `--price-id=${value.selection.stripePriceId}`],
+        env: environment(),
+        createStripeClient: () => mockedStripe(value, calls),
+        createSupabaseClient: () => { throw new Error("dry-run must not create Supabase client"); },
+        write: () => {},
+      });
+      assert.equal(result.status, "dry_run_verified");
+      assert.deepEqual(calls, ["price.retrieve", "product.retrieve"]);
+      assert.equal(result.registration.p_stripe_account_id, accountId);
+      assert.equal(result.registration.p_stripe_livemode, false);
+    });
+  }
+}
+
+test("an Accounts client that throws is never touched", async () => {
+  const value = fixture();
+  let accountTouched = false;
+  const stripe = {
+    ...mockedStripe(value, []),
+    accounts: {
+      retrieve: async () => {
+        accountTouched = true;
+        throw new Error("Accounts API must not be called");
+      },
+    },
+  };
+  const result = await runCatalogRegistration({
+    argv: ["--plan=small_flock", "--cadence=monthly", `--price-id=${value.selection.stripePriceId}`],
+    env: environment(),
+    createStripeClient: () => stripe,
+    write: () => {},
+  });
+  assert.equal(result.status, "dry_run_verified");
+  assert.equal(accountTouched, false);
+});
 
 test("dry-run performs mock reads, emits redacted output, and makes no Supabase mutation", async () => {
   const value = fixture();
@@ -181,25 +229,82 @@ test("dry-run performs mock reads, emits redacted output, and makes no Supabase 
     write: (line) => output.push(line),
   });
   assert.equal(result.status, "dry_run_verified");
-  assert.deepEqual(calls, ["account.retrieve", "price.retrieve", "product.retrieve"]);
+  assert.deepEqual(calls, ["price.retrieve", "product.retrieve"]);
   assert.equal(supabaseCreated, false);
   const printed = output.join("\n");
   assert.doesNotMatch(printed, /raw-price-data|must-not-print|example\.test/);
   assert.doesNotMatch(printed, new RegExp(`${testSecret}|${testRestricted}|${serviceSecret}`));
+  assert.match(printed, /"stripeMode":"sandbox"/);
+  assert.match(printed, /"accountBindingSource":"validated configuration"/);
+  assert.doesNotMatch(printed, /retrieved account|provider-verified account/i);
 });
 
-test("apply requires explicit flag plus matching environment confirmation", async () => {
+test("apply requires matching environment confirmation before any client creation", async () => {
   const value = fixture();
   let stripeCreated = false;
+  let supabaseCreated = false;
   await assert.rejects(
     runCatalogRegistration({
       argv: [`--plan=small_flock`, `--cadence=monthly`, `--price-id=${value.selection.stripePriceId}`, "--apply"],
       env: environment({ SUPABASE_URL: "http://127.0.0.1:54321", SUPABASE_SERVICE_ROLE_KEY: serviceSecret }),
       createStripeClient: () => { stripeCreated = true; return mockedStripe(value, []); },
+      createSupabaseClient: () => { supabaseCreated = true; throw new Error("unexpected"); },
     }),
-    (error) => error.code === "STRIPE_SAAS_UTILITY_CONFIRMATION_REQUIRED",
+    (error) => error.code === "STRIPE_SAAS_UTILITY_ENVIRONMENT_CONFIRMATION_REQUIRED",
   );
   assert.equal(stripeCreated, false);
+  assert.equal(supabaseCreated, false);
+});
+
+test("apply without account confirmation fails before Stripe or Supabase client creation", async () => {
+  const value = fixture();
+  let stripeCreated = false;
+  let supabaseCreated = false;
+  await assert.rejects(
+    runCatalogRegistration({
+      argv: ["--plan=small_flock", "--cadence=monthly", `--price-id=${value.selection.stripePriceId}`, "--apply", "--confirm-environment=local"],
+      env: environment({ SUPABASE_URL: "http://127.0.0.1:54321", SUPABASE_SERVICE_ROLE_KEY: serviceSecret }),
+      createStripeClient: () => { stripeCreated = true; return mockedStripe(value, []); },
+      createSupabaseClient: () => { supabaseCreated = true; throw new Error("unexpected"); },
+    }),
+    (error) => error.code === "STRIPE_SAAS_UTILITY_ACCOUNT_CONFIRMATION_REQUIRED",
+  );
+  assert.equal(stripeCreated, false);
+  assert.equal(supabaseCreated, false);
+});
+
+test("apply with wrong account confirmation fails before Stripe or Supabase client creation", async () => {
+  const value = fixture();
+  let stripeCreated = false;
+  let supabaseCreated = false;
+  await assert.rejects(
+    runCatalogRegistration({
+      argv: ["--plan=small_flock", "--cadence=monthly", `--price-id=${value.selection.stripePriceId}`, "--apply", "--confirm-environment=local", "--confirm-account=acct_WrongPlatform"],
+      env: environment({ SUPABASE_URL: "http://127.0.0.1:54321", SUPABASE_SERVICE_ROLE_KEY: serviceSecret }),
+      createStripeClient: () => { stripeCreated = true; return mockedStripe(value, []); },
+      createSupabaseClient: () => { supabaseCreated = true; throw new Error("unexpected"); },
+    }),
+    (error) => error.code === "STRIPE_SAAS_UTILITY_ACCOUNT_CONFIRMATION_REQUIRED",
+  );
+  assert.equal(stripeCreated, false);
+  assert.equal(supabaseCreated, false);
+});
+
+test("catalog verification requires the dedicated restricted key before client creation", async () => {
+  const value = fixture();
+  let stripeCreated = false;
+  let supabaseCreated = false;
+  await assert.rejects(
+    runCatalogRegistration({
+      argv: ["--plan=small_flock", "--cadence=monthly", `--price-id=${value.selection.stripePriceId}`],
+      env: environment({ STRIPE_SAAS_CATALOG_READ_KEY: "" }),
+      createStripeClient: () => { stripeCreated = true; return mockedStripe(value, []); },
+      createSupabaseClient: () => { supabaseCreated = true; throw new Error("unexpected"); },
+    }),
+    (error) => error.code === "STRIPE_SAAS_UTILITY_CATALOG_READ_KEY_REQUIRED",
+  );
+  assert.equal(stripeCreated, false);
+  assert.equal(supabaseCreated, false);
 });
 
 test("live mode is refused before any provider client is created", async () => {
@@ -226,7 +331,7 @@ test("apply calls only the registration RPC with the allowlisted typed request",
     argv: [
       "--plan=small_flock", "--cadence=monthly",
       `--price-id=${value.selection.stripePriceId}`,
-      "--apply", "--confirm-environment=local",
+      "--apply", "--confirm-environment=local", `--confirm-account=${accountId}`,
     ],
     env: environment({ SUPABASE_URL: "http://127.0.0.1:54321", SUPABASE_SERVICE_ROLE_KEY: serviceSecret }),
     createStripeClient: () => mockedStripe(value, []),
@@ -241,6 +346,8 @@ test("apply calls only the registration RPC with the allowlisted typed request",
   assert.equal(result.status, "registered");
   assert.equal(rpcCalls.length, 1);
   assert.equal(rpcCalls[0].name, "register_verified_saas_price");
+  assert.equal(rpcCalls[0].request.p_stripe_account_id, accountId);
+  assert.equal(rpcCalls[0].request.p_stripe_livemode, false);
   assert.ok(!("metadata" in rpcCalls[0].request));
   assert.ok(!("object" in rpcCalls[0].request));
 });
