@@ -112,12 +112,12 @@ test("migration exposes only service-role catalog contracts and seeds no IDs", a
   assert.doesNotMatch(migration, /saas_(?:subscription_checkout|billing_portal)_enabled[^;]*true/i);
 });
 
-test("post-Batch-4 billing work adds only the approved Batch 5 endpoint and no browser Stripe surface", async () => {
+test("post-Batch-4 billing work adds only the approved Batch 5 and Batch 6 endpoints and no browser Stripe surface", async () => {
   const functionEntries = await readdir(path.join(root, "supabase/functions"), { withFileTypes: true });
   const names = functionEntries.filter((entry) => entry.isDirectory() && entry.name !== "_shared").map((entry) => entry.name);
   assert.deepEqual(
     names.filter((name) => /(?:checkout|webhook|portal|subscription)/i.test(name)),
-    ["stripe-saas-checkout"],
+    ["stripe-saas-checkout", "stripe-saas-webhook"],
   );
   const files = [];
   for (const directory of ["app", "lib", "supabase/functions"]) {
@@ -168,19 +168,23 @@ test("documentation requires only sandbox Product and Price read permissions", a
   assert.doesNotMatch(documentation, /STRIPE_SAAS_CATALOG_READ_KEY\s*=/);
 });
 
-test("Batch 5 changes no browser onboarding, Pay at Pickup, refund, or Connect application file", async () => {
+test("Batch 6 changes no browser onboarding, Pay at Pickup, refund, or Connect application file", async () => {
   const { stdout } = await execFileAsync("git", ["status", "--porcelain=v1", "-uall"], { cwd: root });
   const changed = stdout.split(/\r?\n/).filter((line) => line.trim()).map((line) => line.slice(3));
   const allowed = [
+    "docs/stripe-saas-webhook-deployment.md",
     "supabase/config.toml",
-    "supabase/functions/stripe-saas-checkout/handler.ts",
-    "supabase/functions/stripe-saas-checkout/index.ts",
-    "supabase/migrations/20260802100000_saas_checkout_attempt_contracts.sql",
-    "supabase/tests/saas_checkout_attempt_concurrency_test.sql",
-    "supabase/tests/saas_checkout_attempt_contracts_test.sql",
+    "supabase/functions/_shared/stripe-saas-client.ts",
+    "supabase/functions/_shared/stripe-saas-runtime.mjs",
+    "supabase/functions/stripe-saas-webhook/handler.ts",
+    "supabase/functions/stripe-saas-webhook/index.ts",
+    "supabase/migrations/20260802101000_saas_webhook_event_ledger_contracts.sql",
+    "supabase/tests/saas_webhook_event_ledger_concurrency_test.sql",
+    "supabase/tests/saas_webhook_event_ledger_contracts_test.sql",
     "tests/stripe-saas-batch4-source-contract.test.mjs",
-    "tests/stripe-saas-checkout-handler.test.mjs",
-    "tests/stripe-saas-checkout-source-contract.test.mjs",
+    "tests/stripe-saas-runtime.test.mjs",
+    "tests/stripe-saas-webhook-handler.test.mjs",
+    "tests/stripe-saas-webhook-source-contract.test.mjs",
   ];
   assert.deepEqual(changed.sort(), allowed.sort());
   assert.ok(changed.every((file) => !file.startsWith("app/") && !file.startsWith("lib/")));

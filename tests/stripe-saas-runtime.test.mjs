@@ -7,8 +7,10 @@ import {
   STRIPE_SAAS_PLATFORM_ACCOUNT_ID,
   STRIPE_SAAS_SDK_VERSION,
   StripeSaasError,
+  assertStripeWebhookTimestampWithinTolerance,
   parseStripeSaasCatalogConfig,
   parseStripeSaasConfig,
+  parseStripeSaasWebhookConfig,
   redactStripeSaasConfig,
 } from "../supabase/functions/_shared/stripe-saas-runtime.mjs";
 import {
@@ -25,6 +27,7 @@ const testRestricted = ["rk", "test", "Batch4ReadFixture"].join("_");
 const liveSecret = ["sk", "live", "Batch4FixtureKey"].join("_");
 const liveRestricted = ["rk", "live", "Batch4ReadFixture"].join("_");
 const serviceSecret = ["service", "role", "Batch4Fixture"].join("_");
+const webhookSecret = ["whsec", "Batch6Fixture"].join("_");
 const accountId = STRIPE_SAAS_PLATFORM_ACCOUNT_ID;
 
 function environment(overrides = {}) {
@@ -44,6 +47,50 @@ function catalogEnvironment(overrides = {}) {
     ...overrides,
   };
 }
+
+test("webhook configuration requires only signature context, not a Stripe API key", () => {
+  const config = parseStripeSaasWebhookConfig({
+    STRIPE_SAAS_WEBHOOK_SECRET: webhookSecret,
+    STRIPE_PLATFORM_ACCOUNT_ID: accountId,
+    STRIPE_SAAS_LIVEMODE: "false",
+    FLOCKFRONT_ENVIRONMENT_ID: "local",
+  });
+  assert.equal(config.webhookSecret, webhookSecret);
+  assert.equal(config.livemode, false);
+  assert.equal("operationalApiKey" in config, false);
+  assert.equal("catalogReadApiKey" in config, false);
+
+  expectCode(() => parseStripeSaasWebhookConfig({
+    STRIPE_PLATFORM_ACCOUNT_ID: accountId,
+    STRIPE_SAAS_LIVEMODE: "false",
+    FLOCKFRONT_ENVIRONMENT_ID: "local",
+  }), "STRIPE_SAAS_CONFIG_STRIPE_SAAS_WEBHOOK_SECRET_MISSING");
+  expectCode(() => parseStripeSaasWebhookConfig({
+    STRIPE_SAAS_WEBHOOK_SECRET: "not-a-webhook-secret",
+    STRIPE_PLATFORM_ACCOUNT_ID: accountId,
+    STRIPE_SAAS_LIVEMODE: "false",
+    FLOCKFRONT_ENVIRONMENT_ID: "local",
+  }), "STRIPE_SAAS_CONFIG_WEBHOOK_SECRET_INVALID");
+});
+
+test("webhook signature timestamps have a symmetric bounded tolerance", () => {
+  const receivedAt = 1_800_000_000_000;
+  assert.doesNotThrow(() => assertStripeWebhookTimestampWithinTolerance(
+    "t=1800000000,v1=fixture", 300, receivedAt));
+  assert.doesNotThrow(() => assertStripeWebhookTimestampWithinTolerance(
+    "t=1799999700,v1=fixture", 300, receivedAt));
+  assert.doesNotThrow(() => assertStripeWebhookTimestampWithinTolerance(
+    "t=1800000300,v1=fixture", 300, receivedAt));
+  expectCode(() => assertStripeWebhookTimestampWithinTolerance(
+    "t=1799999699,v1=fixture", 300, receivedAt),
+  "STRIPE_SAAS_WEBHOOK_TIMESTAMP_OUTSIDE_TOLERANCE");
+  expectCode(() => assertStripeWebhookTimestampWithinTolerance(
+    "t=1800000301,v1=fixture", 300, receivedAt),
+  "STRIPE_SAAS_WEBHOOK_TIMESTAMP_OUTSIDE_TOLERANCE");
+  expectCode(() => assertStripeWebhookTimestampWithinTolerance(
+    "v1=fixture", 300, receivedAt),
+  "STRIPE_SAAS_WEBHOOK_TIMESTAMP_INVALID");
+});
 
 const approved = {
   small_flock: {

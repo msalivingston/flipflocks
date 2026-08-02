@@ -115,6 +115,50 @@ export function parseStripeSaasCatalogConfig(source) {
   return Object.freeze({ ...context, catalogReadApiKey });
 }
 
+export function parseStripeSaasWebhookConfig(source) {
+  const webhookSecret = required(source, "STRIPE_SAAS_WEBHOOK_SECRET");
+  const context = parseStripeSaasContext(source);
+  if (!/^whsec_[A-Za-z0-9]+$/.test(webhookSecret)) {
+    throw new StripeSaasError(
+      "STRIPE_SAAS_CONFIG_WEBHOOK_SECRET_INVALID",
+      "The Stripe webhook secret has an invalid format.",
+    );
+  }
+  return Object.freeze({ ...context, webhookSecret });
+}
+
+export function assertStripeWebhookTimestampWithinTolerance(
+  signatureHeader,
+  toleranceSeconds,
+  receivedAtMilliseconds = Date.now(),
+) {
+  if (!Number.isInteger(toleranceSeconds) || toleranceSeconds < 1) {
+    throw new StripeSaasError(
+      "STRIPE_SAAS_WEBHOOK_TOLERANCE_INVALID",
+      "Stripe webhook timestamp tolerance is invalid.",
+    );
+  }
+  const timestamps = String(signatureHeader).split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.startsWith("t="))
+    .map((part) => part.slice(2));
+  if (timestamps.length !== 1 || !/^[0-9]+$/.test(timestamps[0])) {
+    throw new StripeSaasError(
+      "STRIPE_SAAS_WEBHOOK_TIMESTAMP_INVALID",
+      "Stripe webhook signature timestamp is invalid.",
+    );
+  }
+  const timestamp = Number(timestamps[0]);
+  const receivedAtSeconds = Math.floor(receivedAtMilliseconds / 1_000);
+  if (!Number.isSafeInteger(timestamp) ||
+    Math.abs(receivedAtSeconds - timestamp) > toleranceSeconds) {
+    throw new StripeSaasError(
+      "STRIPE_SAAS_WEBHOOK_TIMESTAMP_OUTSIDE_TOLERANCE",
+      "Stripe webhook signature timestamp is outside the allowed tolerance.",
+    );
+  }
+}
+
 export function parseCatalogApplyConfig(source) {
   const supabaseUrl = required(source, "SUPABASE_URL");
   const supabaseServiceRoleKey = required(source, "SUPABASE_SERVICE_ROLE_KEY");
