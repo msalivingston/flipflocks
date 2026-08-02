@@ -35,8 +35,15 @@ function pageStart(title) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>body{font-family:system-ui,sans-serif;max-width:760px;margin:48px auto;padding:0 20px;color:#172016}main{border:1px solid #ccd5ca;border-radius:12px;padding:24px}label{display:block;font-weight:650;margin:20px 0 8px}input{box-sizing:border-box;width:100%;font:inherit;padding:10px}button{font:inherit;font-weight:650;margin-top:16px;padding:10px 18px}table{width:100%;border-collapse:collapse;margin-top:18px}th,td{text-align:left;padding:8px;border-bottom:1px solid #dfe5dd}.pass{color:#176b32}.fail{color:#a32626}</style></head><body><main><h1>${escapeHtml(title)}</h1>`;
 }
 
-function formPage(pathname) {
-  return `${pageStart("Verify FlockFront Stripe Catalog")}<p>Enter the restricted Stripe test key to verify the four approved sandbox Prices.</p><p>The key remains on this computer, is held only in memory, and is not saved.</p><form method="post" action="${escapeHtml(pathname)}" autocomplete="off"><label for="stripe-key">Stripe restricted test key</label><input id="stripe-key" name="stripe_key" type="password" required pattern="rk_test_[A-Za-z0-9]+" autocomplete="off" spellcheck="false"><button type="submit">Verify</button></form></main></body></html>`;
+function formPage(pathname, apply) {
+  const applyFields = apply
+    ? '<label for="supabase-url">Supabase project URL</label><input id="supabase-url" name="supabase_url" type="url" required inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://project-ref.supabase.co"><label for="supabase-service-role-key">Supabase service-role key</label><input id="supabase-service-role-key" name="supabase_service_role_key" type="password" required autocomplete="off" spellcheck="false">'
+    : "";
+  const action = apply ? "Verify and register" : "Verify";
+  const purpose = apply
+    ? "verify and register the four approved sandbox Prices"
+    : "verify the four approved sandbox Prices";
+  return `${pageStart("Verify FlockFront Stripe Catalog")}<p>Enter the restricted Stripe test key to ${purpose}.</p><p>The submitted values remain on this computer, are held only in memory, and are not saved.</p><form method="post" action="${escapeHtml(pathname)}" autocomplete="off"><label for="stripe-key">Stripe restricted test key</label><input id="stripe-key" name="stripe_key" type="password" required pattern="rk_test_[A-Za-z0-9]+" autocomplete="off" spellcheck="false">${applyFields}<button type="submit">${action}</button></form></main></body></html>`;
 }
 
 function errorPage(message) {
@@ -53,9 +60,40 @@ function progressRow(result) {
   return `<tr><td>${escapeHtml(result.label)}</td><td>${escapeHtml(result.stripePriceId)}</td><td class="${className}">${escapeHtml(status)}</td></tr>`;
 }
 
-function progressEnd(passed) {
-  const message = passed ? "All four approved sandbox Prices passed." : "One or more approved sandbox Prices failed.";
+function progressEnd(result, apply) {
+  const message = result.passed
+    ? (apply && result.applied
+      ? "All four approved sandbox Prices passed and were registered."
+      : "All four approved sandbox Prices passed.")
+    : "One or more approved sandbox Prices failed. Nothing was registered.";
   return `</tbody></table><p><strong>${escapeHtml(message)}</strong></p><p>You may close this tab.</p></main></body></html>`;
+}
+
+export function validateSupabaseProjectUrl(value) {
+  const supplied = String(value ?? "").trim();
+  let parsed;
+  try {
+    parsed = new URL(supplied);
+  } catch {
+    throw formError(
+      "STRIPE_SAAS_LOCAL_FORM_SUPABASE_URL_INVALID",
+      "Enter a valid HTTPS Supabase project URL.",
+    );
+  }
+  if (parsed.protocol !== "https:"
+    || !/^[a-z0-9][a-z0-9-]*\.supabase\.co$/i.test(parsed.hostname)
+    || parsed.username
+    || parsed.password
+    || parsed.port
+    || (parsed.pathname !== "/" && parsed.pathname !== "")
+    || parsed.search
+    || parsed.hash) {
+    throw formError(
+      "STRIPE_SAAS_LOCAL_FORM_SUPABASE_URL_INVALID",
+      "Enter a valid HTTPS Supabase project URL.",
+    );
+  }
+  return parsed.origin;
 }
 
 async function readRequestBody(request) {
@@ -91,7 +129,8 @@ export async function openDefaultBrowser(url, {
 }
 
 export async function runLocalCatalogVerificationForm({
-  verifyKey,
+  apply = false,
+  runOperation,
   openBrowser = openDefaultBrowser,
   expirationMs = DEFAULT_EXPIRATION_MS,
   randomBytesFn = randomBytes,
@@ -128,7 +167,7 @@ export async function runLocalCatalogVerificationForm({
       }
       if (request.method === "GET" && !consumed) {
         response.writeHead(200, SECURITY_HEADERS);
-        response.end(formPage(activePath));
+        response.end(formPage(activePath, apply));
         return;
       }
       if (request.method !== "POST") {
@@ -147,7 +186,11 @@ export async function runLocalCatalogVerificationForm({
       clearTimeout(expiration);
       closeServer();
 
-      let catalogReadKey;
+      const credentials = {
+        catalogReadKey: null,
+        supabaseUrl: null,
+        supabaseServiceRoleKey: null,
+      };
       try {
         if (!request.headers["content-type"]?.startsWith("application/x-www-form-urlencoded")) {
           throw formError(
@@ -157,12 +200,22 @@ export async function runLocalCatalogVerificationForm({
         }
         const body = await readRequestBody(request);
         const values = new URLSearchParams(body);
-        catalogReadKey = values.get("stripe_key") ?? "";
-        if (!/^rk_test_[A-Za-z0-9]+$/.test(catalogReadKey)) {
+        credentials.catalogReadKey = (values.get("stripe_key") ?? "").trim();
+        if (!/^rk_test_[A-Za-z0-9]+$/.test(credentials.catalogReadKey)) {
           throw formError(
             "STRIPE_SAAS_LOCAL_FORM_KEY_INVALID",
             "The submitted value was not a valid Stripe restricted test key.",
           );
+        }
+        if (apply) {
+          credentials.supabaseUrl = validateSupabaseProjectUrl(values.get("supabase_url"));
+          credentials.supabaseServiceRoleKey = (values.get("supabase_service_role_key") ?? "").trim();
+          if (!credentials.supabaseServiceRoleKey) {
+            throw formError(
+              "STRIPE_SAAS_LOCAL_FORM_SUPABASE_SERVICE_ROLE_KEY_MISSING",
+              "A Supabase service-role key is required for apply mode.",
+            );
+          }
         }
       } catch (error) {
         const safeError = error instanceof StripeSaasError
@@ -177,18 +230,22 @@ export async function runLocalCatalogVerificationForm({
       response.writeHead(200, SECURITY_HEADERS);
       response.write(progressStart());
       try {
-        const result = await verifyKey(catalogReadKey, (entryResult) => {
+        const result = await runOperation(credentials, (entryResult) => {
           response.write(progressRow(entryResult));
         });
-        response.end(progressEnd(result.passed));
+        response.end(progressEnd(result, apply));
         settle(null, result);
       } catch {
         const error = formError(
           "STRIPE_SAAS_LOCAL_FORM_VERIFICATION_FAILED",
           "Catalog verification could not be completed.",
         );
-        response.end(progressEnd(false));
+        response.end(progressEnd({ passed: false }, apply));
         settle(error);
+      } finally {
+        credentials.catalogReadKey = null;
+        credentials.supabaseUrl = null;
+        credentials.supabaseServiceRoleKey = null;
       }
     });
 

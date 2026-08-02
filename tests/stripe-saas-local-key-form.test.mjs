@@ -36,8 +36,8 @@ test("local form binds to loopback and uses a random single-use token", async ()
   const runPromise = runLocalCatalogVerificationForm({
     onListening: listening.resolve,
     openBrowser: async (url) => { openedUrl = url; },
-    verifyKey: async (key, reportProgress) => {
-      capturedKey = key;
+    runOperation: async (credentials, reportProgress) => {
+      capturedKey = credentials.catalogReadKey;
       for (const result of results) reportProgress(result);
       return { passed: true, results };
     },
@@ -58,6 +58,7 @@ test("local form binds to loopback and uses a random single-use token", async ()
   assert.match(formHtml, /Verify FlockFront Stripe Catalog/);
   assert.match(formHtml, /Stripe restricted test key/);
   assert.match(formHtml, /type="password"/);
+  assert.doesNotMatch(formHtml, /Supabase project URL|supabase_service_role_key/);
   assert.match(formHtml, /method="post"/);
   assert.doesNotMatch(formHtml, /https?:\/\/(?!127\.0\.0\.1)|<script|@font-face/i);
 
@@ -77,6 +78,89 @@ test("local form binds to loopback and uses a random single-use token", async ()
   await expectClosed(info.url);
 });
 
+test("apply form collects Stripe and Supabase credentials once without echoing them", async () => {
+  const listening = listeningPromise();
+  const serviceKey = ["service", "role", "LocalBrowserFixture"].join("_");
+  const projectUrl = "https://projectfixture.supabase.co";
+  let captured;
+  let operationCalls = 0;
+  const runPromise = runLocalCatalogVerificationForm({
+    apply: true,
+    onListening: listening.resolve,
+    openBrowser: async () => {},
+    runOperation: async (credentials, reportProgress) => {
+      operationCalls += 1;
+      captured = { ...credentials };
+      for (const result of results) reportProgress(result);
+      return { passed: true, applied: true, results };
+    },
+  });
+  const info = await listening.promise;
+  const formResponse = await fetch(info.url, { cache: "no-store" });
+  const formHtml = await formResponse.text();
+  assert.match(formHtml, /name="stripe_key" type="password"/);
+  assert.match(formHtml, /name="supabase_url" type="url"/);
+  assert.match(formHtml, /name="supabase_service_role_key" type="password"/);
+  assert.doesNotMatch(formHtml, new RegExp(`${restrictedKey}|${serviceKey}|${projectUrl}`));
+
+  const response = await fetch(info.url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      stripe_key: restrictedKey,
+      supabase_url: projectUrl,
+      supabase_service_role_key: serviceKey,
+    }),
+  });
+  const html = await response.text();
+  const result = await runPromise;
+  assert.equal(result.applied, true);
+  assert.equal(operationCalls, 1);
+  assert.deepEqual(captured, {
+    catalogReadKey: restrictedKey,
+    supabaseUrl: projectUrl,
+    supabaseServiceRoleKey: serviceKey,
+  });
+  assert.match(html, /passed and were registered/);
+  assert.doesNotMatch(html, new RegExp(`${restrictedKey}|${serviceKey}|${projectUrl}`));
+  await expectClosed(info.url);
+});
+
+test("apply form rejects invalid Supabase credentials without invoking the operation", async () => {
+  for (const [supabaseUrl, serviceKey, expectedCode] of [
+    ["http://projectfixture.supabase.co", "service-role-fixture", "STRIPE_SAAS_LOCAL_FORM_SUPABASE_URL_INVALID"],
+    ["https://projectfixture.supabase.co", "   ", "STRIPE_SAAS_LOCAL_FORM_SUPABASE_SERVICE_ROLE_KEY_MISSING"],
+  ]) {
+    const listening = listeningPromise();
+    let operationCalls = 0;
+    const outcomePromise = runLocalCatalogVerificationForm({
+      apply: true,
+      onListening: listening.resolve,
+      openBrowser: async () => {},
+      runOperation: async () => { operationCalls += 1; },
+    }).then(() => null, (error) => error);
+    const info = await listening.promise;
+    const response = await fetch(info.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        stripe_key: restrictedKey,
+        supabase_url: supabaseUrl,
+        supabase_service_role_key: serviceKey,
+      }),
+    });
+    const html = await response.text();
+    const error = await outcomePromise;
+    assert.equal(response.status, 400);
+    assert.equal(error.code, expectedCode);
+    assert.equal(operationCalls, 0);
+    assert.doesNotMatch(`${html} ${error.message}`, new RegExp(restrictedKey));
+    if (supabaseUrl.trim()) assert.equal(`${html} ${error.message}`.includes(supabaseUrl.trim()), false);
+    if (serviceKey.trim()) assert.doesNotMatch(`${html} ${error.message}`, new RegExp(serviceKey));
+    await expectClosed(info.url);
+  }
+});
+
 test("malformed key fails safely, invalidates the token, and closes the server", async () => {
   const listening = listeningPromise();
   const malformed = ["sk", "test", "MustNotLeak"].join("_");
@@ -84,7 +168,7 @@ test("malformed key fails safely, invalidates the token, and closes the server",
   const outcomePromise = runLocalCatalogVerificationForm({
     onListening: listening.resolve,
     openBrowser: async () => {},
-    verifyKey: async () => { verifyCalled = true; throw new Error("unexpected"); },
+    runOperation: async () => { verifyCalled = true; throw new Error("unexpected"); },
   }).then(() => null, (error) => error);
   const info = await listening.promise;
   const response = await fetch(info.url, {
@@ -108,7 +192,7 @@ test("local form expires and closes without receiving a key", async () => {
     expirationMs: 25,
     onListening: listening.resolve,
     openBrowser: async () => {},
-    verifyKey: async () => { verifyCalled = true; throw new Error("unexpected"); },
+    runOperation: async () => { verifyCalled = true; throw new Error("unexpected"); },
   }).then(() => null, (error) => error);
   const info = await listening.promise;
   const error = await outcomePromise;
@@ -120,4 +204,3 @@ test("local form expires and closes without receiving a key", async () => {
 test("HTML escaping covers form and result text boundaries", () => {
   assert.equal(escapeHtml(`<>&"'`), "&lt;&gt;&amp;&quot;&#39;");
 });
-

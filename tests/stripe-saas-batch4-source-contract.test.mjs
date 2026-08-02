@@ -72,7 +72,14 @@ test("catalog utility is read-only toward Stripe and defaults to dry-run", async
   assert.doesNotMatch(utility, /stripe\.(?:products|prices)\.(?:create|update|del|archive)\s*\(/);
   assert.doesNotMatch(utility, /https:\/\/api\.stripe\.com/);
   assert.match(utility, /STRIPE_SAAS_UTILITY_LIVE_MODE_REFUSED/);
-  assert.doesNotMatch(verifier, /createLocalSupabaseAdminClient|\.rpc\(|--apply|parseCatalogApplyConfig/);
+  assert.match(verifier, /parseCatalogVerifierArguments\(argv\)/);
+  assert.match(verifier, /parseCatalogApplyConfig\(credentialSource\)/);
+  assert.match(verifier, /const REGISTER_VERIFIED_SAAS_PRICE_RPC = "register_verified_saas_price"/);
+  assert.match(verifier, /if \(!args\.apply \|\| !verification\.passed\) return verification/);
+  assert.match(verifier, /const supabase = createSupabaseClient/);
+  assert.match(verifier, /await supabase\.rpc\(\s*REGISTER_VERIFIED_SAAS_PRICE_RPC/);
+  assert.doesNotMatch(verifier, /deactivate_verified_saas_price|resolve_verified_saas_price/);
+  assert.doesNotMatch(verifier, /saas_subscription_checkout_enabled|saas_billing_portal_enabled/);
   assert.doesNotMatch(verifier, /\.(?:create|update|del|archive)\s*\(/);
   assert.match(verifier, /const stripe = createStripeClient\(config\.catalogReadApiKey\)/);
   assert.match(verifier, /for \(const entry of APPROVED_SAAS_CATALOG_MANIFEST\)/);
@@ -84,6 +91,11 @@ test("catalog utility is read-only toward Stripe and defaults to dry-run", async
   assert.match(localForm, /const LOOPBACK_HOST = "127\.0\.0\.1"/);
   assert.match(localForm, /randomBytesFn\(32\)/);
   assert.match(localForm, /type=\"password\"/);
+  assert.match(localForm, /name=\"supabase_url\" type=\"url\"/);
+  assert.match(localForm, /name=\"supabase_service_role_key\" type=\"password\"/);
+  assert.match(localForm, /parsed\.protocol !== \"https:\"/);
+  assert.match(localForm, /credentials\.supabaseServiceRoleKey = null/);
+  assert.doesNotMatch(localForm, /process\.env\s*\.|Object\.assign\(process\.env/);
   for (const header of ["Cache-Control", "Referrer-Policy", "Content-Security-Policy", "X-Content-Type-Options"]) {
     assert.match(localForm, new RegExp(header));
   }
@@ -142,6 +154,10 @@ test("documentation requires only sandbox Product and Price read permissions", a
   assert.match(documentation, /validated operator configuration, not provider-retrieved evidence/);
   assert.match(documentation, /--confirm-environment=<environment-id>[\s\S]*--confirm-account=acct_1CTOghL1R5g4hhXt/);
   assert.match(documentation, /npm run stripe:verify-saas-catalog/);
+  assert.match(documentation, /npm run stripe:verify-saas-catalog -- --apply --confirm-environment=local --confirm-account=acct_1CTOghL1R5g4hhXt/);
+  assert.match(documentation, /SUPABASE_URL/);
+  assert.match(documentation, /SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(documentation, /none are registered/);
   assert.match(documentation, /temporary local browser form/);
   assert.match(documentation, /127\.0\.0\.1/);
   assert.match(documentation, /never uses terminal raw-mode input, clipboard acquisition, a key file/);

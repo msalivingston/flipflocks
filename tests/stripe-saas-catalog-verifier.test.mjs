@@ -3,10 +3,17 @@ import test from "node:test";
 
 import {
   APPROVED_SAAS_CATALOG_MANIFEST,
+  parseCatalogVerifierArguments,
   verifyApprovedSaasCatalog,
 } from "../scripts/stripe/verify-saas-catalog.mjs";
 
 const restrictedKey = ["rk", "test", "CatalogVerifierFixture"].join("_");
+const serviceRoleKey = ["service", "role", "fixture"].join("-");
+const applyArguments = [
+  "--apply",
+  "--confirm-environment=local",
+  "--confirm-account=acct_1CTOghL1R5g4hhXt",
+];
 
 const expectedManifest = [
   ["small_flock", "monthly", "price_1TzpKSL1R5g4hhXtWhItRai3", "prod_UzoyVYb4UGqW3m"],
@@ -77,9 +84,9 @@ function mockedClient(values, calls) {
 }
 
 function localFormWithKey(key, onAcquire = () => {}) {
-  return async ({ verifyKey }) => {
+  return async ({ runOperation }) => {
     onAcquire();
-    return verifyKey(key, () => {});
+    return runOperation({ catalogReadKey: key }, () => {});
   };
 }
 
@@ -104,6 +111,7 @@ test("one key acquisition and one Stripe client verify all four Prices", async (
   const output = [];
   let keyAcquisitions = 0;
   let clientCreations = 0;
+  let supabaseClientCreations = 0;
   const inputEnvironment = {};
   const result = await verifyApprovedSaasCatalog({
     env: inputEnvironment,
@@ -113,12 +121,17 @@ test("one key acquisition and one Stripe client verify all four Prices", async (
       assert.equal(key, restrictedKey);
       return mockedClient(values, calls);
     },
+    createSupabaseClient: () => {
+      supabaseClientCreations += 1;
+      throw new Error("dry-run must not create a Supabase client");
+    },
     write: (line) => output.push(line),
   });
 
   assert.equal(result.passed, true);
   assert.equal(keyAcquisitions, 1);
   assert.equal(clientCreations, 1);
+  assert.equal(supabaseClientCreations, 0);
   assert.deepEqual(calls.filter(([type]) => type === "price").map(([, id]) => id),
     APPROVED_SAAS_CATALOG_MANIFEST.map(({ stripePriceId }) => stripePriceId));
   assert.deepEqual(calls.filter(([type]) => type === "product").map(([, id]) => id),
@@ -127,6 +140,89 @@ test("one key acquisition and one Stripe client verify all four Prices", async (
   assert.equal(output.filter((line) => /\bPASS$/.test(line)).length, 8);
   assert.doesNotMatch(output.join("\n"), new RegExp(restrictedKey));
   assert.deepEqual(inputEnvironment, {});
+});
+
+test("apply confirmations are exact and validated before provider or Supabase clients", async () => {
+  let stripeClientCreations = 0;
+  let supabaseClientCreations = 0;
+  await assert.rejects(
+    verifyApprovedSaasCatalog({
+      argv: ["--apply", "--confirm-environment=local"],
+      env: { STRIPE_SAAS_CATALOG_READ_KEY: restrictedKey },
+      createStripeClient: () => { stripeClientCreations += 1; },
+      createSupabaseClient: () => { supabaseClientCreations += 1; },
+      write: () => {},
+    }),
+    (error) => error.code === "STRIPE_SAAS_UTILITY_ACCOUNT_CONFIRMATION_REQUIRED",
+  );
+  assert.equal(stripeClientCreations, 0);
+  assert.equal(supabaseClientCreations, 0);
+  assert.deepEqual(parseCatalogVerifierArguments(applyArguments), {
+    apply: true,
+    confirmationEnvironmentId: "local",
+    confirmationAccountId: "acct_1CTOghL1R5g4hhXt",
+  });
+});
+
+test("apply without terminal variables uses browser-submitted credentials", async () => {
+  const values = fixtures();
+  const stripeCalls = [];
+  let formCalls = 0;
+  let supabaseClientCreations = 0;
+  let rpcCalls = 0;
+  const result = await verifyApprovedSaasCatalog({
+    argv: applyArguments,
+    env: {},
+    runLocalForm: async ({ apply, runOperation }) => {
+      formCalls += 1;
+      assert.equal(apply, true);
+      return runOperation({
+        catalogReadKey: restrictedKey,
+        supabaseUrl: "https://project.supabase.co",
+        supabaseServiceRoleKey: serviceRoleKey,
+      }, () => {});
+    },
+    createStripeClient: () => mockedClient(values, stripeCalls),
+    createSupabaseClient: () => {
+      supabaseClientCreations += 1;
+      return {
+        rpc: async (_name, request) => {
+          rpcCalls += 1;
+          return {
+            data: [{
+              registration_status: "registered",
+              registered_stripe_price_id: request.p_stripe_price_id,
+            }],
+            error: null,
+          };
+        },
+      };
+    },
+    write: () => {},
+  });
+  assert.equal(result.applied, true);
+  assert.equal(formCalls, 1);
+  assert.equal(stripeCalls.filter(([type]) => type === "price").length, 4);
+  assert.equal(supabaseClientCreations, 1);
+  assert.equal(rpcCalls, 4);
+});
+
+test("partially configured apply automation falls back to the complete browser form", async () => {
+  let formOpened = false;
+  await assert.rejects(verifyApprovedSaasCatalog({
+    argv: applyArguments,
+    env: {
+      STRIPE_SAAS_CATALOG_READ_KEY: restrictedKey,
+      SUPABASE_URL: "https://project.supabase.co",
+    },
+    runLocalForm: async ({ apply }) => {
+      formOpened = true;
+      assert.equal(apply, true);
+      throw Object.assign(new Error("form stopped for test"), { code: "FORM_TEST_STOP" });
+    },
+    write: () => {},
+  }), (error) => error.code === "FORM_TEST_STOP");
+  assert.equal(formOpened, true);
 });
 
 test("one failed Price does not prevent the other three checks", async () => {
@@ -148,6 +244,114 @@ test("one failed Price does not prevent the other three checks", async () => {
   assert.equal(calls.filter(([type]) => type === "price").length, 4);
   assert.equal(output.filter((line) => /\bPASS$/.test(line)).length, 6);
   assert.equal(output.filter((line) => /\bFAIL \(/.test(line)).length, 2);
+});
+
+test("one failed Price makes zero registration calls in apply mode", async () => {
+  const values = fixtures();
+  values.prices.get("price_1TzpKSL1R5g4hhXtv4yG6PWt").unit_amount = 5001;
+  const output = [];
+  let supabaseClientCreations = 0;
+  let rpcCalls = 0;
+  const result = await verifyApprovedSaasCatalog({
+    argv: applyArguments,
+    env: {},
+    runLocalForm: async ({ apply, runOperation }) => {
+      assert.equal(apply, true);
+      return runOperation({
+        catalogReadKey: restrictedKey,
+        supabaseUrl: "https://project.supabase.co",
+        supabaseServiceRoleKey: serviceRoleKey,
+      }, () => {});
+    },
+    createStripeClient: () => mockedClient(values, []),
+    createSupabaseClient: () => {
+      supabaseClientCreations += 1;
+      return { rpc: async () => { rpcCalls += 1; } };
+    },
+    write: (line) => output.push(line),
+  });
+  assert.equal(result.passed, false);
+  assert.equal(supabaseClientCreations, 0);
+  assert.equal(rpcCalls, 0);
+  assert.equal(output.filter((line) => /\bPASS$/.test(line)).length, 6);
+  assert.equal(output.filter((line) => /\bFAIL \(/.test(line)).length, 2);
+});
+
+test("four passing Prices use one Supabase client and only four typed registration RPCs", async () => {
+  const values = fixtures();
+  const rpcCalls = [];
+  const output = [];
+  let clientCreations = 0;
+  const result = await verifyApprovedSaasCatalog({
+    argv: applyArguments,
+    env: {
+      STRIPE_SAAS_CATALOG_READ_KEY: restrictedKey,
+      SUPABASE_URL: "https://project.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: serviceRoleKey,
+    },
+    createStripeClient: () => mockedClient(values, []),
+    createSupabaseClient: (url, key) => {
+      clientCreations += 1;
+      assert.equal(url, "https://project.supabase.co");
+      assert.equal(key, serviceRoleKey);
+      return {
+        rpc: async (name, request) => {
+          rpcCalls.push({ name, request });
+          return {
+            data: [{
+              registration_status: "registered",
+              registered_stripe_price_id: request.p_stripe_price_id,
+            }],
+            error: null,
+          };
+        },
+      };
+    },
+    write: (line) => output.push(line),
+  });
+  assert.equal(result.applied, true);
+  assert.equal(clientCreations, 1);
+  assert.equal(rpcCalls.length, 4);
+  assert.ok(rpcCalls.every(({ name }) => name === "register_verified_saas_price"));
+  assert.deepEqual(rpcCalls.map(({ request }) => request.p_stripe_price_id),
+    APPROVED_SAAS_CATALOG_MANIFEST.map(({ stripePriceId }) => stripePriceId));
+  assert.ok(rpcCalls.every(({ request }) => request.p_stripe_account_id === "acct_1CTOghL1R5g4hhXt"));
+  assert.ok(rpcCalls.every(({ request }) => request.p_stripe_livemode === false));
+  assert.deepEqual(result.registrationResults.map(({ status }) => status),
+    ["registered", "registered", "registered", "registered"]);
+  assert.equal(output.filter((line) => /\sregistered$/.test(line)).length, 4);
+  assert.doesNotMatch(output.join("\n"), new RegExp(restrictedKey));
+  assert.doesNotMatch(output.join("\n"), new RegExp(serviceRoleKey));
+});
+
+test("exact replay safely reports already_registered for all four Prices", async () => {
+  const values = fixtures();
+  const rpcNames = [];
+  const result = await verifyApprovedSaasCatalog({
+    argv: applyArguments,
+    env: {
+      STRIPE_SAAS_CATALOG_READ_KEY: restrictedKey,
+      SUPABASE_URL: "https://project.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: serviceRoleKey,
+    },
+    createStripeClient: () => mockedClient(values, []),
+    createSupabaseClient: () => ({
+      rpc: async (name, request) => {
+        rpcNames.push(name);
+        return {
+          data: [{
+            registration_status: "already_registered",
+            registered_stripe_price_id: request.p_stripe_price_id,
+          }],
+          error: null,
+        };
+      },
+    }),
+    write: () => {},
+  });
+  assert.deepEqual(rpcNames, Array(4).fill("register_verified_saas_price"));
+  assert.deepEqual(result.registrationResults.map(({ status }) => status),
+    Array(4).fill("already_registered"));
 });
 
 test("unexpected provider errors are redacted and remaining Prices continue", async () => {

@@ -19,8 +19,8 @@ No Accounts permission is required. The utility does not call the Stripe Account
 | `STRIPE_PLATFORM_ACCOUNT_ID` | Safe identifier | Defaults to the manually confirmed local sandbox binding `acct_1CTOghL1R5g4hhXt`. Supplied values are still validated. |
 | `STRIPE_SAAS_LIVEMODE` | Safe setting | Defaults to `false` for this local utility. Supplied values are still validated, and live mode is refused. |
 | `FLOCKFRONT_ENVIRONMENT_ID` | Safe identifier | Defaults to `local` for this utility. Supplied values must be `local`, `development`, `test`, `preview`, `staging`, or `production`. |
-| `SUPABASE_URL` | Sensitive deployment configuration | Needed only for apply mode. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Secret | Needed only for apply mode; never browser-exposed. |
+| `SUPABASE_URL` | Sensitive deployment configuration | Optional apply-mode automation value. The normal owner workflow collects it in the temporary local form. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Secret | Optional apply-mode automation value. The normal owner workflow collects it in a password field and never echoes it. |
 
 Keep secrets out of source files. No Stripe variable is browser-public. Use the sandbox restricted key for catalog inspection and do not grant it permissions beyond Products: Read and Prices: Read. The local defaults above apply only to this catalog utility; shared operational Stripe configuration remains strict and has no equivalent defaults.
 
@@ -36,9 +36,17 @@ npm run stripe:verify-saas-catalog
 
 When no automation key is already configured, the command opens a temporary local browser form titled **Verify FlockFront Stripe Catalog**. Paste the restricted test key into the password field and select **Verify**. The form is served only from a random, single-use `127.0.0.1` URL, expires shortly, saves nothing, and closes its listener immediately after submission.
 
-Verification progress and the final PASS/FAIL table appear in both the browser and terminal. The verifier always performs read-only dry-run verification, makes no Supabase mutation, and continues after an individual Price failure. Coop monthly and yearly must resolve to the approved Coop Product; Market monthly and yearly must resolve to the approved Market Product.
+Verification progress and the final PASS/FAIL table appear in both the browser and terminal. Dry-run is the default, makes no Supabase mutation, and continues after an individual Price failure. Coop monthly and yearly must resolve to the approved Coop Product; Market monthly and yearly must resolve to the approved Market Product.
 
-For automation, an existing `STRIPE_SAAS_CATALOG_READ_KEY` is used without opening the browser. The verifier never uses terminal raw-mode input, clipboard acquisition, a key file, `STRIPE_SAAS_API_KEY`, or Supabase configuration.
+For automation, an existing `STRIPE_SAAS_CATALOG_READ_KEY` is used without opening the browser. The verifier never uses terminal raw-mode input, clipboard acquisition, a key file, or `STRIPE_SAAS_API_KEY`. Dry-run does not read or require Supabase configuration.
+
+After a successful dry run, the same one-command verifier can register all four verified Prices. Apply validates both confirmations, verifies all four Prices, and only then loads the Supabase service credentials. If any Price fails, none are registered. If all pass, one Supabase client calls only `register_verified_saas_price` once per Price and prints a four-row `registered` or `already_registered` result table:
+
+```text
+npm run stripe:verify-saas-catalog -- --apply --confirm-environment=local --confirm-account=acct_1CTOghL1R5g4hhXt
+```
+
+In the normal owner workflow, the temporary local apply form asks once for the Stripe restricted test key, HTTPS Supabase project URL, and Supabase service-role key. No terminal environment setup is required. Both keys use password fields; the submitted values stay only in process memory and are never echoed into the browser result or terminal. Fully configured automation may continue supplying `STRIPE_SAAS_CATALOG_READ_KEY`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` through the process environment and bypass the browser. Exact replay is safe and reports `already_registered`. Apply does not enable Checkout or Portal feature flags.
 
 ### Individual Price debugging
 
