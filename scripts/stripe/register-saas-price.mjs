@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { pathToFileURL } from "node:url";
 
 import { promptForStripeRestrictedTestKey } from "./secure-secret-prompt.mjs";
+import { readWindowsClipboardRestrictedTestKey } from "./windows-clipboard-secret.mjs";
 
 import {
   STRIPE_SAAS_API_VERSION,
@@ -23,9 +24,14 @@ export const LOCAL_CATALOG_DEFAULTS = Object.freeze({
 export function parseCatalogArguments(argv) {
   const values = new Map();
   let apply = false;
+  let keyFromClipboard = false;
   for (const argument of argv) {
     if (argument === "--apply") {
       apply = true;
+      continue;
+    }
+    if (argument === "--key-from-clipboard") {
+      keyFromClipboard = true;
       continue;
     }
     const match = /^--([a-z-]+)=(.+)$/.exec(argument);
@@ -57,6 +63,7 @@ export function parseCatalogArguments(argv) {
     cadence,
     stripePriceId,
     apply,
+    keyFromClipboard,
     confirmationEnvironmentId: values.get("confirm-environment") ?? null,
     confirmationAccountId: values.get("confirm-account") ?? null,
   });
@@ -134,6 +141,8 @@ export function createLocalSupabaseAdminClient(url, serviceRoleKey) {
 
 export async function resolveCatalogUtilityEnvironment({
   env,
+  keyFromClipboard = false,
+  readClipboardKey = readWindowsClipboardRestrictedTestKey,
   promptForCatalogKey = promptForStripeRestrictedTestKey,
 }) {
   const source = { ...env };
@@ -142,8 +151,10 @@ export async function resolveCatalogUtilityEnvironment({
   }
 
   if (!source.STRIPE_SAAS_CATALOG_READ_KEY?.trim()) {
-    const prompted = await promptForCatalogKey();
-    const catalogReadKey = String(prompted).replace(/(?:\r\n|\r|\n)$/, "");
+    const acquired = keyFromClipboard
+      ? await readClipboardKey()
+      : await promptForCatalogKey();
+    const catalogReadKey = String(acquired).replace(/(?:\r\n|\r|\n)$/, "");
     if (!catalogReadKey) {
       throw new StripeSaasError(
         "STRIPE_SAAS_UTILITY_CATALOG_READ_KEY_BLANK",
@@ -166,11 +177,17 @@ export async function runCatalogRegistration({
   env,
   createStripeClient = createLocalStripeReadClient,
   createSupabaseClient = createLocalSupabaseAdminClient,
+  readClipboardKey = readWindowsClipboardRestrictedTestKey,
   promptForCatalogKey = promptForStripeRestrictedTestKey,
   write = (line) => process.stdout.write(`${line}\n`),
 }) {
   const args = parseCatalogArguments(argv);
-  const configSource = await resolveCatalogUtilityEnvironment({ env, promptForCatalogKey });
+  const configSource = await resolveCatalogUtilityEnvironment({
+    env,
+    keyFromClipboard: args.keyFromClipboard,
+    readClipboardKey,
+    promptForCatalogKey,
+  });
   const config = parseStripeSaasCatalogConfig(configSource);
   getApprovedSaasPrice(args.planKey, args.cadence);
   if (config.livemode) {

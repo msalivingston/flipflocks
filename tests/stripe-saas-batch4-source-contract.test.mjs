@@ -13,6 +13,7 @@ const runtimePath = path.join(root, "supabase/functions/_shared/stripe-saas-runt
 const clientPath = path.join(root, "supabase/functions/_shared/stripe-saas-client.ts");
 const utilityPath = path.join(root, "scripts/stripe/register-saas-price.mjs");
 const promptPath = path.join(root, "scripts/stripe/secure-secret-prompt.mjs");
+const clipboardPath = path.join(root, "scripts/stripe/windows-clipboard-secret.mjs");
 
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -40,12 +41,18 @@ test("official server SDK and API version are exactly pinned across runtimes", a
 test("catalog utility is read-only toward Stripe and defaults to dry-run", async () => {
   const utility = await readFile(utilityPath, "utf8");
   const prompt = await readFile(promptPath, "utf8");
+  const clipboard = await readFile(clipboardPath, "utf8");
   const runtime = await readFile(runtimePath, "utf8");
   assert.match(utility, /let apply = false/);
   assert.match(utility, /parseStripeSaasCatalogConfig\(configSource\)/);
   assert.doesNotMatch(utility, /\boperationalApiKey\b|STRIPE_SAAS_API_KEY/);
-  assert.doesNotMatch(`${utility}\n${prompt}`, /node:fs|writeFile|appendFile|createWriteStream/);
-  assert.doesNotMatch(utility, /--(?:catalog-)?(?:read-)?key|--stripe-key|--api-key/);
+  assert.doesNotMatch(`${utility}\n${prompt}\n${clipboard}`, /node:fs|writeFile|appendFile|createWriteStream/);
+  assert.doesNotMatch(utility, /--(?:catalog-read-key|stripe-key|api-key)(?:=|\b)/);
+  assert.doesNotMatch(`${utility}\n${clipboard}`, /process\.env\s*\.|Object\.assign\(process\.env/);
+  assert.match(clipboard, /execFile/);
+  assert.match(clipboard, /Get-Clipboard -Raw/);
+  assert.match(clipboard, /Set-Clipboard -Value \(\[string\]::Empty\)/);
+  assert.doesNotMatch(clipboard, /shell\s*:\s*true/);
   assert.match(prompt, /input\.setRawMode\(true\)/);
   assert.match(prompt, /input\.setRawMode\(priorRawMode\)/);
   assert.doesNotMatch(prompt, /output\.write\([^)]*(?:value|character|chunk)/);
@@ -84,7 +91,10 @@ test("Batch 4 adds no billing endpoint, browser variable, or browser Stripe pack
 });
 
 test("production Batch 4 files contain no committed provider object identifiers", async () => {
-  const files = [migrationPath, runtimePath, clientPath, utilityPath, path.join(root, "docs/stripe-saas-catalog-registration.md")];
+  const files = [
+    migrationPath, runtimePath, clientPath, utilityPath, promptPath, clipboardPath,
+    path.join(root, "docs/stripe-saas-catalog-registration.md"),
+  ];
   const source = (await Promise.all(files.map((file) => readFile(file, "utf8"))))
     .join("\n")
     .replaceAll("acct_1CTOghL1R5g4hhXt", "approved-safe-account-id");
@@ -101,6 +111,7 @@ test("documentation requires only sandbox Product and Price read permissions", a
   assert.match(documentation, /validated operator configuration, not provider-retrieved evidence/);
   assert.match(documentation, /--confirm-environment=<environment-id>[\s\S]*--confirm-account=acct_1CTOghL1R5g4hhXt/);
   assert.match(documentation, /Paste Stripe restricted test key:/);
+  assert.match(documentation, /--key-from-clipboard/);
   assert.doesNotMatch(documentation, /PowerShell|SecureString|clipboard script|text file/i);
   assert.doesNotMatch(documentation, /STRIPE_SAAS_CATALOG_READ_KEY\s*=/);
 });
@@ -111,7 +122,7 @@ test("no onboarding, entitlement, Pay at Pickup, refund, or Connect application 
   const allowed = [
     "docs/stripe-saas-catalog-registration.md",
     "scripts/stripe/register-saas-price.mjs",
-    "scripts/stripe/secure-secret-prompt.mjs",
+    "scripts/stripe/windows-clipboard-secret.mjs",
     "tests/stripe-saas-runtime.test.mjs",
     "tests/stripe-saas-batch4-source-contract.test.mjs",
   ];

@@ -34,13 +34,21 @@ Dry-run is the default and performs Stripe reads only. Run this single command:
 npm run stripe:register-saas-price -- --plan=small_flock --cadence=monthly --price-id=<test-price-id>
 ```
 
+On Windows, the recommended interactive workflow is to copy the restricted test key and add the explicit clipboard switch:
+
+```text
+npm run stripe:register-saas-price -- --plan=small_flock --cadence=monthly --price-id=<test-price-id> --key-from-clipboard
+```
+
+The utility reads the Windows clipboard only when that switch is present, joins multiline clipboard output, validates the `rk_test_` key, and immediately clears the clipboard after capture. The key is never added to command arguments, process environment, output, logs, or files.
+
 If the restricted key is not already available to the process, the utility prompts:
 
 ```text
 Paste Stripe restricted test key:
 ```
 
-Input is hidden while typing or pasting. The key must begin with `rk_test_`, remains only in process memory, and is discarded when the process exits. It is never printed or persisted. A noninteractive run must provide the catalog-read key through trusted process configuration. Dry-run does not require `STRIPE_SAAS_API_KEY` or either Supabase variable.
+Hidden terminal input remains the fallback when neither an environment key nor the explicit clipboard switch is present. The key must begin with `rk_test_`, remains only in process memory, and is discarded when the process exits. It is never printed or persisted. A noninteractive run must provide the catalog-read key through trusted process configuration or use the explicit Windows clipboard switch. Dry-run does not require `STRIPE_SAAS_API_KEY` or either Supabase variable.
 
 Apply additionally requires `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `--apply`, an exact environment confirmation, and an exact configured-account confirmation. Supabase configuration is checked only after the confirmations and Stripe Product and Price verification succeed:
 

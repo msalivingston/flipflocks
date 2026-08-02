@@ -18,6 +18,7 @@ import {
   verifySaasPrice,
 } from "../scripts/stripe/register-saas-price.mjs";
 import { readHiddenTerminalLine } from "../scripts/stripe/secure-secret-prompt.mjs";
+import { readWindowsClipboardRestrictedTestKey } from "../scripts/stripe/windows-clipboard-secret.mjs";
 
 const testSecret = ["sk", "test", "Batch4FixtureKey"].join("_");
 const testRestricted = ["rk", "test", "Batch4ReadFixture"].join("_");
@@ -184,22 +185,112 @@ test("local catalog defaults are isolated to the utility", async () => {
 
 test("environment catalog key takes precedence without prompting", async () => {
   let prompted = false;
+  let clipboardRead = false;
   const source = await resolveCatalogUtilityEnvironment({
     env: { STRIPE_SAAS_CATALOG_READ_KEY: testRestricted },
+    keyFromClipboard: true,
+    readClipboardKey: async () => { clipboardRead = true; return "must-not-be-used"; },
     promptForCatalogKey: async () => { prompted = true; return "must-not-be-used"; },
   });
   assert.equal(prompted, false);
+  assert.equal(clipboardRead, false);
   assert.equal(source.STRIPE_SAAS_CATALOG_READ_KEY, testRestricted);
 });
 
 test("missing catalog key is accepted only from a valid hidden prompt result", async () => {
   let prompted = 0;
+  let clipboardRead = false;
   const source = await resolveCatalogUtilityEnvironment({
     env: {},
+    readClipboardKey: async () => { clipboardRead = true; return "must-not-be-used"; },
     promptForCatalogKey: async () => { prompted += 1; return `${testRestricted}\r\n`; },
   });
   assert.equal(prompted, 1);
+  assert.equal(clipboardRead, false);
   assert.equal(source.STRIPE_SAAS_CATALOG_READ_KEY, testRestricted);
+});
+
+test("explicit clipboard selection takes precedence over the prompt", async () => {
+  let clipboardRead = 0;
+  let prompted = false;
+  const source = await resolveCatalogUtilityEnvironment({
+    env: {},
+    keyFromClipboard: true,
+    readClipboardKey: async () => { clipboardRead += 1; return testRestricted; },
+    promptForCatalogKey: async () => { prompted = true; return "must-not-be-used"; },
+  });
+  assert.equal(clipboardRead, 1);
+  assert.equal(prompted, false);
+  assert.equal(source.STRIPE_SAAS_CATALOG_READ_KEY, testRestricted);
+});
+
+test("Windows clipboard capture joins lines, clears immediately, and exposes no key in arguments", async () => {
+  const calls = [];
+  const key = await readWindowsClipboardRestrictedTestKey({
+    platform: "win32",
+    runPowerShell: async (argumentsList) => {
+      calls.push([...argumentsList]);
+      if (argumentsList.at(-1) === "Get-Clipboard -Raw") {
+        return { stdout: "  rk_test_Multi\r\nLineFixture  \r\n" };
+      }
+      return { stdout: "" };
+    },
+  });
+  assert.equal(key, "rk_test_MultiLineFixture");
+  assert.deepEqual(calls.map((call) => call.at(-1)), [
+    "Get-Clipboard -Raw",
+    "Set-Clipboard -Value ([string]::Empty)",
+  ]);
+  assert.doesNotMatch(JSON.stringify(calls), new RegExp(key));
+});
+
+test("empty and malformed clipboard values fail after the clipboard is cleared", async () => {
+  for (const [stdout, code] of [
+    [" \r\n ", "STRIPE_SAAS_UTILITY_CLIPBOARD_EMPTY"],
+    [["sk", "test", "ClipboardFixture"].join("_"), "STRIPE_SAAS_UTILITY_CLIPBOARD_KEY_INVALID"],
+  ]) {
+    const calls = [];
+    await assert.rejects(
+      readWindowsClipboardRestrictedTestKey({
+        platform: "win32",
+        runPowerShell: async (argumentsList) => {
+          calls.push(argumentsList.at(-1));
+          return argumentsList.at(-1) === "Get-Clipboard -Raw" ? { stdout } : { stdout: "" };
+        },
+      }),
+      (error) => {
+        assert.equal(error.code, code);
+        assert.doesNotMatch(`${error.code} ${error.message}`, new RegExp(String(stdout).trim() || "never-match"));
+        return true;
+      },
+    );
+    assert.deepEqual(calls, ["Get-Clipboard -Raw", "Set-Clipboard -Value ([string]::Empty)"]);
+  }
+});
+
+test("clipboard read and clear failures return stable secret-free errors", async () => {
+  await assert.rejects(
+    readWindowsClipboardRestrictedTestKey({
+      platform: "win32",
+      runPowerShell: async () => { throw new Error("provider output must stay hidden"); },
+    }),
+    (error) => error.code === "STRIPE_SAAS_UTILITY_CLIPBOARD_READ_FAILED"
+      && !error.message.includes("provider output"),
+  );
+
+  let callCount = 0;
+  await assert.rejects(
+    readWindowsClipboardRestrictedTestKey({
+      platform: "win32",
+      runPowerShell: async () => {
+        callCount += 1;
+        if (callCount === 1) return { stdout: testRestricted };
+        throw new Error(testRestricted);
+      },
+    }),
+    (error) => error.code === "STRIPE_SAAS_UTILITY_CLIPBOARD_CLEAR_FAILED"
+      && !error.message.includes(testRestricted),
+  );
 });
 
 test("blank and malformed prompted keys fail without disclosing input", async () => {
@@ -378,6 +469,30 @@ test("catalog utility runs from plan, cadence, and Price ID arguments with a pro
   assert.deepEqual(calls, ["price.retrieve", "product.retrieve"]);
   assert.equal(result.registration.p_stripe_account_id, accountId);
   assert.equal(result.registration.p_stripe_livemode, false);
+});
+
+test("catalog utility uses the clipboard only when explicitly requested and never prints the key", async () => {
+  const value = fixture();
+  const output = [];
+  let clipboardRead = 0;
+  let prompted = false;
+  const result = await runCatalogRegistration({
+    argv: [
+      "--plan=small_flock", "--cadence=monthly",
+      `--price-id=${value.selection.stripePriceId}`,
+      "--key-from-clipboard",
+    ],
+    env: {},
+    readClipboardKey: async () => { clipboardRead += 1; return testRestricted; },
+    promptForCatalogKey: async () => { prompted = true; return "must-not-be-used"; },
+    createStripeClient: () => mockedStripe(value, []),
+    createSupabaseClient: () => { throw new Error("dry-run must not create Supabase client"); },
+    write: (line) => output.push(line),
+  });
+  assert.equal(result.status, "dry_run_verified");
+  assert.equal(clipboardRead, 1);
+  assert.equal(prompted, false);
+  assert.doesNotMatch(output.join("\n"), new RegExp(testRestricted));
 });
 
 test("an Accounts client that throws is never touched", async () => {
