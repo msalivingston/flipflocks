@@ -14,6 +14,7 @@ const clientPath = path.join(root, "supabase/functions/_shared/stripe-saas-clien
 const utilityPath = path.join(root, "scripts/stripe/register-saas-price.mjs");
 const promptPath = path.join(root, "scripts/stripe/secure-secret-prompt.mjs");
 const clipboardPath = path.join(root, "scripts/stripe/windows-clipboard-secret.mjs");
+const verifierPath = path.join(root, "scripts/stripe/verify-saas-catalog.mjs");
 
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -36,6 +37,10 @@ test("official server SDK and API version are exactly pinned across runtimes", a
   assert.match(client, /from "npm:stripe@22\.3\.2"/);
   assert.match(client, /apiVersion: STRIPE_SAAS_API_VERSION/);
   assert.ok(!("@stripe/stripe-js" in packageJson.dependencies));
+  assert.equal(
+    packageJson.scripts["stripe:verify-saas-catalog"],
+    "node scripts/stripe/verify-saas-catalog.mjs",
+  );
 });
 
 test("catalog utility is read-only toward Stripe and defaults to dry-run", async () => {
@@ -43,6 +48,7 @@ test("catalog utility is read-only toward Stripe and defaults to dry-run", async
   const prompt = await readFile(promptPath, "utf8");
   const clipboard = await readFile(clipboardPath, "utf8");
   const runtime = await readFile(runtimePath, "utf8");
+  const verifier = await readFile(verifierPath, "utf8");
   assert.match(utility, /let apply = false/);
   assert.match(utility, /parseStripeSaasCatalogConfig\(configSource\)/);
   assert.doesNotMatch(utility, /\boperationalApiKey\b|STRIPE_SAAS_API_KEY/);
@@ -64,6 +70,12 @@ test("catalog utility is read-only toward Stripe and defaults to dry-run", async
   assert.doesNotMatch(utility, /stripe\.(?:products|prices)\.(?:create|update|del|archive)\s*\(/);
   assert.doesNotMatch(utility, /https:\/\/api\.stripe\.com/);
   assert.match(utility, /STRIPE_SAAS_UTILITY_LIVE_MODE_REFUSED/);
+  assert.doesNotMatch(verifier, /createLocalSupabaseAdminClient|\.rpc\(|--apply|parseCatalogApplyConfig/);
+  assert.doesNotMatch(verifier, /\.(?:create|update|del|archive)\s*\(/);
+  assert.match(verifier, /const stripe = createStripeClient\(config\.catalogReadApiKey\)/);
+  assert.match(verifier, /for \(const entry of APPROVED_SAAS_CATALOG_MANIFEST\)/);
+  assert.match(verifier, /if \(!result\.passed\) process\.exitCode = 1/);
+  assert.doesNotMatch(verifier, /process\.env\s*\.|Object\.assign\(process\.env/);
 });
 
 test("migration exposes only service-role catalog contracts and seeds no IDs", async () => {
@@ -93,11 +105,18 @@ test("Batch 4 adds no billing endpoint, browser variable, or browser Stripe pack
 test("production Batch 4 files contain no committed provider object identifiers", async () => {
   const files = [
     migrationPath, runtimePath, clientPath, utilityPath, promptPath, clipboardPath,
+    verifierPath,
     path.join(root, "docs/stripe-saas-catalog-registration.md"),
   ];
   const source = (await Promise.all(files.map((file) => readFile(file, "utf8"))))
     .join("\n")
-    .replaceAll("acct_1CTOghL1R5g4hhXt", "approved-safe-account-id");
+    .replaceAll("acct_1CTOghL1R5g4hhXt", "approved-safe-account-id")
+    .replaceAll("price_1TzpKSL1R5g4hhXtWhItRai3", "approved-price")
+    .replaceAll("price_1TzpKSL1R5g4hhXtv4yG6PWt", "approved-price")
+    .replaceAll("price_1TzpLxL1R5g4hhXtHn9Vg6Qd", "approved-price")
+    .replaceAll("price_1TzpMhL1R5g4hhXt266qwLn5", "approved-price")
+    .replaceAll("prod_UzoyVYb4UGqW3m", "approved-product")
+    .replaceAll("prod_Uzoz8CeVMRC3zQ", "approved-product");
   assert.doesNotMatch(source, /["'](?:price|prod|acct)_[A-Za-z0-9]{12,}["']/);
 });
 
@@ -110,8 +129,7 @@ test("documentation requires only sandbox Product and Price read permissions", a
   assert.match(documentation, /does not call the Stripe Accounts API/);
   assert.match(documentation, /validated operator configuration, not provider-retrieved evidence/);
   assert.match(documentation, /--confirm-environment=<environment-id>[\s\S]*--confirm-account=acct_1CTOghL1R5g4hhXt/);
-  assert.match(documentation, /Paste Stripe restricted test key:/);
-  assert.match(documentation, /--key-from-clipboard/);
+  assert.match(documentation, /npm run stripe:verify-saas-catalog/);
   assert.doesNotMatch(documentation, /PowerShell|SecureString|clipboard script|text file/i);
   assert.doesNotMatch(documentation, /STRIPE_SAAS_CATALOG_READ_KEY\s*=/);
 });
@@ -121,9 +139,9 @@ test("no onboarding, entitlement, Pay at Pickup, refund, or Connect application 
   const changed = stdout.split(/\r?\n/).filter((line) => line.trim()).map((line) => line.slice(3));
   const allowed = [
     "docs/stripe-saas-catalog-registration.md",
-    "scripts/stripe/register-saas-price.mjs",
-    "scripts/stripe/windows-clipboard-secret.mjs",
-    "tests/stripe-saas-runtime.test.mjs",
+    "package.json",
+    "scripts/stripe/verify-saas-catalog.mjs",
+    "tests/stripe-saas-catalog-verifier.test.mjs",
     "tests/stripe-saas-batch4-source-contract.test.mjs",
   ];
   assert.deepEqual(changed.sort(), allowed.sort());

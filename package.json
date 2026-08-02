@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "stripe:register-saas-price": "node scripts/stripe/register-saas-price.mjs"
+    "stripe:register-saas-price": "node scripts/stripe/register-saas-price.mjs",
+    "stripe:verify-saas-catalog": "node scripts/stripe/verify-saas-catalog.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.0",
