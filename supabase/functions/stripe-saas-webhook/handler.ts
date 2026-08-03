@@ -37,7 +37,109 @@ export type SaasProviderEventClaim = {
   lease_expires_at: string | null;
 };
 
-type ProviderEventIdentity = {
+export type SaasDeferredEventClaim = {
+  reconciliation_state:
+    | "claimed"
+    | "reclaimed"
+    | "already_processed"
+    | "in_progress"
+    | "permanent_failure"
+    | "conflict"
+    | "not_found"
+    | "not_deferred";
+  processing_status: string | null;
+  attempt_count: number;
+  processing_lease_token: string | null;
+  lease_expires_at: string | null;
+  deferred_reason: string | null;
+};
+
+export type SaasCheckoutMetadata = {
+  checkoutAttemptId: string;
+  storeId: string;
+  environmentId: string;
+  planKey: string;
+  billingCadence: string;
+  schemaVersion: string;
+};
+
+export type SaasCheckoutCompletionEvidence = {
+  session: {
+    id: string;
+    createdAt: string;
+    expiresAt: string;
+    status: string | null;
+    mode: string | null;
+    paymentStatus: string | null;
+    paymentMethodCollection: string | null;
+    clientReferenceId: string | null;
+    livemode: boolean;
+    customerId: string;
+    subscriptionId: string;
+    metadata: SaasCheckoutMetadata;
+  };
+  customer: {
+    id: string;
+    createdAt: string;
+    livemode: boolean;
+  };
+  subscription: {
+    id: string;
+    customerId: string;
+    status: string;
+    createdAt: string;
+    trialStart: string | null;
+    trialEnd: string | null;
+    currentPeriodStart: string;
+    currentPeriodEnd: string;
+    cancelAtPeriodEnd: boolean;
+    livemode: boolean;
+    collectionMethod: string;
+    paymentMethodReady: boolean;
+    metadata: SaasCheckoutMetadata;
+  };
+  lineItem: {
+    priceId: string;
+    productId: string;
+    quantity: number;
+    priceLivemode: boolean;
+    productLivemode: boolean;
+    priceActive: boolean;
+    productActive: boolean;
+    unitAmountCents: number;
+    currency: string;
+    recurringInterval: string;
+    recurringIntervalCount: number;
+    priceType: string;
+    billingScheme: string;
+    recurringUsageType: string;
+    taxBehavior: string;
+    productTaxCode: string;
+  };
+};
+
+export type SaasCheckoutApplicationResult = {
+  application_state: "trial_enrolled" | "paid_enrollment_pending_invoice";
+  store_id: string;
+  customer_binding_id: string;
+  subscription_enrollment_id: string;
+  trial_claimed: boolean;
+  billing_complete: boolean;
+};
+
+export class SaasWebhookDomainError extends Error {
+  readonly errorCode: string;
+  readonly retryable: boolean;
+
+  constructor(errorCode: string, retryable: boolean) {
+    super("SaaS webhook domain processing failed.");
+    this.name = "SaasWebhookDomainError";
+    this.errorCode = errorCode;
+    this.retryable = retryable;
+  }
+}
+
+export type ProviderEventIdentity = {
   providerEventId: string;
   eventType: string;
   providerEventCreatedAt: string;
@@ -62,6 +164,17 @@ export type StripeSaasWebhookDependencies = {
   ) => Promise<VerifiedStripeEvent>;
   hashPayload: (rawBody: Uint8Array) => Promise<string>;
   claimEvent: (identity: ProviderEventIdentity) => Promise<SaasProviderEventClaim>;
+  claimDeferredEvent: (
+    identity: ProviderEventIdentity,
+  ) => Promise<SaasDeferredEventClaim>;
+  retrieveCheckoutCompletionEvidence: (
+    checkoutSessionId: string,
+  ) => Promise<SaasCheckoutCompletionEvidence>;
+  applyCheckoutCompletion: (
+    identity: ProviderEventIdentity,
+    processingLeaseToken: string,
+    evidence: SaasCheckoutCompletionEvidence,
+  ) => Promise<SaasCheckoutApplicationResult>;
   markDeferred: (
     identity: TerminalEventIdentity,
     processingLeaseToken: string,
@@ -157,6 +270,229 @@ function validateVerifiedEvent(
   };
 }
 
+function expandableId(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && !Array.isArray(value) &&
+    typeof (value as { id?: unknown }).id === "string") {
+    return (value as { id: string }).id;
+  }
+  return null;
+}
+
+function validIsoTimestamp(value: string): boolean {
+  return Number.isFinite(Date.parse(value));
+}
+
+function validateCheckoutCompletionEvidence(
+  signedObject: Record<string, unknown>,
+  identity: ProviderEventIdentity,
+  evidence: SaasCheckoutCompletionEvidence,
+): string | null {
+  const signedCustomerId = expandableId(signedObject.customer);
+  const signedSubscriptionId = expandableId(signedObject.subscription);
+  const session = evidence.session;
+  const customer = evidence.customer;
+  const subscription = evidence.subscription;
+  const line = evidence.lineItem;
+  const expectedSessionPrefix = identity.stripeLivemode ? "cs_live_" : "cs_test_";
+
+  if (session.id !== identity.providerObjectId ||
+    !session.id.startsWith(expectedSessionPrefix) ||
+    session.livemode !== identity.stripeLivemode ||
+    session.mode !== "subscription" || session.status !== "complete" ||
+    session.paymentMethodCollection !== "always" ||
+    !signedCustomerId || !signedSubscriptionId ||
+    signedCustomerId !== session.customerId ||
+    signedSubscriptionId !== session.subscriptionId ||
+    customer.id !== session.customerId ||
+    subscription.id !== session.subscriptionId ||
+    subscription.customerId !== session.customerId ||
+    customer.livemode !== identity.stripeLivemode ||
+    subscription.livemode !== identity.stripeLivemode ||
+    line.priceLivemode !== identity.stripeLivemode ||
+    line.productLivemode !== identity.stripeLivemode ||
+    !/^cus_[A-Za-z0-9]+$/.test(customer.id) ||
+    !/^sub_[A-Za-z0-9]+$/.test(subscription.id) ||
+    !/^price_[A-Za-z0-9]+$/.test(line.priceId) ||
+    !/^prod_[A-Za-z0-9]+$/.test(line.productId)) {
+    return "checkout_completion_identity_conflict";
+  }
+
+  if (!validIsoTimestamp(session.createdAt) ||
+    !validIsoTimestamp(session.expiresAt) ||
+    !validIsoTimestamp(customer.createdAt) ||
+    !validIsoTimestamp(subscription.createdAt) ||
+    !validIsoTimestamp(subscription.currentPeriodStart) ||
+    !validIsoTimestamp(subscription.currentPeriodEnd) ||
+    Date.parse(session.expiresAt) <= Date.parse(session.createdAt) ||
+    Date.parse(identity.providerEventCreatedAt) < Date.parse(session.createdAt) ||
+    Date.parse(identity.providerEventCreatedAt) > Date.parse(session.expiresAt) ||
+    Date.parse(subscription.currentPeriodEnd) <=
+      Date.parse(subscription.currentPeriodStart)) {
+    return "checkout_completion_timestamp_conflict";
+  }
+
+  for (const metadata of [session.metadata, subscription.metadata]) {
+    if (!/^[0-9a-f-]{36}$/i.test(metadata.checkoutAttemptId) ||
+      !/^[0-9a-f-]{36}$/i.test(metadata.storeId) ||
+      metadata.environmentId !== identity.environmentId ||
+      !["small_flock", "full_flock"].includes(metadata.planKey) ||
+      !["monthly", "yearly"].includes(metadata.billingCadence) ||
+      metadata.schemaVersion !== "ff_saas_checkout_v1") {
+      return "checkout_completion_metadata_conflict";
+    }
+  }
+  if (session.metadata.checkoutAttemptId !==
+      subscription.metadata.checkoutAttemptId ||
+    session.metadata.storeId !== subscription.metadata.storeId ||
+    session.metadata.planKey !== subscription.metadata.planKey ||
+    session.metadata.billingCadence !==
+      subscription.metadata.billingCadence ||
+    session.clientReferenceId !== session.metadata.checkoutAttemptId) {
+    return "checkout_completion_metadata_conflict";
+  }
+
+  if (!subscription.paymentMethodReady ||
+    subscription.collectionMethod !== "charge_automatically" ||
+    line.quantity !== 1 || !line.priceActive || !line.productActive ||
+    line.priceType !== "recurring" || line.billingScheme !== "per_unit" ||
+    line.recurringUsageType !== "licensed" ||
+    line.taxBehavior !== "exclusive" ||
+    line.productTaxCode !== "txcd_10103001" ||
+    !Number.isSafeInteger(line.unitAmountCents) || line.unitAmountCents < 0 ||
+    !Number.isSafeInteger(line.recurringIntervalCount) ||
+    line.recurringIntervalCount < 1) {
+    return "checkout_completion_provider_shape_conflict";
+  }
+  return null;
+}
+
+async function recordReconciliationFailure(
+  dependencies: StripeSaasWebhookDependencies,
+  identity: TerminalEventIdentity,
+  leaseToken: string,
+  errorCode: string,
+  retryable: boolean,
+): Promise<void> {
+  try {
+    await dependencies.markFailed(
+      identity,
+      leaseToken,
+      errorCode,
+      retryable,
+    );
+  } catch {
+    // The lease remains recoverable; never expose database or provider details.
+  }
+}
+
+async function reconcileCheckoutCompletion(
+  dependencies: StripeSaasWebhookDependencies,
+  identity: ProviderEventIdentity,
+  signedObject: Record<string, unknown>,
+  startedAt: number,
+): Promise<Response> {
+  let claim: SaasDeferredEventClaim;
+  try {
+    claim = await dependencies.claimDeferredEvent(identity);
+  } catch {
+    return jsonResponse(500, { error: "webhook_processing_failed" });
+  }
+
+  if (["already_processed", "in_progress"].includes(
+    claim.reconciliation_state,
+  )) {
+    return jsonResponse(200, { received: true });
+  }
+  if ([
+    "permanent_failure", "conflict", "not_found", "not_deferred",
+  ].includes(claim.reconciliation_state)) {
+    safeLog(dependencies, {
+      event_id: identity.providerEventId,
+      event_type: identity.eventType,
+      mode: identity.stripeLivemode ? "live" : "test",
+      result: claim.reconciliation_state,
+      attempt_count: claim.attempt_count,
+      duration_ms: (dependencies.now?.() ?? Date.now()) - startedAt,
+    });
+    return jsonResponse(200, { received: true });
+  }
+  if (!claim.processing_lease_token) {
+    return jsonResponse(500, { error: "webhook_processing_failed" });
+  }
+
+  let evidence: SaasCheckoutCompletionEvidence;
+  try {
+    evidence = await dependencies.retrieveCheckoutCompletionEvidence(
+      identity.providerObjectId!,
+    );
+  } catch (error) {
+    const classified = error instanceof SaasWebhookDomainError
+      ? error
+      : new SaasWebhookDomainError("stripe_retrieval_failed", true);
+    await recordReconciliationFailure(
+      dependencies,
+      identity,
+      claim.processing_lease_token,
+      classified.errorCode,
+      classified.retryable,
+    );
+    return jsonResponse(classified.retryable ? 500 : 200,
+      classified.retryable
+        ? { error: "webhook_processing_failed" }
+        : { received: true });
+  }
+
+  const evidenceError = validateCheckoutCompletionEvidence(
+    signedObject,
+    identity,
+    evidence,
+  );
+  if (evidenceError) {
+    await recordReconciliationFailure(
+      dependencies,
+      identity,
+      claim.processing_lease_token,
+      evidenceError,
+      false,
+    );
+    return jsonResponse(200, { received: true });
+  }
+
+  try {
+    await dependencies.applyCheckoutCompletion(
+      identity,
+      claim.processing_lease_token,
+      evidence,
+    );
+  } catch (error) {
+    const classified = error instanceof SaasWebhookDomainError
+      ? error
+      : new SaasWebhookDomainError("checkout_completion_apply_failed", true);
+    await recordReconciliationFailure(
+      dependencies,
+      identity,
+      claim.processing_lease_token,
+      classified.errorCode,
+      classified.retryable,
+    );
+    return jsonResponse(classified.retryable ? 500 : 200,
+      classified.retryable
+        ? { error: "webhook_processing_failed" }
+        : { received: true });
+  }
+
+  safeLog(dependencies, {
+    event_id: identity.providerEventId,
+    event_type: identity.eventType,
+    mode: identity.stripeLivemode ? "live" : "test",
+    result: "verified_checkout_applied",
+    attempt_count: claim.attempt_count,
+    duration_ms: (dependencies.now?.() ?? Date.now()) - startedAt,
+  });
+  return jsonResponse(200, { received: true });
+}
+
 export function createStripeSaasWebhookHandler(
   dependencies: StripeSaasWebhookDependencies,
 ): (request: Request) => Promise<Response> {
@@ -239,12 +575,19 @@ export function createStripeSaasWebhookHandler(
       return jsonResponse(500, { error: "webhook_processing_failed" });
     }
 
+    if (claim.claim_state === "deferred_duplicate" &&
+      identity.eventType === "checkout.session.completed") {
+      return await reconcileCheckoutCompletion(
+        dependencies,
+        identity,
+        verified.event.data.object,
+        startedAt,
+      );
+    }
     if ([
       "terminal_duplicate", "deferred_duplicate", "in_progress",
       "permanent_failure",
-    ].includes(
-      claim.claim_state,
-    )) {
+    ].includes(claim.claim_state)) {
       safeLog(dependencies, {
         event_id: identity.providerEventId,
         event_type: identity.eventType,
@@ -317,6 +660,15 @@ export function createStripeSaasWebhookHandler(
         duration_ms: (dependencies.now?.() ?? Date.now()) - startedAt,
       });
       return jsonResponse(500, { error: "webhook_processing_failed" });
+    }
+
+    if (isDeferred && identity.eventType === "checkout.session.completed") {
+      return await reconcileCheckoutCompletion(
+        dependencies,
+        identity,
+        verified.event.data.object,
+        startedAt,
+      );
     }
 
     safeLog(dependencies, {

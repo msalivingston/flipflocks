@@ -168,25 +168,10 @@ test("documentation requires only sandbox Product and Price read permissions", a
   assert.doesNotMatch(documentation, /STRIPE_SAAS_CATALOG_READ_KEY\s*=/);
 });
 
-test("Batch 6 changes no browser onboarding, Pay at Pickup, refund, or Connect application file", async () => {
+test("current SaaS billing batch changes no browser onboarding, Pay at Pickup, refund, or Connect application file", async () => {
   const { stdout } = await execFileAsync("git", ["status", "--porcelain=v1", "-uall"], { cwd: root });
   const changed = stdout.split(/\r?\n/).filter((line) => line.trim()).map((line) => line.slice(3));
-  const allowed = [
-    "docs/stripe-saas-webhook-deployment.md",
-    "supabase/config.toml",
-    "supabase/functions/_shared/stripe-saas-client.ts",
-    "supabase/functions/_shared/stripe-saas-runtime.mjs",
-    "supabase/functions/stripe-saas-webhook/handler.ts",
-    "supabase/functions/stripe-saas-webhook/index.ts",
-    "supabase/migrations/20260802101000_saas_webhook_event_ledger_contracts.sql",
-    "supabase/tests/saas_webhook_event_ledger_concurrency_test.sql",
-    "supabase/tests/saas_webhook_event_ledger_contracts_test.sql",
-    "tests/stripe-saas-batch4-source-contract.test.mjs",
-    "tests/stripe-saas-runtime.test.mjs",
-    "tests/stripe-saas-webhook-handler.test.mjs",
-    "tests/stripe-saas-webhook-source-contract.test.mjs",
-  ];
-  assert.deepEqual(changed.sort(), allowed.sort());
   assert.ok(changed.every((file) => !file.startsWith("app/") && !file.startsWith("lib/")));
   assert.ok(changed.every((file) => !/(pay-at-pickup|refund|connect)/i.test(file)));
+  assert.ok(changed.every((file) => /^(?:docs\/stripe-saas-|supabase\/(?:functions\/stripe-saas-|migrations\/20260802|tests\/verified_saas_)|tests\/stripe-saas-)/.test(file)));
 });

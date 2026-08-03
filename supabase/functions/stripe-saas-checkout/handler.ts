@@ -53,6 +53,8 @@ export type StripeSaasCheckoutDependencies = {
   ) => Promise<SaasCheckoutAttempt>;
   createCheckoutSession: (
     attempt: SaasCheckoutAttempt,
+    planKey: "small_flock" | "full_flock",
+    cadence: "monthly" | "yearly",
   ) => Promise<SafeCheckoutSession>;
   retrieveCheckoutSession: (sessionId: string) => Promise<SafeCheckoutSession>;
   recordCheckoutSession: (
@@ -253,7 +255,11 @@ export function createStripeSaasCheckoutHandler(
       }
     } else if (attempt.attempt_status === "creating") {
       try {
-        session = await dependencies.createCheckoutSession(attempt);
+        session = await dependencies.createCheckoutSession(
+          attempt,
+          intent.planKey,
+          intent.cadence,
+        );
       } catch (error) {
         if (error instanceof CheckoutProviderError && error.definitive) {
           try {

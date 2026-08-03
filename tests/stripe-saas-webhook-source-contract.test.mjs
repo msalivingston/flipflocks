@@ -41,13 +41,16 @@ test("exact raw bytes are read once and verified before any event field is trust
   assert.doesNotMatch(handler, /console\.(?:log|warn|error)/);
 });
 
-test("webhook configuration is signature-only and does not require an API key", async () => {
+test("signature verification remains key-independent while Batch 7 retrieval uses the operational client", async () => {
   const [, , index, , client, runtime] = await sources();
   assert.match(runtime, /parseStripeSaasWebhookConfig/);
   const parser = runtime.match(/export function parseStripeSaasWebhookConfig[\s\S]*?^}/m)?.[0] ?? "";
   assert.match(parser, /STRIPE_SAAS_WEBHOOK_SECRET/);
   assert.doesNotMatch(parser, /STRIPE_SAAS_API_KEY|STRIPE_SAAS_CATALOG_READ_KEY/);
-  assert.doesNotMatch(index, /STRIPE_SAAS_API_KEY|createStripeSaasClient/);
+  assert.match(index, /STRIPE_SAAS_API_KEY/);
+  assert.match(index, /createStripeSaasClient\(operationalConfig\)/);
+  assert.match(index, /checkout\.sessions\.retrieve/);
+  assert.match(index, /subscriptions\.retrieve/);
   assert.doesNotMatch(client.match(/createStripeSaasWebhookVerifier[\s\S]*?^}/m)?.[0] ?? "", /new Stripe|checkout|invoices|subscriptions/);
 });
 
@@ -74,14 +77,12 @@ test("ledger functions are service-only with global identity and lease protectio
   assert.match(migration, /payload_hash.*\^\[0-9a-f\]\{64\}\$/s);
 });
 
-test("Batch 6 stores no raw payload and performs no billing-domain application", async () => {
+test("Batch 6 ledger stores no raw payload or billing-domain application", async () => {
   const [, migration, index, handler] = await sources();
-  const combined = `${migration}\n${index}\n${handler}`;
   assert.doesNotMatch(migration, /add column[^;]*(?:raw_payload|request_body|request_headers)|jsonb/i);
-  assert.doesNotMatch(combined, /insert into public\.(?:billing_customer_bindings|billing_subscription_enrollments|billing_trial_claims)/i);
-  assert.doesNotMatch(combined, /update public\.seller_billing_status|update public\.seller_onboarding_state/i);
-  assert.doesNotMatch(combined, /apply_verified_saas_invoice|apply_verified_stripe_subscription_event|resolve_store_entitlement/i);
-  assert.doesNotMatch(combined, /paid_through_at|grace_ends_at/);
+  assert.doesNotMatch(migration, /insert into public\.(?:billing_customer_bindings|billing_subscription_enrollments|billing_trial_claims)/i);
+  assert.doesNotMatch(migration, /update public\.seller_billing_status|update public\.seller_onboarding_state/i);
+  assert.doesNotMatch(`${index}\n${handler}`, /raw_payload|request_body|request_headers/);
 });
 
 test("routing is SaaS-only, deferred, and independent of Checkout flags", async () => {

@@ -113,16 +113,22 @@ const handler = createStripeSaasCheckoutHandler({
     if (error) throw new Error("Checkout is unavailable.");
     return firstRow<SaasCheckoutAttempt>(data);
   },
-  async createCheckoutSession(attempt) {
+  async createCheckoutSession(attempt, planKey, cadence) {
     const metadata = {
       checkout_attempt_id: attempt.attempt_id!,
       store_id: attempt.store_id,
       environment_id: stripeConfig.environmentId,
+      plan_key: planKey,
+      billing_cadence: cadence,
+      schema_version: "ff_saas_checkout_v1",
     };
     const subscriptionMetadata = {
       checkout_attempt_id: attempt.attempt_id!,
       store_id: attempt.store_id,
       environment_id: stripeConfig.environmentId,
+      plan_key: planKey,
+      billing_cadence: cadence,
+      schema_version: "ff_saas_checkout_v1",
     };
     try {
       const session = await stripe.checkout.sessions.create({

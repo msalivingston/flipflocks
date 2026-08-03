@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  SaasWebhookDomainError,
   STRIPE_SAAS_WEBHOOK_EVENT_TYPES,
   STRIPE_SAAS_WEBHOOK_MAX_BODY_BYTES,
   createStripeSaasWebhookHandler,
@@ -10,6 +11,8 @@ import {
 const ACCOUNT_ID = "acct_Batch6Platform";
 const SIGNATURE = "mock-signature-not-a-secret";
 const RAW_BODY = JSON.stringify({ fixture: "not-provider-payload" });
+const ATTEMPT_ID = "d7000000-0000-4000-8000-000000000001";
+const STORE_ID = "d7000000-0000-4000-8000-000000000002";
 
 function event(type = "checkout.session.completed", overrides = {}) {
   const objectType = type.startsWith("checkout.")
@@ -27,9 +30,83 @@ function event(type = "checkout.session.completed", overrides = {}) {
     type,
     created: 1_785_686_400,
     livemode: false,
-    data: { object: { object: objectType, id: objectId } },
+    data: {
+      object: {
+        object: objectType,
+        id: objectId,
+        ...(objectType === "checkout.session"
+          ? { customer: "cus_Batch7", subscription: "sub_Batch7" }
+          : {}),
+      },
+    },
     ...overrides,
   };
+}
+
+function checkoutEvidence(overrides = {}) {
+  const metadata = {
+    checkoutAttemptId: ATTEMPT_ID,
+    storeId: STORE_ID,
+    environmentId: "local",
+    planKey: "small_flock",
+    billingCadence: "monthly",
+    schemaVersion: "ff_saas_checkout_v1",
+  };
+  const base = {
+    session: {
+      id: "cs_test_Batch6",
+      createdAt: "2026-08-02T15:55:00.000Z",
+      expiresAt: "2026-08-03T15:55:00.000Z",
+      status: "complete",
+      mode: "subscription",
+      paymentStatus: "no_payment_required",
+      paymentMethodCollection: "always",
+      clientReferenceId: ATTEMPT_ID,
+      livemode: false,
+      customerId: "cus_Batch7",
+      subscriptionId: "sub_Batch7",
+      metadata,
+    },
+    customer: {
+      id: "cus_Batch7",
+      createdAt: "2026-08-02T15:55:01.000Z",
+      livemode: false,
+    },
+    subscription: {
+      id: "sub_Batch7",
+      customerId: "cus_Batch7",
+      status: "trialing",
+      createdAt: "2026-08-02T15:55:01.000Z",
+      trialStart: "2026-08-02T15:55:01.000Z",
+      trialEnd: "2026-08-09T15:55:01.000Z",
+      currentPeriodStart: "2026-08-02T15:55:01.000Z",
+      currentPeriodEnd: "2026-08-09T15:55:01.000Z",
+      cancelAtPeriodEnd: false,
+      livemode: false,
+      collectionMethod: "charge_automatically",
+      paymentMethodReady: true,
+      metadata: { ...metadata },
+    },
+    lineItem: {
+      priceId: "price_Batch7",
+      productId: "prod_Batch7",
+      quantity: 1,
+      priceLivemode: false,
+      productLivemode: false,
+      priceActive: true,
+      productActive: true,
+      unitAmountCents: 500,
+      currency: "usd",
+      recurringInterval: "month",
+      recurringIntervalCount: 1,
+      priceType: "recurring",
+      billingScheme: "per_unit",
+      recurringUsageType: "licensed",
+      taxBehavior: "exclusive",
+      productTaxCode: "txcd_10103001",
+    },
+  };
+  return { ...base, ...overrides };
 }
 
 function webhookRequest({
@@ -58,6 +135,9 @@ function harness(overrides = {}) {
     deferred: [],
     ignored: [],
     failed: [],
+    deferredClaim: [],
+    retrieve: [],
+    apply: [],
     logs: [],
   };
   const dependencies = {
@@ -91,13 +171,39 @@ function harness(overrides = {}) {
     markFailed: async (...args) => {
       calls.failed.push(args);
     },
+    claimDeferredEvent: async (...args) => {
+      calls.deferredClaim.push(args);
+      return {
+        reconciliation_state: "claimed",
+        processing_status: "processing",
+        attempt_count: 2,
+        processing_lease_token: "d6000000-0000-4000-8000-000000000099",
+        lease_expires_at: "2026-08-02T16:05:00.000Z",
+        deferred_reason: "awaiting_verified_enrollment_batch",
+      };
+    },
+    retrieveCheckoutCompletionEvidence: async (...args) => {
+      calls.retrieve.push(args);
+      return checkoutEvidence();
+    },
+    applyCheckoutCompletion: async (...args) => {
+      calls.apply.push(args);
+      return {
+        application_state: "trial_enrolled",
+        store_id: STORE_ID,
+        customer_binding_id: "d7000000-0000-4000-8000-000000000003",
+        subscription_enrollment_id: "d7000000-0000-4000-8000-000000000004",
+        trial_claimed: true,
+        billing_complete: true,
+      };
+    },
     safeLog: (record) => calls.logs.push(record),
     ...overrides,
   };
   return { handler: createStripeSaasWebhookHandler(dependencies), calls };
 }
 
-test("valid signed event is claimed and safely deferred", async () => {
+test("valid signed completion is deferred, fenced, retrieved, and applied", async () => {
   const fixture = harness();
   const response = await fixture.handler(webhookRequest());
   assert.equal(response.status, 200);
@@ -112,6 +218,9 @@ test("valid signed event is claimed and safely deferred", async () => {
     "awaiting_verified_enrollment_batch",
   );
   assert.equal(fixture.calls.failed.length, 0);
+  assert.equal(fixture.calls.deferredClaim.length, 1);
+  assert.deepEqual(fixture.calls.retrieve[0], ["cs_test_Batch6"]);
+  assert.equal(fixture.calls.apply.length, 1);
 });
 
 test("raw body is read exactly once and verification precedes hashing and database work", async () => {
@@ -139,6 +248,25 @@ test("raw body is read exactly once and verification precedes hashing and databa
       };
     },
     markDeferred: async () => order.push("deferred"),
+    claimDeferredEvent: async () => {
+      order.push("reclaim");
+      return {
+        reconciliation_state: "claimed",
+        processing_status: "processing",
+        attempt_count: 2,
+        processing_lease_token: "d6000000-0000-4000-8000-000000000098",
+        lease_expires_at: null,
+        deferred_reason: "awaiting_verified_enrollment_batch",
+      };
+    },
+    retrieveCheckoutCompletionEvidence: async () => {
+      order.push("retrieve");
+      return checkoutEvidence();
+    },
+    applyCheckoutCompletion: async () => {
+      order.push("apply");
+      return {};
+    },
   });
   const request = {
     method: "POST",
@@ -153,7 +281,9 @@ test("raw body is read exactly once and verification precedes hashing and databa
   };
   assert.equal((await fixture.handler(request)).status, 200);
   assert.equal(reads, 1);
-  assert.deepEqual(order, ["verify", "hash", "claim", "deferred"]);
+  assert.deepEqual(order, [
+    "verify", "hash", "claim", "deferred", "reclaim", "retrieve", "apply",
+  ]);
 });
 
 test("missing, malformed, wrong, altered, old, or future signatures fail before trust", async () => {
@@ -217,13 +347,9 @@ test("live mode, mismatched account, and malformed event identity fail closed", 
   );
 });
 
-test("duplicates and permanent conflicts return stable safe 200 responses", async () => {
+test("terminal duplicates and permanent conflicts return stable safe 200 responses", async () => {
   for (const claimState of [
-    "terminal_duplicate",
-    "deferred_duplicate",
-    "in_progress",
-    "permanent_failure",
-    "conflict",
+    "terminal_duplicate", "in_progress", "permanent_failure", "conflict",
   ]) {
     const fixture = harness({
       claimEvent: async () => ({
@@ -240,6 +366,22 @@ test("duplicates and permanent conflicts return stable safe 200 responses", asyn
     assert.equal(fixture.calls.deferred.length, 0);
     assert.equal(fixture.calls.ignored.length, 0);
   }
+});
+
+test("deferred duplicate completion resumes reconciliation exactly once", async () => {
+  const fixture = harness({
+    claimEvent: async () => ({
+      claim_state: "deferred_duplicate",
+      processing_status: "deferred",
+      attempt_count: 1,
+      processing_lease_token: null,
+      lease_expires_at: null,
+    }),
+  });
+  assert.equal((await fixture.handler(webhookRequest())).status, 200);
+  assert.equal(fixture.calls.deferred.length, 0);
+  assert.equal(fixture.calls.deferredClaim.length, 1);
+  assert.equal(fixture.calls.apply.length, 1);
 });
 
 test("transient database failures return 500 so Stripe can retry", async () => {
@@ -261,6 +403,99 @@ test("transient database failures return 500 so Stripe can retry", async () => {
     "deferred_recording_failed",
     true,
   ]);
+});
+
+test("transient Stripe retrieval and database application failures return 500", async () => {
+  const retrieval = harness({
+    retrieveCheckoutCompletionEvidence: async () => {
+      throw new Error("provider details");
+    },
+  });
+  assert.equal((await retrieval.handler(webhookRequest())).status, 500);
+  assert.deepEqual(retrieval.calls.failed[0].slice(2), [
+    "stripe_retrieval_failed",
+    true,
+  ]);
+  assert.equal(retrieval.calls.apply.length, 0);
+
+  const database = harness({
+    applyCheckoutCompletion: async () => {
+      throw new Error("database details");
+    },
+  });
+  assert.equal((await database.handler(webhookRequest())).status, 500);
+  assert.deepEqual(database.calls.failed[0].slice(2), [
+    "checkout_completion_apply_failed",
+    true,
+  ]);
+});
+
+test("permanent binding conflicts are recorded without a retry storm", async () => {
+  const fixture = harness({
+    applyCheckoutCompletion: async () => {
+      throw new SaasWebhookDomainError(
+        "checkout_completion_binding_conflict",
+        false,
+      );
+    },
+  });
+  const response = await fixture.handler(webhookRequest());
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { received: true });
+  assert.deepEqual(fixture.calls.failed[0].slice(2), [
+    "checkout_completion_binding_conflict",
+    false,
+  ]);
+});
+
+test("retrieved Session, Customer, Subscription, Price, Product, mode, metadata, and readiness must agree", async () => {
+  const mutations = [
+    (value) => value.session.id = "cs_test_Wrong",
+    (value) => value.customer.id = "cus_Wrong",
+    (value) => value.subscription.id = "sub_Wrong",
+    (value) => value.lineItem.priceId = "wrong",
+    (value) => value.lineItem.productId = "wrong",
+    (value) => value.session.livemode = true,
+    (value) => value.session.metadata.storeId =
+      "d7000000-0000-4000-8000-000000000099",
+    (value) => value.subscription.paymentMethodReady = false,
+  ];
+  for (const mutate of mutations) {
+    const evidence = structuredClone(checkoutEvidence());
+    mutate(evidence);
+    const fixture = harness({
+      retrieveCheckoutCompletionEvidence: async () => evidence,
+    });
+    const response = await fixture.handler(webhookRequest());
+    assert.equal(response.status, 200);
+    assert.equal(fixture.calls.apply.length, 0);
+    assert.equal(fixture.calls.failed[0][3], false);
+  }
+});
+
+test("trial-used completion can bind without claiming browser or paid-through authority", async () => {
+  const evidence = checkoutEvidence();
+  evidence.session.paymentStatus = "paid";
+  evidence.subscription.status = "active";
+  evidence.subscription.trialStart = null;
+  evidence.subscription.trialEnd = null;
+  const fixture = harness({
+    retrieveCheckoutCompletionEvidence: async () => evidence,
+    applyCheckoutCompletion: async (...args) => {
+      fixture.calls.apply.push(args);
+      return {
+        application_state: "paid_enrollment_pending_invoice",
+        store_id: STORE_ID,
+        customer_binding_id: "d7000000-0000-4000-8000-000000000003",
+        subscription_enrollment_id: "d7000000-0000-4000-8000-000000000004",
+        trial_claimed: false,
+        billing_complete: false,
+      };
+    },
+  });
+  assert.equal((await fixture.handler(webhookRequest())).status, 200);
+  assert.equal(fixture.calls.apply.length, 1);
+  assert.doesNotMatch(JSON.stringify(fixture.calls), /paid_through/i);
 });
 
 test("approved application events are deferred while trial notice is informational", async () => {
