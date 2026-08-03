@@ -67,7 +67,10 @@ test("seller onboarding sends requested choices only and contains no promotion a
 
   assert.match(step, /requested_plan_key: selectedPlan/);
   assert.match(step, /requested_billing_cadence: selectedBillingPlan/);
-  assert.doesNotMatch(step, /promo_code|subscription_status|trial_ends_at|storefront_access_until/);
+  const requestedPlanPayload = step.match(/p_plan:\s*\{[\s\S]*?\n\s*\},/)?.[0] ?? "";
+  assert.doesNotMatch(requestedPlanPayload,
+    /promo_code|subscription_status|trial_ends_at|storefront_access_until|stripe_/);
+  assert.doesNotMatch(step, /promo_code/);
   assert.match(foundation, /where stores\.owner_user_id = v_user_id/);
   assert.match(foundation, /for update/);
   assert.match(foundation, /v_billing\.trial_ends_at = v_billing\.trial_started_at \+ interval '7 days'/);
@@ -102,6 +105,10 @@ test("requested and effective entitlement fields remain distinct in seller UI co
     resolve(root, "app/dashboard/account/seller-account.tsx"),
     "utf8",
   );
+  const billingPanel = readFileSync(
+    resolve(root, "app/dashboard/account/subscription-billing-panel.tsx"),
+    "utf8",
+  );
 
   for (const field of [
     "requested_plan_key",
@@ -116,9 +123,12 @@ test("requested and effective entitlement fields remain distinct in seller UI co
 
   assert.match(review, /label="Requested plan"/);
   assert.match(review, /label="Effective plan"/);
-  assert.match(account, /\["Requested plan"/);
-  assert.match(account, /\["Effective plan"/);
+  assert.match(billingPanel, /status\.requested_plan_key/);
+  assert.match(billingPanel, /status\.effective_plan_key/);
+  assert.match(billingPanel, /\["Selected plan"/);
+  assert.match(billingPanel, /\["Current plan"/);
   assert.doesNotMatch(account, /\.from\("seller_billing_status"\)/);
+  assert.doesNotMatch(billingPanel, /\.from\("seller_billing_status"\)/);
 });
 
 test("admin comp is an explicit audited grant and revoke workflow", () => {

@@ -136,7 +136,7 @@ const handler = createStripeSaasCheckoutHandler({
         line_items: [{ price: attempt.stripe_price_id!, quantity: 1 }],
         payment_method_collection: "always",
         success_url:
-          `${publicSiteOrigin}/onboarding?billing=checkout_return`,
+          `${publicSiteOrigin}/onboarding/billing/return?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url:
           `${publicSiteOrigin}/onboarding?billing=checkout_canceled`,
         client_reference_id: attempt.attempt_id!,

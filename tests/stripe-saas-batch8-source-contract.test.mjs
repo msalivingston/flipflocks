@@ -97,13 +97,20 @@ test("Batch 8 changes remain confined to SaaS server, migration, docs, and tests
     line.slice(3).replaceAll("\\", "/")
   );
   const allowed = [
-    /^supabase\/migrations\/20260802103000_saas_invoice_lifecycle_application\.sql$/,
+    /^supabase\/migrations\/2026080210(?:3000_saas_invoice_lifecycle_application|4000_seller_saas_billing_status_read_model)\.sql$/,
     /^supabase\/tests\/saas_invoice_lifecycle_(?:application|concurrency)_test\.sql$/,
     /^supabase\/functions\/stripe-saas-webhook\/(?:handler|index)\.ts$/,
     /^tests\/stripe-saas-(?:webhook-handler|webhook-source-contract|batch8-source-contract)\.test\.mjs$/,
     /^tests\/stripe-saas-batch7-source-contract\.test\.mjs$/,
     /^tests\/stripe-saas-batch4-source-contract\.test\.mjs$/,
     /^docs\/stripe-saas-webhook-deployment\.md$/,
+    /^supabase\/tests\/seller_saas_billing_status_test\.sql$/,
+    /^supabase\/functions\/stripe-saas-checkout\/index\.ts$/,
+    /^app\/(?:dashboard\/(?:_components\/seller-(?:app-shell|billing-banner|billing-context)|account\/(?:seller-account|subscription-billing-panel))|onboarding\/(?:page|_components\/(?:onboarding-flow|step-5-plan-access-form)|billing\/return\/(?:page|stripe-return-status)))\.tsx$/,
+    /^app\/onboarding\/billing\/$/,
+    /^lib\/saas-billing-status\.ts$/,
+    /^tests\/stripe-saas-batch9-source-contract\.test\.mjs$/,
+    /^tests\/authoritative-entitlements\.test\.mjs$/,
   ];
   for (const file of changed) {
     assert.ok(allowed.some((pattern) => pattern.test(file)),

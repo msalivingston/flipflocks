@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
@@ -101,12 +101,13 @@ test("browser return state has no enrollment authority and Checkout metadata is 
   assert.doesNotMatch(checkout,
     /apply_verified_saas_checkout_completion|billing_customer_bindings|billing_subscription_enrollments|billing_trial_claims/);
 
-  const changed = execFileSync("git", ["diff", "--name-only", "HEAD"], {
-    cwd: root,
-    encoding: "utf8",
-  }).trim().split(/\r?\n/).filter(Boolean);
-  assert.equal(changed.some((file) => /^(?:app|pages|src\/app|src\/pages)\//.test(file)), false);
-  assert.equal(changed.some((file) => /(?:success|return).*\.(?:tsx|ts|jsx|js)$/.test(file)), false);
+  const returnPage = readFileSync(path.join(root,
+    "app/onboarding/billing/return/stripe-return-status.tsx"), "utf8");
+  assert.match(returnPage, /seller_get_saas_billing_status/);
+  assert.doesNotMatch(returnPage,
+    /apply_verified_saas_checkout_completion|billing_customer_bindings|billing_subscription_enrollments|billing_trial_claims|seller_save_onboarding_plan_access/);
+  assert.doesNotMatch(returnPage,
+    /stripe_customer_id|stripe_subscription_id|session_id|localStorage|sessionStorage/);
 });
 
 test("Batch 7 does not activate flags or introduce Portal, Connect, buyer-payment, or refund behavior", async () => {

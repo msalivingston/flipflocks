@@ -168,10 +168,11 @@ test("documentation requires only sandbox Product and Price read permissions", a
   assert.doesNotMatch(documentation, /STRIPE_SAAS_CATALOG_READ_KEY\s*=/);
 });
 
-test("current SaaS billing batch changes no browser onboarding, Pay at Pickup, refund, or Connect application file", async () => {
+test("current SaaS billing batch changes no Pay at Pickup, refund, or Connect application file", async () => {
   const { stdout } = await execFileAsync("git", ["status", "--porcelain=v1", "-uall"], { cwd: root });
   const changed = stdout.split(/\r?\n/).filter((line) => line.trim()).map((line) => line.slice(3));
-  assert.ok(changed.every((file) => !file.startsWith("app/") && !file.startsWith("lib/")));
   assert.ok(changed.every((file) => !/(pay-at-pickup|refund|connect)/i.test(file)));
-  assert.ok(changed.every((file) => /^(?:docs\/stripe-saas-|supabase\/(?:functions\/stripe-saas-|migrations\/20260802|tests\/(?:verified_saas_|saas_))|tests\/stripe-saas-)/.test(file)));
+  const batch9Ui = /^app\/(?:dashboard\/(?:_components\/seller-(?:app-shell|billing-banner|billing-context)|account\/(?:seller-account|subscription-billing-panel))|onboarding\/(?:page|_components\/(?:onboarding-flow|step-5-plan-access-form)|billing\/return\/(?:page|stripe-return-status)))\.tsx$/;
+  assert.ok(changed.every((file) => batch9Ui.test(file)
+    || /^(?:lib\/saas-billing-status\.ts|docs\/stripe-saas-|supabase\/(?:functions\/stripe-saas-|migrations\/20260802|tests\/(?:seller_saas_|verified_saas_|saas_))|tests\/(?:authoritative-entitlements|stripe-saas-))/.test(file)));
 });

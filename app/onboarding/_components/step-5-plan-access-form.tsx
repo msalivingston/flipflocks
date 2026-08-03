@@ -1,8 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  getPlanPriceLabel,
+  isSafeStripeCheckoutUrl,
+  parseSellerBillingStatus,
+  type SellerBillingStatus,
+} from "@/lib/saas-billing-status";
 import {
   PLAN_CAPABILITIES,
   type PlanId,
@@ -61,6 +67,20 @@ export function Step5PlanAccessForm({
     useState<BillingCadence>(normalizeBillingCadence(initialBillingPlan));
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [billingStatus, setBillingStatus] = useState<SellerBillingStatus | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function loadBillingMode() {
+      const { data, error } = await supabase.rpc("seller_get_saas_billing_status");
+      if (!active || error) return;
+      setBillingStatus(parseSellerBillingStatus(Array.isArray(data) ? data[0] : null));
+    }
+    void loadBillingMode();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -68,7 +88,7 @@ export function Step5PlanAccessForm({
     setFormError(null);
     setIsSubmitting(true);
 
-    const { error } = await supabase.rpc("seller_save_onboarding_plan_access", {
+    const { data, error } = await supabase.rpc("seller_save_onboarding_plan_access", {
       p_plan: {
         requested_billing_cadence: selectedBillingPlan,
         requested_plan_key: selectedPlan,
@@ -81,10 +101,41 @@ export function Step5PlanAccessForm({
       return;
     }
 
+    const result = Array.isArray(data)
+      ? data[0] as { billing_complete?: boolean; subscription_status?: string } | undefined
+      : undefined;
+    const checkoutRequired = result?.billing_complete === false
+      && result.subscription_status === "dormant";
+
+    if (checkoutRequired) {
+      const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke(
+        "stripe-saas-checkout",
+        {
+          body: {
+            billing_cadence: selectedBillingPlan,
+            plan_key: selectedPlan,
+          },
+        },
+      );
+      const checkoutUrl = checkoutData && typeof checkoutData === "object"
+        ? (checkoutData as { checkout_url?: unknown }).checkout_url
+        : null;
+      if (checkoutError || !isSafeStripeCheckoutUrl(checkoutUrl)) {
+        setFormError("Secure Checkout is not available right now. Your plan selection is saved; please try again.");
+        setIsSubmitting(false);
+        return;
+      }
+      window.location.assign(checkoutUrl);
+      return;
+    }
+
     onComplete(selectedPlan, selectedBillingPlan);
   }
 
   const selectedPlanDetails = PLAN_CAPABILITIES[selectedPlan];
+  const checkoutEnabled = billingStatus?.checkout_enabled === true;
+  const trialAlreadyUsed = billingStatus?.trial_eligibility === "trial_already_used";
+  const selectedPrice = getPlanPriceLabel(selectedPlan, selectedBillingPlan);
 
   return (
     <section className="rounded-[0.95rem] bg-white px-4 py-4 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 lg:px-7">
@@ -161,11 +212,25 @@ export function Step5PlanAccessForm({
           </div>
         </section>
 
-        <div className="rounded-lg border border-[#dbe8d8] bg-[#eff8ed] px-4 py-2.5 text-center">
-          <p className="text-sm font-bold text-[#16572a]">
-            7-day free trial · $0 due today
-          </p>
-        </div>
+        {checkoutEnabled ? (
+          <div className="rounded-lg border border-[#dbe8d8] bg-[#eff8ed] px-4 py-3 text-sm leading-6 text-[#16572a]">
+            {trialAlreadyUsed ? (
+              <p>
+                A payment method is required. Your selected FlockFront subscription ({selectedPrice}) will begin when Stripe confirms payment. Applicable tax may be added.
+              </p>
+            ) : (
+              <p>
+                Start your 7-day free trial. A payment method is required, but you will not be charged today. Unless you cancel before the trial ends, your selected FlockFront subscription ({selectedPrice}) will begin automatically and your payment method will be charged the displayed price plus any applicable tax.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-[#dbe8d8] bg-[#eff8ed] px-4 py-2.5 text-center">
+            <p className="text-sm font-bold text-[#16572a]">
+              7-day free trial · $0 due today
+            </p>
+          </div>
+        )}
 
         {formError ? (
           <p
@@ -191,8 +256,10 @@ export function Step5PlanAccessForm({
             type="submit"
           >
             {isSubmitting
-              ? "Saving plan..."
-              : `Continue with ${selectedPlanDetails.displayName}`}
+              ? checkoutEnabled ? "Opening secure checkout..." : "Saving plan..."
+              : checkoutEnabled
+                ? "Continue to secure checkout"
+                : `Continue with ${selectedPlanDetails.displayName}`}
           </button>
         </div>
       </form>

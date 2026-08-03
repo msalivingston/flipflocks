@@ -35,7 +35,7 @@ type StorePickupSettings = {
   pickup_policy: string | null;
 };
 
-export function OnboardingFlow() {
+export function OnboardingFlow({ checkoutCanceled = false }: { checkoutCanceled?: boolean }) {
   const router = useRouter();
   const [view, setView] = useState<OnboardingView>("loading");
   const [seller, setSeller] = useState<SellerContext | null>(null);
@@ -243,6 +243,11 @@ export function OnboardingFlow() {
           {error ? (
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
               {error}
+            </p>
+          ) : null}
+          {checkoutCanceled ? (
+            <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-950" role="status">
+              Checkout was not completed. Your plan selection is still saved, and no billing access was changed.
             </p>
           ) : null}
           <Step5PlanAccessForm

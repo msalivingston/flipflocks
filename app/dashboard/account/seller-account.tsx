@@ -2,11 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { useSellerContext } from "../_components/seller-context";
 import { ErrorState, LoadingState } from "../_components/seller-ui";
+import { SubscriptionBillingPanel } from "./subscription-billing-panel";
 
 const SUPPORT_EMAIL = "hello@flockfront.com";
 
@@ -136,26 +136,6 @@ export function SellerAccount() {
     };
   }, [seller]);
 
-  const billing = useMemo(
-    () => ({
-      accessReason: seller?.entitlement_reason ?? null,
-      accessUntil: seller?.entitlement_access_until ?? null,
-      effectiveBillingCadence: seller?.effective_billing_cadence ?? null,
-      effectivePlanKey: seller?.effective_plan_key ?? null,
-      hasActiveEntitlement: seller?.has_active_entitlement ?? false,
-      requestedBillingCadence: seller?.requested_billing_cadence ?? null,
-      requestedPlanKey: seller?.requested_plan_key ?? null,
-      status: seller?.subscription_status ?? null,
-      trialEndsAt: seller?.trial_ends_at ?? null,
-    }),
-    [seller],
-  );
-  const requestedPlan = billing.requestedPlanKey
-    ? getPlanCapabilities(billing.requestedPlanKey)
-    : null;
-  const effectivePlan = billing.effectivePlanKey
-    ? getPlanCapabilities(billing.effectivePlanKey)
-    : null;
   const hasBillingAddress = Boolean(
     billingAddress?.billing_address_line1 ||
       billingAddress?.billing_city ||
@@ -548,33 +528,7 @@ export function SellerAccount() {
           />
         </StaticSection>
 
-        <StaticSection title="Plan & billing">
-          <InfoRows
-            compact
-            rows={[
-              ["Requested plan", requestedPlan?.displayName ?? "No requested plan"],
-              [
-                "Requested billing",
-                formatBillingCadence(billing.requestedBillingCadence),
-              ],
-              ["Effective plan", effectivePlan?.displayName ?? "No active plan"],
-              [
-                "Effective billing",
-                formatBillingCadence(billing.effectiveBillingCadence),
-              ],
-              ["Subscription status", formatValue(billing.status)],
-              [
-                "Access",
-                billing.hasActiveEntitlement
-                  ? `Active (${formatValue(billing.accessReason)})`
-                  : `Inactive (${formatValue(billing.accessReason)})`,
-              ],
-              ["Access end date", formatDateTime(billing.accessUntil)],
-              ["Trial status", getTrialStatus(billing.status, billing.trialEndsAt)],
-              ["Trial end date", formatDateTime(billing.trialEndsAt)],
-            ]}
-          />
-        </StaticSection>
+        <SubscriptionBillingPanel />
 
         <section className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-white px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -776,46 +730,6 @@ function getUserName(metadata: unknown) {
   return typeof candidate === "string" && candidate.trim()
     ? candidate.trim()
     : null;
-}
-
-function formatValue(value: string | null | undefined) {
-  if (!value) return null;
-  return value
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function formatDateTime(value: string | null | undefined) {
-  if (!value) return null;
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return null;
-
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function formatBillingCadence(value: string | null | undefined) {
-  if (value === "yearly") return "Annual";
-  if (value === "monthly") return "Monthly";
-  return null;
-}
-
-function getTrialStatus(
-  subscriptionStatus: string | null | undefined,
-  trialEndsAt: string | null | undefined,
-) {
-  if (subscriptionStatus === "trialing") {
-    const formattedTrialEnd = formatDateTime(trialEndsAt);
-    return formattedTrialEnd ? `Trialing until ${formattedTrialEnd}` : "Trialing";
-  }
-
-  if (trialEndsAt) return "Trial ended";
-
-  return null;
 }
 
 function formatState(value: string | null | undefined) {
