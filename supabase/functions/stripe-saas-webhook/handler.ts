@@ -127,6 +127,81 @@ export type SaasCheckoutApplicationResult = {
   billing_complete: boolean;
 };
 
+export function checkoutCompletionRpcArguments(
+  identity: ProviderEventIdentity,
+  processingLeaseToken: string,
+  evidence: SaasCheckoutCompletionEvidence,
+): Record<string, unknown> {
+  const session = evidence.session;
+  const customer = evidence.customer;
+  const subscription = evidence.subscription;
+  const line = evidence.lineItem;
+  return {
+    p_provider_event_id: identity.providerEventId,
+    p_payload_hash: identity.payloadHash,
+    p_processing_lease_token: processingLeaseToken,
+    p_stripe_account_id: identity.stripeAccountId,
+    p_stripe_livemode: identity.stripeLivemode,
+    p_environment_id: identity.environmentId,
+    p_provider_event_created_at: identity.providerEventCreatedAt,
+    p_checkout_session_id: session.id,
+    p_session_created_at: session.createdAt,
+    p_session_expires_at: session.expiresAt,
+    p_session_status: session.status,
+    p_session_mode: session.mode,
+    p_session_payment_status: session.paymentStatus,
+    p_session_payment_method_collection: session.paymentMethodCollection,
+    p_session_client_reference_id: session.clientReferenceId,
+    p_session_livemode: session.livemode,
+    p_attempt_id: session.metadata.checkoutAttemptId,
+    p_session_metadata_attempt_id: session.metadata.checkoutAttemptId,
+    p_session_metadata_store_id: session.metadata.storeId,
+    p_session_metadata_environment_id: session.metadata.environmentId,
+    p_session_metadata_plan_key: session.metadata.planKey,
+    p_session_metadata_billing_cadence: session.metadata.billingCadence,
+    p_session_metadata_schema_version: session.metadata.schemaVersion,
+    p_stripe_customer_id: customer.id,
+    p_customer_created_at: customer.createdAt,
+    p_customer_livemode: customer.livemode,
+    p_stripe_subscription_id: subscription.id,
+    p_subscription_status: subscription.status,
+    p_subscription_created_at: subscription.createdAt,
+    p_subscription_trial_start: subscription.trialStart,
+    p_subscription_trial_end: subscription.trialEnd,
+    p_subscription_current_period_start: subscription.currentPeriodStart,
+    p_subscription_current_period_end: subscription.currentPeriodEnd,
+    p_subscription_cancel_at_period_end: subscription.cancelAtPeriodEnd,
+    p_subscription_livemode: subscription.livemode,
+    p_subscription_collection_method: subscription.collectionMethod,
+    p_payment_method_ready: subscription.paymentMethodReady,
+    p_subscription_metadata_attempt_id:
+      subscription.metadata.checkoutAttemptId,
+    p_subscription_metadata_store_id: subscription.metadata.storeId,
+    p_subscription_metadata_environment_id:
+      subscription.metadata.environmentId,
+    p_subscription_metadata_plan_key: subscription.metadata.planKey,
+    p_subscription_metadata_billing_cadence:
+      subscription.metadata.billingCadence,
+    p_subscription_metadata_schema_version: subscription.metadata.schemaVersion,
+    p_stripe_price_id: line.priceId,
+    p_stripe_product_id: line.productId,
+    p_line_item_quantity: line.quantity,
+    p_price_livemode: line.priceLivemode,
+    p_product_livemode: line.productLivemode,
+    p_price_active: line.priceActive,
+    p_product_active: line.productActive,
+    p_unit_amount_cents: line.unitAmountCents,
+    p_currency: line.currency,
+    p_recurring_interval: line.recurringInterval,
+    p_recurring_interval_count: line.recurringIntervalCount,
+    p_stripe_price_type: line.priceType,
+    p_billing_scheme: line.billingScheme,
+    p_recurring_usage_type: line.recurringUsageType,
+    p_tax_behavior: line.taxBehavior,
+    p_stripe_product_tax_code: line.productTaxCode,
+  };
+}
+
 export type SaasRecurringPriceEvidence = {
   priceId: string;
   productId: string;
@@ -223,6 +298,75 @@ export class SaasWebhookDomainError extends Error {
     this.errorCode = errorCode;
     this.retryable = retryable;
   }
+}
+
+export const ENROLLMENT_RPC_CONFLICT_CODES = Object.freeze({
+  SAAS_ENROLLMENT_EVIDENCE_INVALID: "checkout_evidence_invalid",
+  SAAS_ENROLLMENT_PROVIDER_SHAPE_INVALID: "checkout_provider_shape_invalid",
+  SAAS_ENROLLMENT_EVENT_CLAIM_INVALID: "checkout_event_fence_conflict",
+  SAAS_ENROLLMENT_EVENT_FENCE_CONFLICT: "checkout_event_fence_conflict",
+  SAAS_ENROLLMENT_ATTEMPT_NOT_FOUND: "checkout_attempt_not_found",
+  SAAS_ENROLLMENT_ATTEMPT_CONFLICT: "checkout_attempt_state_mismatch",
+  SAAS_ENROLLMENT_ATTEMPT_STATE_MISMATCH: "checkout_attempt_state_mismatch",
+  SAAS_ENROLLMENT_SESSION_STATE_MISMATCH: "checkout_session_state_mismatch",
+  SAAS_ENROLLMENT_SESSION_ID_MISMATCH: "checkout_session_id_mismatch",
+  SAAS_ENROLLMENT_SESSION_TIMESTAMP_MISMATCH:
+    "checkout_session_timestamp_mismatch",
+  SAAS_ENROLLMENT_SESSION_METADATA_MISMATCH:
+    "checkout_session_metadata_mismatch",
+  SAAS_ENROLLMENT_SUBSCRIPTION_METADATA_MISMATCH:
+    "checkout_subscription_metadata_mismatch",
+  SAAS_ENROLLMENT_CUSTOMER_MISMATCH: "checkout_customer_mismatch",
+  SAAS_ENROLLMENT_SUBSCRIPTION_MISMATCH: "checkout_subscription_mismatch",
+  SAAS_ENROLLMENT_PRICE_MISMATCH: "checkout_price_mismatch",
+  SAAS_ENROLLMENT_PRODUCT_MISMATCH: "checkout_product_mismatch",
+  SAAS_ENROLLMENT_PLAN_MISMATCH: "checkout_plan_mismatch",
+  SAAS_ENROLLMENT_CADENCE_MISMATCH: "checkout_cadence_mismatch",
+  SAAS_ENROLLMENT_ACCOUNT_MISMATCH: "checkout_account_mismatch",
+  SAAS_ENROLLMENT_LIVEMODE_MISMATCH: "checkout_mode_mismatch",
+  SAAS_ENROLLMENT_ENVIRONMENT_MISMATCH: "checkout_environment_mismatch",
+  SAAS_ENROLLMENT_SUBSCRIPTION_TIMESTAMP_MISMATCH:
+    "checkout_subscription_timestamp_mismatch",
+  SAAS_ENROLLMENT_TRIAL_TIMESTAMP_MISMATCH:
+    "checkout_trial_timestamp_mismatch",
+  SAAS_ENROLLMENT_TRIAL_DURATION_VIOLATION:
+    "checkout_trial_duration_violation",
+  SAAS_ENROLLMENT_TRIAL_STATE_MISMATCH: "checkout_trial_state_mismatch",
+  SAAS_ENROLLMENT_PAYMENT_METHOD_NOT_READY:
+    "checkout_payment_method_not_ready",
+  SAAS_ENROLLMENT_CATALOG_CONFLICT: "checkout_catalog_validation_failed",
+  SAAS_ENROLLMENT_CATALOG_VALIDATION_FAILED:
+    "checkout_catalog_validation_failed",
+  SAAS_ENROLLMENT_BILLING_STATE_CONFLICT: "checkout_billing_state_conflict",
+  SAAS_ENROLLMENT_METADATA_CONFLICT: "checkout_metadata_conflict",
+  SAAS_ENROLLMENT_TRIAL_DECISION_INVALID:
+    "checkout_trial_decision_invalid",
+  SAAS_ENROLLMENT_TRIAL_CONFLICT: "checkout_prior_trial_conflict",
+  SAAS_ENROLLMENT_PRIOR_TRIAL_CONFLICT: "checkout_prior_trial_conflict",
+  SAAS_ENROLLMENT_TRIAL_USED_CONFLICT: "checkout_trial_used_conflict",
+  SAAS_ENROLLMENT_CUSTOMER_CONFLICT:
+    "checkout_customer_binding_conflict",
+  SAAS_ENROLLMENT_CUSTOMER_BINDING_CONFLICT:
+    "checkout_customer_binding_conflict",
+  SAAS_ENROLLMENT_SUBSCRIPTION_CONFLICT:
+    "checkout_subscription_enrollment_conflict",
+  SAAS_ENROLLMENT_SUBSCRIPTION_BINDING_CONFLICT:
+    "checkout_subscription_enrollment_conflict",
+  SAAS_ENROLLMENT_EVENT_FINALIZATION_FAILED:
+    "checkout_event_finalization_failed",
+} as const);
+
+export function enrollmentRpcError(
+  failure: { message?: string | null },
+): SaasWebhookDomainError {
+  const { message } = failure;
+  const code = ENROLLMENT_RPC_CONFLICT_CODES[
+    (message ?? "") as keyof typeof ENROLLMENT_RPC_CONFLICT_CODES
+  ];
+  return new SaasWebhookDomainError(
+    code ?? "checkout_completion_apply_failed",
+    code === undefined,
+  );
 }
 
 export type ProviderEventIdentity = {
@@ -383,6 +527,23 @@ function processingFailureResponse(
   }, { "X-FlockFront-Error-Code": code });
 }
 
+function successfulWebhookResponse(
+  result: "processed" | "already_processed" | "deferred" | "in_progress",
+): Response {
+  return jsonResponse(200, { received: true, result });
+}
+
+function permanentConflictResponse(code: string): Response {
+  const safeCode = /^[a-z][a-z0-9_]{0,99}$/.test(code)
+    ? code
+    : "checkout_completion_permanent_conflict";
+  return jsonResponse(200, {
+    received: true,
+    result: "permanent_conflict",
+    code: safeCode,
+  }, { "X-FlockFront-Error-Code": safeCode });
+}
+
 export function createStripeSaasWebhookConfigurationErrorHandler(
   dependencies: WebhookDiagnosticDependencies = {},
 ): (request: Request) => Promise<Response> {
@@ -472,25 +633,36 @@ function validateCheckoutCompletionEvidence(
   const expectedSessionPrefix = identity.stripeLivemode ? "cs_live_" : "cs_test_";
 
   if (session.id !== identity.providerObjectId ||
-    !session.id.startsWith(expectedSessionPrefix) ||
-    session.livemode !== identity.stripeLivemode ||
-    session.mode !== "subscription" || session.status !== "complete" ||
-    session.paymentMethodCollection !== "always" ||
-    !signedCustomerId || !signedSubscriptionId ||
-    signedCustomerId !== session.customerId ||
-    signedSubscriptionId !== session.subscriptionId ||
-    customer.id !== session.customerId ||
-    subscription.id !== session.subscriptionId ||
-    subscription.customerId !== session.customerId ||
+    !session.id.startsWith(expectedSessionPrefix)) {
+    return "checkout_session_id_mismatch";
+  }
+  if (session.livemode !== identity.stripeLivemode ||
     customer.livemode !== identity.stripeLivemode ||
     subscription.livemode !== identity.stripeLivemode ||
     line.priceLivemode !== identity.stripeLivemode ||
-    line.productLivemode !== identity.stripeLivemode ||
-    !/^cus_[A-Za-z0-9]+$/.test(customer.id) ||
-    !/^sub_[A-Za-z0-9]+$/.test(subscription.id) ||
-    !/^price_[A-Za-z0-9]+$/.test(line.priceId) ||
-    !/^prod_[A-Za-z0-9]+$/.test(line.productId)) {
-    return "checkout_completion_identity_conflict";
+    line.productLivemode !== identity.stripeLivemode) {
+    return "checkout_mode_mismatch";
+  }
+  if (session.mode !== "subscription" || session.status !== "complete" ||
+    session.paymentMethodCollection !== "always") {
+    return "checkout_session_state_mismatch";
+  }
+  if (!signedCustomerId || signedCustomerId !== session.customerId ||
+    customer.id !== session.customerId ||
+    subscription.customerId !== session.customerId ||
+    !/^cus_[A-Za-z0-9]+$/.test(customer.id)) {
+    return "checkout_customer_mismatch";
+  }
+  if (!signedSubscriptionId || signedSubscriptionId !== session.subscriptionId ||
+    subscription.id !== session.subscriptionId ||
+    !/^sub_[A-Za-z0-9]+$/.test(subscription.id)) {
+    return "checkout_subscription_mismatch";
+  }
+  if (!/^price_[A-Za-z0-9]+$/.test(line.priceId)) {
+    return "checkout_price_mismatch";
+  }
+  if (!/^prod_[A-Za-z0-9]+$/.test(line.productId)) {
+    return "checkout_product_mismatch";
   }
 
   if (!validIsoTimestamp(session.createdAt) ||
@@ -504,17 +676,25 @@ function validateCheckoutCompletionEvidence(
     Date.parse(identity.providerEventCreatedAt) > Date.parse(session.expiresAt) ||
     Date.parse(subscription.currentPeriodEnd) <=
       Date.parse(subscription.currentPeriodStart)) {
-    return "checkout_completion_timestamp_conflict";
+    return "checkout_session_timestamp_mismatch";
   }
 
-  for (const metadata of [session.metadata, subscription.metadata]) {
+  if (session.metadata.environmentId !== identity.environmentId ||
+    subscription.metadata.environmentId !== identity.environmentId) {
+    return "checkout_environment_mismatch";
+  }
+  for (const [index, metadata] of [
+    session.metadata,
+    subscription.metadata,
+  ].entries()) {
     if (!/^[0-9a-f-]{36}$/i.test(metadata.checkoutAttemptId) ||
       !/^[0-9a-f-]{36}$/i.test(metadata.storeId) ||
-      metadata.environmentId !== identity.environmentId ||
       !["small_flock", "full_flock"].includes(metadata.planKey) ||
       !["monthly", "yearly"].includes(metadata.billingCadence) ||
       metadata.schemaVersion !== "ff_saas_checkout_v1") {
-      return "checkout_completion_metadata_conflict";
+      return index === 0
+        ? "checkout_session_metadata_mismatch"
+        : "checkout_subscription_metadata_mismatch";
     }
   }
   if (session.metadata.checkoutAttemptId !==
@@ -524,11 +704,13 @@ function validateCheckoutCompletionEvidence(
     session.metadata.billingCadence !==
       subscription.metadata.billingCadence ||
     session.clientReferenceId !== session.metadata.checkoutAttemptId) {
-    return "checkout_completion_metadata_conflict";
+    return "checkout_subscription_metadata_mismatch";
   }
 
-  if (!subscription.paymentMethodReady ||
-    subscription.collectionMethod !== "charge_automatically" ||
+  if (!subscription.paymentMethodReady) {
+    return "checkout_payment_method_not_ready";
+  }
+  if (subscription.collectionMethod !== "charge_automatically" ||
     line.quantity !== 1 || !line.priceActive || !line.productActive ||
     line.priceType !== "recurring" || line.billingScheme !== "per_unit" ||
     line.recurringUsageType !== "licensed" ||
@@ -537,7 +719,7 @@ function validateCheckoutCompletionEvidence(
     !Number.isSafeInteger(line.unitAmountCents) || line.unitAmountCents < 0 ||
     !Number.isSafeInteger(line.recurringIntervalCount) ||
     line.recurringIntervalCount < 1) {
-    return "checkout_completion_provider_shape_conflict";
+    return "checkout_catalog_validation_failed";
   }
   return null;
 }
@@ -703,40 +885,13 @@ async function recordReconciliationFailure(
   }
 }
 
-async function reconcileCheckoutCompletion(
+export async function reconcileClaimedCheckoutCompletion(
   dependencies: StripeSaasWebhookDependencies,
   identity: ProviderEventIdentity,
-  signedObject: Record<string, unknown>,
+  signedObject: Record<string, unknown> | null,
   startedAt: number,
+  claim: SaasDeferredEventClaim,
 ): Promise<Response> {
-  let claim: SaasDeferredEventClaim;
-  try {
-    claim = await dependencies.claimDeferredEvent(identity);
-  } catch {
-    return processingFailureResponse(
-      dependencies, "webhook_deferred_claim_failed", "deferred_claim",
-      startedAt, identity,
-    );
-  }
-
-  if (["already_processed", "in_progress"].includes(
-    claim.reconciliation_state,
-  )) {
-    return jsonResponse(200, { received: true });
-  }
-  if ([
-    "permanent_failure", "conflict", "not_found", "not_deferred",
-  ].includes(claim.reconciliation_state)) {
-    safeLog(dependencies, {
-      event_id: identity.providerEventId,
-      event_type: identity.eventType,
-      mode: identity.stripeLivemode ? "live" : "test",
-      result: claim.reconciliation_state,
-      attempt_count: claim.attempt_count,
-      duration_ms: (dependencies.now?.() ?? Date.now()) - startedAt,
-    });
-    return jsonResponse(200, { received: true });
-  }
   if (!claim.processing_lease_token) {
     return processingFailureResponse(
       dependencies, "webhook_deferred_claim_failed", "deferred_claim",
@@ -770,11 +925,15 @@ async function reconcileCheckoutCompletion(
       dependencies, "webhook_stripe_retrieval_failed", "stripe_retrieval",
       startedAt, identity,
     );
-    return jsonResponse(200, { received: true });
+    return permanentConflictResponse(classified.errorCode);
   }
 
+  const correlationObject = signedObject ?? {
+    customer: evidence.session.customerId,
+    subscription: evidence.session.subscriptionId,
+  };
   const evidenceError = validateCheckoutCompletionEvidence(
-    signedObject,
+    correlationObject,
     identity,
     evidence,
   );
@@ -790,7 +949,7 @@ async function reconcileCheckoutCompletion(
       dependencies, "webhook_enrollment_binding_failed", "enrollment_binding",
       startedAt, identity,
     );
-    return jsonResponse(200, { received: true });
+    return permanentConflictResponse(evidenceError);
   }
 
   try {
@@ -820,7 +979,7 @@ async function reconcileCheckoutCompletion(
       dependencies, "webhook_enrollment_binding_failed", "enrollment_binding",
       startedAt, identity,
     );
-    return jsonResponse(200, { received: true });
+    return permanentConflictResponse(classified.errorCode);
   }
 
   safeLog(dependencies, {
@@ -831,7 +990,55 @@ async function reconcileCheckoutCompletion(
     attempt_count: claim.attempt_count,
     duration_ms: (dependencies.now?.() ?? Date.now()) - startedAt,
   });
-  return jsonResponse(200, { received: true });
+  return successfulWebhookResponse("processed");
+}
+
+async function reconcileCheckoutCompletion(
+  dependencies: StripeSaasWebhookDependencies,
+  identity: ProviderEventIdentity,
+  signedObject: Record<string, unknown>,
+  startedAt: number,
+): Promise<Response> {
+  let claim: SaasDeferredEventClaim;
+  try {
+    claim = await dependencies.claimDeferredEvent(identity);
+  } catch {
+    return processingFailureResponse(
+      dependencies, "webhook_deferred_claim_failed", "deferred_claim",
+      startedAt, identity,
+    );
+  }
+
+  if (claim.reconciliation_state === "already_processed") {
+    return successfulWebhookResponse("already_processed");
+  }
+  if (claim.reconciliation_state === "in_progress") {
+    return successfulWebhookResponse("in_progress");
+  }
+  if ([
+    "permanent_failure", "conflict", "not_found", "not_deferred",
+  ].includes(claim.reconciliation_state)) {
+    safeLog(dependencies, {
+      event_id: identity.providerEventId,
+      event_type: identity.eventType,
+      mode: identity.stripeLivemode ? "live" : "test",
+      result: claim.reconciliation_state,
+      attempt_count: claim.attempt_count,
+      duration_ms: (dependencies.now?.() ?? Date.now()) - startedAt,
+    });
+    return permanentConflictResponse(
+      claim.reconciliation_state === "permanent_failure"
+        ? "checkout_completion_permanent_failure"
+        : `checkout_completion_${claim.reconciliation_state}`,
+    );
+  }
+  return await reconcileClaimedCheckoutCompletion(
+    dependencies,
+    identity,
+    signedObject,
+    startedAt,
+    claim,
+  );
 }
 
 async function beginDeferredReconciliation(

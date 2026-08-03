@@ -350,7 +350,10 @@ test("valid signed completion is deferred, fenced, retrieved, and applied", asyn
   const fixture = harness();
   const response = await fixture.handler(webhookRequest());
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { received: true });
+  assert.deepEqual(await response.json(), {
+    received: true,
+    result: "processed",
+  });
   assert.equal(fixture.calls.verify.length, 1);
   assert.equal(fixture.calls.hash.length, 1);
   assert.equal(fixture.calls.claim.length, 1);
@@ -711,20 +714,28 @@ test("each remaining major webhook failure stage has a stable diagnostic", async
   );
 });
 
-test("permanent binding conflicts are recorded without a retry storm", async () => {
+test("permanent binding conflicts preserve a safe precise code without a retry storm", async () => {
   const fixture = harness({
     applyCheckoutCompletion: async () => {
       throw new SaasWebhookDomainError(
-        "checkout_completion_binding_conflict",
+        "checkout_customer_binding_conflict",
         false,
       );
     },
   });
   const response = await fixture.handler(webhookRequest());
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { received: true });
+  assert.deepEqual(await response.json(), {
+    received: true,
+    result: "permanent_conflict",
+    code: "checkout_customer_binding_conflict",
+  });
+  assert.equal(
+    response.headers.get("X-FlockFront-Error-Code"),
+    "checkout_customer_binding_conflict",
+  );
   assert.deepEqual(fixture.calls.failed[0].slice(2), [
-    "checkout_completion_binding_conflict",
+    "checkout_customer_binding_conflict",
     false,
   ]);
 });

@@ -250,7 +250,7 @@ select throws_ok(
   $$select * from pg_temp.batch7_apply(
     'evt_Batch7Trial', repeat('7', 64), gen_random_uuid(),
     'e7000000-0000-4000-a000-000000000001')$$,
-  '55000', 'SAAS_ENROLLMENT_EVENT_CLAIM_INVALID',
+  '55000', 'SAAS_ENROLLMENT_EVENT_FENCE_CONFLICT',
   'wrong fencing token is rejected'
 );
 select throws_ok(
@@ -258,7 +258,7 @@ select throws_ok(
     'evt_Batch7Trial', repeat('8', 64),
     (select processing_lease_token from batch7_reconciliation_claim),
     'e7000000-0000-4000-a000-000000000001')$$,
-  '55000', 'SAAS_ENROLLMENT_EVENT_CLAIM_INVALID',
+  '55000', 'SAAS_ENROLLMENT_EVENT_FENCE_CONFLICT',
   'wrong payload hash is rejected'
 );
 select throws_ok(
@@ -267,7 +267,7 @@ select throws_ok(
     (select processing_lease_token from batch7_reconciliation_claim),
     'e7000000-0000-4000-a000-000000000001',
     p_session_override => 'cs_test_Wrong')$$,
-  '55000', 'SAAS_ENROLLMENT_EVENT_CLAIM_INVALID',
+  '55000', 'SAAS_ENROLLMENT_EVENT_FENCE_CONFLICT',
   'wrong provider Checkout object is rejected'
 );
 select throws_ok(
@@ -276,7 +276,7 @@ select throws_ok(
     (select processing_lease_token from batch7_reconciliation_claim),
     'e7000000-0000-4000-a000-000000000001',
     p_price_override => 'price_Wrong')$$,
-  '55000', 'SAAS_ENROLLMENT_ATTEMPT_CONFLICT',
+  '55000', 'SAAS_ENROLLMENT_PRICE_MISMATCH',
   'Price must match the immutable Checkout attempt'
 );
 select throws_ok(
@@ -285,7 +285,7 @@ select throws_ok(
     (select processing_lease_token from batch7_reconciliation_claim),
     'e7000000-0000-4000-a000-000000000001',
     p_product_override => 'prod_Wrong')$$,
-  '55000', 'SAAS_ENROLLMENT_ATTEMPT_CONFLICT',
+  '55000', 'SAAS_ENROLLMENT_PRODUCT_MISMATCH',
   'Product must match the immutable Checkout attempt'
 );
 select throws_ok(
@@ -295,7 +295,7 @@ select throws_ok(
     'e7000000-0000-4000-a000-000000000001',
     p_metadata_store_override =>
       'e7000000-0000-4000-9000-000000000099')$$,
-  '55000', 'SAAS_ENROLLMENT_METADATA_CONFLICT',
+  '55000', 'SAAS_ENROLLMENT_SESSION_METADATA_MISMATCH',
   'metadata cannot rebind the attempt to another store'
 );
 select throws_ok(
@@ -304,7 +304,7 @@ select throws_ok(
     (select processing_lease_token from batch7_reconciliation_claim),
     'e7000000-0000-4000-a000-000000000001',
     p_payment_method_ready => false)$$,
-  '22023', 'SAAS_ENROLLMENT_EVIDENCE_INVALID',
+  '55000', 'SAAS_ENROLLMENT_PAYMENT_METHOD_NOT_READY',
   'missing automatic-payment readiness is rejected'
 );
 select throws_ok(
@@ -313,7 +313,7 @@ select throws_ok(
     (select processing_lease_token from batch7_reconciliation_claim),
     'e7000000-0000-4000-a000-000000000001',
     p_trial_duration => interval '7 days 6 minutes')$$,
-  '55000', 'SAAS_ENROLLMENT_TRIAL_CONFLICT',
+  '55000', 'SAAS_ENROLLMENT_TRIAL_DURATION_VIOLATION',
   'provider trial longer than seven days plus tolerance is rejected'
 );
 

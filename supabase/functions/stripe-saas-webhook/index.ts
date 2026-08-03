@@ -11,6 +11,8 @@ import {
 import {
   createStripeSaasWebhookConfigurationErrorHandler,
   createStripeSaasWebhookHandler,
+  checkoutCompletionRpcArguments,
+  enrollmentRpcError,
   SaasWebhookDomainError,
   type ProviderEventIdentity,
   type SaasCheckoutApplicationResult,
@@ -390,12 +392,6 @@ async function retrieveSubscriptionLifecycleEvidence(
   };
 }
 
-function isPermanentEnrollmentError(error: { message?: string | null }): boolean {
-  return /^SAAS_ENROLLMENT_(?:EVIDENCE_INVALID|PROVIDER_SHAPE_INVALID|EVENT_CLAIM_INVALID|ATTEMPT_NOT_FOUND|ATTEMPT_CONFLICT|BILLING_STATE_CONFLICT|METADATA_CONFLICT|CATALOG_CONFLICT|TRIAL_DECISION_INVALID|TRIAL_CONFLICT|TRIAL_USED_CONFLICT|CUSTOMER_CONFLICT|SUBSCRIPTION_CONFLICT|EVENT_FINALIZATION_FAILED)$/.test(
-    error.message ?? "",
-  );
-}
-
 function lifecycleRpcError(
   error: { message?: string | null },
   domain: "invoice" | "subscription",
@@ -470,85 +466,16 @@ const handler = createStripeSaasWebhookHandler({
     processingLeaseToken: string,
     evidence: SaasCheckoutCompletionEvidence,
   ) {
-    const session = evidence.session;
-    const customer = evidence.customer;
-    const subscription = evidence.subscription;
-    const line = evidence.lineItem;
     const { data, error } = await serviceClient.rpc(
       "apply_verified_saas_checkout_completion",
-      {
-        p_provider_event_id: identity.providerEventId,
-        p_payload_hash: identity.payloadHash,
-        p_processing_lease_token: processingLeaseToken,
-        p_stripe_account_id: identity.stripeAccountId,
-        p_stripe_livemode: identity.stripeLivemode,
-        p_environment_id: identity.environmentId,
-        p_provider_event_created_at: identity.providerEventCreatedAt,
-        p_checkout_session_id: session.id,
-        p_session_created_at: session.createdAt,
-        p_session_expires_at: session.expiresAt,
-        p_session_status: session.status,
-        p_session_mode: session.mode,
-        p_session_payment_status: session.paymentStatus,
-        p_session_payment_method_collection: session.paymentMethodCollection,
-        p_session_client_reference_id: session.clientReferenceId,
-        p_session_livemode: session.livemode,
-        p_attempt_id: session.metadata.checkoutAttemptId,
-        p_session_metadata_attempt_id: session.metadata.checkoutAttemptId,
-        p_session_metadata_store_id: session.metadata.storeId,
-        p_session_metadata_environment_id: session.metadata.environmentId,
-        p_session_metadata_plan_key: session.metadata.planKey,
-        p_session_metadata_billing_cadence: session.metadata.billingCadence,
-        p_session_metadata_schema_version: session.metadata.schemaVersion,
-        p_stripe_customer_id: customer.id,
-        p_customer_created_at: customer.createdAt,
-        p_customer_livemode: customer.livemode,
-        p_stripe_subscription_id: subscription.id,
-        p_subscription_status: subscription.status,
-        p_subscription_created_at: subscription.createdAt,
-        p_subscription_trial_start: subscription.trialStart,
-        p_subscription_trial_end: subscription.trialEnd,
-        p_subscription_current_period_start: subscription.currentPeriodStart,
-        p_subscription_current_period_end: subscription.currentPeriodEnd,
-        p_subscription_cancel_at_period_end: subscription.cancelAtPeriodEnd,
-        p_subscription_livemode: subscription.livemode,
-        p_subscription_collection_method: subscription.collectionMethod,
-        p_payment_method_ready: subscription.paymentMethodReady,
-        p_subscription_metadata_attempt_id:
-          subscription.metadata.checkoutAttemptId,
-        p_subscription_metadata_store_id: subscription.metadata.storeId,
-        p_subscription_metadata_environment_id:
-          subscription.metadata.environmentId,
-        p_subscription_metadata_plan_key: subscription.metadata.planKey,
-        p_subscription_metadata_billing_cadence:
-          subscription.metadata.billingCadence,
-        p_subscription_metadata_schema_version:
-          subscription.metadata.schemaVersion,
-        p_stripe_price_id: line.priceId,
-        p_stripe_product_id: line.productId,
-        p_line_item_quantity: line.quantity,
-        p_price_livemode: line.priceLivemode,
-        p_product_livemode: line.productLivemode,
-        p_price_active: line.priceActive,
-        p_product_active: line.productActive,
-        p_unit_amount_cents: line.unitAmountCents,
-        p_currency: line.currency,
-        p_recurring_interval: line.recurringInterval,
-        p_recurring_interval_count: line.recurringIntervalCount,
-        p_stripe_price_type: line.priceType,
-        p_billing_scheme: line.billingScheme,
-        p_recurring_usage_type: line.recurringUsageType,
-        p_tax_behavior: line.taxBehavior,
-        p_stripe_product_tax_code: line.productTaxCode,
-      },
+      checkoutCompletionRpcArguments(
+        identity,
+        processingLeaseToken,
+        evidence,
+      ),
     );
     if (error) {
-      throw new SaasWebhookDomainError(
-        isPermanentEnrollmentError(error)
-          ? "checkout_completion_binding_conflict"
-          : "checkout_completion_apply_failed",
-        !isPermanentEnrollmentError(error),
-      );
+      throw enrollmentRpcError(error);
     }
     return firstRow<SaasCheckoutApplicationResult>(data);
   },

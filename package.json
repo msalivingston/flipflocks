@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "stripe:register-saas-price": "node scripts/stripe/register-saas-price.mjs",
-    "stripe:verify-saas-catalog": "node scripts/stripe/verify-saas-catalog.mjs"
+    "stripe:verify-saas-catalog": "node scripts/stripe/verify-saas-catalog.mjs",
+    "stripe:replay-saas-checkout": "node scripts/stripe/replay-saas-checkout-event.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.0",
