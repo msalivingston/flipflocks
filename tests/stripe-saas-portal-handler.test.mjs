@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildStripePortalSessionParams,
   createStripeSaasPortalHandler,
+  isApprovedStripePortalConfiguration,
   isSafeStripePortalUrl,
   PortalProviderError,
 } from "../supabase/functions/stripe-saas-portal/handler.ts";
@@ -56,6 +57,40 @@ function session(overrides = {}) {
     ...overrides,
   };
 }
+function portalConfiguration(overrides = {}) {
+  const value = {
+    id: "bpc_Batch10General",
+    object: "billing_portal.configuration",
+    active: true,
+    application: null,
+    is_default: true,
+    livemode: false,
+    features: {
+      customer_update: { allowed_updates: ["address", "tax_id"], enabled: true },
+      invoice_history: { enabled: true },
+      payment_method_update: {
+        enabled: true,
+        payment_method_configuration: null,
+      },
+      subscription_cancel: {
+        cancellation_reason: { enabled: true, options: ["other"] },
+        enabled: true,
+        mode: "at_period_end",
+        proration_behavior: "none",
+      },
+      subscription_update: {
+        billing_cycle_anchor: "unchanged",
+        default_allowed_updates: [],
+        enabled: false,
+        products: [],
+        proration_behavior: "none",
+        schedule_at_period_end: { conditions: [] },
+        trial_update_behavior: "continue_trial",
+      },
+    },
+  };
+  return { ...value, ...overrides };
+}
 function request(body = { action: "manage_billing" }, overrides = {}) {
   return new Request("https://functions.test/stripe-saas-portal", {
     method: "POST",
@@ -69,7 +104,7 @@ function request(body = { action: "manage_billing" }, overrides = {}) {
   });
 }
 function harness(overrides = {}) {
-  const calls = { begin: [], create: [], record: [], failed: [] };
+  const calls = { begin: [], create: [], retrieve: [], record: [], failed: [] };
   const dependencies = {
     allowedOrigin: "https://flockfront.test",
     stripeLivemode: false,
@@ -81,6 +116,10 @@ function harness(overrides = {}) {
     createPortalSession: async (...args) => {
       calls.create.push(args);
       return session();
+    },
+    retrievePortalConfiguration: async (...args) => {
+      calls.retrieve.push(args);
+      return portalConfiguration();
     },
     recordPortalSession: async (...args) => calls.record.push(args),
     markActionFailed: async (...args) => calls.failed.push(args),
@@ -117,7 +156,76 @@ test("Portal uses server-derived authorization and returns only a safe URL", asy
     portal_url: "https://billing.stripe.com/p/session/batch10",
   });
   assert.equal(calls.create.length, 1);
+  assert.deepEqual(calls.retrieve, [["bpc_Batch10General"]]);
   assert.equal(calls.record.length, 1);
+});
+
+test("Portal configuration preflight accepts only the approved default policy", () => {
+  assert.equal(isApprovedStripePortalConfiguration(
+    portalConfiguration(), "bpc_Batch10General", false,
+  ), true);
+
+  const unsafe = [];
+  const productSwitching = structuredClone(portalConfiguration());
+  productSwitching.features.subscription_update.enabled = true;
+  unsafe.push(productSwitching);
+  const priceUpdates = structuredClone(portalConfiguration());
+  priceUpdates.features.subscription_update.default_allowed_updates = ["price"];
+  unsafe.push(priceUpdates);
+  const immediateCancel = structuredClone(portalConfiguration());
+  immediateCancel.features.subscription_cancel.mode = "immediately";
+  unsafe.push(immediateCancel);
+  const cancellationProration = structuredClone(portalConfiguration());
+  cancellationProration.features.subscription_cancel.proration_behavior = "create_prorations";
+  unsafe.push(cancellationProration);
+  const paymentDisabled = structuredClone(portalConfiguration());
+  paymentDisabled.features.payment_method_update.enabled = false;
+  unsafe.push(paymentDisabled);
+  const invoicesDisabled = structuredClone(portalConfiguration());
+  invoicesDisabled.features.invoice_history.enabled = false;
+  unsafe.push(invoicesDisabled);
+  const unknownMutation = structuredClone(portalConfiguration());
+  unknownMutation.features.future_subscription_mutation = { enabled: true };
+  unsafe.push(unknownMutation);
+  unsafe.push(portalConfiguration({ is_default: false }));
+  unsafe.push(portalConfiguration({ livemode: true }));
+  unsafe.push(portalConfiguration({ active: false }));
+
+  for (const configuration of unsafe) {
+    assert.equal(isApprovedStripePortalConfiguration(
+      configuration, "bpc_Batch10General", false,
+    ), false);
+  }
+});
+
+test("unsafe, missing, or unavailable Portal configuration returns no URL", async () => {
+  const unsafeConfiguration = structuredClone(portalConfiguration());
+  unsafeConfiguration.features.subscription_update.enabled = true;
+  const unsafe = harness({
+    retrievePortalConfiguration: async () => unsafeConfiguration,
+  });
+  const unsafeResponse = await unsafe.handler(request());
+  assert.equal(unsafeResponse.status, 503);
+  assert.deepEqual(await unsafeResponse.json(), {
+    error: "billing_management_temporarily_unavailable",
+  });
+  assert.equal(unsafe.calls.record.length, 0);
+  assert.equal(unsafe.calls.failed[0][1], "stripe_portal_configuration_unsafe");
+
+  const missing = harness({ createPortalSession: async () => session({ configuration: "" }) });
+  assert.equal((await missing.handler(request())).status, 503);
+  assert.equal(missing.calls.retrieve.length, 0);
+  assert.equal(missing.calls.record.length, 0);
+
+  const unavailable = harness({
+    retrievePortalConfiguration: async () => { throw new Error("provider details"); },
+  });
+  assert.equal((await unavailable.handler(request())).status, 503);
+  assert.equal(unavailable.calls.record.length, 0);
+  assert.equal(
+    unavailable.calls.failed[0][1],
+    "stripe_portal_configuration_retrieval_failed",
+  );
 });
 
 test("Portal rejects non-Stripe redirect hosts and mode mismatch", async () => {

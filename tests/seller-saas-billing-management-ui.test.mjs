@@ -54,6 +54,17 @@ test("canceling subscription exposes resume but not a second cancel action", () 
   assert.equal(value.resumeSubscription, true);
 });
 
+test("canceling verified trial stays manageable and exposes resume", () => {
+  const value = getBillingManagementAvailability(status({
+    lifecycle_state: "trial_canceling_at_period_end",
+    cancel_at_period_end: true,
+  }));
+  assert.equal(value.manageBilling, true);
+  assert.equal(value.updatePaymentMethod, true);
+  assert.equal(value.cancelSubscription, false);
+  assert.equal(value.resumeSubscription, true);
+});
+
 test("complimentary, held, unknown, canceled, local, and unbound states expose no actions", () => {
   for (const lifecycle_state of [
     "complimentary_access", "administrative_hold", "unknown", "fully_canceled",

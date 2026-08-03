@@ -116,6 +116,15 @@ const handler = createStripeSaasPortalHandler({
       ].includes(type) ? "stripe_portal_request_rejected" : "stripe_portal_request_ambiguous");
     }
   },
+  async retrievePortalConfiguration(configurationId) {
+    try {
+      return await stripe.billingPortal.configurations.retrieve(configurationId);
+    } catch {
+      throw new PortalProviderError(
+        "stripe_portal_configuration_retrieval_failed",
+      );
+    }
+  },
   async recordPortalSession(actionRequestId, session) {
     const { error } = await serviceClient.rpc("record_saas_billing_portal_session", {
       p_action_request_id: actionRequestId,

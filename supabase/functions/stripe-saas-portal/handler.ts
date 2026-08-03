@@ -22,6 +22,123 @@ export type SafePortalSession = {
   livemode: boolean;
 };
 
+type UnknownRecord = Record<string, unknown>;
+
+function record(value: unknown): UnknownRecord | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as UnknownRecord
+    : null;
+}
+
+function hasKeys(
+  value: UnknownRecord,
+  required: readonly string[],
+  optional: readonly string[] = [],
+): boolean {
+  const allowed = new Set([...required, ...optional]);
+  return required.every((key) => Object.hasOwn(value, key)) &&
+    Object.keys(value).every((key) => allowed.has(key));
+}
+
+const customerUpdateFields = new Set([
+  "address", "email", "name", "phone", "shipping", "tax_id",
+]);
+const cancellationReasons = new Set([
+  "customer_service", "low_quality", "missing_features", "other",
+  "switched_service", "too_complex", "too_expensive", "unused",
+]);
+const scheduleConditions = new Set([
+  "decreasing_item_amount", "shortening_interval",
+]);
+
+/**
+ * Fail-closed validation of the default Portal configuration assigned by
+ * Stripe. Subscription mutation controls remain unreachable even if the
+ * Dashboard default drifts after deployment.
+ */
+export function isApprovedStripePortalConfiguration(
+  value: unknown,
+  expectedConfigurationId: string,
+  expectedLivemode: boolean,
+): boolean {
+  const configuration = record(value);
+  if (!configuration ||
+    configuration.id !== expectedConfigurationId ||
+    configuration.object !== "billing_portal.configuration" ||
+    configuration.active !== true ||
+    configuration.is_default !== true ||
+    configuration.livemode !== expectedLivemode ||
+    configuration.application !== null) return false;
+
+  const features = record(configuration.features);
+  if (!features || !hasKeys(features, [
+    "customer_update", "invoice_history", "payment_method_update",
+    "subscription_cancel", "subscription_update",
+  ])) return false;
+
+  const customerUpdate = record(features.customer_update);
+  const customerAllowed = customerUpdate?.allowed_updates;
+  if (!customerUpdate || !hasKeys(customerUpdate, ["allowed_updates", "enabled"]) ||
+    typeof customerUpdate.enabled !== "boolean" ||
+    !Array.isArray(customerAllowed) ||
+    !customerAllowed.every((entry) =>
+      typeof entry === "string" && customerUpdateFields.has(entry)
+    )) return false;
+
+  const invoiceHistory = record(features.invoice_history);
+  if (!invoiceHistory || !hasKeys(invoiceHistory, ["enabled"]) ||
+    invoiceHistory.enabled !== true) return false;
+
+  const paymentMethodUpdate = record(features.payment_method_update);
+  if (!paymentMethodUpdate || !hasKeys(
+    paymentMethodUpdate,
+    ["enabled", "payment_method_configuration"],
+  ) || paymentMethodUpdate.enabled !== true || !(
+    paymentMethodUpdate.payment_method_configuration === null ||
+    (typeof paymentMethodUpdate.payment_method_configuration === "string" &&
+      /^pmc_[A-Za-z0-9]+$/.test(paymentMethodUpdate.payment_method_configuration))
+  )) return false;
+
+  const subscriptionCancel = record(features.subscription_cancel);
+  const reason = record(subscriptionCancel?.cancellation_reason);
+  if (!subscriptionCancel || !hasKeys(subscriptionCancel, [
+    "cancellation_reason", "enabled", "mode", "proration_behavior",
+  ]) || subscriptionCancel.enabled !== true ||
+    subscriptionCancel.mode !== "at_period_end" ||
+    subscriptionCancel.proration_behavior !== "none" ||
+    !reason || !hasKeys(reason, ["enabled", "options"]) ||
+    typeof reason.enabled !== "boolean" || !Array.isArray(reason.options) ||
+    !reason.options.every((entry) =>
+      typeof entry === "string" && cancellationReasons.has(entry)
+    )) return false;
+
+  const subscriptionUpdate = record(features.subscription_update);
+  const schedule = record(subscriptionUpdate?.schedule_at_period_end);
+  const conditions = schedule?.conditions;
+  if (!subscriptionUpdate || !hasKeys(subscriptionUpdate, [
+    "billing_cycle_anchor", "default_allowed_updates", "enabled",
+    "proration_behavior", "schedule_at_period_end", "trial_update_behavior",
+  ], ["products"]) || subscriptionUpdate.enabled !== false ||
+    !Array.isArray(subscriptionUpdate.default_allowed_updates) ||
+    subscriptionUpdate.default_allowed_updates.length !== 0 ||
+    !(subscriptionUpdate.products === undefined ||
+      subscriptionUpdate.products === null ||
+      (Array.isArray(subscriptionUpdate.products) &&
+        subscriptionUpdate.products.length === 0)) ||
+    ![null, "unchanged"].includes(subscriptionUpdate.billing_cycle_anchor as null | string) ||
+    subscriptionUpdate.proration_behavior !== "none" ||
+    !["continue_trial", "end_trial"].includes(
+      subscriptionUpdate.trial_update_behavior as string,
+    ) || !schedule || !hasKeys(schedule, ["conditions"]) ||
+    !Array.isArray(conditions) || !conditions.every((condition) => {
+      const item = record(condition);
+      return Boolean(item && hasKeys(item, ["type"]) &&
+        typeof item.type === "string" && scheduleConditions.has(item.type));
+    })) return false;
+
+  return true;
+}
+
 export function buildStripePortalSessionParams(
   action: PortalAction,
   customerId: string,
@@ -69,6 +186,7 @@ export type StripeSaasPortalDependencies = {
     authorization: PortalActionAuthorization,
     action: PortalAction,
   ) => Promise<SafePortalSession>;
+  retrievePortalConfiguration: (configurationId: string) => Promise<unknown>;
   recordPortalSession: (
     actionRequestId: string,
     session: SafePortalSession,
@@ -190,6 +308,33 @@ export function createStripeSaasPortalHandler(
         await dependencies.markActionFailed(
           actionAuthorization.action_request_id,
           "stripe_portal_response_invalid",
+        );
+      } catch { /* best effort */ }
+      return json(503, { error: "billing_management_temporarily_unavailable" }, responseHeaders);
+    }
+    let configuration: unknown;
+    try {
+      configuration = await dependencies.retrievePortalConfiguration(
+        session.configuration,
+      );
+    } catch {
+      try {
+        await dependencies.markActionFailed(
+          actionAuthorization.action_request_id,
+          "stripe_portal_configuration_retrieval_failed",
+        );
+      } catch { /* best effort */ }
+      return json(503, { error: "billing_management_temporarily_unavailable" }, responseHeaders);
+    }
+    if (!isApprovedStripePortalConfiguration(
+      configuration,
+      session.configuration,
+      dependencies.stripeLivemode,
+    )) {
+      try {
+        await dependencies.markActionFailed(
+          actionAuthorization.action_request_id,
+          "stripe_portal_configuration_unsafe",
         );
       } catch { /* best effort */ }
       return json(503, { error: "billing_management_temporarily_unavailable" }, responseHeaders);

@@ -20,20 +20,30 @@ export function SubscriptionBillingPanel() {
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [resumePending, setResumePending] = useState(false);
   const [portalReturnPending, setPortalReturnPending] = useState(false);
+  const [portalReturnDelayed, setPortalReturnDelayed] = useState(false);
   const pollingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("billing") !== "portal_return") return;
     let active = true;
     queueMicrotask(() => {
-      if (active) setPortalReturnPending(true);
+      if (active) {
+        setPortalReturnPending(true);
+        setPortalReturnDelayed(false);
+      }
     });
     let polls = 0;
     const poll = async () => {
       if (!active || polls >= 5) return;
       polls += 1;
       await reload();
-      if (active && polls < 5) pollingTimer.current = setTimeout(poll, 2_000);
+      if (!active) return;
+      if (polls < 5) {
+        pollingTimer.current = setTimeout(poll, 2_000);
+        return;
+      }
+      setPortalReturnPending(false);
+      setPortalReturnDelayed(true);
     };
     void poll();
     return () => {
@@ -85,7 +95,9 @@ export function SubscriptionBillingPanel() {
     ["Price", price],
     requestedDiffers ? ["Selected plan", requestedPlan] : ["Selected plan", null],
     requestedDiffers ? ["Selected billing", requestedCadence] : ["Selected billing", null],
-    ["Trial ends", status.lifecycle_state.includes("trial") ? formatBillingDate(status.trial_ends_at) : null],
+    ["Trial ends", ["stripe_trial", "trial"].includes(status.entitlement_reason ?? "")
+      ? formatBillingDate(status.trial_ends_at)
+      : null],
     ["Access active through", formatBillingDate(status.paid_through_at)],
     ["Grace ends", formatBillingDate(status.grace_ends_at, { includeTime: true })],
     ["Scheduled to end", status.cancel_at_period_end ? formatBillingDate(status.entitlement_access_until) : null],
@@ -166,6 +178,11 @@ export function SubscriptionBillingPanel() {
           Your billing changes are being confirmed.
         </p>
       ) : null}
+      {portalReturnDelayed ? (
+        <p className="mt-4 rounded-md bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-950" role="status">
+          Stripe changes may take a moment to appear. No billing change is assumed; you can refresh this page later.
+        </p>
+      ) : null}
       {resumePending ? (
         <p className="mt-4 rounded-md bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-950" role="status">
           Stripe is confirming that your subscription will continue.
@@ -226,6 +243,8 @@ function getBillingPresentation(status: SellerBillingStatus) {
       return present("Trial", "Your 7-day FlockFront trial is active.", "bg-emerald-100 text-emerald-900");
     case "trial_payment_problem":
       return present("Payment needs attention", "Your trial is active, but your payment method needs attention before billing begins.", "bg-amber-100 text-amber-950");
+    case "trial_canceling_at_period_end":
+      return present("Trial ending", "Your trial remains active through the verified trial end shown. You can keep your subscription before it ends.", "bg-sky-100 text-sky-950");
     case "active_paid":
       return present("Active", "Your FlockFront subscription is active.", "bg-emerald-100 text-emerald-900");
     case "payment_failed_paid_through":

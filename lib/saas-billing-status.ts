@@ -8,6 +8,7 @@ export type SellerBillingLifecycle =
   | "awaiting_stripe_confirmation"
   | "trial_active"
   | "trial_payment_problem"
+  | "trial_canceling_at_period_end"
   | "active_paid"
   | "payment_failed_paid_through"
   | "payment_grace"
@@ -67,6 +68,7 @@ const lifecycleStates = new Set<SellerBillingLifecycle>([
   "awaiting_stripe_confirmation",
   "trial_active",
   "trial_payment_problem",
+  "trial_canceling_at_period_end",
   "active_paid",
   "payment_failed_paid_through",
   "payment_grace",
@@ -167,6 +169,14 @@ export function getBillingBanner(status: SellerBillingStatus): BillingBanner | n
       tone: "attention",
     };
   }
+  if (status.lifecycle_state === "trial_canceling_at_period_end") {
+    return {
+      message: trialDate
+        ? `Your trial is scheduled to end on ${trialDate}.`
+        : "Your trial is scheduled to end at its verified trial boundary.",
+      tone: "info",
+    };
+  }
   if (status.lifecycle_state === "canceling_at_period_end") {
     return {
       message: accessDate
@@ -195,6 +205,7 @@ export function isConfirmedBillingLifecycle(state: SellerBillingLifecycle) {
   return [
     "trial_active",
     "trial_payment_problem",
+    "trial_canceling_at_period_end",
     "active_paid",
     "payment_failed_paid_through",
     "payment_grace",

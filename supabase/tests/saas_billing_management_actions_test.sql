@@ -7,6 +7,16 @@ select set_config('request.jwt.claim.role', 'service_role', true);
 select has_table('public', 'billing_management_action_requests', 'billing action audit table exists');
 select has_column('public', 'billing_management_action_requests', 'subscription_enrollment_id', 'actions bind an immutable enrollment');
 select has_column('public', 'billing_management_action_requests', 'stripe_idempotency_key', 'resume idempotency evidence is typed');
+select has_table('public', 'saas_billing_portal_store_cohort', 'controlled Portal cohort table exists');
+select ok((select relrowsecurity from pg_class where oid = 'public.saas_billing_portal_store_cohort'::regclass), 'Portal cohort RLS is enabled');
+select fk_ok(
+  'public', 'saas_billing_portal_store_cohort', 'store_id',
+  'public', 'stores', 'id', 'cohort identity is bound to a real store'
+);
+select is(
+  (select count(*) from public.saas_billing_portal_store_cohort),
+  0::bigint, 'deployment migration enrolls no store into the cohort'
+);
 select ok((select relrowsecurity from pg_class where oid = 'public.billing_management_action_requests'::regclass), 'action audit RLS is enabled');
 select ok(
   has_function_privilege('service_role', 'public.begin_saas_billing_portal_action(uuid,text,boolean,text,text)', 'execute')
@@ -138,6 +148,106 @@ insert into public.seller_billing_status (
   transaction_timestamp() + interval '6 days', true
 );
 
+create temporary table batch10_trial_boundary as
+select trial_started_at, trial_ends_at
+from public.seller_billing_status
+where store_id = 'fa000000-0000-4000-9000-000000000001';
+
+create function pg_temp.batch10_claim_subscription(
+  p_event_id text,
+  p_created_at timestamptz default statement_timestamp(),
+  p_environment_id text default 'local'
+) returns uuid
+language plpgsql
+set search_path = pg_catalog, public
+as $function$
+declare
+  v_receipt record;
+  v_reconciliation record;
+begin
+  select * into v_receipt from public.claim_saas_billing_provider_event(
+    p_event_id, 'customer.subscription.updated', p_created_at, repeat('c', 64),
+    'acct_1CTOghL1R5g4hhXt', false, p_environment_id,
+    'subscription', 'sub_Batch10'
+  );
+  perform public.mark_saas_billing_provider_event_deferred(
+    p_event_id, repeat('c', 64), 'acct_1CTOghL1R5g4hhXt', false,
+    v_receipt.processing_lease_token, 'awaiting_verified_enrollment_batch'
+  );
+  select * into v_reconciliation
+  from public.claim_deferred_saas_billing_provider_event(
+    p_event_id, repeat('c', 64), 'acct_1CTOghL1R5g4hhXt', false,
+    p_environment_id, 'customer.subscription.updated', 'subscription', 'sub_Batch10'
+  );
+  return v_reconciliation.processing_lease_token;
+end;
+$function$;
+
+create function pg_temp.batch10_apply_subscription(
+  p_event_id text,
+  p_token uuid,
+  p_cancel_at_period_end boolean,
+  p_environment_id text default 'local'
+) returns table (
+  application_state text, store_id uuid, subscription_status text,
+  paid_through_at timestamptz, grace_ends_at timestamptz
+)
+language plpgsql
+set search_path = pg_catalog, public
+as $function$
+declare
+  v_event public.billing_provider_events%rowtype;
+  v_enrollment public.billing_subscription_enrollments%rowtype;
+begin
+  select * into v_event from public.billing_provider_events
+  where provider_event_id = p_event_id order by created_at limit 1;
+  select * into v_enrollment from public.billing_subscription_enrollments
+  where id = 'fa000000-0000-4000-b000-000000000001';
+  return query select * from public.apply_verified_stripe_subscription_event(
+    p_provider_event_id => p_event_id,
+    p_payload_hash => repeat('c', 64),
+    p_processing_lease_token => p_token,
+    p_stripe_account_id => 'acct_1CTOghL1R5g4hhXt',
+    p_stripe_livemode => false,
+    p_environment_id => p_environment_id,
+    p_provider_event_created_at => v_event.provider_event_created_at,
+    p_event_type => 'customer.subscription.updated',
+    p_stripe_subscription_id => 'sub_Batch10',
+    p_subscription_livemode => false,
+    p_stripe_customer_id => 'cus_Batch10',
+    p_stripe_price_id => 'price_Batch10Coop',
+    p_stripe_product_id => 'prod_Batch10Coop',
+    p_subscription_status => 'trialing',
+    p_current_period_start => v_enrollment.trial_started_at,
+    p_current_period_end => v_enrollment.trial_ends_at,
+    p_cancel_at_period_end => p_cancel_at_period_end,
+    p_subscription_created_at => v_enrollment.provider_created_at,
+    p_subscription_canceled_at => null,
+    p_subscription_ended_at => null,
+    p_line_quantity => 1,
+    p_price_livemode => false,
+    p_product_livemode => false,
+    p_price_active => true,
+    p_product_active => true,
+    p_unit_amount_cents => 500,
+    p_currency => 'usd',
+    p_recurring_interval => 'month',
+    p_recurring_interval_count => 1,
+    p_price_type => 'recurring',
+    p_billing_scheme => 'per_unit',
+    p_recurring_usage_type => 'licensed',
+    p_tax_behavior => 'exclusive',
+    p_product_tax_code => 'txcd_10103001'
+  );
+end;
+$function$;
+
+select is(
+  public.set_saas_billing_portal_store_cohort(
+    'fa000000-0000-4000-9000-000000000001', true
+  ), 'activated', 'service role can activate one controlled cohort store'
+);
+
 select throws_ok(
   $$select * from public.begin_saas_billing_portal_action(
     'fa000000-0000-4000-8000-000000000001', 'portal_general', false,
@@ -146,6 +256,36 @@ select throws_ok(
 );
 update public.platform_settings set boolean_value = true
 where setting_key = 'saas_billing_portal_enabled';
+
+select throws_ok(
+  $$select * from public.begin_saas_billing_portal_action(
+    'fa000000-0000-4000-8000-000000000002', 'portal_general', false,
+    'acct_1CTOghL1R5g4hhXt', 'local')$$,
+  '55000', 'SAAS_BILLING_PORTAL_COHORT_REQUIRED',
+  'global flag without same-store cohort remains blocked'
+);
+select is(
+  public.set_saas_billing_portal_store_cohort(
+    'fa000000-0000-4000-9000-000000000001', false
+  ), 'revoked', 'cohort access can be revoked without deleting history'
+);
+select throws_ok(
+  $$select * from public.begin_saas_billing_portal_action(
+    'fa000000-0000-4000-8000-000000000001', 'portal_general', false,
+    'acct_1CTOghL1R5g4hhXt', 'local')$$,
+  '55000', 'SAAS_BILLING_PORTAL_COHORT_REQUIRED',
+  'revoked cohort remains blocked'
+);
+select is(
+  public.set_saas_billing_portal_store_cohort(
+    'fa000000-0000-4000-9000-000000000001', true
+  ), 'activated', 'reactivation appends a fresh cohort record'
+);
+select is(
+  (select count(*) from public.saas_billing_portal_store_cohort
+   where store_id = 'fa000000-0000-4000-9000-000000000001'),
+  2::bigint, 'cohort revocation history is preserved'
+);
 
 select throws_ok(
   $$select * from public.begin_saas_billing_portal_action(
@@ -159,6 +299,51 @@ select throws_ok(
     'acct_1CTOghL1R5g4hhXt', 'local')$$,
   '42501', 'BILLING_MANAGEMENT_STORE_NOT_OWNED', 'nonowner is rejected'
 );
+
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claim.sub', 'fa000000-0000-4000-8000-000000000001', true);
+select is(
+  (select portal_enabled from public.seller_get_saas_billing_status()),
+  true, 'master flag plus same-store cohort exposes Portal in the read model'
+);
+select is(
+  (select lifecycle_state from public.seller_get_saas_billing_status()),
+  'trial_canceling_at_period_end',
+  'active canceling verified trial maps to the resumable presentation state'
+);
+select is(
+  (select has_active_access from public.seller_get_saas_billing_status()),
+  true, 'canceling trial remains entitled through its verified trial boundary'
+);
+select set_config('request.jwt.claim.role', 'service_role', true);
+update public.billing_subscription_enrollments
+set cancel_at_period_end = false
+where id = 'fa000000-0000-4000-b000-000000000001';
+update public.seller_billing_status
+set cancel_at_period_end = false
+where store_id = 'fa000000-0000-4000-9000-000000000001';
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select is(
+  (select lifecycle_state from public.seller_get_saas_billing_status()),
+  'trial_active', 'normal verified trial remains distinct from canceling trial'
+);
+select set_config('request.jwt.claim.role', 'service_role', true);
+update public.seller_billing_status
+set payment_failure_started_at = statement_timestamp()
+where store_id = 'fa000000-0000-4000-9000-000000000001';
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select is(
+  (select lifecycle_state from public.seller_get_saas_billing_status()),
+  'trial_payment_problem', 'trial payment problem remains a distinct presentation state'
+);
+select set_config('request.jwt.claim.role', 'service_role', true);
+update public.billing_subscription_enrollments
+set cancel_at_period_end = true
+where id = 'fa000000-0000-4000-b000-000000000001';
+update public.seller_billing_status
+set cancel_at_period_end = true,
+    payment_failure_started_at = null
+where store_id = 'fa000000-0000-4000-9000-000000000001';
 
 create temporary table batch10_portal as
 select * from public.begin_saas_billing_portal_action(
@@ -255,6 +440,85 @@ select is((select cancel_at_period_end from public.seller_billing_status where s
 select is((select subscription_status from public.seller_billing_status where store_id = 'fa000000-0000-4000-9000-000000000001'), 'trialing', 'resume request does not change subscription status');
 select is((select access_reason from public.resolve_store_entitlement('fa000000-0000-4000-9000-000000000001')), 'stripe_trial', 'request auditing leaves entitlement unchanged');
 
+create temporary table batch10_wrong_environment_claim as
+select pg_temp.batch10_claim_subscription(
+  'evt_Batch10WrongEnvironment', statement_timestamp(), 'staging'
+) as token;
+select is(
+  (select application_state from pg_temp.batch10_apply_subscription(
+    'evt_Batch10WrongEnvironment',
+    (select token from batch10_wrong_environment_claim), false, 'staging'
+  )),
+  'snapshot_applied', 'verified Subscription snapshot remains environment-bound'
+);
+select is(
+  (select request_status from public.billing_management_action_requests
+   where id = (select action_request_id from batch10_resume)),
+  'provider_requested', 'mismatched event environment cannot complete resume audit'
+);
+
+create temporary table batch10_resume_update_claim as
+select pg_temp.batch10_claim_subscription(
+  'evt_Batch10ResumeConfirmed', statement_timestamp() + interval '1 second'
+) as token;
+select is(
+  (select application_state from pg_temp.batch10_apply_subscription(
+    'evt_Batch10ResumeConfirmed',
+    (select token from batch10_resume_update_claim), false
+  )),
+  'snapshot_applied', 'matching verified Subscription update clears cancellation'
+);
+select is(
+  (select request_status from public.billing_management_action_requests
+   where id = (select action_request_id from batch10_resume)),
+  'completed', 'matching verified Subscription update completes pending resume audit'
+);
+select ok(
+  (select completed_at is not null from public.billing_management_action_requests
+   where id = (select action_request_id from batch10_resume)),
+  'verified resume completion records a terminal audit timestamp'
+);
+select is(
+  (select paid_through_at from public.seller_billing_status
+   where store_id = 'fa000000-0000-4000-9000-000000000001'),
+  null::timestamptz, 'resume completion creates no paid-through authority'
+);
+select is(
+  (select trial_ends_at from public.seller_billing_status
+   where store_id = 'fa000000-0000-4000-9000-000000000001'),
+  (select trial_ends_at from batch10_trial_boundary),
+  'resume completion does not alter the verified trial boundary'
+);
+select is(
+  (select application_state from pg_temp.batch10_apply_subscription(
+    'evt_Batch10ResumeConfirmed',
+    (select token from batch10_resume_update_claim), false
+  )),
+  'already_processed', 'duplicate verified Subscription delivery is idempotent'
+);
+
+create temporary table batch10_cancel_again_claim as
+select pg_temp.batch10_claim_subscription(
+  'evt_Batch10CancelAgain', statement_timestamp() + interval '1 second'
+) as token;
+select is(
+  (select application_state from pg_temp.batch10_apply_subscription(
+    'evt_Batch10CancelAgain',
+    (select token from batch10_cancel_again_claim), true
+  )),
+  'snapshot_applied', 'later verified cancellation starts a fresh lifecycle cycle'
+);
+create temporary table batch10_second_resume as
+select * from public.begin_saas_subscription_resume(
+  'fa000000-0000-4000-8000-000000000001', false,
+  'acct_1CTOghL1R5g4hhXt', 'local'
+);
+select isnt(
+  (select action_request_id from batch10_second_resume),
+  (select action_request_id from batch10_resume),
+  'later cancel and resume cycle creates a fresh action identity'
+);
+
 select throws_ok(
   $$insert into public.billing_management_action_requests (
     store_id, requested_by_user_id, subscription_enrollment_id, action_type,
@@ -274,6 +538,15 @@ select throws_ok(
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
+select throws_ok(
+  $$select count(*) from public.saas_billing_portal_store_cohort$$,
+  '42501', null, 'authenticated browser cannot enumerate cohort records'
+);
+select throws_ok(
+  $$select public.set_saas_billing_portal_store_cohort(
+    'fa000000-0000-4000-9000-000000000001', false)$$,
+  '42501', null, 'authenticated browser cannot manage cohort records'
+);
 select throws_ok(
   $$insert into public.billing_management_action_requests (
     store_id, requested_by_user_id, subscription_enrollment_id, action_type,

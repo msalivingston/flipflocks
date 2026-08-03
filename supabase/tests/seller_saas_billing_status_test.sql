@@ -244,40 +244,47 @@ select ok(
   'read model exposes no Stripe identifiers or provider-event evidence'
 );
 select ok(
-  position('resolve_store_entitlement' in (
+  position('seller_get_saas_billing_status_base_v1' in (
     select pg_get_functiondef(procedure.oid)
     from pg_proc as procedure
     join pg_namespace as namespace on namespace.oid = procedure.pronamespace
     where namespace.nspname = 'public'
       and procedure.proname = 'seller_get_saas_billing_status'
+  )) > 0
+  and position('resolve_store_entitlement' in (
+    select pg_get_functiondef(procedure.oid)
+    from pg_proc as procedure
+    join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'public'
+      and procedure.proname = 'seller_get_saas_billing_status_base_v1'
   )) > 0,
-  'read model derives access from the canonical resolver'
+  'cohort-aware read model delegates access to the canonical resolver projection'
 );
 select ok(
   position('payment_failed_paid_through' in (
     select pg_get_functiondef(procedure.oid) from pg_proc as procedure
     join pg_namespace as namespace on namespace.oid = procedure.pronamespace
-    where namespace.nspname = 'public' and procedure.proname = 'seller_get_saas_billing_status'
+    where namespace.nspname = 'public' and procedure.proname = 'seller_get_saas_billing_status_base_v1'
   )) > 0
   and position('payment_grace' in (
     select pg_get_functiondef(procedure.oid) from pg_proc as procedure
     join pg_namespace as namespace on namespace.oid = procedure.pronamespace
-    where namespace.nspname = 'public' and procedure.proname = 'seller_get_saas_billing_status'
+    where namespace.nspname = 'public' and procedure.proname = 'seller_get_saas_billing_status_base_v1'
   )) > 0
   and position('suspended_nonpayment' in (
     select pg_get_functiondef(procedure.oid) from pg_proc as procedure
     join pg_namespace as namespace on namespace.oid = procedure.pronamespace
-    where namespace.nspname = 'public' and procedure.proname = 'seller_get_saas_billing_status'
+    where namespace.nspname = 'public' and procedure.proname = 'seller_get_saas_billing_status_base_v1'
   )) > 0
   and position('canceling_at_period_end' in (
     select pg_get_functiondef(procedure.oid) from pg_proc as procedure
     join pg_namespace as namespace on namespace.oid = procedure.pronamespace
-    where namespace.nspname = 'public' and procedure.proname = 'seller_get_saas_billing_status'
+    where namespace.nspname = 'public' and procedure.proname = 'seller_get_saas_billing_status_base_v1'
   )) > 0
   and position('fully_canceled' in (
     select pg_get_functiondef(procedure.oid) from pg_proc as procedure
     join pg_namespace as namespace on namespace.oid = procedure.pronamespace
-    where namespace.nspname = 'public' and procedure.proname = 'seller_get_saas_billing_status'
+    where namespace.nspname = 'public' and procedure.proname = 'seller_get_saas_billing_status_base_v1'
   )) > 0,
   'read model contains paid failure, grace, suspension, cancellation, and terminal mappings'
 );
@@ -286,7 +293,7 @@ select ok(
    from pg_proc as procedure
    join pg_namespace as namespace on namespace.oid = procedure.pronamespace
    where namespace.nspname = 'public'
-     and procedure.proname = 'seller_get_saas_billing_status')
+     and procedure.proname = 'seller_get_saas_billing_status_base_v1')
   like '%complimentary_access%administrative_hold%unknown%',
   'read model deliberately maps complimentary, hold, and unknown states'
 );

@@ -25,7 +25,8 @@ export function getBillingManagementAvailability(
     );
   const updatePaymentMethod = verifiedStripeManagement && [
     "trial_active", "trial_payment_problem", "active_paid",
-    "payment_failed_paid_through", "payment_grace", "canceling_at_period_end",
+    "trial_canceling_at_period_end", "payment_failed_paid_through",
+    "payment_grace", "canceling_at_period_end",
   ].includes(status.lifecycle_state);
   return {
     manageBilling: verifiedStripeManagement,
@@ -36,6 +37,8 @@ export function getBillingManagementAvailability(
       "payment_failed_paid_through", "payment_grace",
     ].includes(status.lifecycle_state),
     resumeSubscription: verifiedStripeManagement && status.cancel_at_period_end &&
-      status.lifecycle_state === "canceling_at_period_end",
+      ["trial_canceling_at_period_end", "canceling_at_period_end"].includes(
+        status.lifecycle_state,
+      ),
   };
 }
