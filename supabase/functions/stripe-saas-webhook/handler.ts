@@ -278,6 +278,10 @@ export type StripeSaasWebhookDependencies = {
     processingLeaseToken: string,
     evidence: SaasSubscriptionLifecycleEvidence,
   ) => Promise<SaasSubscriptionApplicationResult>;
+  deferSubscriptionUntilEnrollment: (
+    identity: ProviderEventIdentity,
+    processingLeaseToken: string,
+  ) => Promise<void>;
   markDeferred: (
     identity: TerminalEventIdentity,
     processingLeaseToken: string,
@@ -1029,6 +1033,34 @@ async function reconcileSubscriptionLifecycle(
     const classified = error instanceof SaasWebhookDomainError
       ? error
       : new SaasWebhookDomainError("subscription_application_failed", true);
+    if (classified.errorCode === "immutable_enrollment_not_ready") {
+      try {
+        await dependencies.deferSubscriptionUntilEnrollment(
+          identity,
+          leaseToken,
+        );
+      } catch {
+        return processingFailureResponse(
+          dependencies,
+          "webhook_event_finalization_failed",
+          "subscription_enrollment_defer",
+          startedAt,
+          identity,
+        );
+      }
+      safeLog(dependencies, {
+        event_id: identity.providerEventId,
+        event_type: identity.eventType,
+        mode: identity.stripeLivemode ? "live" : "test",
+        result: "deferred_awaiting_enrollment",
+        attempt_count: claim.attempt_count,
+        duration_ms: (dependencies.now?.() ?? Date.now()) - startedAt,
+      });
+      return jsonResponse(200, {
+        received: true,
+        result: "deferred_awaiting_enrollment",
+      });
+    }
     await recordReconciliationFailure(
       dependencies, identity, leaseToken,
       classified.errorCode, classified.retryable,

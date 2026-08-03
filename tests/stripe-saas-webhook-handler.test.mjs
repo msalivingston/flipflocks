@@ -217,6 +217,7 @@ function harness(overrides = {}) {
     applyInvoice: [],
     retrieveSubscription: [],
     applySubscription: [],
+    deferSubscriptionUntilEnrollment: [],
     logs: [],
   };
   const dependencies = {
@@ -304,6 +305,9 @@ function harness(overrides = {}) {
         paid_through_at: "2026-09-02T16:00:00.000Z",
         grace_ends_at: null,
       };
+    },
+    deferSubscriptionUntilEnrollment: async (...args) => {
+      calls.deferSubscriptionUntilEnrollment.push(args);
     },
     safeLog: (record) => calls.logs.push(record),
     ...overrides,
@@ -848,6 +852,164 @@ test("verified Subscription created, updated, and deleted events apply snapshots
   }
 });
 
+test("Subscription creation before Checkout enrollment stays deferred and reconciles once", async () => {
+  let currentEvent = event("customer.subscription.created", {
+    id: "evt_SubscriptionBeforeCheckout",
+  });
+  let subscriptionReceived = false;
+  let enrollmentAvailable = false;
+  let subscriptionProcessed = false;
+  const fixture = harness({
+    verifySignature: async () => currentEvent,
+    claimEvent: async (identity) => {
+      fixture.calls.claim.push([identity]);
+      if (identity.eventType === "checkout.session.completed") {
+        return {
+          claim_state: "claimed",
+          processing_status: "processing",
+          attempt_count: 1,
+          processing_lease_token: "d6000000-0000-4000-8000-000000000010",
+          lease_expires_at: "2026-08-02T12:05:00.000Z",
+        };
+      }
+      if (subscriptionProcessed) {
+        return {
+          claim_state: "terminal_duplicate",
+          processing_status: "processed",
+          attempt_count: 3,
+          processing_lease_token: null,
+          lease_expires_at: null,
+        };
+      }
+      const claimState = subscriptionReceived ? "deferred_duplicate" : "claimed";
+      subscriptionReceived = true;
+      return {
+        claim_state: claimState,
+        processing_status: claimState === "claimed" ? "processing" : "deferred",
+        attempt_count: claimState === "claimed" ? 1 : 2,
+        processing_lease_token: claimState === "claimed"
+          ? "d6000000-0000-4000-8000-000000000011"
+          : null,
+        lease_expires_at: claimState === "claimed"
+          ? "2026-08-02T12:05:00.000Z"
+          : null,
+      };
+    },
+    applySubscriptionLifecycle: async (...args) => {
+      fixture.calls.applySubscription.push(args);
+      if (!enrollmentAvailable) {
+        throw new SaasWebhookDomainError(
+          "immutable_enrollment_not_ready",
+          true,
+        );
+      }
+      subscriptionProcessed = true;
+      return {
+        application_state: "snapshot_applied",
+        store_id: STORE_ID,
+        subscription_status: "trialing",
+        paid_through_at: null,
+        grace_ends_at: null,
+      };
+    },
+    deferSubscriptionUntilEnrollment: async (...args) => {
+      fixture.calls.deferSubscriptionUntilEnrollment.push(args);
+    },
+    applyCheckoutCompletion: async (...args) => {
+      fixture.calls.apply.push(args);
+      enrollmentAvailable = true;
+      return {
+        application_state: "trial_enrolled",
+        store_id: STORE_ID,
+        customer_binding_id: "d7000000-0000-4000-8000-000000000003",
+        subscription_enrollment_id: "d7000000-0000-4000-8000-000000000004",
+        trial_claimed: true,
+        billing_complete: true,
+      };
+    },
+  });
+
+  const earlyResponse = await fixture.handler(webhookRequest());
+  assert.equal(earlyResponse.status, 200);
+  assert.deepEqual(await earlyResponse.json(), {
+    received: true,
+    result: "deferred_awaiting_enrollment",
+  });
+  assert.equal(fixture.calls.deferSubscriptionUntilEnrollment.length, 1);
+  assert.equal(fixture.calls.failed.length, 0);
+  assert.equal(fixture.calls.apply.length, 0);
+  assert.equal(fixture.calls.applyInvoice.length, 0);
+
+  currentEvent = event("checkout.session.completed", {
+    id: "evt_CheckoutAfterSubscription",
+  });
+  assert.equal((await fixture.handler(webhookRequest())).status, 200);
+  assert.equal(fixture.calls.apply.length, 1);
+
+  currentEvent = event("customer.subscription.created", {
+    id: "evt_SubscriptionBeforeCheckout",
+  });
+  assert.equal((await fixture.handler(webhookRequest())).status, 200);
+  assert.equal(fixture.calls.applySubscription.length, 2);
+  assert.equal(subscriptionProcessed, true);
+
+  assert.equal((await fixture.handler(webhookRequest())).status, 200);
+  assert.equal(fixture.calls.applySubscription.length, 2);
+  assert.equal(fixture.calls.deferSubscriptionUntilEnrollment.length, 1);
+});
+
+test("Subscription binding conflict stays permanent while database failure stays retryable", async () => {
+  const conflict = harness({
+    verifySignature: async () => event("customer.subscription.updated"),
+    applySubscriptionLifecycle: async () => {
+      throw new SaasWebhookDomainError("immutable_binding_conflict", false);
+    },
+  });
+  const conflictResponse = await conflict.handler(webhookRequest());
+  assert.equal(conflictResponse.status, 200);
+  assert.deepEqual(conflict.calls.failed[0].slice(2), [
+    "immutable_binding_conflict",
+    false,
+  ]);
+  assert.equal(conflict.calls.deferSubscriptionUntilEnrollment.length, 0);
+
+  const transient = harness({
+    verifySignature: async () => event("customer.subscription.updated"),
+    applySubscriptionLifecycle: async () => {
+      throw new Error("database unavailable");
+    },
+  });
+  await assertProcessingFailure(
+    await transient.handler(webhookRequest()),
+    "webhook_subscription_snapshot_failed",
+  );
+  assert.deepEqual(transient.calls.failed[0].slice(2), [
+    "subscription_application_failed",
+    true,
+  ]);
+  assert.equal(transient.calls.deferSubscriptionUntilEnrollment.length, 0);
+});
+
+test("failure to release an early Subscription event back to deferred is retryable", async () => {
+  const fixture = harness({
+    verifySignature: async () => event("customer.subscription.created"),
+    applySubscriptionLifecycle: async () => {
+      throw new SaasWebhookDomainError(
+        "immutable_enrollment_not_ready",
+        true,
+      );
+    },
+    deferSubscriptionUntilEnrollment: async () => {
+      throw new Error("database unavailable");
+    },
+  });
+  await assertProcessingFailure(
+    await fixture.handler(webhookRequest()),
+    "webhook_event_finalization_failed",
+  );
+  assert.equal(fixture.calls.failed.length, 0);
+});
+
 test("invoice identity, binding evidence, Price, Product, and mode mismatches fail closed", async () => {
   const mutations = [
     (value) => value.invoice.id = "in_Wrong",
@@ -873,7 +1035,7 @@ test("invoice identity, binding evidence, Price, Product, and mode mismatches fa
   }
 });
 
-test("invoice and Subscription retrieval or unbound enrollment failures remain retryable", async () => {
+test("invoice enrollment and invoice or Subscription retrieval failures remain retryable", async () => {
   const invoiceRetrieval = harness({
     verifySignature: async () => event("invoice.payment_succeeded"),
     retrieveInvoiceLifecycleEvidence: async () => {

@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const migrationPath = path.join(root,
   "supabase/migrations/20260802101000_saas_webhook_event_ledger_contracts.sql");
+const enrollmentDeferMigrationPath = path.join(root,
+  "supabase/migrations/20260803100000_saas_subscription_event_enrollment_defer.sql");
 const indexPath = path.join(root, "supabase/functions/stripe-saas-webhook/index.ts");
 const handlerPath = path.join(root, "supabase/functions/stripe-saas-webhook/handler.ts");
 
@@ -137,6 +139,33 @@ test("webhook failures expose only stable stage diagnostics", async () => {
   assert.match(index, /catch\s*\{[\s\S]*?configuredHandler\s*=\s*createStripeSaasWebhookConfigurationErrorHandler/);
   assert.doesNotMatch(`${index}\n${handler}`, /console\.(?:error|warn)\s*\(/);
   assert.doesNotMatch(handler, /(?:error|exception)\.(?:message|stack)|JSON\.stringify\((?:error|exception)\)/i);
+});
+
+test("early Subscription events remain verified deferred work until enrollment exists", async () => {
+  const [, , index, handler] = await sources();
+  const migration = await readFile(enrollmentDeferMigrationPath, "utf8");
+  assert.match(handler,
+    /classified\.errorCode === "immutable_enrollment_not_ready"[\s\S]*?deferSubscriptionUntilEnrollment/);
+  assert.match(handler, /result:\s*"deferred_awaiting_enrollment"/);
+  assert.match(index, /defer_saas_subscription_event_until_enrollment/);
+  assert.match(index, /SAAS_[\s\S]*ENROLLMENT_NOT_FOUND/);
+  assert.match(index, /"immutable_binding_conflict"/);
+  assert.match(migration,
+    /create function public\.defer_saas_subscription_event_until_enrollment/);
+  assert.match(migration,
+    /processing_status = 'deferred'/);
+  assert.match(migration,
+    /deferred_reason is distinct from[\s\S]*?'awaiting_verified_enrollment_batch'/);
+  assert.match(migration,
+    /processing_lease_token is distinct from[\s\S]*?p_processing_lease_token/);
+  assert.match(migration,
+    /'provider_event_deferred', 'enrollment_not_yet_available'/);
+  assert.match(migration,
+    /grant execute on function public\.defer_saas_subscription_event_until_enrollment\([\s\S]*?\) to service_role/);
+  assert.doesNotMatch(migration,
+    /grant execute on function public\.defer_saas_subscription_event_until_enrollment\([\s\S]*?\) to (?:anon|authenticated)/);
+  assert.doesNotMatch(migration,
+    /(?:insert into|update) public\.(?:seller_billing_status|billing_customer_bindings|billing_subscription_enrollments|billing_trial_claims|billing_subscription_invoices)/i);
 });
 
 test("deployment documentation keeps webhook, catalog, and operational secrets separate", async () => {

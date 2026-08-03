@@ -410,7 +410,9 @@ function lifecycleRpcError(
     enrollmentMissing
       ? "immutable_enrollment_not_ready"
       : permanent
-      ? `${domain}_binding_conflict`
+      ? domain === "subscription"
+        ? "immutable_binding_conflict"
+        : "invoice_binding_conflict"
       : `${domain}_application_failed`,
     !permanent,
   );
@@ -673,6 +675,28 @@ const handler = createStripeSaasWebhookHandler({
     );
     if (error) throw lifecycleRpcError(error, "subscription");
     return firstRow<SaasSubscriptionApplicationResult>(data);
+  },
+  async deferSubscriptionUntilEnrollment(
+    identity,
+    processingLeaseToken,
+  ) {
+    const { error } = await serviceClient.rpc(
+      "defer_saas_subscription_event_until_enrollment",
+      {
+        p_provider_event_id: identity.providerEventId,
+        p_payload_hash: identity.payloadHash,
+        p_stripe_account_id: identity.stripeAccountId,
+        p_stripe_livemode: identity.stripeLivemode,
+        p_environment_id: identity.environmentId,
+        p_event_type: identity.eventType,
+        p_provider_object_type: identity.providerObjectType,
+        p_provider_object_id: identity.providerObjectId,
+        p_processing_lease_token: processingLeaseToken,
+      },
+    );
+    if (error) {
+      throw new Error("Subscription event enrollment deferral failed.");
+    }
   },
   async markDeferred(identity, processingLeaseToken, reasonCode) {
     const { error } = await serviceClient.rpc(

@@ -179,5 +179,5 @@ test("current SaaS billing batch changes no Pay at Pickup, refund, or Connect ap
   assert.ok(changed.every((file) => !/(pay-at-pickup|refund|connect)/i.test(file)));
   const batch9Ui = /^app\/(?:dashboard\/(?:_components\/seller-(?:app-shell|billing-banner|billing-context)|account\/(?:seller-account|subscription-billing-panel))|onboarding\/(?:page|_components\/(?:onboarding-flow|step-5-plan-access-form)|billing\/return\/(?:page|stripe-return-status)))\.tsx$/;
   assert.ok(changed.every((file) => batch9Ui.test(file)
-    || /^(?:lib\/saas-billing-(?:status|management)\.ts|docs\/stripe-saas-|supabase\/(?:config\.toml|functions\/(?:_shared\/stripe-saas-|stripe-saas-)|migrations\/20260802|tests\/(?:seller_saas_|verified_saas_|saas_))|tests\/(?:authoritative-entitlements|seller-saas-|stripe-saas-))/.test(file)));
+    || /^(?:lib\/saas-billing-(?:status|management)\.ts|docs\/stripe-saas-|supabase\/(?:config\.toml|functions\/(?:_shared\/stripe-saas-|stripe-saas-)|migrations\/(?:20260802|20260803100000_saas_subscription_event_enrollment_defer)|tests\/(?:seller_saas_|verified_saas_|saas_))|tests\/(?:authoritative-entitlements|seller-saas-|stripe-saas-))/.test(file)));
 });
