@@ -14,6 +14,7 @@ const panel = read("app/dashboard/account/subscription-billing-panel.tsx");
 const management = read("lib/saas-billing-management.ts");
 const config = read("supabase/config.toml");
 const documentation = read("docs/stripe-saas-billing-management.md");
+const runtime = read("supabase/functions/_shared/stripe-saas-runtime.mjs");
 
 test("Batch 10 functions are authenticated and registered but remain undeployed by source", () => {
   assert.match(config, /\[functions\.stripe-saas-portal\]\s*verify_jwt = true/);
@@ -32,20 +33,24 @@ test("browser inputs cannot supply provider or tenant authority", () => {
 });
 
 test("Portal uses fixed server configuration and host validation", () => {
+  assert.match(portalIndex, /FLOCKFRONT_APP_ORIGIN/);
   for (const name of [
-    "FLOCKFRONT_APP_ORIGIN",
     "STRIPE_GENERAL_PORTAL_CONFIGURATION_ID",
     "STRIPE_CANCEL_PORTAL_CONFIGURATION_ID",
-  ]) assert.match(portalIndex, new RegExp(name));
+  ]) {
+    assert.doesNotMatch(portalIndex, new RegExp(name));
+    assert.doesNotMatch(resumeIndex, new RegExp(name));
+    assert.doesNotMatch(runtime, new RegExp(name));
+  }
   assert.match(portalIndex, /dashboard\/account\?billing=portal_return/);
   assert.match(portalHandler, /url\.hostname === "billing\.stripe\.com"/);
   assert.match(portalIndex, /billingPortal\.sessions\.create/);
-  assert.match(portalIndex, /type: "payment_method_update"/);
-  assert.match(portalIndex, /type: "subscription_cancel"/);
-  assert.match(portalIndex, /subscription_cancel:\s*\{\s*subscription:/);
-  assert.match(portalIndex, /safe\.configuration !== configuration/);
+  assert.match(portalHandler, /type: "payment_method_update"/);
+  assert.match(portalHandler, /type: "subscription_cancel"/);
+  assert.match(portalHandler, /subscription_cancel:\s*\{\s*subscription:/);
+  assert.match(portalIndex, /buildStripePortalSessionParams/);
   assert.match(portalIndex, /safe\.customer !== authorization\.stripe_customer_id/);
-  assert.doesNotMatch(portalIndex, /subscription_update/);
+  assert.doesNotMatch(`${portalIndex}\n${portalHandler}`, /subscription_update/);
 });
 
 test("resume updates only provider cancellation scheduling with stable idempotency", () => {
@@ -79,9 +84,10 @@ test("seller controls are authoritative-state gated and Portal-return is present
 
 test("deployment documentation keeps all secrets server-only and plan changes disabled", () => {
   assert.match(documentation, /STRIPE_SAAS_API_KEY/);
-  assert.match(documentation, /STRIPE_GENERAL_PORTAL_CONFIGURATION_ID/);
-  assert.match(documentation, /STRIPE_CANCEL_PORTAL_CONFIGURATION_ID/);
-  assert.match(documentation, /Product and Price switching\s+disabled/);
+  assert.doesNotMatch(documentation, /STRIPE_GENERAL_PORTAL_CONFIGURATION_ID/);
+  assert.doesNotMatch(documentation, /STRIPE_CANCEL_PORTAL_CONFIGURATION_ID/);
+  assert.match(documentation, /saved default sandbox Portal configuration/);
+  assert.match(documentation, /Product and Price switching[\s\S]*must remain disabled/);
   assert.match(documentation, /temporary[\s\S]*STRIPE_SAAS_CATALOG_READ_KEY[\s\S]*is unrelated/i);
   assert.doesNotMatch(documentation, /(sk|rk)_(test|live)_[A-Za-z0-9]{8,}/);
 });

@@ -2,10 +2,37 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildStripePortalSessionParams,
   createStripeSaasPortalHandler,
   isSafeStripePortalUrl,
   PortalProviderError,
 } from "../supabase/functions/stripe-saas-portal/handler.ts";
+
+test("Portal Session parameters use the default configuration and preserve targeted flows", () => {
+  const returnUrl = "https://flockfront.test/dashboard/account?billing=portal_return";
+  for (const action of ["manage_billing", "invoice_history"]) {
+    const params = buildStripePortalSessionParams(action, "cus_Batch10", "sub_Batch10", returnUrl);
+    assert.equal(Object.hasOwn(params, "configuration"), false);
+    assert.equal(params.customer, "cus_Batch10");
+    assert.equal(params.return_url, returnUrl);
+    assert.equal(params.flow_data, undefined);
+  }
+
+  const payment = buildStripePortalSessionParams(
+    "update_payment_method", "cus_Batch10", "sub_Batch10", returnUrl,
+  );
+  assert.equal(Object.hasOwn(payment, "configuration"), false);
+  assert.equal(payment.flow_data.type, "payment_method_update");
+  assert.equal(payment.flow_data.after_completion.redirect.return_url, returnUrl);
+
+  const cancellation = buildStripePortalSessionParams(
+    "cancel_subscription", "cus_Batch10", "sub_Batch10", returnUrl,
+  );
+  assert.equal(Object.hasOwn(cancellation, "configuration"), false);
+  assert.equal(cancellation.flow_data.type, "subscription_cancel");
+  assert.equal(cancellation.flow_data.subscription_cancel.subscription, "sub_Batch10");
+  assert.equal(cancellation.flow_data.after_completion.redirect.return_url, returnUrl);
+});
 
 function authorization(overrides = {}) {
   return {

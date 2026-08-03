@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.0";
 import { createStripeSaasClient } from "../_shared/stripe-saas-client.ts";
 import { parseStripeSaasPortalConfig } from "../_shared/stripe-saas-runtime.mjs";
 import {
+  buildStripePortalSessionParams,
   createStripeSaasPortalHandler,
   PortalProviderError,
   type PortalAction,
@@ -21,8 +22,6 @@ const config = parseStripeSaasPortalConfig({
   STRIPE_SAAS_LIVEMODE: Deno.env.get("STRIPE_SAAS_LIVEMODE"),
   FLOCKFRONT_ENVIRONMENT_ID: Deno.env.get("FLOCKFRONT_ENVIRONMENT_ID"),
   FLOCKFRONT_APP_ORIGIN: Deno.env.get("FLOCKFRONT_APP_ORIGIN"),
-  STRIPE_GENERAL_PORTAL_CONFIGURATION_ID: Deno.env.get("STRIPE_GENERAL_PORTAL_CONFIGURATION_ID"),
-  STRIPE_CANCEL_PORTAL_CONFIGURATION_ID: Deno.env.get("STRIPE_CANCEL_PORTAL_CONFIGURATION_ID"),
 });
 if (config.livemode) throw new Error("Live SaaS Billing Portal is not enabled in this batch.");
 
@@ -93,34 +92,17 @@ const handler = createStripeSaasPortalHandler({
     return firstRow<PortalActionAuthorization>(data);
   },
   async createPortalSession(authorization, action) {
-    const configuration = action === "cancel_subscription"
-      ? config.cancelPortalConfigurationId
-      : config.generalPortalConfigurationId;
-    const afterCompletion = {
-      type: "redirect" as const,
-      redirect: { return_url: returnUrl },
-    };
-    const flowData = action === "update_payment_method"
-      ? { type: "payment_method_update" as const, after_completion: afterCompletion }
-      : action === "cancel_subscription"
-      ? {
-        type: "subscription_cancel" as const,
-        subscription_cancel: {
-          subscription: authorization.stripe_subscription_id!,
-        },
-        after_completion: afterCompletion,
-      }
-      : undefined;
     try {
-      const session = await stripe.billingPortal.sessions.create({
-        customer: authorization.stripe_customer_id!,
-        configuration,
-        return_url: returnUrl,
-        flow_data: flowData,
-      });
+      const session = await stripe.billingPortal.sessions.create(
+        buildStripePortalSessionParams(
+          action,
+          authorization.stripe_customer_id!,
+          authorization.stripe_subscription_id!,
+          returnUrl,
+        ),
+      );
       const safe = safeSession(session);
-      if (safe.configuration !== configuration ||
-          safe.customer !== authorization.stripe_customer_id) {
+      if (safe.customer !== authorization.stripe_customer_id) {
         throw new PortalProviderError("stripe_portal_response_invalid");
       }
       return safe;

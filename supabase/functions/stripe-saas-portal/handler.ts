@@ -22,6 +22,32 @@ export type SafePortalSession = {
   livemode: boolean;
 };
 
+export function buildStripePortalSessionParams(
+  action: PortalAction,
+  customerId: string,
+  subscriptionId: string,
+  returnUrl: string,
+) {
+  const afterCompletion = {
+    type: "redirect" as const,
+    redirect: { return_url: returnUrl },
+  };
+  const flowData = action === "update_payment_method"
+    ? { type: "payment_method_update" as const, after_completion: afterCompletion }
+    : action === "cancel_subscription"
+    ? {
+      type: "subscription_cancel" as const,
+      subscription_cancel: { subscription: subscriptionId },
+      after_completion: afterCompletion,
+    }
+    : undefined;
+  return {
+    customer: customerId,
+    return_url: returnUrl,
+    flow_data: flowData,
+  };
+}
+
 export class PortalProviderError extends Error {
   readonly failureCode: string;
   constructor(failureCode: string) {

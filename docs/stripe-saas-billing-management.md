@@ -11,19 +11,22 @@ Future deployments require these server-only values:
 - `STRIPE_SAAS_LIVEMODE`
 - `FLOCKFRONT_ENVIRONMENT_ID`
 - `FLOCKFRONT_APP_ORIGIN`
-- `STRIPE_GENERAL_PORTAL_CONFIGURATION_ID`
-- `STRIPE_CANCEL_PORTAL_CONFIGURATION_ID`
 
 The temporary `STRIPE_SAAS_CATALOG_READ_KEY` is unrelated and must not be
 used by these functions. No value belongs in source control or a public
 environment variable.
 
-The general Portal configuration must allow payment-method updates and
-invoice history while leaving subscription Product and Price switching
-disabled. The cancellation configuration must cancel at the end of the
-current billing period and must also leave plan switching disabled. FlockFront
-uses a targeted `subscription_cancel` Portal flow for the current immutable
-Subscription binding.
+The saved default sandbox Portal configuration must allow payment-method
+updates, invoice history, and cancellation at the end of the current billing
+period. Subscription Product and Price switching, plan changes, cadence
+changes, and promotion codes must remain disabled.
+
+FlockFront deliberately omits Stripe's `configuration` parameter when it
+creates every Portal Session, so Stripe uses the saved default sandbox
+configuration. Payment-method updates and cancellation still use targeted
+Portal flows. The `subscription_cancel` flow is bound to the current immutable
+Subscription derived by the server. No Portal configuration identifier is a
+required runtime variable.
 
 `FLOCKFRONT_APP_ORIGIN` is the fixed return origin. It must use HTTPS outside
 local development. The server always returns to

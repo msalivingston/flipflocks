@@ -19,8 +19,6 @@ const config = parseStripeSaasPortalConfig({
   STRIPE_SAAS_LIVEMODE: Deno.env.get("STRIPE_SAAS_LIVEMODE"),
   FLOCKFRONT_ENVIRONMENT_ID: Deno.env.get("FLOCKFRONT_ENVIRONMENT_ID"),
   FLOCKFRONT_APP_ORIGIN: Deno.env.get("FLOCKFRONT_APP_ORIGIN"),
-  STRIPE_GENERAL_PORTAL_CONFIGURATION_ID: Deno.env.get("STRIPE_GENERAL_PORTAL_CONFIGURATION_ID"),
-  STRIPE_CANCEL_PORTAL_CONFIGURATION_ID: Deno.env.get("STRIPE_CANCEL_PORTAL_CONFIGURATION_ID"),
 });
 if (config.livemode) throw new Error("Live SaaS subscription actions are not enabled in this batch.");
 

@@ -38,12 +38,10 @@ test("Portal configuration remains operational-key-only and validates fixed serv
     STRIPE_SAAS_LIVEMODE: "false",
     FLOCKFRONT_ENVIRONMENT_ID: "local",
     FLOCKFRONT_APP_ORIGIN: "http://127.0.0.1:3000",
-    STRIPE_GENERAL_PORTAL_CONFIGURATION_ID: "bpc_Batch10General",
-    STRIPE_CANCEL_PORTAL_CONFIGURATION_ID: "bpc_Batch10Cancel",
   });
   assert.equal(config.appOrigin, "http://127.0.0.1:3000");
-  assert.equal(config.generalPortalConfigurationId, "bpc_Batch10General");
-  assert.equal(config.cancelPortalConfigurationId, "bpc_Batch10Cancel");
+  assert.equal("generalPortalConfigurationId" in config, false);
+  assert.equal("cancelPortalConfigurationId" in config, false);
   assert.equal(config.operationalApiKey, testSecret);
   assert.equal("catalogReadApiKey" in config, true);
 
@@ -52,14 +50,10 @@ test("Portal configuration remains operational-key-only and validates fixed serv
     STRIPE_SAAS_LIVEMODE: "false",
     FLOCKFRONT_ENVIRONMENT_ID: "local",
     FLOCKFRONT_APP_ORIGIN: "https://flockfront.test",
-    STRIPE_GENERAL_PORTAL_CONFIGURATION_ID: "bpc_Batch10General",
-    STRIPE_CANCEL_PORTAL_CONFIGURATION_ID: "bpc_Batch10Cancel",
   }), "STRIPE_SAAS_CONFIG_STRIPE_SAAS_API_KEY_MISSING");
   expectCode(() => parseStripeSaasPortalConfig({
     ...environment(),
     FLOCKFRONT_APP_ORIGIN: "https://flockfront.test/path",
-    STRIPE_GENERAL_PORTAL_CONFIGURATION_ID: "bpc_Batch10General",
-    STRIPE_CANCEL_PORTAL_CONFIGURATION_ID: "bpc_Batch10Cancel",
   }), "STRIPE_SAAS_CONFIG_APP_ORIGIN_INVALID");
 });
 

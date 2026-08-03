@@ -148,32 +148,12 @@ function parseApplicationOrigin(value) {
   return parsed.origin;
 }
 
-function parsePortalConfigurationId(value, name) {
-  if (!/^bpc_[A-Za-z0-9]+$/.test(value)) {
-    throw new StripeSaasError(
-      `STRIPE_SAAS_CONFIG_${name}_INVALID`,
-      `${name} must be a Stripe Billing Portal configuration identifier.`,
-    );
-  }
-  return value;
-}
-
 export function parseStripeSaasPortalConfig(source) {
   const operational = parseStripeSaasConfig(source);
   const appOrigin = parseApplicationOrigin(required(source, "FLOCKFRONT_APP_ORIGIN"));
-  const generalPortalConfigurationId = parsePortalConfigurationId(
-    required(source, "STRIPE_GENERAL_PORTAL_CONFIGURATION_ID"),
-    "STRIPE_GENERAL_PORTAL_CONFIGURATION_ID",
-  );
-  const cancelPortalConfigurationId = parsePortalConfigurationId(
-    required(source, "STRIPE_CANCEL_PORTAL_CONFIGURATION_ID"),
-    "STRIPE_CANCEL_PORTAL_CONFIGURATION_ID",
-  );
   return Object.freeze({
     ...operational,
     appOrigin,
-    generalPortalConfigurationId,
-    cancelPortalConfigurationId,
   });
 }
 
