@@ -35,6 +35,15 @@ select ok(
   ),
   'failed Checkout replay diagnostics are service-role only'
 );
+select ok(
+  position(
+    '''checkout_trial_state_mismatch'''
+    in pg_get_functiondef(
+      'public.claim_failed_saas_checkout_completion_replay(text,text,text,boolean,text,text,text,text)'::regprocedure
+    )
+  ) > 0,
+  'the precise trial-state conflict remains allowlisted for audited replay'
+);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,

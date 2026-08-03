@@ -151,7 +151,10 @@ create function pg_temp.batch7_apply(
   p_metadata_cadence_override text default null,
   p_payment_method_ready boolean default true,
   p_trial_duration interval default interval '7 days',
-  p_trial_checkout boolean default true
+  p_trial_checkout boolean default true,
+  p_session_payment_status_override text default null,
+  p_subscription_status_override text default null,
+  p_period_end_offset interval default interval '0 seconds'
 )
 returns table (
   application_state text,
@@ -200,7 +203,10 @@ begin
   v_trial_end := case when p_trial_checkout
     then v_event.provider_event_created_at + p_trial_duration else null end;
   v_period_start := coalesce(v_trial_start, v_event.provider_event_created_at);
-  v_period_end := coalesce(v_trial_end, v_event.provider_event_created_at + interval '30 days');
+  v_period_end := coalesce(
+    v_trial_end,
+    v_event.provider_event_created_at + interval '30 days'
+  ) + p_period_end_offset;
 
   return query
   select * from public.apply_verified_saas_checkout_completion(
@@ -208,7 +214,10 @@ begin
     v_event.provider_event_created_at,
     v_session, v_attempt.session_created_at, v_attempt.session_expires_at,
     'complete', 'subscription',
-    case when p_trial_checkout then 'no_payment_required' else 'paid' end,
+    coalesce(
+      p_session_payment_status_override,
+      case when p_trial_checkout then 'no_payment_required' else 'paid' end
+    ),
     'always', v_attempt.id::text, v_livemode, v_attempt.id,
     v_attempt.id::text,
     coalesce(p_metadata_store_override, v_attempt.store_id::text),
@@ -218,7 +227,10 @@ begin
     'ff_saas_checkout_v1',
     v_customer, v_attempt.session_created_at, v_livemode,
     v_subscription,
-    case when p_trial_checkout then 'trialing' else 'active' end,
+    coalesce(
+      p_subscription_status_override,
+      case when p_trial_checkout then 'trialing' else 'active' end
+    ),
     v_attempt.session_created_at, v_trial_start, v_trial_end,
     v_period_start, v_period_end, false, v_livemode,
     'charge_automatically', p_payment_method_ready,
@@ -266,7 +278,8 @@ select throws_ok(
     'evt_Batch7Trial', repeat('7', 64),
     (select processing_lease_token from batch7_reconciliation_claim),
     'e7000000-0000-4000-a000-000000000001',
-    p_session_override => 'cs_test_Wrong')$$,
+    p_session_override => 'cs_test_Wrong',
+    p_session_payment_status_override => 'paid')$$,
   '55000', 'SAAS_ENROLLMENT_EVENT_FENCE_CONFLICT',
   'wrong provider Checkout object is rejected'
 );
@@ -275,7 +288,8 @@ select throws_ok(
     'evt_Batch7Trial', repeat('7', 64),
     (select processing_lease_token from batch7_reconciliation_claim),
     'e7000000-0000-4000-a000-000000000001',
-    p_price_override => 'price_Wrong')$$,
+    p_price_override => 'price_Wrong',
+    p_session_payment_status_override => 'paid')$$,
   '55000', 'SAAS_ENROLLMENT_PRICE_MISMATCH',
   'Price must match the immutable Checkout attempt'
 );
@@ -284,7 +298,8 @@ select throws_ok(
     'evt_Batch7Trial', repeat('7', 64),
     (select processing_lease_token from batch7_reconciliation_claim),
     'e7000000-0000-4000-a000-000000000001',
-    p_product_override => 'prod_Wrong')$$,
+    p_product_override => 'prod_Wrong',
+    p_session_payment_status_override => 'paid')$$,
   '55000', 'SAAS_ENROLLMENT_PRODUCT_MISMATCH',
   'Product must match the immutable Checkout attempt'
 );
@@ -294,7 +309,8 @@ select throws_ok(
     (select processing_lease_token from batch7_reconciliation_claim),
     'e7000000-0000-4000-a000-000000000001',
     p_metadata_store_override =>
-      'e7000000-0000-4000-9000-000000000099')$$,
+      'e7000000-0000-4000-9000-000000000099',
+    p_session_payment_status_override => 'paid')$$,
   '55000', 'SAAS_ENROLLMENT_SESSION_METADATA_MISMATCH',
   'metadata cannot rebind the attempt to another store'
 );
@@ -303,7 +319,8 @@ select throws_ok(
     'evt_Batch7Trial', repeat('7', 64),
     (select processing_lease_token from batch7_reconciliation_claim),
     'e7000000-0000-4000-a000-000000000001',
-    p_payment_method_ready => false)$$,
+    p_payment_method_ready => false,
+    p_session_payment_status_override => 'paid')$$,
   '55000', 'SAAS_ENROLLMENT_PAYMENT_METHOD_NOT_READY',
   'missing automatic-payment readiness is rejected'
 );
@@ -312,16 +329,107 @@ select throws_ok(
     'evt_Batch7Trial', repeat('7', 64),
     (select processing_lease_token from batch7_reconciliation_claim),
     'e7000000-0000-4000-a000-000000000001',
-    p_trial_duration => interval '7 days 6 minutes')$$,
+    p_trial_duration => interval '7 days 6 minutes',
+    p_session_payment_status_override => 'paid')$$,
   '55000', 'SAAS_ENROLLMENT_TRIAL_DURATION_VIOLATION',
   'provider trial longer than seven days plus tolerance is rejected'
+);
+
+select throws_ok(
+  $$select * from pg_temp.batch7_apply(
+    'evt_Batch7Trial', repeat('7', 64),
+    (select processing_lease_token from batch7_reconciliation_claim),
+    'e7000000-0000-4000-a000-000000000001',
+    p_session_payment_status_override => 'unpaid')$$,
+  '55000', 'SAAS_ENROLLMENT_TRIAL_STATE_MISMATCH',
+  'unpaid is not valid Checkout payment state for a verified trial'
+);
+select throws_ok(
+  $$select * from pg_temp.batch7_apply(
+    'evt_Batch7Trial', repeat('7', 64),
+    (select processing_lease_token from batch7_reconciliation_claim),
+    'e7000000-0000-4000-a000-000000000001',
+    p_session_payment_status_override => 'requires_payment_method')$$,
+  '55000', 'SAAS_ENROLLMENT_TRIAL_STATE_MISMATCH',
+  'other unsupported Checkout payment states remain rejected'
+);
+select throws_ok(
+  $$select * from pg_temp.batch7_apply(
+    'evt_Batch7Trial', repeat('7', 64),
+    (select processing_lease_token from batch7_reconciliation_claim),
+    'e7000000-0000-4000-a000-000000000001',
+    p_session_payment_status_override => 'paid',
+    p_subscription_status_override => 'active')$$,
+  '55000', 'SAAS_ENROLLMENT_TRIAL_STATE_MISMATCH',
+  'paid does not bypass the required trialing Subscription status'
+);
+select throws_ok(
+  $$select * from pg_temp.batch7_apply(
+    'evt_Batch7Trial', repeat('7', 64),
+    (select processing_lease_token from batch7_reconciliation_claim),
+    'e7000000-0000-4000-a000-000000000001',
+    p_session_payment_status_override => 'paid',
+    p_period_end_offset => interval '1 second')$$,
+  '55000', 'SAAS_ENROLLMENT_TRIAL_TIMESTAMP_MISMATCH',
+  'paid does not bypass matching trial and current-period timestamps'
+);
+select throws_ok(
+  $$select * from pg_temp.batch7_apply(
+    'evt_Batch7Trial', repeat('7', 64),
+    (select processing_lease_token from batch7_reconciliation_claim),
+    'e7000000-0000-4000-a000-000000000001',
+    p_metadata_plan_override => 'full_flock',
+    p_session_payment_status_override => 'paid')$$,
+  '55000', 'SAAS_ENROLLMENT_PLAN_MISMATCH',
+  'paid does not bypass trusted plan metadata'
+);
+select throws_ok(
+  $$select * from pg_temp.batch7_apply(
+    'evt_Batch7Trial', repeat('7', 64),
+    (select processing_lease_token from batch7_reconciliation_claim),
+    'e7000000-0000-4000-a000-000000000001',
+    p_metadata_cadence_override => 'yearly',
+    p_session_payment_status_override => 'paid')$$,
+  '55000', 'SAAS_ENROLLMENT_CADENCE_MISMATCH',
+  'paid does not bypass trusted cadence metadata'
+);
+select throws_ok(
+  $$select * from pg_temp.batch7_apply(
+    'evt_Batch7Trial', repeat('7', 64),
+    (select processing_lease_token from batch7_reconciliation_claim),
+    'e7000000-0000-4000-a000-000000000001',
+    p_account_override => 'acct_WrongTrialAccount',
+    p_session_payment_status_override => 'paid')$$,
+  '55000', 'SAAS_ENROLLMENT_ACCOUNT_MISMATCH',
+  'paid does not bypass the verified Stripe account binding'
+);
+select throws_ok(
+  $$select * from pg_temp.batch7_apply(
+    'evt_Batch7Trial', repeat('7', 64),
+    (select processing_lease_token from batch7_reconciliation_claim),
+    'e7000000-0000-4000-a000-000000000001',
+    p_livemode_override => true,
+    p_session_payment_status_override => 'paid')$$,
+  '55000', 'SAAS_ENROLLMENT_LIVEMODE_MISMATCH',
+  'paid does not bypass the verified test-mode binding'
+);
+select throws_ok(
+  $$select * from pg_temp.batch7_apply(
+    'evt_Batch7Trial', repeat('7', 64),
+    (select processing_lease_token from batch7_reconciliation_claim),
+    'e7000000-0000-4000-a000-000000000001',
+    p_environment_override => 'wrong-environment',
+    p_session_payment_status_override => 'paid')$$,
+  '22023', 'SAAS_ENROLLMENT_EVIDENCE_INVALID',
+  'paid does not bypass the verified environment binding'
 );
 
 create temporary table batch7_application as
 select * from pg_temp.batch7_apply(
   'evt_Batch7Trial', repeat('7', 64),
   (select processing_lease_token from batch7_reconciliation_claim),
-  'e7000000-0000-4000-a000-000000000001'
+  'e7000000-0000-4000-a000-000000000001',
+  p_session_payment_status_override => 'paid'
 );
 
 select is((select application_state from batch7_application), 'trial_enrolled',
@@ -394,7 +502,7 @@ select is(
   (select paid_through_at from public.seller_billing_status
    where store_id = 'e7000000-0000-4000-9000-000000000001'),
   null::timestamptz,
-  'Checkout completion grants no paid-through authority'
+  'paid zero-dollar trial Checkout grants no paid-through authority'
 );
 select is(
   (select storefront_enabled from public.stores
@@ -416,6 +524,82 @@ select is(
      'cs_test_Batch7Trial')),
   'already_processed',
   'exact duplicate completion is idempotent and cannot be reapplied'
+);
+
+insert into public.stores (
+  id, owner_user_id, store_name, store_slug, store_status,
+  storefront_mode, storefront_enabled
+) values (
+  'e7000000-0000-4000-9000-000000000003',
+  'e7000000-0000-4000-8000-000000000001',
+  'Batch 7 No Payment Required Store',
+  'batch-7-no-payment-required', 'draft', 'hosted', false
+);
+insert into public.seller_onboarding_state (store_id, profile_complete)
+values ('e7000000-0000-4000-9000-000000000003', true);
+insert into public.seller_billing_status (
+  store_id, requested_plan_key, requested_billing_cadence,
+  plan_key, billing_plan, subscription_status, billing_state_authority
+) values (
+  'e7000000-0000-4000-9000-000000000003',
+  'small_flock', 'monthly', null, null, 'dormant', 'pending_checkout'
+);
+insert into public.billing_checkout_attempts (
+  id, store_id, created_by_user_id, requested_plan_key,
+  requested_billing_cadence, stripe_price_id, stripe_product_id,
+  stripe_livemode, stripe_account_id, checkout_environment_id,
+  trial_eligibility, attempt_status, stripe_checkout_session_id,
+  stripe_idempotency_key, session_created_at, session_expires_at
+) values (
+  'e7000000-0000-4000-a000-000000000003',
+  'e7000000-0000-4000-9000-000000000003',
+  'e7000000-0000-4000-8000-000000000001',
+  'small_flock', 'monthly', 'price_Batch7CoopMonthly',
+  'prod_Batch7Coop', false, 'acct_1CTOghL1R5g4hhXt', 'local',
+  'trial_eligible', 'open', 'cs_test_Batch7NoPaymentRequired',
+  'ff:saas_checkout:local:e7000000-0000-4000-a000-000000000003:v1',
+  statement_timestamp() - interval '2 minutes',
+  statement_timestamp() + interval '23 hours'
+);
+create temporary table batch7_no_payment_receipt as
+select * from public.claim_saas_billing_provider_event(
+  'evt_Batch7NoPaymentRequired', 'checkout.session.completed',
+  statement_timestamp() - interval '1 minute', repeat('5', 64),
+  'acct_1CTOghL1R5g4hhXt', false, 'local',
+  'checkout.session', 'cs_test_Batch7NoPaymentRequired'
+);
+select public.mark_saas_billing_provider_event_deferred(
+  'evt_Batch7NoPaymentRequired', repeat('5', 64),
+  'acct_1CTOghL1R5g4hhXt', false,
+  (select processing_lease_token from batch7_no_payment_receipt),
+  'awaiting_verified_enrollment_batch'
+);
+create temporary table batch7_no_payment_reconciliation as
+select * from public.claim_deferred_saas_billing_provider_event(
+  'evt_Batch7NoPaymentRequired', repeat('5', 64),
+  'acct_1CTOghL1R5g4hhXt', false, 'local',
+  'checkout.session.completed', 'checkout.session',
+  'cs_test_Batch7NoPaymentRequired'
+);
+create temporary table batch7_no_payment_application as
+select * from pg_temp.batch7_apply(
+  'evt_Batch7NoPaymentRequired', repeat('5', 64),
+  (select processing_lease_token from batch7_no_payment_reconciliation),
+  'e7000000-0000-4000-a000-000000000003',
+  p_customer_override => 'cus_Batch7NoPaymentRequired',
+  p_subscription_override => 'sub_Batch7NoPaymentRequired',
+  p_session_payment_status_override => 'no_payment_required'
+);
+select is(
+  (select application_state from batch7_no_payment_application),
+  'trial_enrolled',
+  'no_payment_required remains valid for verified trial enrollment'
+);
+select is(
+  (select paid_through_at from public.seller_billing_status
+   where store_id = 'e7000000-0000-4000-9000-000000000003'),
+  null::timestamptz,
+  'no_payment_required trial Checkout grants no paid-through authority'
 );
 
 insert into public.stores (
