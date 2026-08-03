@@ -5,6 +5,7 @@ import {
   SaasWebhookDomainError,
   STRIPE_SAAS_WEBHOOK_EVENT_TYPES,
   STRIPE_SAAS_WEBHOOK_MAX_BODY_BYTES,
+  createStripeSaasWebhookConfigurationErrorHandler,
   createStripeSaasWebhookHandler,
 } from "../supabase/functions/stripe-saas-webhook/handler.ts";
 
@@ -310,6 +311,37 @@ function harness(overrides = {}) {
   return { handler: createStripeSaasWebhookHandler(dependencies), calls };
 }
 
+async function assertProcessingFailure(response, expectedCode) {
+  assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), {
+    error: "webhook_processing_failed",
+    code: expectedCode,
+  });
+  assert.equal(
+    response.headers.get("X-FlockFront-Error-Code"),
+    expectedCode,
+  );
+}
+
+function assertDiagnosticLog(logs, expectedCode, expectedStage, hasIdentity = true) {
+  const matches = logs.filter((record) => record.code === expectedCode);
+  assert.equal(matches.length, 1);
+  const record = matches[0];
+  assert.equal(record.stage, expectedStage);
+  assert.equal(typeof record.duration_ms, "number");
+  assert.ok(record.duration_ms >= 0);
+  assert.deepEqual(
+    Object.keys(record).sort(),
+    (hasIdentity
+      ? ["code", "duration_ms", "event_id", "event_type", "stage"]
+      : ["code", "duration_ms", "stage"]).sort(),
+  );
+  if (hasIdentity) {
+    assert.equal(record.event_id, "evt_Batch6Handler");
+    assert.equal(typeof record.event_type, "string");
+  }
+}
+
 test("valid signed completion is deferred, fenced, retrieved, and applied", async () => {
   const fixture = harness();
   const response = await fixture.handler(webhookRequest());
@@ -395,8 +427,16 @@ test("raw body is read exactly once and verification precedes hashing and databa
 
 test("missing, malformed, wrong, altered, old, or future signatures fail before trust", async () => {
   const missing = harness();
-  assert.equal((await missing.handler(webhookRequest({ signature: null }))).status, 400);
+  const missingResponse = await missing.handler(webhookRequest({ signature: null }));
+  assert.equal(missingResponse.status, 400);
+  assert.deepEqual(await missingResponse.json(), { error: "invalid_webhook_signature" });
   assert.equal(missing.calls.verify.length, 0);
+  assertDiagnosticLog(
+    missing.calls.logs,
+    "webhook_signature_invalid",
+    "signature_verification",
+    false,
+  );
 
   for (const failure of [
     "malformed_signature",
@@ -415,7 +455,26 @@ test("missing, malformed, wrong, altered, old, or future signatures fail before 
     assert.equal(response.status, 400);
     assert.deepEqual(await response.json(), { error: "invalid_webhook_signature" });
     assert.equal(fixture.calls.claim.length, 0);
+    assertDiagnosticLog(
+      fixture.calls.logs,
+      "webhook_signature_invalid",
+      "signature_verification",
+      false,
+    );
   }
+});
+
+test("configuration failures return a stable redacted diagnostic", async () => {
+  const logs = [];
+  const handler = createStripeSaasWebhookConfigurationErrorHandler({
+    now: () => 100,
+    safeLog: (record) => logs.push(record),
+  });
+  await assertProcessingFailure(
+    await handler(webhookRequest()),
+    "webhook_config_invalid",
+  );
+  assertDiagnosticLog(logs, "webhook_config_invalid", "configuration", false);
 });
 
 test("oversized request is rejected before signature verification", async () => {
@@ -497,7 +556,15 @@ test("transient database failures return 500 so Stripe can retry", async () => {
       throw new Error("database details");
     },
   });
-  assert.equal((await claimFailure.handler(webhookRequest())).status, 500);
+  await assertProcessingFailure(
+    await claimFailure.handler(webhookRequest()),
+    "webhook_event_claim_failed",
+  );
+  assertDiagnosticLog(
+    claimFailure.calls.logs,
+    "webhook_event_claim_failed",
+    "event_claim",
+  );
 
   const terminalFailure = harness({
     markDeferred: async () => {
@@ -505,7 +572,12 @@ test("transient database failures return 500 so Stripe can retry", async () => {
     },
   });
   const response = await terminalFailure.handler(webhookRequest());
-  assert.equal(response.status, 500);
+  await assertProcessingFailure(response, "webhook_event_finalization_failed");
+  assertDiagnosticLog(
+    terminalFailure.calls.logs,
+    "webhook_event_finalization_failed",
+    "event_finalization",
+  );
   assert.deepEqual(terminalFailure.calls.failed[0].slice(2), [
     "deferred_recording_failed",
     true,
@@ -518,7 +590,15 @@ test("transient Stripe retrieval and database application failures return 500", 
       throw new Error("provider details");
     },
   });
-  assert.equal((await retrieval.handler(webhookRequest())).status, 500);
+  await assertProcessingFailure(
+    await retrieval.handler(webhookRequest()),
+    "webhook_stripe_retrieval_failed",
+  );
+  assertDiagnosticLog(
+    retrieval.calls.logs,
+    "webhook_stripe_retrieval_failed",
+    "stripe_retrieval",
+  );
   assert.deepEqual(retrieval.calls.failed[0].slice(2), [
     "stripe_retrieval_failed",
     true,
@@ -530,11 +610,101 @@ test("transient Stripe retrieval and database application failures return 500", 
       throw new Error("database details");
     },
   });
-  assert.equal((await database.handler(webhookRequest())).status, 500);
+  await assertProcessingFailure(
+    await database.handler(webhookRequest()),
+    "webhook_enrollment_binding_failed",
+  );
+  assertDiagnosticLog(
+    database.calls.logs,
+    "webhook_enrollment_binding_failed",
+    "enrollment_binding",
+  );
   assert.deepEqual(database.calls.failed[0].slice(2), [
     "checkout_completion_apply_failed",
     true,
   ]);
+});
+
+test("each remaining major webhook failure stage has a stable diagnostic", async () => {
+  const deferredClaim = harness({
+    claimDeferredEvent: async () => {
+      throw new Error("sensitive deferred database detail");
+    },
+  });
+  await assertProcessingFailure(
+    await deferredClaim.handler(webhookRequest()),
+    "webhook_deferred_claim_failed",
+  );
+  assertDiagnosticLog(
+    deferredClaim.calls.logs,
+    "webhook_deferred_claim_failed",
+    "deferred_claim",
+  );
+
+  const invoiceApplication = harness({
+    verifySignature: async () => event("invoice.payment_succeeded"),
+    applyInvoiceLifecycle: async () => {
+      throw new Error("sensitive invoice database detail");
+    },
+  });
+  await assertProcessingFailure(
+    await invoiceApplication.handler(webhookRequest()),
+    "webhook_invoice_application_failed",
+  );
+  assertDiagnosticLog(
+    invoiceApplication.calls.logs,
+    "webhook_invoice_application_failed",
+    "invoice_application",
+  );
+
+  const subscriptionSnapshot = harness({
+    verifySignature: async () => event("customer.subscription.updated"),
+    applySubscriptionLifecycle: async () => {
+      throw new Error("sensitive subscription database detail");
+    },
+  });
+  await assertProcessingFailure(
+    await subscriptionSnapshot.handler(webhookRequest()),
+    "webhook_subscription_snapshot_failed",
+  );
+  assertDiagnosticLog(
+    subscriptionSnapshot.calls.logs,
+    "webhook_subscription_snapshot_failed",
+    "subscription_snapshot",
+  );
+
+  const unexpected = harness({
+    hashPayload: async () => {
+      throw new Error("sensitive hashing detail");
+    },
+  });
+  await assertProcessingFailure(
+    await unexpected.handler(webhookRequest()),
+    "webhook_unexpected_error",
+  );
+  assertDiagnosticLog(
+    unexpected.calls.logs,
+    "webhook_unexpected_error",
+    "payload_hash",
+    false,
+  );
+
+  const topLevelUnexpected = harness({
+    claimEvent: async () => ({
+      claim_state: "terminal_duplicate",
+      processing_status: "processed",
+      attempt_count: 2,
+      processing_lease_token: null,
+      lease_expires_at: null,
+    }),
+    safeLog: () => {
+      throw new Error("sensitive logger detail");
+    },
+  });
+  await assertProcessingFailure(
+    await topLevelUnexpected.handler(webhookRequest()),
+    "webhook_unexpected_error",
+  );
 });
 
 test("permanent binding conflicts are recorded without a retry storm", async () => {
@@ -816,6 +986,34 @@ test("safe logs and responses exclude raw body, signature, and provider data", a
   });
   assert.doesNotMatch(emitted, /private@example\.test|mock-signature|do_not_log/);
   assert.doesNotMatch(emitted, /checkout_url|authorization|raw/i);
+});
+
+test("diagnostic failures never expose source errors, secrets, or provider objects", async () => {
+  const sensitiveValues = [
+    "sensitive-webhook-secret",
+    "sensitive-service-role-key",
+    "private@example.test",
+    "select private billing query",
+    "raw-provider-object",
+  ];
+  const fixture = harness({
+    claimEvent: async () => {
+      throw new Error(sensitiveValues.join(" "));
+    },
+  });
+  const response = await fixture.handler(webhookRequest({
+    body: JSON.stringify({ sensitive: "raw-provider-object" }),
+  }));
+  assert.equal(response.status, 500);
+  const emitted = JSON.stringify({
+    body: await response.json(),
+    header: response.headers.get("X-FlockFront-Error-Code"),
+    logs: fixture.calls.logs,
+  });
+  for (const sensitive of sensitiveValues) {
+    assert.doesNotMatch(emitted, new RegExp(sensitive.replaceAll("-", "\\-"), "i"));
+  }
+  assert.doesNotMatch(emitted, /stack|query|signature|customer|service.role/i);
 });
 
 test("webhook requires no Supabase user JWT and has no browser CORS contract", async () => {

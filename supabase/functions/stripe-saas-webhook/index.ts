@@ -9,6 +9,7 @@ import {
   parseStripeSaasWebhookConfig,
 } from "../_shared/stripe-saas-runtime.mjs";
 import {
+  createStripeSaasWebhookConfigurationErrorHandler,
   createStripeSaasWebhookHandler,
   SaasWebhookDomainError,
   type ProviderEventIdentity,
@@ -30,6 +31,8 @@ function requiredEnvironment(name: string): string {
   return value;
 }
 
+let configuredHandler: (request: Request) => Promise<Response>;
+try {
 const stripeConfig = parseStripeSaasWebhookConfig({
   STRIPE_SAAS_WEBHOOK_SECRET: Deno.env.get("STRIPE_SAAS_WEBHOOK_SECRET"),
   STRIPE_PLATFORM_ACCOUNT_ID: Deno.env.get("STRIPE_PLATFORM_ACCOUNT_ID"),
@@ -720,4 +723,13 @@ const handler = createStripeSaasWebhookHandler({
   },
 });
 
-Deno.serve(handler);
+configuredHandler = handler;
+} catch {
+  configuredHandler = createStripeSaasWebhookConfigurationErrorHandler({
+    safeLog(record) {
+      console.info(JSON.stringify(record));
+    },
+  });
+}
+
+Deno.serve(configuredHandler);

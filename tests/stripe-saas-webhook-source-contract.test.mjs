@@ -115,6 +115,30 @@ test("no webhook secret, live key, or sensitive payload logging is present in so
   assert.match(index, /console\.info\(JSON\.stringify\(record\)\)/);
 });
 
+test("webhook failures expose only stable stage diagnostics", async () => {
+  const [, , index, handler] = await sources();
+  for (const code of [
+    "webhook_config_invalid",
+    "webhook_signature_invalid",
+    "webhook_event_claim_failed",
+    "webhook_deferred_claim_failed",
+    "webhook_stripe_retrieval_failed",
+    "webhook_enrollment_binding_failed",
+    "webhook_subscription_snapshot_failed",
+    "webhook_invoice_application_failed",
+    "webhook_event_finalization_failed",
+    "webhook_unexpected_error",
+  ]) {
+    assert.match(handler, new RegExp(`\\"${code}\\"`));
+  }
+  assert.match(handler, /X-FlockFront-Error-Code/);
+  assert.match(handler, /error:\s*"webhook_processing_failed",\s*code/s);
+  assert.match(index, /createStripeSaasWebhookConfigurationErrorHandler/);
+  assert.match(index, /catch\s*\{[\s\S]*?configuredHandler\s*=\s*createStripeSaasWebhookConfigurationErrorHandler/);
+  assert.doesNotMatch(`${index}\n${handler}`, /console\.(?:error|warn)\s*\(/);
+  assert.doesNotMatch(handler, /(?:error|exception)\.(?:message|stack)|JSON\.stringify\((?:error|exception)\)/i);
+});
+
 test("deployment documentation keeps webhook, catalog, and operational secrets separate", async () => {
   const documentation = await readFile(
     path.join(root, "docs/stripe-saas-webhook-deployment.md"), "utf8");

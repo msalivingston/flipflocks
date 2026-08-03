@@ -304,13 +304,35 @@ const accountIdPattern = /^acct_[A-Za-z0-9]+$/;
 const objectTypePattern = /^[a-z][a-z0-9_.]{0,99}$/;
 const objectIdPattern = /^[A-Za-z][A-Za-z0-9_]{2,254}$/;
 
-function jsonResponse(status: number, body: Record<string, unknown>): Response {
+export type WebhookDiagnosticCode =
+  | "webhook_config_invalid"
+  | "webhook_signature_invalid"
+  | "webhook_event_claim_failed"
+  | "webhook_deferred_claim_failed"
+  | "webhook_stripe_retrieval_failed"
+  | "webhook_enrollment_binding_failed"
+  | "webhook_subscription_snapshot_failed"
+  | "webhook_invoice_application_failed"
+  | "webhook_event_finalization_failed"
+  | "webhook_unexpected_error";
+
+type WebhookDiagnosticDependencies = {
+  safeLog?: (record: Record<string, string | number | boolean>) => void;
+  now?: () => number;
+};
+
+function jsonResponse(
+  status: number,
+  body: Record<string, unknown>,
+  extraHeaders: Record<string, string> = {},
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       "Cache-Control": "no-store",
       "Content-Type": "application/json",
       "X-Content-Type-Options": "nosniff",
+      ...extraHeaders,
     },
   });
 }
@@ -320,6 +342,52 @@ function safeLog(
   record: Record<string, string | number | boolean>,
 ) {
   dependencies.safeLog?.(record);
+}
+
+function diagnosticLog(
+  dependencies: WebhookDiagnosticDependencies,
+  code: WebhookDiagnosticCode,
+  stage: string,
+  startedAt: number,
+  identity?: Pick<ProviderEventIdentity, "providerEventId" | "eventType">,
+) {
+  const record: Record<string, string | number | boolean> = {
+    code,
+    stage,
+    duration_ms: Math.max(0, (dependencies.now?.() ?? Date.now()) - startedAt),
+  };
+  if (identity?.providerEventId) record.event_id = identity.providerEventId;
+  if (identity?.eventType) record.event_type = identity.eventType;
+  try {
+    dependencies.safeLog?.(record);
+  } catch {
+    // Diagnostics must never alter webhook processing or expose the source error.
+  }
+}
+
+function processingFailureResponse(
+  dependencies: WebhookDiagnosticDependencies,
+  code: WebhookDiagnosticCode,
+  stage: string,
+  startedAt: number,
+  identity?: Pick<ProviderEventIdentity, "providerEventId" | "eventType">,
+): Response {
+  diagnosticLog(dependencies, code, stage, startedAt, identity);
+  return jsonResponse(500, {
+    error: "webhook_processing_failed",
+    code,
+  }, { "X-FlockFront-Error-Code": code });
+}
+
+export function createStripeSaasWebhookConfigurationErrorHandler(
+  dependencies: WebhookDiagnosticDependencies = {},
+): (request: Request) => Promise<Response> {
+  return async () => processingFailureResponse(
+    dependencies,
+    "webhook_config_invalid",
+    "configuration",
+    dependencies.now?.() ?? Date.now(),
+  );
 }
 
 function deferredReason(eventType: string): string {
@@ -641,7 +709,10 @@ async function reconcileCheckoutCompletion(
   try {
     claim = await dependencies.claimDeferredEvent(identity);
   } catch {
-    return jsonResponse(500, { error: "webhook_processing_failed" });
+    return processingFailureResponse(
+      dependencies, "webhook_deferred_claim_failed", "deferred_claim",
+      startedAt, identity,
+    );
   }
 
   if (["already_processed", "in_progress"].includes(
@@ -663,7 +734,10 @@ async function reconcileCheckoutCompletion(
     return jsonResponse(200, { received: true });
   }
   if (!claim.processing_lease_token) {
-    return jsonResponse(500, { error: "webhook_processing_failed" });
+    return processingFailureResponse(
+      dependencies, "webhook_deferred_claim_failed", "deferred_claim",
+      startedAt, identity,
+    );
   }
 
   let evidence: SaasCheckoutCompletionEvidence;
@@ -682,10 +756,17 @@ async function reconcileCheckoutCompletion(
       classified.errorCode,
       classified.retryable,
     );
-    return jsonResponse(classified.retryable ? 500 : 200,
-      classified.retryable
-        ? { error: "webhook_processing_failed" }
-        : { received: true });
+    if (classified.retryable) {
+      return processingFailureResponse(
+        dependencies, "webhook_stripe_retrieval_failed", "stripe_retrieval",
+        startedAt, identity,
+      );
+    }
+    diagnosticLog(
+      dependencies, "webhook_stripe_retrieval_failed", "stripe_retrieval",
+      startedAt, identity,
+    );
+    return jsonResponse(200, { received: true });
   }
 
   const evidenceError = validateCheckoutCompletionEvidence(
@@ -700,6 +781,10 @@ async function reconcileCheckoutCompletion(
       claim.processing_lease_token,
       evidenceError,
       false,
+    );
+    diagnosticLog(
+      dependencies, "webhook_enrollment_binding_failed", "enrollment_binding",
+      startedAt, identity,
     );
     return jsonResponse(200, { received: true });
   }
@@ -721,10 +806,17 @@ async function reconcileCheckoutCompletion(
       classified.errorCode,
       classified.retryable,
     );
-    return jsonResponse(classified.retryable ? 500 : 200,
-      classified.retryable
-        ? { error: "webhook_processing_failed" }
-        : { received: true });
+    if (classified.retryable) {
+      return processingFailureResponse(
+        dependencies, "webhook_enrollment_binding_failed", "enrollment_binding",
+        startedAt, identity,
+      );
+    }
+    diagnosticLog(
+      dependencies, "webhook_enrollment_binding_failed", "enrollment_binding",
+      startedAt, identity,
+    );
+    return jsonResponse(200, { received: true });
   }
 
   safeLog(dependencies, {
@@ -747,7 +839,10 @@ async function beginDeferredReconciliation(
   try {
     claim = await dependencies.claimDeferredEvent(identity);
   } catch {
-    return jsonResponse(500, { error: "webhook_processing_failed" });
+    return processingFailureResponse(
+      dependencies, "webhook_deferred_claim_failed", "deferred_claim",
+      startedAt, identity,
+    );
   }
   if (["already_processed", "in_progress"].includes(
     claim.reconciliation_state,
@@ -768,7 +863,10 @@ async function beginDeferredReconciliation(
     return jsonResponse(200, { received: true });
   }
   if (!claim.processing_lease_token) {
-    return jsonResponse(500, { error: "webhook_processing_failed" });
+    return processingFailureResponse(
+      dependencies, "webhook_deferred_claim_failed", "deferred_claim",
+      startedAt, identity,
+    );
   }
   return claim;
 }
@@ -801,10 +899,17 @@ async function reconcileInvoiceLifecycle(
       dependencies, identity, leaseToken,
       classified.errorCode, classified.retryable,
     );
-    return jsonResponse(classified.retryable ? 500 : 200,
-      classified.retryable
-        ? { error: "webhook_processing_failed" }
-        : { received: true });
+    if (classified.retryable) {
+      return processingFailureResponse(
+        dependencies, "webhook_stripe_retrieval_failed", "stripe_retrieval",
+        startedAt, identity,
+      );
+    }
+    diagnosticLog(
+      dependencies, "webhook_stripe_retrieval_failed", "stripe_retrieval",
+      startedAt, identity,
+    );
+    return jsonResponse(200, { received: true });
   }
 
   const evidenceError = validateInvoiceLifecycleEvidence(
@@ -815,6 +920,10 @@ async function reconcileInvoiceLifecycle(
   if (evidenceError) {
     await recordReconciliationFailure(
       dependencies, identity, leaseToken, evidenceError, false,
+    );
+    diagnosticLog(
+      dependencies, "webhook_enrollment_binding_failed", "enrollment_binding",
+      startedAt, identity,
     );
     return jsonResponse(200, { received: true });
   }
@@ -829,10 +938,17 @@ async function reconcileInvoiceLifecycle(
       dependencies, identity, leaseToken,
       classified.errorCode, classified.retryable,
     );
-    return jsonResponse(classified.retryable ? 500 : 200,
-      classified.retryable
-        ? { error: "webhook_processing_failed" }
-        : { received: true });
+    if (classified.retryable) {
+      return processingFailureResponse(
+        dependencies, "webhook_invoice_application_failed", "invoice_application",
+        startedAt, identity,
+      );
+    }
+    diagnosticLog(
+      dependencies, "webhook_invoice_application_failed", "invoice_application",
+      startedAt, identity,
+    );
+    return jsonResponse(200, { received: true });
   }
 
   safeLog(dependencies, {
@@ -874,10 +990,17 @@ async function reconcileSubscriptionLifecycle(
       dependencies, identity, leaseToken,
       classified.errorCode, classified.retryable,
     );
-    return jsonResponse(classified.retryable ? 500 : 200,
-      classified.retryable
-        ? { error: "webhook_processing_failed" }
-        : { received: true });
+    if (classified.retryable) {
+      return processingFailureResponse(
+        dependencies, "webhook_stripe_retrieval_failed", "stripe_retrieval",
+        startedAt, identity,
+      );
+    }
+    diagnosticLog(
+      dependencies, "webhook_stripe_retrieval_failed", "stripe_retrieval",
+      startedAt, identity,
+    );
+    return jsonResponse(200, { received: true });
   }
 
   const evidenceError = validateSubscriptionLifecycleEvidence(
@@ -888,6 +1011,10 @@ async function reconcileSubscriptionLifecycle(
   if (evidenceError) {
     await recordReconciliationFailure(
       dependencies, identity, leaseToken, evidenceError, false,
+    );
+    diagnosticLog(
+      dependencies, "webhook_enrollment_binding_failed", "enrollment_binding",
+      startedAt, identity,
     );
     return jsonResponse(200, { received: true });
   }
@@ -906,10 +1033,17 @@ async function reconcileSubscriptionLifecycle(
       dependencies, identity, leaseToken,
       classified.errorCode, classified.retryable,
     );
-    return jsonResponse(classified.retryable ? 500 : 200,
-      classified.retryable
-        ? { error: "webhook_processing_failed" }
-        : { received: true });
+    if (classified.retryable) {
+      return processingFailureResponse(
+        dependencies, "webhook_subscription_snapshot_failed", "subscription_snapshot",
+        startedAt, identity,
+      );
+    }
+    diagnosticLog(
+      dependencies, "webhook_subscription_snapshot_failed", "subscription_snapshot",
+      startedAt, identity,
+    );
+    return jsonResponse(200, { received: true });
   }
 
   safeLog(dependencies, {
@@ -971,6 +1105,8 @@ export function createStripeSaasWebhookHandler(
 
   return async (request: Request) => {
     const startedAt = dependencies.now?.() ?? Date.now();
+    let diagnosticIdentity: ProviderEventIdentity | undefined;
+    try {
     if (request.method !== "POST") {
       return jsonResponse(405, { error: "method_not_allowed" });
     }
@@ -980,6 +1116,10 @@ export function createStripeSaasWebhookHandler(
     }
     const signature = request.headers.get("stripe-signature");
     if (!signature) {
+      diagnosticLog(
+        dependencies, "webhook_signature_invalid", "signature_verification",
+        startedAt,
+      );
       return jsonResponse(400, { error: "invalid_webhook_signature" });
     }
     const declaredLength = Number(request.headers.get("content-length") ?? 0);
@@ -1003,6 +1143,10 @@ export function createStripeSaasWebhookHandler(
       // The exact bytes are authenticated before any event field is parsed or trusted.
       verifiedValue = await dependencies.verifySignature(rawBody, signature);
     } catch {
+      diagnosticLog(
+        dependencies, "webhook_signature_invalid", "signature_verification",
+        startedAt,
+      );
       return jsonResponse(400, { error: "invalid_webhook_signature" });
     }
 
@@ -1013,7 +1157,10 @@ export function createStripeSaasWebhookHandler(
     try {
       payloadHash = await dependencies.hashPayload(rawBody);
     } catch {
-      return jsonResponse(500, { error: "webhook_processing_failed" });
+      return processingFailureResponse(
+        dependencies, "webhook_unexpected_error", "payload_hash",
+        startedAt,
+      );
     }
 
     const identity: ProviderEventIdentity = {
@@ -1027,30 +1174,34 @@ export function createStripeSaasWebhookHandler(
       providerObjectType: verified.providerObjectType,
       providerObjectId: verified.providerObjectId,
     };
+    diagnosticIdentity = identity;
     const terminalIdentity: TerminalEventIdentity = identity;
 
     let claim: SaasProviderEventClaim;
     try {
       claim = await dependencies.claimEvent(identity);
     } catch {
-      safeLog(dependencies, {
-        event_id: identity.providerEventId,
-        event_type: identity.eventType,
-        mode: identity.stripeLivemode ? "live" : "test",
-        result: "claim_failed",
-        error_code: "database_unavailable",
-        duration_ms: (dependencies.now?.() ?? Date.now()) - startedAt,
-      });
-      return jsonResponse(500, { error: "webhook_processing_failed" });
+      return processingFailureResponse(
+        dependencies, "webhook_event_claim_failed", "event_claim",
+        startedAt, identity,
+      );
     }
 
     if (claim.claim_state === "deferred_duplicate") {
-      const reconciliation = await reconcileApplicableDeferredEvent(
-        dependencies,
-        identity,
-        verified.event.data.object,
-        startedAt,
-      );
+      let reconciliation: Response | null;
+      try {
+        reconciliation = await reconcileApplicableDeferredEvent(
+          dependencies,
+          identity,
+          verified.event.data.object,
+          startedAt,
+        );
+      } catch {
+        return processingFailureResponse(
+          dependencies, "webhook_unexpected_error", "reconciliation",
+          startedAt, identity,
+        );
+      }
       if (reconciliation) return reconciliation;
     }
     if ([
@@ -1083,7 +1234,10 @@ export function createStripeSaasWebhookHandler(
     }
 
     if (!claim.processing_lease_token) {
-      return jsonResponse(500, { error: "webhook_processing_failed" });
+      return processingFailureResponse(
+        dependencies, "webhook_event_claim_failed", "event_claim",
+        startedAt, identity,
+      );
     }
     const isInformational = identity.eventType ===
       "customer.subscription.trial_will_end";
@@ -1119,25 +1273,27 @@ export function createStripeSaasWebhookHandler(
       } catch {
         // The database lease permits a later Stripe delivery to reclaim work.
       }
-      safeLog(dependencies, {
-        event_id: identity.providerEventId,
-        event_type: identity.eventType,
-        mode: identity.stripeLivemode ? "live" : "test",
-        result: "processing_failed",
-        error_code: "deferred_recording_failed",
-        attempt_count: claim.attempt_count,
-        duration_ms: (dependencies.now?.() ?? Date.now()) - startedAt,
-      });
-      return jsonResponse(500, { error: "webhook_processing_failed" });
+      return processingFailureResponse(
+        dependencies, "webhook_event_finalization_failed", "event_finalization",
+        startedAt, identity,
+      );
     }
 
     if (isDeferred) {
-      const reconciliation = await reconcileApplicableDeferredEvent(
-        dependencies,
-        identity,
-        verified.event.data.object,
-        startedAt,
-      );
+      let reconciliation: Response | null;
+      try {
+        reconciliation = await reconcileApplicableDeferredEvent(
+          dependencies,
+          identity,
+          verified.event.data.object,
+          startedAt,
+        );
+      } catch {
+        return processingFailureResponse(
+          dependencies, "webhook_unexpected_error", "reconciliation",
+          startedAt, identity,
+        );
+      }
       if (reconciliation) return reconciliation;
     }
 
@@ -1150,5 +1306,11 @@ export function createStripeSaasWebhookHandler(
       duration_ms: (dependencies.now?.() ?? Date.now()) - startedAt,
     });
     return jsonResponse(200, { received: true });
+    } catch {
+      return processingFailureResponse(
+        dependencies, "webhook_unexpected_error", "request_processing",
+        startedAt, diagnosticIdentity,
+      );
+    }
   };
 }
