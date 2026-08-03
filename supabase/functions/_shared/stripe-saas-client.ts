@@ -4,11 +4,13 @@ import {
   STRIPE_SAAS_API_VERSION,
   assertStripeWebhookTimestampWithinTolerance,
   parseStripeSaasConfig,
+  parseStripeSaasPortalConfig,
   parseStripeSaasWebhookConfig,
 } from "./stripe-saas-runtime.mjs";
 
 type StripeSaasConfig = ReturnType<typeof parseStripeSaasConfig>;
 type StripeSaasWebhookConfig = ReturnType<typeof parseStripeSaasWebhookConfig>;
+export type StripeSaasPortalConfig = ReturnType<typeof parseStripeSaasPortalConfig>;
 
 export function createStripeSaasClient(
   config: StripeSaasConfig,

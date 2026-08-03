@@ -1,16 +1,50 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { getBillingManagementAvailability } from "@/lib/saas-billing-management";
 import {
   formatBillingDate,
   getCadenceDisplayName,
   getPlanDisplayName,
   getPlanPriceLabel,
+  isSafeStripePortalUrl,
   type SellerBillingStatus,
 } from "@/lib/saas-billing-status";
 import { useSellerBillingStatus } from "../_components/seller-billing-context";
 
 export function SubscriptionBillingPanel() {
   const { error, isLoading, reload, status } = useSellerBillingStatus();
+  const [activeAction, setActiveAction] = useState<string | null>(null);
+  const [actionError, setActionError] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [resumePending, setResumePending] = useState(false);
+  const [portalReturnPending, setPortalReturnPending] = useState(false);
+  const pollingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("billing") !== "portal_return") return;
+    let active = true;
+    queueMicrotask(() => {
+      if (active) setPortalReturnPending(true);
+    });
+    let polls = 0;
+    const poll = async () => {
+      if (!active || polls >= 5) return;
+      polls += 1;
+      await reload();
+      if (active && polls < 5) pollingTimer.current = setTimeout(poll, 2_000);
+    };
+    void poll();
+    return () => {
+      active = false;
+      if (pollingTimer.current) clearTimeout(pollingTimer.current);
+    };
+  }, [reload]);
+
+  useEffect(() => () => {
+    if (pollingTimer.current) clearTimeout(pollingTimer.current);
+  }, []);
 
   if (isLoading) {
     return (
@@ -58,6 +92,56 @@ export function SubscriptionBillingPanel() {
     ["Complimentary access ends", formatBillingDate(status.complimentary_access_ends_at)],
   ];
 
+  const management = getBillingManagementAvailability(status);
+  const activeThrough = formatBillingDate(status.entitlement_access_until) ??
+    "the end of your confirmed access period";
+
+  async function openPortal(action: "manage_billing" | "update_payment_method" | "invoice_history" | "cancel_subscription") {
+    if (activeAction) return;
+    setActionError(false);
+    setActiveAction(action);
+    const { data, error: requestError } = await supabase.functions.invoke<{ portal_url?: string }>(
+      "stripe-saas-portal",
+      { body: { action } },
+    );
+    if (requestError || !isSafeStripePortalUrl(data?.portal_url)) {
+      setActionError(true);
+      setActiveAction(null);
+      return;
+    }
+    window.location.assign(data.portal_url);
+  }
+
+  async function requestResume() {
+    if (activeAction) return;
+    setActionError(false);
+    setActiveAction("resume");
+    const { data, error: requestError } = await supabase.functions.invoke<{ status?: string }>(
+      "stripe-saas-subscription-action",
+      {
+        body: { action: "resume" },
+      },
+    );
+    if (requestError || data?.status !== "resume_requested") {
+      setActionError(true);
+      setActiveAction(null);
+      return;
+    }
+    setResumePending(true);
+    setActiveAction(null);
+    let polls = 0;
+    const poll = async () => {
+      polls += 1;
+      const refreshed = await reload();
+      if (refreshed && !refreshed.cancel_at_period_end) {
+        setResumePending(false);
+        return;
+      }
+      if (polls < 5) pollingTimer.current = setTimeout(poll, 2_000);
+    };
+    void poll();
+  }
+
   return (
     <section className="rounded-lg border border-stone-200 bg-white px-4 py-4" aria-labelledby="subscription-billing-heading">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -77,6 +161,61 @@ export function SubscriptionBillingPanel() {
           </div>
         ))}
       </dl>
+      {portalReturnPending ? (
+        <p className="mt-4 rounded-md bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-950" role="status">
+          Your billing changes are being confirmed.
+        </p>
+      ) : null}
+      {resumePending ? (
+        <p className="mt-4 rounded-md bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-950" role="status">
+          Stripe is confirming that your subscription will continue.
+        </p>
+      ) : null}
+      {actionError ? (
+        <p className="mt-4 text-sm font-semibold text-red-800" role="alert">
+          We could not open billing management. Please try again.
+        </p>
+      ) : null}
+      {management.manageBilling ? (
+        <div className="mt-5 flex flex-col gap-2 border-t border-stone-200 pt-4 sm:flex-row sm:flex-wrap">
+          <button className="seller-secondary-button min-h-11" disabled={Boolean(activeAction)} onClick={() => void openPortal("manage_billing")} type="button">
+            Manage billing
+          </button>
+          {management.updatePaymentMethod ? (
+            <button className="seller-secondary-button min-h-11" disabled={Boolean(activeAction)} onClick={() => void openPortal("update_payment_method")} type="button">
+              Update payment method
+            </button>
+          ) : null}
+          <button className="seller-secondary-button min-h-11" disabled={Boolean(activeAction)} onClick={() => void openPortal("invoice_history")} type="button">
+            View invoices
+          </button>
+          {management.cancelSubscription && !confirmingCancel ? (
+            <button className="seller-secondary-button min-h-11" disabled={Boolean(activeAction)} onClick={() => setConfirmingCancel(true)} type="button">
+              Cancel subscription
+            </button>
+          ) : null}
+          {management.resumeSubscription ? (
+            <button className="seller-primary-button min-h-11" disabled={Boolean(activeAction) || resumePending} onClick={() => void requestResume()} type="button">
+              Keep my subscription
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {confirmingCancel ? (
+        <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-3" role="group" aria-labelledby="cancel-subscription-confirmation">
+          <p className="text-sm font-semibold leading-6 text-amber-950" id="cancel-subscription-confirmation">
+            Canceling stops your next renewal. Your subscription will remain active through {activeThrough}, and your listings and account data will remain saved.
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <button className="seller-secondary-button min-h-11 border-red-300 text-red-800 hover:bg-red-50" disabled={Boolean(activeAction)} onClick={() => void openPortal("cancel_subscription")} type="button">
+              Continue to cancellation
+            </button>
+            <button className="seller-secondary-button min-h-11" disabled={Boolean(activeAction)} onClick={() => setConfirmingCancel(false)} type="button">
+              Keep subscription
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

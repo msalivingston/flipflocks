@@ -10,6 +10,7 @@ import {
   assertStripeWebhookTimestampWithinTolerance,
   parseStripeSaasCatalogConfig,
   parseStripeSaasConfig,
+  parseStripeSaasPortalConfig,
   parseStripeSaasWebhookConfig,
   redactStripeSaasConfig,
 } from "../supabase/functions/_shared/stripe-saas-runtime.mjs";
@@ -29,6 +30,38 @@ const liveRestricted = ["rk", "live", "Batch4ReadFixture"].join("_");
 const serviceSecret = ["service", "role", "Batch4Fixture"].join("_");
 const webhookSecret = ["whsec", "Batch6Fixture"].join("_");
 const accountId = STRIPE_SAAS_PLATFORM_ACCOUNT_ID;
+
+test("Portal configuration remains operational-key-only and validates fixed server values", () => {
+  const config = parseStripeSaasPortalConfig({
+    STRIPE_SAAS_API_KEY: testSecret,
+    STRIPE_PLATFORM_ACCOUNT_ID: accountId,
+    STRIPE_SAAS_LIVEMODE: "false",
+    FLOCKFRONT_ENVIRONMENT_ID: "local",
+    FLOCKFRONT_APP_ORIGIN: "http://127.0.0.1:3000",
+    STRIPE_GENERAL_PORTAL_CONFIGURATION_ID: "bpc_Batch10General",
+    STRIPE_CANCEL_PORTAL_CONFIGURATION_ID: "bpc_Batch10Cancel",
+  });
+  assert.equal(config.appOrigin, "http://127.0.0.1:3000");
+  assert.equal(config.generalPortalConfigurationId, "bpc_Batch10General");
+  assert.equal(config.cancelPortalConfigurationId, "bpc_Batch10Cancel");
+  assert.equal(config.operationalApiKey, testSecret);
+  assert.equal("catalogReadApiKey" in config, true);
+
+  expectCode(() => parseStripeSaasPortalConfig({
+    STRIPE_PLATFORM_ACCOUNT_ID: accountId,
+    STRIPE_SAAS_LIVEMODE: "false",
+    FLOCKFRONT_ENVIRONMENT_ID: "local",
+    FLOCKFRONT_APP_ORIGIN: "https://flockfront.test",
+    STRIPE_GENERAL_PORTAL_CONFIGURATION_ID: "bpc_Batch10General",
+    STRIPE_CANCEL_PORTAL_CONFIGURATION_ID: "bpc_Batch10Cancel",
+  }), "STRIPE_SAAS_CONFIG_STRIPE_SAAS_API_KEY_MISSING");
+  expectCode(() => parseStripeSaasPortalConfig({
+    ...environment(),
+    FLOCKFRONT_APP_ORIGIN: "https://flockfront.test/path",
+    STRIPE_GENERAL_PORTAL_CONFIGURATION_ID: "bpc_Batch10General",
+    STRIPE_CANCEL_PORTAL_CONFIGURATION_ID: "bpc_Batch10Cancel",
+  }), "STRIPE_SAAS_CONFIG_APP_ORIGIN_INVALID");
+});
 
 function environment(overrides = {}) {
   return {

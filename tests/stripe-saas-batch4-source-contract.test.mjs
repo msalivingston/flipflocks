@@ -112,12 +112,17 @@ test("migration exposes only service-role catalog contracts and seeds no IDs", a
   assert.doesNotMatch(migration, /saas_(?:subscription_checkout|billing_portal)_enabled[^;]*true/i);
 });
 
-test("post-Batch-4 billing work adds only the approved Batch 5 and Batch 6 endpoints and no browser Stripe surface", async () => {
+test("post-Batch-4 billing work adds only approved SaaS server endpoints and no browser Stripe SDK surface", async () => {
   const functionEntries = await readdir(path.join(root, "supabase/functions"), { withFileTypes: true });
   const names = functionEntries.filter((entry) => entry.isDirectory() && entry.name !== "_shared").map((entry) => entry.name);
   assert.deepEqual(
-    names.filter((name) => /(?:checkout|webhook|portal|subscription)/i.test(name)),
-    ["stripe-saas-checkout", "stripe-saas-webhook"],
+    names.filter((name) => /(?:checkout|webhook|portal|subscription)/i.test(name)).sort(),
+    [
+      "stripe-saas-checkout",
+      "stripe-saas-portal",
+      "stripe-saas-subscription-action",
+      "stripe-saas-webhook",
+    ],
   );
   const files = [];
   for (const directory of ["app", "lib", "supabase/functions"]) {
@@ -174,5 +179,5 @@ test("current SaaS billing batch changes no Pay at Pickup, refund, or Connect ap
   assert.ok(changed.every((file) => !/(pay-at-pickup|refund|connect)/i.test(file)));
   const batch9Ui = /^app\/(?:dashboard\/(?:_components\/seller-(?:app-shell|billing-banner|billing-context)|account\/(?:seller-account|subscription-billing-panel))|onboarding\/(?:page|_components\/(?:onboarding-flow|step-5-plan-access-form)|billing\/return\/(?:page|stripe-return-status)))\.tsx$/;
   assert.ok(changed.every((file) => batch9Ui.test(file)
-    || /^(?:lib\/saas-billing-status\.ts|docs\/stripe-saas-|supabase\/(?:functions\/stripe-saas-|migrations\/20260802|tests\/(?:seller_saas_|verified_saas_|saas_))|tests\/(?:authoritative-entitlements|stripe-saas-))/.test(file)));
+    || /^(?:lib\/saas-billing-(?:status|management)\.ts|docs\/stripe-saas-|supabase\/(?:config\.toml|functions\/(?:_shared\/stripe-saas-|stripe-saas-)|migrations\/20260802|tests\/(?:seller_saas_|verified_saas_|saas_))|tests\/(?:authoritative-entitlements|seller-saas-|stripe-saas-))/.test(file)));
 });

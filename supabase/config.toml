@@ -14,3 +14,9 @@ verify_jwt = true
 
 [functions.stripe-saas-webhook]
 verify_jwt = false
+
+[functions.stripe-saas-portal]
+verify_jwt = true
+
+[functions.stripe-saas-subscription-action]
+verify_jwt = true

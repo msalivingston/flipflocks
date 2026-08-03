@@ -73,7 +73,10 @@ test("account UI translates every approved seller lifecycle without raw codes", 
   assert.match(accountPanel, /Plan &amp; billing/);
   assert.match(billingHelpers, /small_flock[\s\S]+full_flock/);
   assert.doesNotMatch(accountPanel, /stripe_customer|stripe_subscription|provider_event|payload_hash/);
-  assert.doesNotMatch(accountPanel, /Manage Billing|Update Payment Method|Cancel subscription|Resume subscription/);
+  assert.match(accountPanel, /Manage billing/);
+  assert.match(accountPanel, /Update payment method/);
+  assert.match(accountPanel, /Cancel subscription/);
+  assert.match(accountPanel, /Keep my subscription/);
 });
 
 test("dashboard emits at most one prioritized billing banner", () => {

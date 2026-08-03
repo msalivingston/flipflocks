@@ -212,6 +212,17 @@ export function isSafeStripeCheckoutUrl(value: unknown): value is string {
   }
 }
 
+export function isSafeStripePortalUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "billing.stripe.com" &&
+      !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 export function isPlanId(value: string | null): value is PlanId {
   return value === "small_flock" || value === "full_flock";
 }
