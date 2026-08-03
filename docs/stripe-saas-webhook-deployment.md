@@ -1,8 +1,10 @@
 # Stripe SaaS webhook deployment and enrollment boundary
 
-Batch 6 added the receipt ledger and Batch 7 adds local, undeployed verified
-Checkout enrollment application. Do not deploy either Edge Function or
-create a Stripe webhook destination until the coordinated activation review.
+Batch 6 added the receipt ledger, Batch 7 added local verified Checkout
+enrollment application, and Batch 8 adds local invoice and Subscription
+lifecycle application. Both Edge Functions remain undeployed. Do not deploy
+either function or create a Stripe webhook destination until the coordinated
+activation review.
 
 The future Edge Function deployment requires these server-only values:
 
@@ -20,6 +22,13 @@ verification. After signature verification and a fenced deferred-event claim,
 Batch 7 uses the operational key only to retrieve the Checkout Session,
 Customer, Subscription, recurring Price, and Product evidence needed for the
 atomic enrollment contract. It does not mutate Stripe objects.
+
+Batch 8 uses the same operational client read-only to retrieve an Invoice, its
+bound Subscription, the single recurring line, Price, and Product. The signed
+event object ID, immutable Customer and Subscription bindings, account, mode,
+catalog values, currency, collection method, amounts, and recurring service
+period must all agree before PostgreSQL applies the event. The client does not
+pay, finalize, void, update, or otherwise mutate an Invoice or Subscription.
 
 Supabase supplies its project URL and service-role credential to the deployed
 function according to the repository's existing Edge Function runtime
@@ -58,3 +67,26 @@ actually established the first trial, applies trial entitlement, and marks the
 event processed in one database transaction. It never creates paid-through
 authority. No raw Stripe payload is accepted from a browser or platform
 administrator.
+
+## Invoice and Subscription lifecycle authority
+
+The four approved Invoice events and the three approved Subscription snapshot
+events remain deferred until the webhook service obtains an active fenced
+reconciliation claim. Their typed database application and provider-event
+finalization occur in the same transaction.
+
+Only a positive, automatically collected, verified
+`invoice.payment_succeeded` event can extend `paid_through_at`. A zero-dollar
+trial Invoice is audit evidence only. Neither an Invoice `paid` field nor a
+Subscription `current_period_end` value is payment authority. Payment failure,
+action-required, and finalization-failure events can schedule grace only for a
+trial conversion or ordinary recurring renewal. Grace ends exactly three days
+after the verified trial end or existing paid-through boundary. A later
+verified payment advances paid-through monotonically and clears matching or
+older failure and grace state.
+
+Enrollment-backed Subscription created, updated, and deleted events update
+provider status, scheduling, and cancellation snapshots only. They cannot
+extend paid-through. Period-end or terminal cancellation cannot shorten access
+already proven by a paid Invoice, does not create grace by itself, and does not
+alter the seller's storefront preference or delete seller data.

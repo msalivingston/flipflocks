@@ -68,7 +68,13 @@ test("Checkout completion never creates paid-through authority or treats trial p
   assert.match(applyFunction, /p_session_payment_status is distinct from 'no_payment_required'/);
   assert.match(applyFunction, /p_session_payment_status is distinct from 'paid'/);
   assert.match(applyFunction, /verified_paid_enrollment_pending_invoice/);
-  assert.doesNotMatch(`${webhookIndex}\n${webhookHandler}`,
+  const checkoutRetrieval = webhookIndex.match(
+    /async function retrieveCheckoutCompletionEvidence[\s\S]*?\n}/,
+  )?.[0] ?? "";
+  const checkoutReconciliation = webhookHandler.match(
+    /async function reconcileCheckoutCompletion[\s\S]*?\n}/,
+  )?.[0] ?? "";
+  assert.doesNotMatch(`${checkoutRetrieval}\n${checkoutReconciliation}`,
     /apply_verified_saas_invoice|paid_through_at\s*:/);
 });
 
@@ -110,7 +116,13 @@ test("Batch 7 does not activate flags or introduce Portal, Connect, buyer-paymen
   const applyFunction = migration.match(
     /create function public\.apply_verified_saas_checkout_completion[\s\S]*?\$function\$;/,
   )?.[0] ?? "";
-  const combined = `${applyFunction}\n${index}\n${handler}`;
+  const checkoutRetrieval = index.match(
+    /async function retrieveCheckoutCompletionEvidence[\s\S]*?\n}/,
+  )?.[0] ?? "";
+  const checkoutReconciliation = handler.match(
+    /async function reconcileCheckoutCompletion[\s\S]*?\n}/,
+  )?.[0] ?? "";
+  const combined = `${applyFunction}\n${checkoutRetrieval}\n${checkoutReconciliation}`;
   assert.doesNotMatch(combined, /billing_portal|portal\.sessions|stripe_account_link|application_fee|transfer_data/);
   assert.doesNotMatch(combined, /payment_intent|charge\.|refund|dispute|connected_account/i);
 });

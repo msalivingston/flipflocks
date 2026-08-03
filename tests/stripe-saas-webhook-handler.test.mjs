@@ -36,7 +36,14 @@ function event(type = "checkout.session.completed", overrides = {}) {
         id: objectId,
         ...(objectType === "checkout.session"
           ? { customer: "cus_Batch7", subscription: "sub_Batch7" }
-          : {}),
+          : objectType === "subscription"
+          ? { customer: "cus_Batch8" }
+          : {
+            customer: "cus_Batch8",
+            parent: {
+              subscription_details: { subscription: "sub_Batch6" },
+            },
+          }),
       },
     },
     ...overrides,
@@ -109,6 +116,73 @@ function checkoutEvidence(overrides = {}) {
   return { ...base, ...overrides };
 }
 
+function recurringPriceEvidence(overrides = {}) {
+  return {
+    priceId: "price_Batch8",
+    productId: "prod_Batch8",
+    quantity: 1,
+    priceLivemode: false,
+    productLivemode: false,
+    priceActive: true,
+    productActive: true,
+    unitAmountCents: 500,
+    currency: "usd",
+    recurringInterval: "month",
+    recurringIntervalCount: 1,
+    priceType: "recurring",
+    billingScheme: "per_unit",
+    recurringUsageType: "licensed",
+    taxBehavior: "exclusive",
+    productTaxCode: "txcd_10103001",
+    ...overrides,
+  };
+}
+
+function invoiceEvidence(overrides = {}) {
+  const base = {
+    invoice: {
+      id: "in_Batch6",
+      livemode: false,
+      customerId: "cus_Batch8",
+      subscriptionId: "sub_Batch6",
+      billingReason: "subscription_cycle",
+      collectionMethod: "charge_automatically",
+      status: "paid",
+      currency: "usd",
+      amountDueCents: 500,
+      amountPaidCents: 500,
+      amountRemainingCents: 0,
+      recurringLineAmountCents: 500,
+      servicePeriodStart: "2026-08-02T16:00:00.000Z",
+      servicePeriodEnd: "2026-09-02T16:00:00.000Z",
+      paidAt: "2026-08-02T16:00:00.000Z",
+      nextPaymentAttemptAt: null,
+      failureCode: null,
+    },
+    lineItem: recurringPriceEvidence(),
+  };
+  return { ...base, ...overrides };
+}
+
+function subscriptionEvidence(overrides = {}) {
+  const base = {
+    subscription: {
+      id: "sub_Batch6",
+      livemode: false,
+      customerId: "cus_Batch8",
+      status: "active",
+      currentPeriodStart: "2026-08-02T16:00:00.000Z",
+      currentPeriodEnd: "2026-09-02T16:00:00.000Z",
+      cancelAtPeriodEnd: false,
+      createdAt: "2026-08-01T16:00:00.000Z",
+      canceledAt: null,
+      endedAt: null,
+    },
+    lineItem: recurringPriceEvidence(),
+  };
+  return { ...base, ...overrides };
+}
+
 function webhookRequest({
   body = RAW_BODY,
   signature = SIGNATURE,
@@ -138,6 +212,10 @@ function harness(overrides = {}) {
     deferredClaim: [],
     retrieve: [],
     apply: [],
+    retrieveInvoice: [],
+    applyInvoice: [],
+    retrieveSubscription: [],
+    applySubscription: [],
     logs: [],
   };
   const dependencies = {
@@ -195,6 +273,35 @@ function harness(overrides = {}) {
         subscription_enrollment_id: "d7000000-0000-4000-8000-000000000004",
         trial_claimed: true,
         billing_complete: true,
+      };
+    },
+    retrieveInvoiceLifecycleEvidence: async (...args) => {
+      calls.retrieveInvoice.push(args);
+      return invoiceEvidence();
+    },
+    applyInvoiceLifecycle: async (...args) => {
+      calls.applyInvoice.push(args);
+      return {
+        application_state: "paid_through_extended",
+        store_id: STORE_ID,
+        invoice_id: "d7000000-0000-4000-8000-000000000005",
+        paid_through_at: "2026-09-02T16:00:00.000Z",
+        grace_ends_at: null,
+        billing_complete: true,
+      };
+    },
+    retrieveSubscriptionLifecycleEvidence: async (...args) => {
+      calls.retrieveSubscription.push(args);
+      return subscriptionEvidence();
+    },
+    applySubscriptionLifecycle: async (...args) => {
+      calls.applySubscription.push(args);
+      return {
+        application_state: "snapshot_applied",
+        store_id: STORE_ID,
+        subscription_status: "active",
+        paid_through_at: "2026-09-02T16:00:00.000Z",
+        grace_ends_at: null,
       };
     },
     safeLog: (record) => calls.logs.push(record),
@@ -496,6 +603,169 @@ test("trial-used completion can bind without claiming browser or paid-through au
   assert.equal((await fixture.handler(webhookRequest())).status, 200);
   assert.equal(fixture.calls.apply.length, 1);
   assert.doesNotMatch(JSON.stringify(fixture.calls), /paid_through/i);
+});
+
+test("all four verified invoice lifecycle events retrieve and apply through one fenced path", async () => {
+  const cases = [
+    ["invoice.payment_succeeded", "paid", 500, 0, null],
+    ["invoice.payment_failed", "open", 0, 500, "payment_failed"],
+    [
+      "invoice.payment_action_required",
+      "open",
+      0,
+      500,
+      "payment_action_required",
+    ],
+    [
+      "invoice.finalization_failed",
+      "draft",
+      0,
+      500,
+      "provider_configuration_failure",
+    ],
+  ];
+  for (const [eventType, status, paid, remaining, failureCode] of cases) {
+    const evidence = invoiceEvidence();
+    evidence.invoice.status = status;
+    evidence.invoice.amountPaidCents = paid;
+    evidence.invoice.amountRemainingCents = remaining;
+    evidence.invoice.paidAt = eventType === "invoice.payment_succeeded"
+      ? evidence.invoice.paidAt
+      : null;
+    evidence.invoice.failureCode = failureCode;
+    const fixture = harness({
+      verifySignature: async () => event(eventType),
+      retrieveInvoiceLifecycleEvidence: async (...args) => {
+        fixture.calls.retrieveInvoice.push(args);
+        return evidence;
+      },
+    });
+    const response = await fixture.handler(webhookRequest());
+    assert.equal(response.status, 200, eventType);
+    assert.equal(fixture.calls.deferred.length, 1, eventType);
+    assert.equal(fixture.calls.deferredClaim.length, 1, eventType);
+    assert.equal(fixture.calls.retrieveInvoice.length, 1, eventType);
+    assert.equal(fixture.calls.applyInvoice.length, 1, eventType);
+    assert.equal(fixture.calls.applySubscription.length, 0, eventType);
+  }
+});
+
+test("verified Subscription created, updated, and deleted events apply snapshots only", async () => {
+  for (const eventType of [
+    "customer.subscription.created",
+    "customer.subscription.updated",
+    "customer.subscription.deleted",
+  ]) {
+    const evidence = subscriptionEvidence();
+    if (eventType === "customer.subscription.deleted") {
+      evidence.subscription.status = "canceled";
+      evidence.subscription.cancelAtPeriodEnd = true;
+      evidence.subscription.canceledAt = "2026-08-02T16:00:00.000Z";
+      evidence.subscription.endedAt = "2026-08-02T16:00:00.000Z";
+    }
+    const fixture = harness({
+      verifySignature: async () => event(eventType),
+      retrieveSubscriptionLifecycleEvidence: async (...args) => {
+        fixture.calls.retrieveSubscription.push(args);
+        return evidence;
+      },
+    });
+    const response = await fixture.handler(webhookRequest());
+    assert.equal(response.status, 200, eventType);
+    assert.equal(fixture.calls.retrieveSubscription.length, 1, eventType);
+    assert.equal(fixture.calls.applySubscription.length, 1, eventType);
+    assert.equal(fixture.calls.applyInvoice.length, 0, eventType);
+  }
+});
+
+test("invoice identity, binding evidence, Price, Product, and mode mismatches fail closed", async () => {
+  const mutations = [
+    (value) => value.invoice.id = "in_Wrong",
+    (value) => value.invoice.customerId = "cus_Wrong",
+    (value) => value.invoice.subscriptionId = "sub_Wrong",
+    (value) => value.lineItem.priceId = "wrong",
+    (value) => value.lineItem.productId = "wrong",
+    (value) => value.invoice.livemode = true,
+    (value) => value.invoice.currency = "eur",
+    (value) => value.invoice.recurringLineAmountCents = 499,
+  ];
+  for (const mutate of mutations) {
+    const evidence = structuredClone(invoiceEvidence());
+    mutate(evidence);
+    const fixture = harness({
+      verifySignature: async () => event("invoice.payment_succeeded"),
+      retrieveInvoiceLifecycleEvidence: async () => evidence,
+    });
+    const response = await fixture.handler(webhookRequest());
+    assert.equal(response.status, 200);
+    assert.equal(fixture.calls.applyInvoice.length, 0);
+    assert.equal(fixture.calls.failed[0][3], false);
+  }
+});
+
+test("invoice and Subscription retrieval or unbound enrollment failures remain retryable", async () => {
+  const invoiceRetrieval = harness({
+    verifySignature: async () => event("invoice.payment_succeeded"),
+    retrieveInvoiceLifecycleEvidence: async () => {
+      throw new Error("provider details");
+    },
+  });
+  assert.equal((await invoiceRetrieval.handler(webhookRequest())).status, 500);
+  assert.deepEqual(invoiceRetrieval.calls.failed[0].slice(2), [
+    "invoice_retrieval_failed",
+    true,
+  ]);
+
+  const unbound = harness({
+    verifySignature: async () => event("invoice.payment_succeeded"),
+    applyInvoiceLifecycle: async () => {
+      throw new SaasWebhookDomainError(
+        "immutable_enrollment_not_ready",
+        true,
+      );
+    },
+  });
+  assert.equal((await unbound.handler(webhookRequest())).status, 500);
+  assert.deepEqual(unbound.calls.failed[0].slice(2), [
+    "immutable_enrollment_not_ready",
+    true,
+  ]);
+
+  const subscriptionRetrieval = harness({
+    verifySignature: async () => event("customer.subscription.updated"),
+    retrieveSubscriptionLifecycleEvidence: async () => {
+      throw new Error("provider details");
+    },
+  });
+  assert.equal(
+    (await subscriptionRetrieval.handler(webhookRequest())).status,
+    500,
+  );
+});
+
+test("zero-dollar success is routed without claiming paid-through authority in the handler", async () => {
+  const evidence = invoiceEvidence();
+  evidence.invoice.amountDueCents = 0;
+  evidence.invoice.amountPaidCents = 0;
+  evidence.invoice.amountRemainingCents = 0;
+  const fixture = harness({
+    verifySignature: async () => event("invoice.payment_succeeded"),
+    retrieveInvoiceLifecycleEvidence: async () => evidence,
+    applyInvoiceLifecycle: async (...args) => {
+      fixture.calls.applyInvoice.push(args);
+      return {
+        application_state: "non_authoritative_payment_recorded",
+        store_id: STORE_ID,
+        invoice_id: "d7000000-0000-4000-8000-000000000005",
+        paid_through_at: null,
+        grace_ends_at: null,
+        billing_complete: false,
+      };
+    },
+  });
+  assert.equal((await fixture.handler(webhookRequest())).status, 200);
+  assert.equal(fixture.calls.applyInvoice.length, 1);
+  assert.equal(fixture.calls.applyInvoice[0][2].invoice.amountDueCents, 0);
 });
 
 test("approved application events are deferred while trial notice is informational", async () => {

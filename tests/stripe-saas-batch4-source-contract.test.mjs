@@ -173,5 +173,5 @@ test("current SaaS billing batch changes no browser onboarding, Pay at Pickup, r
   const changed = stdout.split(/\r?\n/).filter((line) => line.trim()).map((line) => line.slice(3));
   assert.ok(changed.every((file) => !file.startsWith("app/") && !file.startsWith("lib/")));
   assert.ok(changed.every((file) => !/(pay-at-pickup|refund|connect)/i.test(file)));
-  assert.ok(changed.every((file) => /^(?:docs\/stripe-saas-|supabase\/(?:functions\/stripe-saas-|migrations\/20260802|tests\/verified_saas_)|tests\/stripe-saas-)/.test(file)));
+  assert.ok(changed.every((file) => /^(?:docs\/stripe-saas-|supabase\/(?:functions\/stripe-saas-|migrations\/20260802|tests\/(?:verified_saas_|saas_))|tests\/stripe-saas-)/.test(file)));
 });

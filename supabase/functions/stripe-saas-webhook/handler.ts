@@ -127,6 +127,92 @@ export type SaasCheckoutApplicationResult = {
   billing_complete: boolean;
 };
 
+export type SaasRecurringPriceEvidence = {
+  priceId: string;
+  productId: string;
+  quantity: number;
+  priceLivemode: boolean;
+  productLivemode: boolean;
+  priceActive: boolean;
+  productActive: boolean;
+  unitAmountCents: number;
+  currency: string;
+  recurringInterval: string;
+  recurringIntervalCount: number;
+  priceType: string;
+  billingScheme: string;
+  recurringUsageType: string;
+  taxBehavior: string;
+  productTaxCode: string;
+};
+
+export type SaasInvoiceLifecycleEvidence = {
+  invoice: {
+    id: string;
+    livemode: boolean;
+    customerId: string;
+    subscriptionId: string;
+    billingReason: string;
+    collectionMethod: string;
+    status: string;
+    currency: string;
+    amountDueCents: number;
+    amountPaidCents: number;
+    amountRemainingCents: number;
+    recurringLineAmountCents: number;
+    servicePeriodStart: string;
+    servicePeriodEnd: string;
+    paidAt: string | null;
+    nextPaymentAttemptAt: string | null;
+    failureCode: string | null;
+  };
+  lineItem: SaasRecurringPriceEvidence;
+};
+
+export type SaasInvoiceApplicationResult = {
+  application_state:
+    | "already_processed"
+    | "stale_recorded"
+    | "paid_through_extended"
+    | "payment_recorded"
+    | "grace_scheduled"
+    | "non_authoritative_payment_recorded"
+    | "nonpayment_recorded";
+  store_id: string;
+  invoice_id: string;
+  paid_through_at: string | null;
+  grace_ends_at: string | null;
+  billing_complete: boolean;
+};
+
+export type SaasSubscriptionLifecycleEvidence = {
+  subscription: {
+    id: string;
+    livemode: boolean;
+    customerId: string;
+    status: string;
+    currentPeriodStart: string | null;
+    currentPeriodEnd: string | null;
+    cancelAtPeriodEnd: boolean;
+    createdAt: string;
+    canceledAt: string | null;
+    endedAt: string | null;
+  };
+  lineItem: SaasRecurringPriceEvidence;
+};
+
+export type SaasSubscriptionApplicationResult = {
+  application_state:
+    | "already_processed"
+    | "stale_snapshot"
+    | "snapshot_applied"
+    | "terminal_snapshot_applied";
+  store_id: string;
+  subscription_status: string;
+  paid_through_at: string | null;
+  grace_ends_at: string | null;
+};
+
 export class SaasWebhookDomainError extends Error {
   readonly errorCode: string;
   readonly retryable: boolean;
@@ -175,6 +261,23 @@ export type StripeSaasWebhookDependencies = {
     processingLeaseToken: string,
     evidence: SaasCheckoutCompletionEvidence,
   ) => Promise<SaasCheckoutApplicationResult>;
+  retrieveInvoiceLifecycleEvidence: (
+    invoiceId: string,
+    eventType: string,
+  ) => Promise<SaasInvoiceLifecycleEvidence>;
+  applyInvoiceLifecycle: (
+    identity: ProviderEventIdentity,
+    processingLeaseToken: string,
+    evidence: SaasInvoiceLifecycleEvidence,
+  ) => Promise<SaasInvoiceApplicationResult>;
+  retrieveSubscriptionLifecycleEvidence: (
+    subscriptionId: string,
+  ) => Promise<SaasSubscriptionLifecycleEvidence>;
+  applySubscriptionLifecycle: (
+    identity: ProviderEventIdentity,
+    processingLeaseToken: string,
+    evidence: SaasSubscriptionLifecycleEvidence,
+  ) => Promise<SaasSubscriptionApplicationResult>;
   markDeferred: (
     identity: TerminalEventIdentity,
     processingLeaseToken: string,
@@ -367,6 +470,148 @@ function validateCheckoutCompletionEvidence(
   return null;
 }
 
+function signedInvoiceSubscriptionId(
+  signedObject: Record<string, unknown>,
+): string | null {
+  const parent = signedObject.parent;
+  if (!parent || typeof parent !== "object" || Array.isArray(parent)) {
+    return null;
+  }
+  const details = (parent as { subscription_details?: unknown })
+    .subscription_details;
+  if (!details || typeof details !== "object" || Array.isArray(details)) {
+    return null;
+  }
+  return expandableId(
+    (details as { subscription?: unknown }).subscription,
+  );
+}
+
+function validateRecurringPriceEvidence(
+  line: SaasRecurringPriceEvidence,
+  livemode: boolean,
+): boolean {
+  return /^price_[A-Za-z0-9]+$/.test(line.priceId) &&
+    /^prod_[A-Za-z0-9]+$/.test(line.productId) &&
+    line.quantity === 1 &&
+    line.priceLivemode === livemode &&
+    line.productLivemode === livemode &&
+    line.priceActive && line.productActive &&
+    Number.isSafeInteger(line.unitAmountCents) && line.unitAmountCents >= 0 &&
+    /^[a-z]{3}$/.test(line.currency) &&
+    ["month", "year"].includes(line.recurringInterval) &&
+    Number.isSafeInteger(line.recurringIntervalCount) &&
+    line.recurringIntervalCount > 0 &&
+    line.priceType === "recurring" &&
+    line.billingScheme === "per_unit" &&
+    line.recurringUsageType === "licensed" &&
+    line.taxBehavior === "exclusive" &&
+    line.productTaxCode === "txcd_10103001";
+}
+
+function validateInvoiceLifecycleEvidence(
+  signedObject: Record<string, unknown>,
+  identity: ProviderEventIdentity,
+  evidence: SaasInvoiceLifecycleEvidence,
+): string | null {
+  const invoice = evidence.invoice;
+  const signedCustomerId = expandableId(signedObject.customer);
+  const signedSubscriptionId = signedInvoiceSubscriptionId(signedObject);
+  if (invoice.id !== identity.providerObjectId ||
+    !/^in_[A-Za-z0-9]+$/.test(invoice.id) ||
+    invoice.livemode !== identity.stripeLivemode ||
+    !signedCustomerId || signedCustomerId !== invoice.customerId ||
+    !signedSubscriptionId || signedSubscriptionId !== invoice.subscriptionId ||
+    !/^cus_[A-Za-z0-9]+$/.test(invoice.customerId) ||
+    !/^sub_[A-Za-z0-9]+$/.test(invoice.subscriptionId) ||
+    !validateRecurringPriceEvidence(
+      evidence.lineItem,
+      identity.stripeLivemode,
+    )) {
+    return "invoice_lifecycle_identity_conflict";
+  }
+  if (!["charge_automatically", "send_invoice"].includes(
+      invoice.collectionMethod,
+    ) || !invoice.billingReason || !invoice.status ||
+    !/^[a-z]{3}$/.test(invoice.currency) ||
+    invoice.currency !== evidence.lineItem.currency ||
+    !Number.isSafeInteger(invoice.amountDueCents) ||
+    !Number.isSafeInteger(invoice.amountPaidCents) ||
+    !Number.isSafeInteger(invoice.amountRemainingCents) ||
+    !Number.isSafeInteger(invoice.recurringLineAmountCents) ||
+    invoice.amountDueCents < 0 || invoice.amountPaidCents < 0 ||
+    invoice.amountRemainingCents < 0 ||
+    invoice.recurringLineAmountCents < 0 ||
+    invoice.amountPaidCents + invoice.amountRemainingCents !==
+      invoice.amountDueCents ||
+    invoice.recurringLineAmountCents !== evidence.lineItem.unitAmountCents ||
+    !validIsoTimestamp(invoice.servicePeriodStart) ||
+    !validIsoTimestamp(invoice.servicePeriodEnd) ||
+    Date.parse(invoice.servicePeriodEnd) <=
+      Date.parse(invoice.servicePeriodStart) ||
+    (invoice.nextPaymentAttemptAt !== null &&
+      !validIsoTimestamp(invoice.nextPaymentAttemptAt))) {
+    return "invoice_lifecycle_provider_shape_conflict";
+  }
+  if (identity.eventType === "invoice.payment_succeeded" &&
+    (invoice.status !== "paid" || invoice.amountRemainingCents !== 0 ||
+      !invoice.paidAt || !validIsoTimestamp(invoice.paidAt))) {
+    return "invoice_payment_success_conflict";
+  }
+  if (identity.eventType === "invoice.payment_failed" &&
+    !["open", "uncollectible"].includes(invoice.status)) {
+    return "invoice_payment_failure_conflict";
+  }
+  if (identity.eventType === "invoice.payment_action_required" &&
+    invoice.status !== "open") {
+    return "invoice_payment_action_conflict";
+  }
+  if (identity.eventType === "invoice.finalization_failed" &&
+    !["draft", "open"].includes(invoice.status)) {
+    return "invoice_finalization_conflict";
+  }
+  return null;
+}
+
+function validateSubscriptionLifecycleEvidence(
+  signedObject: Record<string, unknown>,
+  identity: ProviderEventIdentity,
+  evidence: SaasSubscriptionLifecycleEvidence,
+): string | null {
+  const subscription = evidence.subscription;
+  const signedCustomerId = expandableId(signedObject.customer);
+  if (subscription.id !== identity.providerObjectId ||
+    !/^sub_[A-Za-z0-9]+$/.test(subscription.id) ||
+    subscription.livemode !== identity.stripeLivemode ||
+    !signedCustomerId || signedCustomerId !== subscription.customerId ||
+    !/^cus_[A-Za-z0-9]+$/.test(subscription.customerId) ||
+    !validateRecurringPriceEvidence(
+      evidence.lineItem,
+      identity.stripeLivemode,
+    ) ||
+    !validIsoTimestamp(subscription.createdAt) ||
+    (subscription.currentPeriodStart === null) !==
+      (subscription.currentPeriodEnd === null) ||
+    (subscription.currentPeriodStart !== null && (
+      !validIsoTimestamp(subscription.currentPeriodStart) ||
+      !validIsoTimestamp(subscription.currentPeriodEnd!) ||
+      Date.parse(subscription.currentPeriodEnd!) <=
+        Date.parse(subscription.currentPeriodStart)
+    )) ||
+    (subscription.canceledAt !== null &&
+      !validIsoTimestamp(subscription.canceledAt)) ||
+    (subscription.endedAt !== null &&
+      !validIsoTimestamp(subscription.endedAt))) {
+    return "subscription_lifecycle_identity_conflict";
+  }
+  if (identity.eventType === "customer.subscription.deleted" &&
+    (subscription.status !== "canceled" ||
+      (!subscription.canceledAt && !subscription.endedAt))) {
+    return "subscription_terminal_shape_conflict";
+  }
+  return null;
+}
+
 async function recordReconciliationFailure(
   dependencies: StripeSaasWebhookDependencies,
   identity: TerminalEventIdentity,
@@ -493,6 +738,230 @@ async function reconcileCheckoutCompletion(
   return jsonResponse(200, { received: true });
 }
 
+async function beginDeferredReconciliation(
+  dependencies: StripeSaasWebhookDependencies,
+  identity: ProviderEventIdentity,
+  startedAt: number,
+): Promise<SaasDeferredEventClaim | Response> {
+  let claim: SaasDeferredEventClaim;
+  try {
+    claim = await dependencies.claimDeferredEvent(identity);
+  } catch {
+    return jsonResponse(500, { error: "webhook_processing_failed" });
+  }
+  if (["already_processed", "in_progress"].includes(
+    claim.reconciliation_state,
+  )) {
+    return jsonResponse(200, { received: true });
+  }
+  if ([
+    "permanent_failure", "conflict", "not_found", "not_deferred",
+  ].includes(claim.reconciliation_state)) {
+    safeLog(dependencies, {
+      event_id: identity.providerEventId,
+      event_type: identity.eventType,
+      mode: identity.stripeLivemode ? "live" : "test",
+      result: claim.reconciliation_state,
+      attempt_count: claim.attempt_count,
+      duration_ms: (dependencies.now?.() ?? Date.now()) - startedAt,
+    });
+    return jsonResponse(200, { received: true });
+  }
+  if (!claim.processing_lease_token) {
+    return jsonResponse(500, { error: "webhook_processing_failed" });
+  }
+  return claim;
+}
+
+async function reconcileInvoiceLifecycle(
+  dependencies: StripeSaasWebhookDependencies,
+  identity: ProviderEventIdentity,
+  signedObject: Record<string, unknown>,
+  startedAt: number,
+): Promise<Response> {
+  const claim = await beginDeferredReconciliation(
+    dependencies,
+    identity,
+    startedAt,
+  );
+  if (claim instanceof Response) return claim;
+  const leaseToken = claim.processing_lease_token!;
+
+  let evidence: SaasInvoiceLifecycleEvidence;
+  try {
+    evidence = await dependencies.retrieveInvoiceLifecycleEvidence(
+      identity.providerObjectId!,
+      identity.eventType,
+    );
+  } catch (error) {
+    const classified = error instanceof SaasWebhookDomainError
+      ? error
+      : new SaasWebhookDomainError("invoice_retrieval_failed", true);
+    await recordReconciliationFailure(
+      dependencies, identity, leaseToken,
+      classified.errorCode, classified.retryable,
+    );
+    return jsonResponse(classified.retryable ? 500 : 200,
+      classified.retryable
+        ? { error: "webhook_processing_failed" }
+        : { received: true });
+  }
+
+  const evidenceError = validateInvoiceLifecycleEvidence(
+    signedObject,
+    identity,
+    evidence,
+  );
+  if (evidenceError) {
+    await recordReconciliationFailure(
+      dependencies, identity, leaseToken, evidenceError, false,
+    );
+    return jsonResponse(200, { received: true });
+  }
+
+  try {
+    await dependencies.applyInvoiceLifecycle(identity, leaseToken, evidence);
+  } catch (error) {
+    const classified = error instanceof SaasWebhookDomainError
+      ? error
+      : new SaasWebhookDomainError("invoice_application_failed", true);
+    await recordReconciliationFailure(
+      dependencies, identity, leaseToken,
+      classified.errorCode, classified.retryable,
+    );
+    return jsonResponse(classified.retryable ? 500 : 200,
+      classified.retryable
+        ? { error: "webhook_processing_failed" }
+        : { received: true });
+  }
+
+  safeLog(dependencies, {
+    event_id: identity.providerEventId,
+    event_type: identity.eventType,
+    invoice_id: identity.providerObjectId!,
+    mode: identity.stripeLivemode ? "live" : "test",
+    result: "verified_invoice_applied",
+    attempt_count: claim.attempt_count,
+    duration_ms: (dependencies.now?.() ?? Date.now()) - startedAt,
+  });
+  return jsonResponse(200, { received: true });
+}
+
+async function reconcileSubscriptionLifecycle(
+  dependencies: StripeSaasWebhookDependencies,
+  identity: ProviderEventIdentity,
+  signedObject: Record<string, unknown>,
+  startedAt: number,
+): Promise<Response> {
+  const claim = await beginDeferredReconciliation(
+    dependencies,
+    identity,
+    startedAt,
+  );
+  if (claim instanceof Response) return claim;
+  const leaseToken = claim.processing_lease_token!;
+
+  let evidence: SaasSubscriptionLifecycleEvidence;
+  try {
+    evidence = await dependencies.retrieveSubscriptionLifecycleEvidence(
+      identity.providerObjectId!,
+    );
+  } catch (error) {
+    const classified = error instanceof SaasWebhookDomainError
+      ? error
+      : new SaasWebhookDomainError("subscription_retrieval_failed", true);
+    await recordReconciliationFailure(
+      dependencies, identity, leaseToken,
+      classified.errorCode, classified.retryable,
+    );
+    return jsonResponse(classified.retryable ? 500 : 200,
+      classified.retryable
+        ? { error: "webhook_processing_failed" }
+        : { received: true });
+  }
+
+  const evidenceError = validateSubscriptionLifecycleEvidence(
+    signedObject,
+    identity,
+    evidence,
+  );
+  if (evidenceError) {
+    await recordReconciliationFailure(
+      dependencies, identity, leaseToken, evidenceError, false,
+    );
+    return jsonResponse(200, { received: true });
+  }
+
+  try {
+    await dependencies.applySubscriptionLifecycle(
+      identity,
+      leaseToken,
+      evidence,
+    );
+  } catch (error) {
+    const classified = error instanceof SaasWebhookDomainError
+      ? error
+      : new SaasWebhookDomainError("subscription_application_failed", true);
+    await recordReconciliationFailure(
+      dependencies, identity, leaseToken,
+      classified.errorCode, classified.retryable,
+    );
+    return jsonResponse(classified.retryable ? 500 : 200,
+      classified.retryable
+        ? { error: "webhook_processing_failed" }
+        : { received: true });
+  }
+
+  safeLog(dependencies, {
+    event_id: identity.providerEventId,
+    event_type: identity.eventType,
+    subscription_id: identity.providerObjectId!,
+    mode: identity.stripeLivemode ? "live" : "test",
+    result: "verified_subscription_snapshot_applied",
+    attempt_count: claim.attempt_count,
+    duration_ms: (dependencies.now?.() ?? Date.now()) - startedAt,
+  });
+  return jsonResponse(200, { received: true });
+}
+
+function isInvoiceLifecycleEvent(eventType: string): boolean {
+  return [
+    "invoice.payment_succeeded", "invoice.payment_failed",
+    "invoice.payment_action_required", "invoice.finalization_failed",
+  ].includes(eventType);
+}
+
+function isSubscriptionLifecycleEvent(eventType: string): boolean {
+  return [
+    "customer.subscription.created", "customer.subscription.updated",
+    "customer.subscription.deleted",
+  ].includes(eventType);
+}
+
+async function reconcileApplicableDeferredEvent(
+  dependencies: StripeSaasWebhookDependencies,
+  identity: ProviderEventIdentity,
+  signedObject: Record<string, unknown>,
+  startedAt: number,
+): Promise<Response | null> {
+  if (identity.eventType === "checkout.session.completed") {
+    return await reconcileCheckoutCompletion(
+      dependencies, identity, signedObject, startedAt,
+    );
+  }
+  if (isInvoiceLifecycleEvent(identity.eventType)) {
+    return await reconcileInvoiceLifecycle(
+      dependencies, identity, signedObject, startedAt,
+    );
+  }
+  if (isSubscriptionLifecycleEvent(identity.eventType)) {
+    return await reconcileSubscriptionLifecycle(
+      dependencies, identity, signedObject, startedAt,
+    );
+  }
+  return null;
+}
+
 export function createStripeSaasWebhookHandler(
   dependencies: StripeSaasWebhookDependencies,
 ): (request: Request) => Promise<Response> {
@@ -575,14 +1044,14 @@ export function createStripeSaasWebhookHandler(
       return jsonResponse(500, { error: "webhook_processing_failed" });
     }
 
-    if (claim.claim_state === "deferred_duplicate" &&
-      identity.eventType === "checkout.session.completed") {
-      return await reconcileCheckoutCompletion(
+    if (claim.claim_state === "deferred_duplicate") {
+      const reconciliation = await reconcileApplicableDeferredEvent(
         dependencies,
         identity,
         verified.event.data.object,
         startedAt,
       );
+      if (reconciliation) return reconciliation;
     }
     if ([
       "terminal_duplicate", "deferred_duplicate", "in_progress",
@@ -662,13 +1131,14 @@ export function createStripeSaasWebhookHandler(
       return jsonResponse(500, { error: "webhook_processing_failed" });
     }
 
-    if (isDeferred && identity.eventType === "checkout.session.completed") {
-      return await reconcileCheckoutCompletion(
+    if (isDeferred) {
+      const reconciliation = await reconcileApplicableDeferredEvent(
         dependencies,
         identity,
         verified.event.data.object,
         startedAt,
       );
+      if (reconciliation) return reconciliation;
     }
 
     safeLog(dependencies, {
