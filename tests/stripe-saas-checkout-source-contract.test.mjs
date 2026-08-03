@@ -30,7 +30,14 @@ test("Checkout endpoint is JWT-authenticated, feature-gated, and service bounded
 test("Stripe parameters are server-owned, subscription-only, and trial decision is trusted", async () => {
   const index = await readFile(indexPath, "utf8");
   assert.match(index, /mode: "subscription"/);
+  assert.match(index, /payment_method_types: \["card"\]/);
   assert.match(index, /payment_method_collection: "always"/);
+  assert.match(index, /wallet_options: \{ link: \{ display: "never" \} \}/);
+  assert.doesNotMatch(index, /automatic_payment_methods|excluded_payment_method_types/);
+  assert.doesNotMatch(
+    index,
+    /payment_method_types:\s*\[[^\]]*(?:cashapp|us_bank_account|link|customer_balance|pay_by_bank|ach)/,
+  );
   assert.match(index, /line_items: \[\{ price: attempt\.stripe_price_id!, quantity: 1 \}\]/);
   assert.match(index, /attempt\.trial_eligibility === "trial_eligible"[\s\S]*?trial_period_days: 7/);
   assert.match(index, /success_url:[\s\S]*?publicSiteOrigin/);

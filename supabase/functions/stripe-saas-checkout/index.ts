@@ -134,7 +134,9 @@ const handler = createStripeSaasCheckoutHandler({
       const session = await stripe.checkout.sessions.create({
         mode: "subscription",
         line_items: [{ price: attempt.stripe_price_id!, quantity: 1 }],
+        payment_method_types: ["card"],
         payment_method_collection: "always",
+        wallet_options: { link: { display: "never" } },
         success_url:
           `${publicSiteOrigin}/onboarding/billing/return?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url:
