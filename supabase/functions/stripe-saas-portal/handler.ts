@@ -73,7 +73,7 @@ export function isApprovedStripePortalConfiguration(
   const features = record(configuration.features);
   if (!features || !hasKeys(features, [
     "customer_update", "invoice_history", "payment_method_update",
-    "subscription_cancel", "subscription_update",
+    "subscription_cancel", "subscription_pause", "subscription_update",
   ])) return false;
 
   const customerUpdate = record(features.customer_update);
@@ -111,6 +111,10 @@ export function isApprovedStripePortalConfiguration(
     !reason.options.every((entry) =>
       typeof entry === "string" && cancellationReasons.has(entry)
     )) return false;
+
+  const subscriptionPause = record(features.subscription_pause);
+  if (!subscriptionPause || !hasKeys(subscriptionPause, ["enabled"]) ||
+    subscriptionPause.enabled !== false) return false;
 
   const subscriptionUpdate = record(features.subscription_update);
   const schedule = record(subscriptionUpdate?.schedule_at_period_end);

@@ -54,6 +54,9 @@ test("Portal uses fixed server configuration and host validation", () => {
   assert.match(portalIndex, /safe\.customer !== authorization\.stripe_customer_id/);
   assert.doesNotMatch(portalHandler, /type:\s*["']subscription_update["']/);
   assert.match(portalHandler, /subscriptionUpdate\.enabled !== false/);
+  assert.match(portalHandler, /"subscription_cancel", "subscription_pause", "subscription_update"/);
+  assert.match(portalHandler, /hasKeys\(subscriptionPause, \["enabled"\]\)/);
+  assert.match(portalHandler, /subscriptionPause\.enabled !== false/);
   assert.match(portalHandler, /subscriptionCancel\.mode !== "at_period_end"/);
   assert.match(portalHandler, /subscriptionCancel\.proration_behavior !== "none"/);
 });

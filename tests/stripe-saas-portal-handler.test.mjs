@@ -78,6 +78,7 @@ function portalConfiguration(overrides = {}) {
         mode: "at_period_end",
         proration_behavior: "none",
       },
+      subscription_pause: { enabled: false },
       subscription_update: {
         billing_cycle_anchor: "unchanged",
         default_allowed_updates: [],
@@ -198,9 +199,42 @@ test("Portal configuration preflight accepts only the approved default policy", 
   }
 });
 
+test("Portal configuration preflight requires subscription pause to be exactly disabled", () => {
+  const disabled = portalConfiguration();
+  assert.equal(isApprovedStripePortalConfiguration(
+    disabled, "bpc_Batch10General", false,
+  ), true);
+
+  const enabled = structuredClone(disabled);
+  enabled.features.subscription_pause.enabled = true;
+  const missingEnabled = structuredClone(disabled);
+  delete missingEnabled.features.subscription_pause.enabled;
+  const missingObject = structuredClone(disabled);
+  delete missingObject.features.subscription_pause;
+  const malformed = structuredClone(disabled);
+  malformed.features.subscription_pause = "disabled";
+  const unexpectedNested = structuredClone(disabled);
+  unexpectedNested.features.subscription_pause.future_behavior = "pause_now";
+  const unknownFeature = structuredClone(disabled);
+  unknownFeature.features.future_subscription_mutation = { enabled: false };
+
+  for (const configuration of [
+    enabled,
+    missingEnabled,
+    missingObject,
+    malformed,
+    unexpectedNested,
+    unknownFeature,
+  ]) {
+    assert.equal(isApprovedStripePortalConfiguration(
+      configuration, "bpc_Batch10General", false,
+    ), false);
+  }
+});
+
 test("unsafe, missing, or unavailable Portal configuration returns no URL", async () => {
   const unsafeConfiguration = structuredClone(portalConfiguration());
-  unsafeConfiguration.features.subscription_update.enabled = true;
+  unsafeConfiguration.features.subscription_pause.enabled = true;
   const unsafe = harness({
     retrievePortalConfiguration: async () => unsafeConfiguration,
   });
