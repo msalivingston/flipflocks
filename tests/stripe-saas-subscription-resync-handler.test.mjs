@@ -33,6 +33,52 @@ function harness(overrides = {}) {
   return { handler, calls };
 }
 
+test("approved-origin preflight succeeds before authentication or resync", async () => {
+  const fixture = harness({
+    authorizeOperator: async () => {
+      throw new Error("authentication must not run during preflight");
+    },
+    resync: async () => {
+      throw new Error("resync must not run during preflight");
+    },
+  });
+  const response = await fixture.handler(new Request(
+    "https://functions.test/stripe-saas-resync-subscription",
+    {
+      method: "OPTIONS",
+      headers: {
+        Origin: "https://flockfront.test",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "authorization, apikey, content-type, x-client-info",
+      },
+    },
+  ));
+
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://flockfront.test");
+  assert.equal(response.headers.get("Access-Control-Allow-Methods"), "POST, OPTIONS");
+  assert.equal(
+    response.headers.get("Access-Control-Allow-Headers"),
+    "authorization, x-client-info, apikey, content-type",
+  );
+  assert.deepEqual(fixture.calls, { authorize: 0, resync: 0 });
+});
+
+test("preflight from any origin other than the configured application fails closed", async () => {
+  for (const origin of ["https://attacker.test", null]) {
+    const fixture = harness();
+    const requestHeaders = origin ? { Origin: origin } : undefined;
+    const response = await fixture.handler(new Request(
+      "https://functions.test/stripe-saas-resync-subscription",
+      { method: "OPTIONS", headers: requestHeaders },
+    ));
+
+    assert.equal(response.status, 403);
+    assert.equal(response.headers.has("Access-Control-Allow-Origin"), false);
+    assert.deepEqual(fixture.calls, { authorize: 0, resync: 0 });
+  }
+});
+
 test("one-purpose authenticated resync accepts no store or provider identity", async () => {
   const fixture = harness();
   const response = await fixture.handler(request());

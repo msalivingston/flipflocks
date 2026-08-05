@@ -12,7 +12,7 @@ export type SubscriptionResyncDependencies = {
 function headers(origin: string) {
   return {
     "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Cache-Control": "no-store",
     "Content-Type": "application/json",
@@ -22,6 +22,21 @@ function headers(origin: string) {
 
 function response(status: number, body: Record<string, unknown>, value: Record<string, string>) {
   return new Response(JSON.stringify(body), { status, headers: value });
+}
+
+function preflightResponse(
+  request: Request,
+  allowedOrigin: string,
+): Response | null {
+  if (request.method !== "OPTIONS") return null;
+  if (request.headers.get("Origin") !== allowedOrigin) {
+    return response(403, { error: "origin_not_allowed" }, {
+      "Cache-Control": "no-store",
+      "Content-Type": "application/json",
+      "Vary": "Origin",
+    });
+  }
+  return new Response(null, { status: 204, headers: headers(allowedOrigin) });
 }
 
 async function hasExactBody(request: Request): Promise<boolean> {
@@ -42,12 +57,14 @@ export function createStripeSaasSubscriptionResyncHandler(
   dependencies: SubscriptionResyncDependencies,
 ): (request: Request) => Promise<Response> {
   return async (request: Request) => {
+    const preflight = preflightResponse(request, dependencies.allowedOrigin);
+    if (preflight) return preflight;
+
     const responseHeaders = headers(dependencies.allowedOrigin);
     const origin = request.headers.get("Origin");
     if (origin && origin !== dependencies.allowedOrigin) {
       return response(403, { error: "not_authorized" }, responseHeaders);
     }
-    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: responseHeaders });
     if (request.method !== "POST") return response(405, { error: "method_not_allowed" }, responseHeaders);
     const authorization = request.headers.get("Authorization");
     if (!authorization || !/^Bearer\s+\S+$/i.test(authorization)) {
