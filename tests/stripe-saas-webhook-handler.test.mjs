@@ -175,6 +175,8 @@ function subscriptionEvidence(overrides = {}) {
       currentPeriodStart: "2026-08-02T16:00:00.000Z",
       currentPeriodEnd: "2026-09-02T16:00:00.000Z",
       cancelAtPeriodEnd: false,
+      cancelAt: null,
+      trialEnd: null,
       createdAt: "2026-08-01T16:00:00.000Z",
       canceledAt: null,
       endedAt: null,
@@ -860,6 +862,36 @@ test("verified Subscription created, updated, and deleted events apply snapshots
     assert.equal(fixture.calls.retrieveSubscription.length, 1, eventType);
     assert.equal(fixture.calls.applySubscription.length, 1, eventType);
     assert.equal(fixture.calls.applyInvoice.length, 0, eventType);
+  }
+});
+
+test("explicit Subscription cancellation must match the verified period and trial boundary", async () => {
+  const valid = subscriptionEvidence();
+  valid.subscription.status = "trialing";
+  valid.subscription.currentPeriodEnd = "2026-08-09T16:00:00.000Z";
+  valid.subscription.cancelAt = "2026-08-09T16:00:00.000Z";
+  valid.subscription.trialEnd = "2026-08-09T16:00:00.000Z";
+  const accepted = harness({
+    verifySignature: async () => event("customer.subscription.updated"),
+    retrieveSubscriptionLifecycleEvidence: async () => valid,
+  });
+  assert.equal((await accepted.handler(webhookRequest())).status, 200);
+  assert.equal(accepted.calls.applySubscription.length, 1);
+
+  for (const mutate of [
+    (value) => value.subscription.cancelAt = "2026-08-09T15:59:59.000Z",
+    (value) => value.subscription.trialEnd = "2026-08-10T16:00:00.000Z",
+  ]) {
+    const evidence = structuredClone(valid);
+    mutate(evidence);
+    const rejected = harness({
+      verifySignature: async () => event("customer.subscription.updated"),
+      retrieveSubscriptionLifecycleEvidence: async () => evidence,
+    });
+    const response = await rejected.handler(webhookRequest());
+    assert.equal(response.status, 200);
+    assert.equal(rejected.calls.applySubscription.length, 0);
+    assert.equal(rejected.calls.failed[0][3], false);
   }
 });
 

@@ -43,6 +43,8 @@ insert into auth.users (
   '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
   now(), now(), '', '', '', ''
 );
+insert into public.user_roles (user_id, role, store_id) values
+  ('fa000000-0000-4000-8000-000000000001', 'admin', null);
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
@@ -187,6 +189,7 @@ create function pg_temp.batch10_apply_subscription(
   p_event_id text,
   p_token uuid,
   p_cancel_at_period_end boolean,
+  p_cancel_at timestamptz default null,
   p_environment_id text default 'local'
 ) returns table (
   application_state text, store_id uuid, subscription_status text,
@@ -221,6 +224,7 @@ begin
     p_current_period_start => v_enrollment.trial_started_at,
     p_current_period_end => v_enrollment.trial_ends_at,
     p_cancel_at_period_end => p_cancel_at_period_end,
+    p_subscription_cancel_at => p_cancel_at,
     p_subscription_created_at => v_enrollment.provider_created_at,
     p_subscription_canceled_at => null,
     p_subscription_ended_at => null,
@@ -345,6 +349,50 @@ set cancel_at_period_end = true,
     payment_failure_started_at = null
 where store_id = 'fa000000-0000-4000-9000-000000000001';
 
+create temporary table batch10_explicit_cancel_claim as
+select pg_temp.batch10_claim_subscription(
+  'evt_Batch10ExplicitCancel', statement_timestamp() + interval '1 second'
+) as token;
+select is(
+  (select application_state from pg_temp.batch10_apply_subscription(
+    'evt_Batch10ExplicitCancel',
+    (select token from batch10_explicit_cancel_claim), false,
+    (select trial_ends_at from batch10_trial_boundary)
+  )),
+  'snapshot_applied',
+  'provider cancel_at exactly matching trial and period end is normalized as scheduled cancellation'
+);
+select is(
+  (select provider_cancel_at_period_end from public.seller_billing_status
+   where store_id = 'fa000000-0000-4000-9000-000000000001'),
+  false, 'literal provider cancel_at_period_end remains separately false'
+);
+select is(
+  (select provider_cancel_at from public.seller_billing_status
+   where store_id = 'fa000000-0000-4000-9000-000000000001'),
+  (select trial_ends_at from batch10_trial_boundary),
+  'literal provider cancel_at boundary is preserved'
+);
+select is(
+  (select cancel_at_period_end from public.seller_billing_status
+   where store_id = 'fa000000-0000-4000-9000-000000000001'),
+  true, 'normalized scheduled-cancellation state remains true'
+);
+
+create temporary table batch10_bad_cancel_claim as
+select pg_temp.batch10_claim_subscription(
+  'evt_Batch10BadCancel', statement_timestamp() + interval '2 seconds'
+) as token;
+select throws_ok(
+  $$select * from pg_temp.batch10_apply_subscription(
+    'evt_Batch10BadCancel',
+    (select token from batch10_bad_cancel_claim), false,
+    (select trial_ends_at from batch10_trial_boundary) - interval '1 second'
+  )$$,
+  '55000', 'SAAS_SUBSCRIPTION_CANCEL_AT_MISMATCH',
+  'arbitrary provider cancel_at boundary fails closed'
+);
+
 create temporary table batch10_portal as
 select * from public.begin_saas_billing_portal_action(
   'fa000000-0000-4000-8000-000000000001', 'portal_general', false,
@@ -442,12 +490,12 @@ select is((select access_reason from public.resolve_store_entitlement('fa000000-
 
 create temporary table batch10_wrong_environment_claim as
 select pg_temp.batch10_claim_subscription(
-  'evt_Batch10WrongEnvironment', statement_timestamp(), 'staging'
+  'evt_Batch10WrongEnvironment', statement_timestamp() + interval '3 seconds', 'staging'
 ) as token;
 select is(
   (select application_state from pg_temp.batch10_apply_subscription(
     'evt_Batch10WrongEnvironment',
-    (select token from batch10_wrong_environment_claim), false, 'staging'
+    (select token from batch10_wrong_environment_claim), false, null, 'staging'
   )),
   'snapshot_applied', 'verified Subscription snapshot remains environment-bound'
 );
@@ -459,7 +507,7 @@ select is(
 
 create temporary table batch10_resume_update_claim as
 select pg_temp.batch10_claim_subscription(
-  'evt_Batch10ResumeConfirmed', statement_timestamp() + interval '1 second'
+  'evt_Batch10ResumeConfirmed', statement_timestamp() + interval '4 seconds'
 ) as token;
 select is(
   (select application_state from pg_temp.batch10_apply_subscription(
@@ -499,7 +547,7 @@ select is(
 
 create temporary table batch10_cancel_again_claim as
 select pg_temp.batch10_claim_subscription(
-  'evt_Batch10CancelAgain', statement_timestamp() + interval '1 second'
+  'evt_Batch10CancelAgain', statement_timestamp() + interval '5 seconds'
 ) as token;
 select is(
   (select application_state from pg_temp.batch10_apply_subscription(
@@ -534,6 +582,63 @@ select throws_ok(
   $$select public.mark_saas_billing_management_action_failed(
     (select action_request_id from batch10_resume), 'RAW Error Message!')$$,
   '22023', 'BILLING_MANAGEMENT_FAILURE_CODE_INVALID', 'unsanitized failure codes are rejected'
+);
+
+create temporary table batch10_resync as
+select * from public.begin_saas_subscription_snapshot_resync(
+  'fa000000-0000-4000-8000-000000000001',
+  'fa000000-0000-4000-9000-000000000001',
+  'acct_1CTOghL1R5g4hhXt', false, 'local'
+);
+select is(
+  (select stripe_subscription_id from batch10_resync),
+  'sub_Batch10', 'resync derives Subscription identity from the immutable enrollment'
+);
+select throws_ok(
+  $$select public.apply_verified_saas_subscription_snapshot_resync(
+    (select request_id from batch10_resync), 'sub_Batch10', false,
+    'cus_Batch10', 'price_Wrong', 'prod_Batch10Coop', 'trialing',
+    (select trial_started_at from batch10_trial_boundary),
+    (select trial_ends_at from batch10_trial_boundary), false,
+    (select trial_ends_at from batch10_trial_boundary)
+  )$$,
+  '55000', 'SUBSCRIPTION_RESYNC_BINDING_INVALID',
+  'resync cannot change immutable Price identity'
+);
+select is(
+  public.apply_verified_saas_subscription_snapshot_resync(
+    (select request_id from batch10_resync), 'sub_Batch10', false,
+    'cus_Batch10', 'price_Batch10Coop', 'prod_Batch10Coop', 'trialing',
+    (select trial_started_at from batch10_trial_boundary),
+    (select trial_ends_at from batch10_trial_boundary), false,
+    (select trial_ends_at from batch10_trial_boundary)
+  ),
+  'applied', 'one-purpose resync applies the verified current snapshot'
+);
+select is(
+  public.apply_verified_saas_subscription_snapshot_resync(
+    (select request_id from batch10_resync), 'sub_Batch10', false,
+    'cus_Batch10', 'price_Batch10Coop', 'prod_Batch10Coop', 'trialing',
+    (select trial_started_at from batch10_trial_boundary),
+    (select trial_ends_at from batch10_trial_boundary), false,
+    (select trial_ends_at from batch10_trial_boundary)
+  ),
+  'already_applied', 'resync is idempotent'
+);
+select is(
+  (select paid_through_at from public.seller_billing_status
+   where store_id = 'fa000000-0000-4000-9000-000000000001'),
+  null::timestamptz, 'resync creates no paid-through authority'
+);
+select is(
+  (select count(*) from public.billing_customer_bindings
+   where store_id = 'fa000000-0000-4000-9000-000000000001'),
+  1::bigint, 'resync does not replace the immutable Customer binding'
+);
+select is(
+  (select count(*) from public.billing_subscription_enrollments
+   where store_id = 'fa000000-0000-4000-9000-000000000001'),
+  1::bigint, 'resync does not replace the immutable Subscription enrollment'
 );
 
 select set_config('request.jwt.claim.role', 'authenticated', true);

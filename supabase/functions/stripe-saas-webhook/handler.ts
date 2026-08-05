@@ -269,6 +269,8 @@ export type SaasSubscriptionLifecycleEvidence = {
     currentPeriodStart: string | null;
     currentPeriodEnd: string | null;
     cancelAtPeriodEnd: boolean;
+    cancelAt: string | null;
+    trialEnd: string | null;
     createdAt: string;
     canceledAt: string | null;
     endedAt: string | null;
@@ -854,6 +856,14 @@ function validateSubscriptionLifecycleEvidence(
     )) ||
     (subscription.canceledAt !== null &&
       !validIsoTimestamp(subscription.canceledAt)) ||
+    (subscription.cancelAt !== null &&
+      (!validIsoTimestamp(subscription.cancelAt) ||
+        subscription.currentPeriodEnd === null ||
+        subscription.cancelAt !== subscription.currentPeriodEnd ||
+        (subscription.status === "trialing" &&
+          subscription.cancelAt !== subscription.trialEnd))) ||
+    (subscription.trialEnd !== null &&
+      !validIsoTimestamp(subscription.trialEnd)) ||
     (subscription.endedAt !== null &&
       !validIsoTimestamp(subscription.endedAt))) {
     return "subscription_lifecycle_identity_conflict";

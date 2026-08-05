@@ -7,6 +7,7 @@ const root = process.cwd();
 const read = (value) => fs.readFileSync(path.join(root, value), "utf8");
 const migration = read("supabase/migrations/20260802105000_saas_billing_management_actions.sql");
 const safetyMigration = read("supabase/migrations/20260803103000_saas_billing_portal_controlled_rollout.sql");
+const cancellationMigration = read("supabase/migrations/20260803104000_saas_trial_scheduled_cancellation.sql");
 const portalIndex = read("supabase/functions/stripe-saas-portal/index.ts");
 const portalHandler = read("supabase/functions/stripe-saas-portal/handler.ts");
 const resumeIndex = read("supabase/functions/stripe-saas-subscription-action/index.ts");
@@ -68,11 +69,32 @@ test("Portal uses fixed server configuration and host validation", () => {
 });
 
 test("resume updates only provider cancellation scheduling with stable idempotency", () => {
-  assert.match(resumeIndex, /subscriptions\.update\([\s\S]*\{ cancel_at_period_end: false \}[\s\S]*idempotencyKey/);
+  assert.match(resumeIndex, /subscriptions\.update\([\s\S]*\{ cancel_at_period_end: false, cancel_at: "" \}[\s\S]*idempotencyKey/);
   assert.doesNotMatch(resumeIndex, /price:|trial_end|billing_cycle_anchor|default_payment_method|collection_method|metadata:/);
   assert.match(migration, /ff:saas_resume:' \|\| p_environment_id \|\| ':' \|\| v_action_id::text \|\| ':v1'/);
   assert.doesNotMatch(migration, /set\s+cancel_at_period_end\s*=\s*false/i);
   assert.doesNotMatch(migration, /set\s+paid_through_at|set\s+plan_key|set\s+storefront_enabled/i);
+});
+
+test("provider cancel_at is normalized only at the immutable verified boundary", () => {
+  assert.match(cancellationMigration, /provider_cancel_at_period_end boolean not null default false/);
+  assert.match(cancellationMigration, /provider_cancel_at timestamptz/);
+  assert.match(cancellationMigration, /p_provider_cancel_at is distinct from p_current_period_end/);
+  assert.match(cancellationMigration, /p_subscription_status = 'trialing'[\s\S]*p_provider_cancel_at is distinct from p_verified_trial_end/);
+  assert.match(cancellationMigration, /p_provider_cancel_at_period_end or p_provider_cancel_at is not null/);
+  assert.match(cancellationMigration, /not p_cancel_at_period_end[\s\S]*p_subscription_cancel_at is null[\s\S]*action\.request_status = 'provider_requested'/);
+  assert.doesNotMatch(cancellationMigration, /set\s+paid_through_at|set\s+trial_ends_at|set\s+storefront_access_until/i);
+});
+
+test("subscription resync is one-purpose, service-only, and immutable-binding constrained", () => {
+  assert.match(cancellationMigration, /create table public\.billing_subscription_snapshot_resyncs/);
+  assert.match(cancellationMigration, /alter table public\.billing_subscription_snapshot_resyncs enable row level security/);
+  assert.match(cancellationMigration, /begin_saas_subscription_snapshot_resync/);
+  assert.match(cancellationMigration, /apply_verified_saas_subscription_snapshot_resync/);
+  assert.match(cancellationMigration, /grant execute[\s\S]*to service_role/);
+  assert.doesNotMatch(cancellationMigration, /grant execute[\s\S]{0,120}to authenticated/);
+  assert.match(cancellationMigration, /initial_stripe_price_id is distinct from p_stripe_price_id/);
+  assert.doesNotMatch(cancellationMigration, /update public\.billing_customer_bindings|insert into public\.billing_trial_claims|paid_through_at\s*=/i);
 });
 
 test("action contracts are service-only and same-store bound", () => {

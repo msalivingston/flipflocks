@@ -61,7 +61,7 @@ const handler = createStripeSaasSubscriptionActionHandler({
     try {
       await stripe.subscriptions.update(
         authorization.stripe_subscription_id!,
-        { cancel_at_period_end: false },
+        { cancel_at_period_end: false, cancel_at: "" },
         { idempotencyKey: authorization.stripe_idempotency_key! },
       );
     } catch (error) {

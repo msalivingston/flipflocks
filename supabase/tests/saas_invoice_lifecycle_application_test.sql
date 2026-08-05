@@ -542,7 +542,8 @@ create function pg_temp.batch8_apply_subscription(
   p_period_start timestamptz,
   p_period_end timestamptz,
   p_canceled_at timestamptz default null,
-  p_ended_at timestamptz default null
+  p_ended_at timestamptz default null,
+  p_cancel_at timestamptz default null
 ) returns table (
   application_state text, store_id uuid, subscription_status text,
   paid_through_at timestamptz, grace_ends_at timestamptz
@@ -573,6 +574,7 @@ begin
     p_current_period_start => p_period_start,
     p_current_period_end => p_period_end,
     p_cancel_at_period_end => p_cancel_at_period_end,
+    p_subscription_cancel_at => p_cancel_at,
     p_subscription_created_at => statement_timestamp() - interval '8 days',
     p_subscription_canceled_at => p_canceled_at,
     p_subscription_ended_at => p_ended_at,
