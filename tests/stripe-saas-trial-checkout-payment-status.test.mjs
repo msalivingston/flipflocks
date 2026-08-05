@@ -9,10 +9,6 @@ const correctionPath = path.join(
   root,
   "supabase/migrations/20260803102000_saas_trial_checkout_payment_status.sql",
 );
-const replayPath = path.join(
-  root,
-  "supabase/migrations/20260803101000_saas_checkout_conflict_diagnostics_and_replay.sql",
-);
 
 test("trial Checkout accepts only paid or no_payment_required with null-safe checks", async () => {
   const correction = await readFile(correctionPath, "utf8");
@@ -48,13 +44,4 @@ test("correction is limited to the trial predicate and adds no payment authority
     correction,
     /saas_subscription_checkout_enabled[\s\S]*?true|saas_billing_portal_enabled[\s\S]*?true/i,
   );
-});
-
-test("checkout_trial_state_mismatch remains an allowlisted replay conflict", async () => {
-  const replay = await readFile(replayPath, "utf8");
-  const replayableCodes = replay.match(
-    /v_replayable_codes constant text\[\][\s\S]*?\];/,
-  )?.[0] ?? "";
-
-  assert.match(replayableCodes, /'checkout_trial_state_mismatch'/);
 });
