@@ -47,6 +47,7 @@ test("Portal uses fixed server configuration and host validation", () => {
   assert.match(portalHandler, /url\.hostname === "billing\.stripe\.com"/);
   assert.match(portalIndex, /billingPortal\.sessions\.create/);
   assert.match(portalIndex, /billingPortal\.configurations\.retrieve/);
+  assert.match(portalIndex, /STRIPE_SAAS_PORTAL_PAYMENT_METHOD_CONFIGURATION_ID/);
   assert.match(portalHandler, /type: "payment_method_update"/);
   assert.match(portalHandler, /type: "subscription_cancel"/);
   assert.match(portalHandler, /subscription_cancel:\s*\{\s*subscription:/);
@@ -61,6 +62,9 @@ test("Portal uses fixed server configuration and host validation", () => {
   assert.match(portalHandler, /!Array\.isArray\(conditions\) \|\| conditions\.length !== 0/);
   assert.match(portalHandler, /subscriptionCancel\.mode !== "at_period_end"/);
   assert.match(portalHandler, /subscriptionCancel\.proration_behavior !== "none"/);
+  assert.match(portalHandler, /paymentMethodUpdate\.payment_method_configuration !==[\s\S]*expectedPaymentMethodConfigurationId/);
+  assert.doesNotMatch(portalIndex, /paymentMethodConfigurations\.retrieve/);
+  assert.doesNotMatch(portalHandler, /STRIPE_PORTAL_PAYMENT_METHOD_KEYS/);
 });
 
 test("resume updates only provider cancellation scheduling with stable idempotency", () => {
@@ -118,12 +122,13 @@ test("billing management controls lock visibly and synchronously during requests
   assert.equal((panel.match(/if \(actionInFlight\.current\) return;/g) ?? []).length, 2);
   assert.equal((panel.match(/actionInFlight\.current = true;/g) ?? []).length, 2);
   assert.match(panel, /disabled=\{Boolean\(activeAction\)\}/);
-  assert.match(panel, /activeAction === "manage_billing" \? "Opening…" : "Manage billing"/);
+  assert.match(panel, /activeAction === "manage_billing" \? "Opening…" : "Manage billing & invoices"/);
   assert.match(panel, /activeAction === "update_payment_method" \? "Opening…" : "Update payment method"/);
-  assert.match(panel, /activeAction === "invoice_history" \? "Opening…" : "View invoices"/);
   assert.match(panel, /activeAction === "cancel_subscription" \? "Opening…" : "Continue to cancellation"/);
   assert.match(panel, /activeAction === "resume" \? "Opening…" : "Keep my subscription"/);
   assert.match(panel, /actionInFlight\.current = false;[\s\S]{0,100}setActionError\(true\);[\s\S]{0,100}setActiveAction\(null\);/);
+  assert.doesNotMatch(panel, />\s*View invoices\s*</);
+  assert.doesNotMatch(panel, /openPortal\("invoice_history"\)/);
 });
 
 test("Portal return stays silent while retaining bounded background polling", () => {
@@ -136,10 +141,13 @@ test("Portal return stays silent while retaining bounded background polling", ()
 
 test("deployment documentation keeps all secrets server-only and plan changes disabled", () => {
   assert.match(documentation, /STRIPE_SAAS_API_KEY/);
+  assert.match(documentation, /STRIPE_SAAS_PORTAL_PAYMENT_METHOD_CONFIGURATION_ID/);
   assert.doesNotMatch(documentation, /STRIPE_GENERAL_PORTAL_CONFIGURATION_ID/);
   assert.doesNotMatch(documentation, /STRIPE_CANCEL_PORTAL_CONFIGURATION_ID/);
   assert.match(documentation, /saved default sandbox Portal configuration/);
-  assert.match(documentation, /Product and Price switching[\s\S]*must remain disabled/);
+  assert.match(documentation, /Product and\s+Price switching[\s\S]*remain disabled/);
+  assert.match(documentation, /payment_method_types: \["card"\]/);
+  assert.match(documentation, /Manage billing & invoices/);
   assert.match(documentation, /temporary[\s\S]*STRIPE_SAAS_CATALOG_READ_KEY[\s\S]*is unrelated/i);
   assert.doesNotMatch(documentation, /(sk|rk)_(test|live)_[A-Za-z0-9]{8,}/);
 });

@@ -9,6 +9,8 @@ import {
   PortalProviderError,
 } from "../supabase/functions/stripe-saas-portal/handler.ts";
 
+const portalPaymentMethodConfigurationId = "pmc_Batch10CardOnly";
+
 test("Portal Session parameters use the default configuration and preserve targeted flows", () => {
   const returnUrl = "https://flockfront.test/dashboard/account?billing=portal_return";
   for (const action of ["manage_billing", "invoice_history"]) {
@@ -70,7 +72,7 @@ function portalConfiguration(overrides = {}) {
       invoice_history: { enabled: true },
       payment_method_update: {
         enabled: true,
-        payment_method_configuration: null,
+        payment_method_configuration: portalPaymentMethodConfigurationId,
       },
       subscription_cancel: {
         cancellation_reason: { enabled: true, options: ["other"] },
@@ -108,6 +110,7 @@ function harness(overrides = {}) {
   const calls = { begin: [], create: [], retrieve: [], record: [], failed: [] };
   const dependencies = {
     allowedOrigin: "https://flockfront.test",
+    approvedPaymentMethodConfigurationId: portalPaymentMethodConfigurationId,
     stripeLivemode: false,
     authenticate: async () => "fa000000-0000-4000-8000-000000000001",
     beginPortalAction: async (...args) => {
@@ -164,6 +167,7 @@ test("Portal uses server-derived authorization and returns only a safe URL", asy
 test("Portal configuration preflight accepts only the approved default policy", () => {
   assert.equal(isApprovedStripePortalConfiguration(
     portalConfiguration(), "bpc_Batch10General", false,
+    portalPaymentMethodConfigurationId,
   ), true);
 
   const unsafe = [];
@@ -182,6 +186,12 @@ test("Portal configuration preflight accepts only the approved default policy", 
   const paymentDisabled = structuredClone(portalConfiguration());
   paymentDisabled.features.payment_method_update.enabled = false;
   unsafe.push(paymentDisabled);
+  const paymentConfigurationMissing = structuredClone(portalConfiguration());
+  paymentConfigurationMissing.features.payment_method_update.payment_method_configuration = null;
+  unsafe.push(paymentConfigurationMissing);
+  const paymentConfigurationMismatch = structuredClone(portalConfiguration());
+  paymentConfigurationMismatch.features.payment_method_update.payment_method_configuration = "pmc_OtherConfiguration";
+  unsafe.push(paymentConfigurationMismatch);
   const invoicesDisabled = structuredClone(portalConfiguration());
   invoicesDisabled.features.invoice_history.enabled = false;
   unsafe.push(invoicesDisabled);
@@ -195,6 +205,7 @@ test("Portal configuration preflight accepts only the approved default policy", 
   for (const configuration of unsafe) {
     assert.equal(isApprovedStripePortalConfiguration(
       configuration, "bpc_Batch10General", false,
+      portalPaymentMethodConfigurationId,
     ), false);
   }
 });
@@ -203,6 +214,7 @@ test("Portal configuration preflight requires subscription pause to be exactly d
   const disabled = portalConfiguration();
   assert.equal(isApprovedStripePortalConfiguration(
     disabled, "bpc_Batch10General", false,
+    portalPaymentMethodConfigurationId,
   ), true);
 
   const enabled = structuredClone(disabled);
@@ -228,6 +240,7 @@ test("Portal configuration preflight requires subscription pause to be exactly d
   ]) {
     assert.equal(isApprovedStripePortalConfiguration(
       configuration, "bpc_Batch10General", false,
+      portalPaymentMethodConfigurationId,
     ), false);
   }
 });
@@ -236,12 +249,14 @@ test("disabled subscription updates accept only inert proration defaults", () =>
   const none = portalConfiguration();
   assert.equal(isApprovedStripePortalConfiguration(
     none, "bpc_Batch10General", false,
+    portalPaymentMethodConfigurationId,
   ), true);
 
   const alwaysInvoice = structuredClone(none);
   alwaysInvoice.features.subscription_update.proration_behavior = "always_invoice";
   assert.equal(isApprovedStripePortalConfiguration(
     alwaysInvoice, "bpc_Batch10General", false,
+    portalPaymentMethodConfigurationId,
   ), true);
 
   const enabled = structuredClone(alwaysInvoice);
@@ -275,6 +290,7 @@ test("disabled subscription updates accept only inert proration defaults", () =>
   ]) {
     assert.equal(isApprovedStripePortalConfiguration(
       configuration, "bpc_Batch10General", false,
+      portalPaymentMethodConfigurationId,
     ), false);
   }
 });
@@ -307,6 +323,26 @@ test("unsafe, missing, or unavailable Portal configuration returns no URL", asyn
     unavailable.calls.failed[0][1],
     "stripe_portal_configuration_retrieval_failed",
   );
+});
+
+test("missing or mismatched approved payment-method configuration returns no URL", async () => {
+  for (const value of [null, "pmc_OtherConfiguration"]) {
+    const configuration = structuredClone(portalConfiguration());
+    configuration.features.payment_method_update.payment_method_configuration = value;
+    const blocked = harness({
+      retrievePortalConfiguration: async () => configuration,
+    });
+    const response = await blocked.handler(request());
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), {
+      error: "billing_management_temporarily_unavailable",
+    });
+    assert.equal(blocked.calls.record.length, 0);
+    assert.equal(
+      blocked.calls.failed[0][1],
+      "stripe_portal_configuration_unsafe",
+    );
+  }
 });
 
 test("Portal rejects non-Stripe redirect hosts and mode mismatch", async () => {

@@ -191,16 +191,13 @@ export function SubscriptionBillingPanel() {
       {management.manageBilling ? (
         <div className="mt-5 flex flex-col gap-2 border-t border-stone-200 pt-4 sm:flex-row sm:flex-wrap">
           <button className={billingActionButtonClass("seller-secondary-button")} disabled={Boolean(activeAction)} onClick={() => void openPortal("manage_billing")} type="button">
-            {activeAction === "manage_billing" ? "Opening…" : "Manage billing"}
+            {activeAction === "manage_billing" ? "Opening…" : "Manage billing & invoices"}
           </button>
           {management.updatePaymentMethod ? (
             <button className={billingActionButtonClass("seller-secondary-button")} disabled={Boolean(activeAction)} onClick={() => void openPortal("update_payment_method")} type="button">
               {activeAction === "update_payment_method" ? "Opening…" : "Update payment method"}
             </button>
           ) : null}
-          <button className={billingActionButtonClass("seller-secondary-button")} disabled={Boolean(activeAction)} onClick={() => void openPortal("invoice_history")} type="button">
-            {activeAction === "invoice_history" ? "Opening…" : "View invoices"}
-          </button>
           {management.cancelSubscription && !confirmingCancel ? (
             <button className={billingActionButtonClass("seller-secondary-button")} disabled={Boolean(activeAction)} onClick={() => setConfirmingCancel(true)} type="button">
               Cancel subscription

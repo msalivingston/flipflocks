@@ -22,6 +22,9 @@ const config = parseStripeSaasPortalConfig({
   STRIPE_SAAS_LIVEMODE: Deno.env.get("STRIPE_SAAS_LIVEMODE"),
   FLOCKFRONT_ENVIRONMENT_ID: Deno.env.get("FLOCKFRONT_ENVIRONMENT_ID"),
   FLOCKFRONT_APP_ORIGIN: Deno.env.get("FLOCKFRONT_APP_ORIGIN"),
+  STRIPE_SAAS_PORTAL_PAYMENT_METHOD_CONFIGURATION_ID: Deno.env.get(
+    "STRIPE_SAAS_PORTAL_PAYMENT_METHOD_CONFIGURATION_ID",
+  ),
 });
 if (config.livemode) throw new Error("Live SaaS Billing Portal is not enabled in this batch.");
 
@@ -75,6 +78,8 @@ function safeSession(session: {
 
 const handler = createStripeSaasPortalHandler({
   allowedOrigin: config.appOrigin,
+  approvedPaymentMethodConfigurationId:
+    config.portalPaymentMethodConfigurationId,
   stripeLivemode: config.livemode,
   async authenticate(authorization) {
     const { data: { user }, error } = await authenticatedClient(authorization).auth.getUser();

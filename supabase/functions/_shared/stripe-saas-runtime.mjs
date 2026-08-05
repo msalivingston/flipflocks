@@ -151,9 +151,20 @@ function parseApplicationOrigin(value) {
 export function parseStripeSaasPortalConfig(source) {
   const operational = parseStripeSaasConfig(source);
   const appOrigin = parseApplicationOrigin(required(source, "FLOCKFRONT_APP_ORIGIN"));
+  const portalPaymentMethodConfigurationId = required(
+    source,
+    "STRIPE_SAAS_PORTAL_PAYMENT_METHOD_CONFIGURATION_ID",
+  );
+  if (!/^pmc_[A-Za-z0-9]+$/.test(portalPaymentMethodConfigurationId)) {
+    throw new StripeSaasError(
+      "STRIPE_SAAS_CONFIG_PORTAL_PAYMENT_METHOD_CONFIGURATION_INVALID",
+      "The approved Portal Payment Method Configuration ID is invalid.",
+    );
+  }
   return Object.freeze({
     ...operational,
     appOrigin,
+    portalPaymentMethodConfigurationId,
   });
 }
 

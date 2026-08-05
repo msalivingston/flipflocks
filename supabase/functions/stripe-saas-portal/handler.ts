@@ -56,6 +56,7 @@ export function isApprovedStripePortalConfiguration(
   value: unknown,
   expectedConfigurationId: string,
   expectedLivemode: boolean,
+  expectedPaymentMethodConfigurationId: string,
 ): boolean {
   const configuration = record(value);
   if (!configuration ||
@@ -89,11 +90,9 @@ export function isApprovedStripePortalConfiguration(
   if (!paymentMethodUpdate || !hasKeys(
     paymentMethodUpdate,
     ["enabled", "payment_method_configuration"],
-  ) || paymentMethodUpdate.enabled !== true || !(
-    paymentMethodUpdate.payment_method_configuration === null ||
-    (typeof paymentMethodUpdate.payment_method_configuration === "string" &&
-      /^pmc_[A-Za-z0-9]+$/.test(paymentMethodUpdate.payment_method_configuration))
-  )) return false;
+  ) || paymentMethodUpdate.enabled !== true ||
+    paymentMethodUpdate.payment_method_configuration !==
+      expectedPaymentMethodConfigurationId) return false;
 
   const subscriptionCancel = record(features.subscription_cancel);
   const reason = record(subscriptionCancel?.cancellation_reason);
@@ -174,6 +173,7 @@ export class PortalProviderError extends Error {
 
 export type StripeSaasPortalDependencies = {
   allowedOrigin: string;
+  approvedPaymentMethodConfigurationId: string;
   stripeLivemode: boolean;
   authenticate: (authorization: string) => Promise<string | null>;
   beginPortalAction: (
@@ -328,6 +328,7 @@ export function createStripeSaasPortalHandler(
       configuration,
       session.configuration,
       dependencies.stripeLivemode,
+      dependencies.approvedPaymentMethodConfigurationId,
     )) {
       try {
         await dependencies.markActionFailed(

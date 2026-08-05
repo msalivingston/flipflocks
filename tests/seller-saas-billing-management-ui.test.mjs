@@ -88,8 +88,17 @@ test("billing controls expose accessible busy styling and prevent duplicate requ
   assert.match(panel, /disabled:opacity-50/);
   assert.match(panel, /const actionInFlight = useRef\(false\)/);
   assert.equal((panel.match(/if \(actionInFlight\.current\) return;/g) ?? []).length, 2);
-  assert.equal((panel.match(/"Opening…"/g) ?? []).length, 5);
+  assert.equal((panel.match(/"Opening…"/g) ?? []).length, 4);
   assert.match(panel, /setActionError\(true\);[\s\S]{0,100}setActiveAction\(null\);/);
+});
+
+test("invoice history uses the general Portal entry without a separate control", () => {
+  assert.match(panel, /Manage billing & invoices/);
+  assert.match(panel, /openPortal\("manage_billing"\)/);
+  assert.doesNotMatch(panel, />\s*View invoices\s*</);
+  assert.doesNotMatch(panel, /openPortal\("invoice_history"\)/);
+  assert.match(panel, /openPortal\("update_payment_method"\)/);
+  assert.match(panel, /openPortal\("cancel_subscription"\)/);
 });
 
 test("Portal return refresh stays silent and presentation-only", () => {

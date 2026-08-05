@@ -38,8 +38,13 @@ test("Portal configuration remains operational-key-only and validates fixed serv
     STRIPE_SAAS_LIVEMODE: "false",
     FLOCKFRONT_ENVIRONMENT_ID: "local",
     FLOCKFRONT_APP_ORIGIN: "http://127.0.0.1:3000",
+    STRIPE_SAAS_PORTAL_PAYMENT_METHOD_CONFIGURATION_ID: "pmc_Batch10CardOnly",
   });
   assert.equal(config.appOrigin, "http://127.0.0.1:3000");
+  assert.equal(
+    config.portalPaymentMethodConfigurationId,
+    "pmc_Batch10CardOnly",
+  );
   assert.equal("generalPortalConfigurationId" in config, false);
   assert.equal("cancelPortalConfigurationId" in config, false);
   assert.equal(config.operationalApiKey, testSecret);
@@ -54,7 +59,22 @@ test("Portal configuration remains operational-key-only and validates fixed serv
   expectCode(() => parseStripeSaasPortalConfig({
     ...environment(),
     FLOCKFRONT_APP_ORIGIN: "https://flockfront.test/path",
+    STRIPE_SAAS_PORTAL_PAYMENT_METHOD_CONFIGURATION_ID: "pmc_Batch10CardOnly",
   }), "STRIPE_SAAS_CONFIG_APP_ORIGIN_INVALID");
+  expectCode(() => parseStripeSaasPortalConfig({
+    ...environment(),
+    FLOCKFRONT_APP_ORIGIN: "https://flockfront.test",
+  }), "STRIPE_SAAS_CONFIG_STRIPE_SAAS_PORTAL_PAYMENT_METHOD_CONFIGURATION_ID_MISSING");
+  expectCode(() => parseStripeSaasPortalConfig({
+    ...environment(),
+    FLOCKFRONT_APP_ORIGIN: "https://flockfront.test",
+    STRIPE_SAAS_PORTAL_PAYMENT_METHOD_CONFIGURATION_ID: "not-a-pmc-id",
+  }), "STRIPE_SAAS_CONFIG_PORTAL_PAYMENT_METHOD_CONFIGURATION_INVALID");
+  expectCode(() => parseStripeSaasPortalConfig({
+    ...environment({ STRIPE_PLATFORM_ACCOUNT_ID: "acct_WrongPlatform" }),
+    FLOCKFRONT_APP_ORIGIN: "https://flockfront.test",
+    STRIPE_SAAS_PORTAL_PAYMENT_METHOD_CONFIGURATION_ID: "pmc_Batch10CardOnly",
+  }), "STRIPE_SAAS_CONFIG_ACCOUNT_MISMATCH");
 });
 
 function environment(overrides = {}) {
