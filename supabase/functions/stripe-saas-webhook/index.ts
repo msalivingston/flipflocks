@@ -5,6 +5,7 @@ import {
   createStripeSaasWebhookVerifier,
 } from "../_shared/stripe-saas-client.ts";
 import {
+  assertStripeSaasRuntimeEnvironment,
   parseStripeSaasConfig,
   parseStripeSaasWebhookConfig,
 } from "../_shared/stripe-saas-runtime.mjs";
@@ -47,9 +48,8 @@ const operationalConfig = parseStripeSaasConfig({
   STRIPE_SAAS_LIVEMODE: Deno.env.get("STRIPE_SAAS_LIVEMODE"),
   FLOCKFRONT_ENVIRONMENT_ID: Deno.env.get("FLOCKFRONT_ENVIRONMENT_ID"),
 });
-if (stripeConfig.livemode) {
-  throw new Error("Live SaaS webhook processing is not enabled in this batch.");
-}
+assertStripeSaasRuntimeEnvironment(stripeConfig);
+assertStripeSaasRuntimeEnvironment(operationalConfig);
 
 const serviceClient = createClient(
   requiredEnvironment("SUPABASE_URL"),

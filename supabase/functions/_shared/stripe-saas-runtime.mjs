@@ -102,6 +102,16 @@ export function parseStripeSaasConfig(source) {
   });
 }
 
+export function assertStripeSaasRuntimeEnvironment(config) {
+  if (config.livemode && config.environmentId !== "production") {
+    throw new StripeSaasError(
+      "STRIPE_SAAS_CONFIG_LIVE_ENVIRONMENT_MISMATCH",
+      "Live Stripe SaaS configuration requires the production environment.",
+    );
+  }
+  return config;
+}
+
 export function parseStripeSaasCatalogConfig(source) {
   const catalogReadApiKey = required(source, "STRIPE_SAAS_CATALOG_READ_KEY");
   const context = parseStripeSaasContext(source);

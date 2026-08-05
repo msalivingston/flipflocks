@@ -1,6 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.0";
 import { createStripeSaasClient } from "../_shared/stripe-saas-client.ts";
-import { parseStripeSaasPortalConfig } from "../_shared/stripe-saas-runtime.mjs";
+import {
+  assertStripeSaasRuntimeEnvironment,
+  parseStripeSaasPortalConfig,
+} from "../_shared/stripe-saas-runtime.mjs";
 import {
   createStripeSaasSubscriptionActionHandler,
   ResumeProviderError,
@@ -20,7 +23,7 @@ const config = parseStripeSaasPortalConfig({
   FLOCKFRONT_ENVIRONMENT_ID: Deno.env.get("FLOCKFRONT_ENVIRONMENT_ID"),
   FLOCKFRONT_APP_ORIGIN: Deno.env.get("FLOCKFRONT_APP_ORIGIN"),
 });
-if (config.livemode) throw new Error("Live SaaS subscription actions are not enabled in this batch.");
+assertStripeSaasRuntimeEnvironment(config);
 
 const supabaseUrl = requiredEnvironment("SUPABASE_URL");
 const anonKey = requiredEnvironment("SUPABASE_ANON_KEY");

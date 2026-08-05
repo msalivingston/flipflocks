@@ -90,6 +90,26 @@ function harness(overrides = {}) {
   return { handler: createStripeSaasCheckoutHandler(dependencies), calls };
 }
 
+test("approved-origin Checkout preflight returns 204 without starting Checkout", async () => {
+  const fixture = harness();
+  const response = await fixture.handler(new Request(
+    "https://functions.test/stripe-saas-checkout",
+    {
+      method: "OPTIONS",
+      headers: {
+        Origin: "https://flockfront.test",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "authorization, content-type",
+      },
+    },
+  ));
+
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://flockfront.test");
+  assert.equal(fixture.calls.begin.length, 0);
+  assert.equal(fixture.calls.create.length, 0);
+});
+
 test("verified user intent creates and records one trusted Checkout Session", async () => {
   const testHarness = harness();
   const response = await testHarness.handler(checkoutRequest());

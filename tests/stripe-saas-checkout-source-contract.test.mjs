@@ -27,6 +27,23 @@ test("Checkout endpoint is JWT-authenticated, feature-gated, and service bounded
   assert.match(handler, /allowedBodyKeys = new Set\(\["plan_key", "billing_cadence"\]\)/);
 });
 
+test("all SaaS function entrypoints use the shared production runtime safeguard", async () => {
+  const entrypoints = await Promise.all([
+    "stripe-saas-checkout",
+    "stripe-saas-webhook",
+    "stripe-saas-portal",
+    "stripe-saas-subscription-action",
+  ].map((name) => readFile(
+    path.join(root, `supabase/functions/${name}/index.ts`),
+    "utf8",
+  )));
+
+  for (const source of entrypoints) {
+    assert.match(source, /assertStripeSaasRuntimeEnvironment\(/);
+    assert.doesNotMatch(source, /Live SaaS .*not enabled in this batch/);
+  }
+});
+
 test("Stripe parameters are server-owned, subscription-only, and trial decision is trusted", async () => {
   const index = await readFile(indexPath, "utf8");
   assert.match(index, /mode: "subscription"/);

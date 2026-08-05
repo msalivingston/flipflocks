@@ -7,6 +7,7 @@ import {
   STRIPE_SAAS_PLATFORM_ACCOUNT_ID,
   STRIPE_SAAS_SDK_VERSION,
   StripeSaasError,
+  assertStripeSaasRuntimeEnvironment,
   assertStripeWebhookTimestampWithinTolerance,
   parseStripeSaasCatalogConfig,
   parseStripeSaasConfig,
@@ -237,6 +238,29 @@ test("configuration fails closed and strictly binds keys, mode, account, and env
   expectCode(() => parseStripeSaasConfig(environment({ FLOCKFRONT_ENVIRONMENT_ID: "arbitrary" })), "STRIPE_SAAS_CONFIG_ENVIRONMENT_INVALID");
   assert.equal(parseStripeSaasConfig(environment()).catalogReadApiKey, testRestricted);
   assert.equal(parseStripeSaasConfig(environment({ STRIPE_SAAS_CATALOG_READ_KEY: "" })).catalogReadApiKey, null);
+});
+
+test("runtime environment safeguard permits sandbox and approved live production only", () => {
+  const sandbox = parseStripeSaasConfig(environment());
+  assert.equal(assertStripeSaasRuntimeEnvironment(sandbox), sandbox);
+
+  const liveProduction = parseStripeSaasConfig(environment({
+    STRIPE_SAAS_API_KEY: liveSecret,
+    STRIPE_SAAS_CATALOG_READ_KEY: "",
+    STRIPE_SAAS_LIVEMODE: "true",
+    FLOCKFRONT_ENVIRONMENT_ID: "production",
+  }));
+  assert.equal(assertStripeSaasRuntimeEnvironment(liveProduction), liveProduction);
+
+  expectCode(
+    () => assertStripeSaasRuntimeEnvironment(parseStripeSaasConfig(environment({
+      STRIPE_SAAS_API_KEY: liveSecret,
+      STRIPE_SAAS_CATALOG_READ_KEY: "",
+      STRIPE_SAAS_LIVEMODE: "true",
+      FLOCKFRONT_ENVIRONMENT_ID: "staging",
+    }))),
+    "STRIPE_SAAS_CONFIG_LIVE_ENVIRONMENT_MISMATCH",
+  );
 });
 
 test("catalog configuration is independent of the required operational configuration", () => {

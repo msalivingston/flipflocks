@@ -2,7 +2,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.0";
 import {
   createStripeSaasClient,
 } from "../_shared/stripe-saas-client.ts";
-import { parseStripeSaasConfig } from "../_shared/stripe-saas-runtime.mjs";
+import {
+  assertStripeSaasRuntimeEnvironment,
+  parseStripeSaasConfig,
+} from "../_shared/stripe-saas-runtime.mjs";
 import {
   CheckoutProviderError,
   createStripeSaasCheckoutHandler,
@@ -34,9 +37,7 @@ const stripeConfig = parseStripeSaasConfig({
   STRIPE_SAAS_LIVEMODE: Deno.env.get("STRIPE_SAAS_LIVEMODE"),
   FLOCKFRONT_ENVIRONMENT_ID: Deno.env.get("FLOCKFRONT_ENVIRONMENT_ID"),
 });
-if (stripeConfig.livemode) {
-  throw new Error("Live SaaS Checkout is not enabled in this batch.");
-}
+assertStripeSaasRuntimeEnvironment(stripeConfig);
 
 const supabaseUrl = requiredEnvironment("SUPABASE_URL");
 const anonKey = requiredEnvironment("SUPABASE_ANON_KEY");

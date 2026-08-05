@@ -1,6 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.0";
 import { createStripeSaasClient } from "../_shared/stripe-saas-client.ts";
-import { parseStripeSaasPortalConfig } from "../_shared/stripe-saas-runtime.mjs";
+import {
+  assertStripeSaasRuntimeEnvironment,
+  parseStripeSaasPortalConfig,
+} from "../_shared/stripe-saas-runtime.mjs";
 import {
   buildStripePortalSessionParams,
   createStripeSaasPortalHandler,
@@ -26,7 +29,7 @@ const config = parseStripeSaasPortalConfig({
     "STRIPE_SAAS_PORTAL_PAYMENT_METHOD_CONFIGURATION_ID",
   ),
 });
-if (config.livemode) throw new Error("Live SaaS Billing Portal is not enabled in this batch.");
+assertStripeSaasRuntimeEnvironment(config);
 
 const supabaseUrl = requiredEnvironment("SUPABASE_URL");
 const anonKey = requiredEnvironment("SUPABASE_ANON_KEY");
