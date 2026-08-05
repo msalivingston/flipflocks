@@ -19,20 +19,12 @@ export function SubscriptionBillingPanel() {
   const [actionError, setActionError] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [resumePending, setResumePending] = useState(false);
-  const [portalReturnPending, setPortalReturnPending] = useState(false);
-  const [portalReturnDelayed, setPortalReturnDelayed] = useState(false);
   const actionInFlight = useRef(false);
   const pollingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("billing") !== "portal_return") return;
     let active = true;
-    queueMicrotask(() => {
-      if (active) {
-        setPortalReturnPending(true);
-        setPortalReturnDelayed(false);
-      }
-    });
     let polls = 0;
     const poll = async () => {
       if (!active || polls >= 5) return;
@@ -41,10 +33,7 @@ export function SubscriptionBillingPanel() {
       if (!active) return;
       if (polls < 5) {
         pollingTimer.current = setTimeout(poll, 2_000);
-        return;
       }
-      setPortalReturnPending(false);
-      setPortalReturnDelayed(true);
     };
     void poll();
     return () => {
@@ -189,16 +178,6 @@ export function SubscriptionBillingPanel() {
           </div>
         ))}
       </dl>
-      {portalReturnPending ? (
-        <p className="mt-4 rounded-md bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-950" role="status">
-          Checking for billing updates…
-        </p>
-      ) : null}
-      {portalReturnDelayed ? (
-        <p className="mt-4 rounded-md bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-950" role="status">
-          Stripe changes may take a moment to appear. No billing change is assumed; you can refresh this page later.
-        </p>
-      ) : null}
       {resumePending ? (
         <p className="mt-4 rounded-md bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-950" role="status">
           Stripe is confirming that your subscription will continue.

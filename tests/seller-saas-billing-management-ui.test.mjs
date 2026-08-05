@@ -92,10 +92,11 @@ test("billing controls expose accessible busy styling and prevent duplicate requ
   assert.match(panel, /setActionError\(true\);[\s\S]{0,100}setActiveAction\(null\);/);
 });
 
-test("Portal return messaging is presentation-only and does not claim a change occurred", () => {
+test("Portal return refresh stays silent and presentation-only", () => {
   assert.match(panel, /billing.*portal_return/);
-  assert.match(panel, /Checking for billing updates…/);
+  assert.match(panel, /polls >= 5/);
+  assert.doesNotMatch(panel, /portalReturnPending|portalReturnDelayed/);
+  assert.doesNotMatch(panel, /Checking for billing updates/);
   assert.doesNotMatch(panel, /Your billing changes are being confirmed\./);
-  assert.match(panel, /Stripe changes may take a moment to appear/);
-  assert.match(panel, /No billing change is assumed/);
+  assert.doesNotMatch(panel, /Stripe changes may take a moment to appear/);
 });

@@ -106,9 +106,6 @@ test("seller controls are authoritative-state gated and Portal-return is present
   assert.match(panel, /Canceling stops your next renewal/);
   assert.match(panel, /Stripe is confirming that your subscription will continue/);
   assert.match(panel, /billing.*portal_return/);
-  assert.match(panel, /setPortalReturnPending\(false\)/);
-  assert.match(panel, /Stripe changes may take a moment to appear/);
-  assert.match(panel, /No billing change is assumed/);
   assert.match(panel, /trial_canceling_at_period_end/);
   assert.doesNotMatch(panel, /cancel_at_period_end\s*:/);
   assert.doesNotMatch(panel, /paid_through_at\s*:/);
@@ -129,13 +126,12 @@ test("billing management controls lock visibly and synchronously during requests
   assert.match(panel, /actionInFlight\.current = false;[\s\S]{0,100}setActionError\(true\);[\s\S]{0,100}setActiveAction\(null\);/);
 });
 
-test("Portal return copy is neutral and bounded polling retains delayed guidance", () => {
-  assert.match(panel, /Checking for billing updates…/);
+test("Portal return stays silent while retaining bounded background polling", () => {
+  assert.doesNotMatch(panel, /portalReturnPending|portalReturnDelayed/);
+  assert.doesNotMatch(panel, /Checking for billing updates/);
   assert.doesNotMatch(panel, /Your billing changes are being confirmed\./);
   assert.match(panel, /polls >= 5/);
-  assert.match(panel, /setPortalReturnPending\(false\)/);
-  assert.match(panel, /setPortalReturnDelayed\(true\)/);
-  assert.match(panel, /No billing change is assumed/);
+  assert.doesNotMatch(panel, /Stripe changes may take a moment to appear/);
 });
 
 test("deployment documentation keeps all secrets server-only and plan changes disabled", () => {
