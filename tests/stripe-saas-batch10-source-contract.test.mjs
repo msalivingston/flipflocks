@@ -87,17 +87,6 @@ test("provider cancel_at is normalized only at the immutable verified boundary",
   assert.doesNotMatch(cancellationMigration, /set\s+paid_through_at|set\s+trial_ends_at|set\s+storefront_access_until/i);
 });
 
-test("subscription resync is one-purpose, service-only, and immutable-binding constrained", () => {
-  assert.match(cancellationMigration, /create table public\.billing_subscription_snapshot_resyncs/);
-  assert.match(cancellationMigration, /alter table public\.billing_subscription_snapshot_resyncs enable row level security/);
-  assert.match(cancellationMigration, /begin_saas_subscription_snapshot_resync/);
-  assert.match(cancellationMigration, /apply_verified_saas_subscription_snapshot_resync/);
-  assert.match(cancellationMigration, /grant execute[\s\S]*to service_role/);
-  assert.doesNotMatch(cancellationMigration, /grant execute[\s\S]{0,120}to authenticated/);
-  assert.match(cancellationMigration, /initial_stripe_price_id is distinct from p_stripe_price_id/);
-  assert.doesNotMatch(cancellationMigration, /update public\.billing_customer_bindings|insert into public\.billing_trial_claims|paid_through_at\s*=/i);
-});
-
 test("action contracts are service-only and same-store bound", () => {
   assert.match(migration, /billing_management_actions_enrollment_context_fk foreign key[\s\S]*subscription_enrollment_id, store_id, stripe_subscription_id,[\s\S]*stripe_livemode, stripe_account_id/);
   assert.match(migration, /revoke all on table public\.billing_management_action_requests[\s\S]*public, anon, authenticated/);

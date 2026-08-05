@@ -23,6 +23,3 @@ verify_jwt = true
 
 [functions.stripe-saas-replay-checkout-event]
 verify_jwt = true
-
-[functions.stripe-saas-resync-subscription]
-verify_jwt = true

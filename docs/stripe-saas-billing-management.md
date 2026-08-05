@@ -12,7 +12,6 @@ Future deployments require these server-only values:
 - `FLOCKFRONT_ENVIRONMENT_ID`
 - `FLOCKFRONT_APP_ORIGIN`
 - `STRIPE_SAAS_PORTAL_PAYMENT_METHOD_CONFIGURATION_ID`
-- `STRIPE_SAAS_RESYNC_ALLOWED_STORE_ID` (temporary one-store snapshot repair)
 
 The temporary `STRIPE_SAAS_CATALOG_READ_KEY` is unrelated and must not be
 used by these functions. No value belongs in source control or a public
@@ -83,14 +82,6 @@ cancellation fields are clear. The matching verified
 `customer.subscription.updated` transaction also completes the pending resume
 audit record only after immutable Store, Customer, Subscription, enrollment,
 account, mode, environment, catalog, and event identity checks have passed.
-
-The temporary `stripe-saas-resync-subscription` function is limited by the
-server-side operator ID and `STRIPE_SAAS_RESYNC_ALLOWED_STORE_ID`. It derives
-the current immutable enrollment, retrieves that Subscription read-only, and
-updates only the typed provider snapshot through a service-role contract. It
-cannot replace Store, Customer, Subscription, account, mode, Price, or Product
-identity, and cannot write trial or paid-through authority. Remove the
-temporary function and allowlist secret after the controlled repair.
 
 For controlled rollout, deploy the migration and updated functions while the
 master flag remains false. Then use the service-only

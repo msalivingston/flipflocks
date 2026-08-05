@@ -121,7 +121,6 @@ test("post-Batch-4 billing work adds only approved SaaS server endpoints and no 
       "stripe-saas-checkout",
       "stripe-saas-portal",
       "stripe-saas-replay-checkout-event",
-      "stripe-saas-resync-subscription",
       "stripe-saas-subscription-action",
       "stripe-saas-webhook",
     ],

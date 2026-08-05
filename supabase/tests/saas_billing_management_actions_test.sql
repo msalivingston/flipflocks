@@ -584,63 +584,6 @@ select throws_ok(
   '22023', 'BILLING_MANAGEMENT_FAILURE_CODE_INVALID', 'unsanitized failure codes are rejected'
 );
 
-create temporary table batch10_resync as
-select * from public.begin_saas_subscription_snapshot_resync(
-  'fa000000-0000-4000-8000-000000000001',
-  'fa000000-0000-4000-9000-000000000001',
-  'acct_1CTOghL1R5g4hhXt', false, 'local'
-);
-select is(
-  (select stripe_subscription_id from batch10_resync),
-  'sub_Batch10', 'resync derives Subscription identity from the immutable enrollment'
-);
-select throws_ok(
-  $$select public.apply_verified_saas_subscription_snapshot_resync(
-    (select request_id from batch10_resync), 'sub_Batch10', false,
-    'cus_Batch10', 'price_Wrong', 'prod_Batch10Coop', 'trialing',
-    (select trial_started_at from batch10_trial_boundary),
-    (select trial_ends_at from batch10_trial_boundary), false,
-    (select trial_ends_at from batch10_trial_boundary)
-  )$$,
-  '55000', 'SUBSCRIPTION_RESYNC_BINDING_INVALID',
-  'resync cannot change immutable Price identity'
-);
-select is(
-  public.apply_verified_saas_subscription_snapshot_resync(
-    (select request_id from batch10_resync), 'sub_Batch10', false,
-    'cus_Batch10', 'price_Batch10Coop', 'prod_Batch10Coop', 'trialing',
-    (select trial_started_at from batch10_trial_boundary),
-    (select trial_ends_at from batch10_trial_boundary), false,
-    (select trial_ends_at from batch10_trial_boundary)
-  ),
-  'applied', 'one-purpose resync applies the verified current snapshot'
-);
-select is(
-  public.apply_verified_saas_subscription_snapshot_resync(
-    (select request_id from batch10_resync), 'sub_Batch10', false,
-    'cus_Batch10', 'price_Batch10Coop', 'prod_Batch10Coop', 'trialing',
-    (select trial_started_at from batch10_trial_boundary),
-    (select trial_ends_at from batch10_trial_boundary), false,
-    (select trial_ends_at from batch10_trial_boundary)
-  ),
-  'already_applied', 'resync is idempotent'
-);
-select is(
-  (select paid_through_at from public.seller_billing_status
-   where store_id = 'fa000000-0000-4000-9000-000000000001'),
-  null::timestamptz, 'resync creates no paid-through authority'
-);
-select is(
-  (select count(*) from public.billing_customer_bindings
-   where store_id = 'fa000000-0000-4000-9000-000000000001'),
-  1::bigint, 'resync does not replace the immutable Customer binding'
-);
-select is(
-  (select count(*) from public.billing_subscription_enrollments
-   where store_id = 'fa000000-0000-4000-9000-000000000001'),
-  1::bigint, 'resync does not replace the immutable Subscription enrollment'
-);
-
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 select throws_ok(
