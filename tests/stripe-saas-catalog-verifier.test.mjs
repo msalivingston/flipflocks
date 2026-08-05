@@ -33,8 +33,8 @@ const expectedManifest = [
 const expectedLiveManifest = [
   ["small_flock", "monthly", "price_1U1A6TL1R5g4hhXttRzdEkpO", "prod_V1CV3zEif7505x"],
   ["small_flock", "yearly", "price_1U1A6TL1R5g4hhXtXV8oONZy", "prod_V1CV3zEif7505x"],
-  ["full_flock", "monthly", "price_1U1A6PL1R5g4hhXtsuBhV0pk", "prod_V1CVBoupdvldFd"],
-  ["full_flock", "yearly", "price_1U1A6PL1R5g4hhXtandGNw8C", "prod_V1CVBoupdvldFd"],
+  ["full_flock", "monthly", "price_1U1A6PL1R5g4hhXtsuBhV0pk", "prod_V1CVBoupdvIdFd"],
+  ["full_flock", "yearly", "price_1U1A6PL1R5g4hhXtandGNw8C", "prod_V1CVBoupdvIdFd"],
 ];
 
 const approvedValues = new Map([

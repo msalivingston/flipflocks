@@ -88,7 +88,7 @@ The live manifest is:
 |---|---|---|---|---|
 | Coop | `small_flock` | Monthly | `price_1U1A6TL1R5g4hhXttRzdEkpO` | `prod_V1CV3zEif7505x` |
 | Coop | `small_flock` | Annual | `price_1U1A6TL1R5g4hhXtXV8oONZy` | `prod_V1CV3zEif7505x` |
-| Market | `full_flock` | Monthly | `price_1U1A6PL1R5g4hhXtsuBhV0pk` | `prod_V1CVBoupdvldFd` |
-| Market | `full_flock` | Annual | `price_1U1A6PL1R5g4hhXtandGNw8C` | `prod_V1CVBoupdvldFd` |
+| Market | `full_flock` | Monthly | `price_1U1A6PL1R5g4hhXtsuBhV0pk` | `prod_V1CVBoupdvIdFd` |
+| Market | `full_flock` | Annual | `price_1U1A6PL1R5g4hhXtandGNw8C` | `prod_V1CVBoupdvIdFd` |
 
 The RPC uniqueness boundary includes account and `stripe_livemode`, so adding these live rows does not replace or mutate the registered sandbox rows.

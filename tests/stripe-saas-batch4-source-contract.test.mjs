@@ -155,7 +155,7 @@ test("catalog files contain no provider object identifiers outside the approved 
     .replaceAll("price_1U1A6PL1R5g4hhXtsuBhV0pk", "approved-live-price")
     .replaceAll("price_1U1A6PL1R5g4hhXtandGNw8C", "approved-live-price")
     .replaceAll("prod_V1CV3zEif7505x", "approved-live-product")
-    .replaceAll("prod_V1CVBoupdvldFd", "approved-live-product");
+    .replaceAll("prod_V1CVBoupdvIdFd", "approved-live-product");
   assert.doesNotMatch(source, /["'](?:price|prod|acct)_[A-Za-z0-9]{12,}["']/);
 });
 

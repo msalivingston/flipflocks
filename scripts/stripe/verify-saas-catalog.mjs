@@ -114,14 +114,14 @@ export const APPROVED_LIVE_SAAS_CATALOG_MANIFEST = Object.freeze([
     planKey: "full_flock",
     cadence: "monthly",
     stripePriceId: "price_1U1A6PL1R5g4hhXtsuBhV0pk",
-    stripeProductId: "prod_V1CVBoupdvldFd",
+    stripeProductId: "prod_V1CVBoupdvIdFd",
   }),
   Object.freeze({
     label: "Market yearly",
     planKey: "full_flock",
     cadence: "yearly",
     stripePriceId: "price_1U1A6PL1R5g4hhXtandGNw8C",
-    stripeProductId: "prod_V1CVBoupdvldFd",
+    stripeProductId: "prod_V1CVBoupdvIdFd",
   }),
 ]);
 
