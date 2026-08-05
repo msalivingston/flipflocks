@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import test from "node:test";
 
 import { getBillingManagementAvailability } from "../lib/saas-billing-management.ts";
+
+const panel = fs.readFileSync(
+  path.join(process.cwd(), "app/dashboard/account/subscription-billing-panel.tsx"),
+  "utf8",
+);
 
 function status(overrides = {}) {
   return {
@@ -73,4 +80,22 @@ test("complimentary, held, unknown, canceled, local, and unbound states expose n
   }
   assert.equal(getBillingManagementAvailability(status({ current_enrollment_exists: false })).manageBilling, false);
   assert.equal(getBillingManagementAvailability(status({ customer_binding_exists: false })).manageBilling, false);
+});
+
+test("billing controls expose accessible busy styling and prevent duplicate requests", () => {
+  assert.match(panel, /enabled:cursor-pointer/);
+  assert.match(panel, /disabled:cursor-not-allowed/);
+  assert.match(panel, /disabled:opacity-50/);
+  assert.match(panel, /const actionInFlight = useRef\(false\)/);
+  assert.equal((panel.match(/if \(actionInFlight\.current\) return;/g) ?? []).length, 2);
+  assert.equal((panel.match(/"Opening…"/g) ?? []).length, 5);
+  assert.match(panel, /setActionError\(true\);[\s\S]{0,100}setActiveAction\(null\);/);
+});
+
+test("Portal return messaging is presentation-only and does not claim a change occurred", () => {
+  assert.match(panel, /billing.*portal_return/);
+  assert.match(panel, /Checking for billing updates…/);
+  assert.doesNotMatch(panel, /Your billing changes are being confirmed\./);
+  assert.match(panel, /Stripe changes may take a moment to appear/);
+  assert.match(panel, /No billing change is assumed/);
 });

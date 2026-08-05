@@ -115,6 +115,29 @@ test("seller controls are authoritative-state gated and Portal-return is present
   assert.doesNotMatch(panel, /resolve_store_entitlement|billing_complete\s*:/);
 });
 
+test("billing management controls lock visibly and synchronously during requests", () => {
+  assert.match(panel, /enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-50/);
+  assert.match(panel, /const actionInFlight = useRef\(false\)/);
+  assert.equal((panel.match(/if \(actionInFlight\.current\) return;/g) ?? []).length, 2);
+  assert.equal((panel.match(/actionInFlight\.current = true;/g) ?? []).length, 2);
+  assert.match(panel, /disabled=\{Boolean\(activeAction\)\}/);
+  assert.match(panel, /activeAction === "manage_billing" \? "Opening…" : "Manage billing"/);
+  assert.match(panel, /activeAction === "update_payment_method" \? "Opening…" : "Update payment method"/);
+  assert.match(panel, /activeAction === "invoice_history" \? "Opening…" : "View invoices"/);
+  assert.match(panel, /activeAction === "cancel_subscription" \? "Opening…" : "Continue to cancellation"/);
+  assert.match(panel, /activeAction === "resume" \? "Opening…" : "Keep my subscription"/);
+  assert.match(panel, /actionInFlight\.current = false;[\s\S]{0,100}setActionError\(true\);[\s\S]{0,100}setActiveAction\(null\);/);
+});
+
+test("Portal return copy is neutral and bounded polling retains delayed guidance", () => {
+  assert.match(panel, /Checking for billing updates…/);
+  assert.doesNotMatch(panel, /Your billing changes are being confirmed\./);
+  assert.match(panel, /polls >= 5/);
+  assert.match(panel, /setPortalReturnPending\(false\)/);
+  assert.match(panel, /setPortalReturnDelayed\(true\)/);
+  assert.match(panel, /No billing change is assumed/);
+});
+
 test("deployment documentation keeps all secrets server-only and plan changes disabled", () => {
   assert.match(documentation, /STRIPE_SAAS_API_KEY/);
   assert.doesNotMatch(documentation, /STRIPE_GENERAL_PORTAL_CONFIGURATION_ID/);

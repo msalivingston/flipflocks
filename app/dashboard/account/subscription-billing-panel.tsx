@@ -21,6 +21,7 @@ export function SubscriptionBillingPanel() {
   const [resumePending, setResumePending] = useState(false);
   const [portalReturnPending, setPortalReturnPending] = useState(false);
   const [portalReturnDelayed, setPortalReturnDelayed] = useState(false);
+  const actionInFlight = useRef(false);
   const pollingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -109,38 +110,53 @@ export function SubscriptionBillingPanel() {
     "the end of your confirmed access period";
 
   async function openPortal(action: "manage_billing" | "update_payment_method" | "invoice_history" | "cancel_subscription") {
-    if (activeAction) return;
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
     setActionError(false);
     setActiveAction(action);
-    const { data, error: requestError } = await supabase.functions.invoke<{ portal_url?: string }>(
-      "stripe-saas-portal",
-      { body: { action } },
-    );
-    if (requestError || !isSafeStripePortalUrl(data?.portal_url)) {
+    try {
+      const { data, error: requestError } = await supabase.functions.invoke<{ portal_url?: string }>(
+        "stripe-saas-portal",
+        { body: { action } },
+      );
+      if (requestError || !isSafeStripePortalUrl(data?.portal_url)) {
+        actionInFlight.current = false;
+        setActionError(true);
+        setActiveAction(null);
+        return;
+      }
+      window.location.assign(data.portal_url);
+    } catch {
+      actionInFlight.current = false;
       setActionError(true);
       setActiveAction(null);
-      return;
     }
-    window.location.assign(data.portal_url);
   }
 
   async function requestResume() {
-    if (activeAction) return;
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
     setActionError(false);
     setActiveAction("resume");
-    const { data, error: requestError } = await supabase.functions.invoke<{ status?: string }>(
-      "stripe-saas-subscription-action",
-      {
-        body: { action: "resume" },
-      },
-    );
-    if (requestError || data?.status !== "resume_requested") {
+    let requestSucceeded = false;
+    try {
+      const { data, error: requestError } = await supabase.functions.invoke<{ status?: string }>(
+        "stripe-saas-subscription-action",
+        {
+          body: { action: "resume" },
+        },
+      );
+      requestSucceeded = !requestError && data?.status === "resume_requested";
+    } catch {
+      requestSucceeded = false;
+    }
+    actionInFlight.current = false;
+    setActiveAction(null);
+    if (!requestSucceeded) {
       setActionError(true);
-      setActiveAction(null);
       return;
     }
     setResumePending(true);
-    setActiveAction(null);
     let polls = 0;
     const poll = async () => {
       polls += 1;
@@ -175,7 +191,7 @@ export function SubscriptionBillingPanel() {
       </dl>
       {portalReturnPending ? (
         <p className="mt-4 rounded-md bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-950" role="status">
-          Your billing changes are being confirmed.
+          Checking for billing updates…
         </p>
       ) : null}
       {portalReturnDelayed ? (
@@ -195,25 +211,25 @@ export function SubscriptionBillingPanel() {
       ) : null}
       {management.manageBilling ? (
         <div className="mt-5 flex flex-col gap-2 border-t border-stone-200 pt-4 sm:flex-row sm:flex-wrap">
-          <button className="seller-secondary-button min-h-11" disabled={Boolean(activeAction)} onClick={() => void openPortal("manage_billing")} type="button">
-            Manage billing
+          <button className={billingActionButtonClass("seller-secondary-button")} disabled={Boolean(activeAction)} onClick={() => void openPortal("manage_billing")} type="button">
+            {activeAction === "manage_billing" ? "Opening…" : "Manage billing"}
           </button>
           {management.updatePaymentMethod ? (
-            <button className="seller-secondary-button min-h-11" disabled={Boolean(activeAction)} onClick={() => void openPortal("update_payment_method")} type="button">
-              Update payment method
+            <button className={billingActionButtonClass("seller-secondary-button")} disabled={Boolean(activeAction)} onClick={() => void openPortal("update_payment_method")} type="button">
+              {activeAction === "update_payment_method" ? "Opening…" : "Update payment method"}
             </button>
           ) : null}
-          <button className="seller-secondary-button min-h-11" disabled={Boolean(activeAction)} onClick={() => void openPortal("invoice_history")} type="button">
-            View invoices
+          <button className={billingActionButtonClass("seller-secondary-button")} disabled={Boolean(activeAction)} onClick={() => void openPortal("invoice_history")} type="button">
+            {activeAction === "invoice_history" ? "Opening…" : "View invoices"}
           </button>
           {management.cancelSubscription && !confirmingCancel ? (
-            <button className="seller-secondary-button min-h-11" disabled={Boolean(activeAction)} onClick={() => setConfirmingCancel(true)} type="button">
+            <button className={billingActionButtonClass("seller-secondary-button")} disabled={Boolean(activeAction)} onClick={() => setConfirmingCancel(true)} type="button">
               Cancel subscription
             </button>
           ) : null}
           {management.resumeSubscription ? (
-            <button className="seller-primary-button min-h-11" disabled={Boolean(activeAction) || resumePending} onClick={() => void requestResume()} type="button">
-              Keep my subscription
+            <button className={billingActionButtonClass("seller-primary-button")} disabled={Boolean(activeAction) || resumePending} onClick={() => void requestResume()} type="button">
+              {activeAction === "resume" ? "Opening…" : "Keep my subscription"}
             </button>
           ) : null}
         </div>
@@ -224,10 +240,10 @@ export function SubscriptionBillingPanel() {
             Canceling stops your next renewal. Your subscription will remain active through {activeThrough}, and your listings and account data will remain saved.
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <button className="seller-secondary-button min-h-11 border-red-300 text-red-800 hover:bg-red-50" disabled={Boolean(activeAction)} onClick={() => void openPortal("cancel_subscription")} type="button">
-              Continue to cancellation
+            <button className={billingActionButtonClass("seller-secondary-button border-red-300 text-red-800 hover:bg-red-50")} disabled={Boolean(activeAction)} onClick={() => void openPortal("cancel_subscription")} type="button">
+              {activeAction === "cancel_subscription" ? "Opening…" : "Continue to cancellation"}
             </button>
-            <button className="seller-secondary-button min-h-11" disabled={Boolean(activeAction)} onClick={() => setConfirmingCancel(false)} type="button">
+            <button className={billingActionButtonClass("seller-secondary-button")} disabled={Boolean(activeAction)} onClick={() => setConfirmingCancel(false)} type="button">
               Keep subscription
             </button>
           </div>
@@ -235,6 +251,10 @@ export function SubscriptionBillingPanel() {
       ) : null}
     </section>
   );
+}
+
+function billingActionButtonClass(baseClass: string) {
+  return `${baseClass} min-h-11 enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-50`;
 }
 
 function getBillingPresentation(status: SellerBillingStatus) {
