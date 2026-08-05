@@ -1,6 +1,6 @@
 # Stripe SaaS catalog registration
 
-Batch 4 verifies existing Stripe sandbox Products and Prices. It never creates, edits, archives, or activates Stripe objects. Products and Prices are created manually in the Stripe Dashboard, then the local tool verifies the provider values before asking the service-only database contract to trust them.
+The catalog utility verifies existing Stripe Products and Prices. It never creates, edits, archives, or activates Stripe objects. Products and Prices are created manually in the Stripe Dashboard, then the local tool verifies the provider values before asking the service-only database contract to trust them.
 
 Create a sandbox restricted key with exactly these permissions:
 
@@ -15,10 +15,10 @@ No Accounts permission is required. The utility does not call the Stripe Account
 | Variable | Classification | Purpose |
 |---|---|---|
 | `STRIPE_SAAS_API_KEY` | Secret, not used by this utility | Reserved for future FlockFront SaaS billing operations. Catalog dry-run and apply do not require or read it. |
-| `STRIPE_SAAS_CATALOG_READ_KEY` | Secret, prompted when absent | Least-privilege Stripe restricted test key for Product and Price reads. An existing server environment value takes precedence; the utility never falls back to the operational key. |
+| `STRIPE_SAAS_CATALOG_READ_KEY` | Secret, prompted when absent | Least-privilege Stripe restricted key for Product and Price reads in the explicitly selected mode. An existing server environment value takes precedence; the utility never falls back to the operational key. |
 | `STRIPE_PLATFORM_ACCOUNT_ID` | Safe identifier | Defaults to the manually confirmed local sandbox binding `acct_1CTOghL1R5g4hhXt`. Supplied values are still validated. |
-| `STRIPE_SAAS_LIVEMODE` | Safe setting | Defaults to `false` for this local utility. Supplied values are still validated, and live mode is refused. |
-| `FLOCKFRONT_ENVIRONMENT_ID` | Safe identifier | Defaults to `local` for this utility. Supplied values must be `local`, `development`, `test`, `preview`, `staging`, or `production`. |
+| `STRIPE_SAAS_LIVEMODE` | Safe setting | Defaults to `false`. Live mode is selected only by the explicit `--live` argument; a supplied environment value must agree with that selection. |
+| `FLOCKFRONT_ENVIRONMENT_ID` | Safe identifier | Defaults to `local`; explicit live mode requires `production`. A supplied environment value must agree with the selected mode. |
 | `SUPABASE_URL` | Sensitive deployment configuration | Optional apply-mode automation value. The normal owner workflow collects it in the temporary local form. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Secret | Optional apply-mode automation value. The normal owner workflow collects it in a password field and never echoes it. |
 
@@ -62,4 +62,33 @@ Apply additionally requires `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `--appl
 npm run stripe:register-saas-price -- --plan=small_flock --cadence=monthly --price-id=<test-price-id> --apply --confirm-environment=<environment-id> --confirm-account=acct_1CTOghL1R5g4hhXt
 ```
 
-Batch 4 refuses live mode. Output is redacted, and only allowlisted typed attributes go to `register_verified_saas_price`. Price IDs must never be copied into browser code or accepted as browser authority. Test and live configuration must remain separate.
+Output is redacted, and only allowlisted typed attributes go to `register_verified_saas_price`. Price IDs must never be copied into browser code or accepted as browser authority. Test and live configuration remain separate.
+
+## Live catalog registration
+
+Live registration is an explicit operator-only mode. It uses the same provider verification and permanent `register_verified_saas_price` RPC as sandbox registration, but selects the approved live manifest, requires an `rk_live_` restricted key with only Products: Read and Prices: Read, and requires the production environment and platform-account confirmations. It never falls back to the operational Stripe key.
+
+The internal Market plan key remains `full_flock`; “Market” is its seller-facing name. The database does not accept `market` as a plan key.
+
+First run the provider-only verification. This opens the single-use loopback form and asks only for the live restricted catalog key:
+
+```text
+npm run stripe:verify-saas-catalog -- --live
+```
+
+After all four live rows pass, run the apply command. The local form additionally asks for the Supabase project URL and service-role key; no secret is placed in the command line or repository:
+
+```text
+npm run stripe:verify-saas-catalog -- --live --apply --confirm-environment=production --confirm-account=acct_1CTOghL1R5g4hhXt
+```
+
+The live manifest is:
+
+| Display plan | Internal plan key | Cadence | Price | Product |
+|---|---|---|---|---|
+| Coop | `small_flock` | Monthly | `price_1U1A6TL1R5g4hhXttRzdEkpO` | `prod_V1CV3zEif7505x` |
+| Coop | `small_flock` | Annual | `price_1U1A6TL1R5g4hhXtXV8oONZy` | `prod_V1CV3zEif7505x` |
+| Market | `full_flock` | Monthly | `price_1U1A6PL1R5g4hhXtsuBhV0pk` | `prod_V1CVBoupdvldFd` |
+| Market | `full_flock` | Annual | `price_1U1A6PL1R5g4hhXtandGNw8C` | `prod_V1CVBoupdvldFd` |
+
+The RPC uniqueness boundary includes account and `stripe_livemode`, so adding these live rows does not replace or mutate the registered sandbox rows.

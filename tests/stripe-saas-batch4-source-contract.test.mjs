@@ -82,7 +82,8 @@ test("catalog utility is read-only toward Stripe and defaults to dry-run", async
   assert.doesNotMatch(verifier, /saas_subscription_checkout_enabled|saas_billing_portal_enabled/);
   assert.doesNotMatch(verifier, /\.(?:create|update|del|archive)\s*\(/);
   assert.match(verifier, /const stripe = createStripeClient\(config\.catalogReadApiKey\)/);
-  assert.match(verifier, /for \(const entry of APPROVED_SAAS_CATALOG_MANIFEST\)/);
+  assert.match(verifier, /const manifest = config\.livemode[\s\S]*APPROVED_LIVE_SAAS_CATALOG_MANIFEST[\s\S]*APPROVED_SAAS_CATALOG_MANIFEST/);
+  assert.match(verifier, /for \(const entry of manifest\)/);
   assert.match(verifier, /if \(!result\.passed\) process\.exitCode = 1/);
   assert.doesNotMatch(verifier, /process\.env\s*\.|Object\.assign\(process\.env/);
   assert.doesNotMatch(verifier, /promptFor|readHidden|rawMode|clipboard|key-from-clipboard/i);
@@ -134,7 +135,7 @@ test("post-Batch-4 billing work adds only approved SaaS server endpoints and no 
   assert.doesNotMatch(source, /(?:sk|rk)_(?:test|live)_[A-Za-z0-9]{16,}|whsec_[A-Za-z0-9]{16,}/);
 });
 
-test("production Batch 4 files contain no committed provider object identifiers", async () => {
+test("catalog files contain no provider object identifiers outside the approved manifests", async () => {
   const files = [
     migrationPath, runtimePath, clientPath, utilityPath, promptPath, clipboardPath,
     verifierPath, localFormPath,
@@ -148,11 +149,17 @@ test("production Batch 4 files contain no committed provider object identifiers"
     .replaceAll("price_1TzpLxL1R5g4hhXtHn9Vg6Qd", "approved-price")
     .replaceAll("price_1TzpMhL1R5g4hhXt266qwLn5", "approved-price")
     .replaceAll("prod_UzoyVYb4UGqW3m", "approved-product")
-    .replaceAll("prod_Uzoz8CeVMRC3zQ", "approved-product");
+    .replaceAll("prod_Uzoz8CeVMRC3zQ", "approved-product")
+    .replaceAll("price_1U1A6TL1R5g4hhXttRzdEkpO", "approved-live-price")
+    .replaceAll("price_1U1A6TL1R5g4hhXtXV8oONZy", "approved-live-price")
+    .replaceAll("price_1U1A6PL1R5g4hhXtsuBhV0pk", "approved-live-price")
+    .replaceAll("price_1U1A6PL1R5g4hhXtandGNw8C", "approved-live-price")
+    .replaceAll("prod_V1CV3zEif7505x", "approved-live-product")
+    .replaceAll("prod_V1CVBoupdvldFd", "approved-live-product");
   assert.doesNotMatch(source, /["'](?:price|prod|acct)_[A-Za-z0-9]{12,}["']/);
 });
 
-test("documentation requires only sandbox Product and Price read permissions", async () => {
+test("documentation requires only Product and Price read permissions for catalog verification", async () => {
   const documentation = await readFile(path.join(root, "docs/stripe-saas-catalog-registration.md"), "utf8");
   assert.match(documentation, /Products: Read/);
   assert.match(documentation, /Prices: Read/);

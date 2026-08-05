@@ -84,8 +84,8 @@ export function verifySaasPrice({ price, product, config, selection }) {
   };
 
   requireMatch(price?.id === selection.stripePriceId, "STRIPE_SAAS_VERIFY_PRICE_ID_MISMATCH", "Retrieved Price does not match the requested identifier.");
-  requireMatch(price?.livemode === false, "STRIPE_SAAS_VERIFY_PRICE_LIVE_MODE", "Stripe Price must be a sandbox object.");
-  requireMatch(product?.livemode === false, "STRIPE_SAAS_VERIFY_PRODUCT_LIVE_MODE", "Stripe Product must be a sandbox object.");
+  requireMatch(price?.livemode === config.livemode, "STRIPE_SAAS_VERIFY_PRICE_LIVE_MODE", "Stripe Price mode does not match the configured catalog mode.");
+  requireMatch(product?.livemode === config.livemode, "STRIPE_SAAS_VERIFY_PRODUCT_LIVE_MODE", "Stripe Product mode does not match the configured catalog mode.");
   requireMatch(price.livemode === product.livemode, "STRIPE_SAAS_VERIFY_MODE_DISAGREEMENT", "Stripe Price and Product modes must agree.");
   requireMatch(price?.active === true, "STRIPE_SAAS_VERIFY_PRICE_INACTIVE", "Stripe Price must be active.");
   requireMatch(product?.active === true, "STRIPE_SAAS_VERIFY_PRODUCT_INACTIVE", "Stripe Product must be active.");

@@ -126,6 +126,42 @@ test("apply form collects Stripe and Supabase credentials once without echoing t
   await expectClosed(info.url);
 });
 
+test("live form accepts only a live restricted key and labels the live catalog", async () => {
+  const listening = listeningPromise();
+  const liveKey = ["rk", "live", "LocalBrowserFixture"].join("_");
+  let capturedKey;
+  const runPromise = runLocalCatalogVerificationForm({
+    keyMode: "live",
+    onListening: listening.resolve,
+    openBrowser: async () => {},
+    runOperation: async (credentials, reportProgress) => {
+      capturedKey = credentials.catalogReadKey;
+      for (const result of results) reportProgress(result);
+      return { passed: true, results };
+    },
+  });
+  const info = await listening.promise;
+  const formResponse = await fetch(info.url, { cache: "no-store" });
+  const formHtml = await formResponse.text();
+  assert.match(formHtml, /Stripe restricted live key/);
+  assert.match(formHtml, /pattern="rk_live_\[A-Za-z0-9\]\+"/);
+  assert.doesNotMatch(formHtml, new RegExp(liveKey));
+
+  const response = await fetch(info.url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ stripe_key: liveKey }),
+  });
+  const html = await response.text();
+  const result = await runPromise;
+  assert.equal(response.status, 200);
+  assert.equal(result.passed, true);
+  assert.equal(capturedKey, liveKey);
+  assert.match(html, /All four approved live Prices passed/);
+  assert.doesNotMatch(html, new RegExp(liveKey));
+  await expectClosed(info.url);
+});
+
 test("apply form rejects invalid Supabase credentials without invoking the operation", async () => {
   for (const [supabaseUrl, serviceKey, expectedCode] of [
     ["http://projectfixture.supabase.co", "service-role-fixture", "STRIPE_SAAS_LOCAL_FORM_SUPABASE_URL_INVALID"],

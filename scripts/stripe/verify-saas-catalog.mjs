@@ -22,9 +22,14 @@ const REGISTRATION_STATUSES = new Set(["registered", "already_registered"]);
 export function parseCatalogVerifierArguments(argv) {
   const values = new Map();
   let apply = false;
+  let live = false;
   for (const argument of argv) {
     if (argument === "--apply") {
       apply = true;
+      continue;
+    }
+    if (argument === "--live") {
+      live = true;
       continue;
     }
     const match = /^--(confirm-environment|confirm-account)=(.+)$/.exec(argument);
@@ -38,13 +43,15 @@ export function parseCatalogVerifierArguments(argv) {
   }
   const result = Object.freeze({
     apply,
+    live,
     confirmationEnvironmentId: values.get("confirm-environment") ?? null,
     confirmationAccountId: values.get("confirm-account") ?? null,
   });
-  if (apply && result.confirmationEnvironmentId !== LOCAL_CATALOG_DEFAULTS.FLOCKFRONT_ENVIRONMENT_ID) {
+  const expectedEnvironment = live ? "production" : LOCAL_CATALOG_DEFAULTS.FLOCKFRONT_ENVIRONMENT_ID;
+  if (apply && result.confirmationEnvironmentId !== expectedEnvironment) {
     throw new StripeSaasError(
       "STRIPE_SAAS_UTILITY_ENVIRONMENT_CONFIRMATION_REQUIRED",
-      "Apply requires --confirm-environment=local.",
+      `Apply requires --confirm-environment=${expectedEnvironment}.`,
     );
   }
   if (apply && result.confirmationAccountId !== LOCAL_CATALOG_DEFAULTS.STRIPE_PLATFORM_ACCOUNT_ID) {
@@ -87,6 +94,37 @@ export const APPROVED_SAAS_CATALOG_MANIFEST = Object.freeze([
   }),
 ]);
 
+export const APPROVED_LIVE_SAAS_CATALOG_MANIFEST = Object.freeze([
+  Object.freeze({
+    label: "Coop monthly",
+    planKey: "small_flock",
+    cadence: "monthly",
+    stripePriceId: "price_1U1A6TL1R5g4hhXttRzdEkpO",
+    stripeProductId: "prod_V1CV3zEif7505x",
+  }),
+  Object.freeze({
+    label: "Coop yearly",
+    planKey: "small_flock",
+    cadence: "yearly",
+    stripePriceId: "price_1U1A6TL1R5g4hhXtXV8oONZy",
+    stripeProductId: "prod_V1CV3zEif7505x",
+  }),
+  Object.freeze({
+    label: "Market monthly",
+    planKey: "full_flock",
+    cadence: "monthly",
+    stripePriceId: "price_1U1A6PL1R5g4hhXtsuBhV0pk",
+    stripeProductId: "prod_V1CVBoupdvldFd",
+  }),
+  Object.freeze({
+    label: "Market yearly",
+    planKey: "full_flock",
+    cadence: "yearly",
+    stripePriceId: "price_1U1A6PL1R5g4hhXtandGNw8C",
+    stripeProductId: "prod_V1CVBoupdvldFd",
+  }),
+]);
+
 function providerProductId(price) {
   return typeof price?.product === "string" ? price.product : price?.product?.id;
 }
@@ -97,10 +135,10 @@ function safeFailureCode(error) {
     : "STRIPE_SAAS_CATALOG_VERIFY_UNEXPECTED";
 }
 
-function writeSummary(results, write) {
+function writeSummary(results, write, live) {
   const labelWidth = Math.max("Catalog entry".length, ...results.map(({ label }) => label.length));
   const priceWidth = Math.max("Stripe Price".length, ...results.map(({ stripePriceId }) => stripePriceId.length));
-  write("FlockFront SaaS sandbox catalog verification");
+  write(`FlockFront SaaS ${live ? "live" : "sandbox"} catalog verification`);
   write(`${"Catalog entry".padEnd(labelWidth)}  ${"Stripe Price".padEnd(priceWidth)}  Result`);
   for (const result of results) {
     const status = result.status === "PASS" ? "PASS" : `FAIL (${result.failureCode})`;
@@ -108,10 +146,10 @@ function writeSummary(results, write) {
   }
 }
 
-function writeRegistrationSummary(results, write) {
+function writeRegistrationSummary(results, write, live) {
   const labelWidth = Math.max("Catalog entry".length, ...results.map(({ label }) => label.length));
   const priceWidth = Math.max("Stripe Price".length, ...results.map(({ stripePriceId }) => stripePriceId.length));
-  write("FlockFront SaaS sandbox catalog registration");
+  write(`FlockFront SaaS ${live ? "live" : "sandbox"} catalog registration`);
   write(`${"Catalog entry".padEnd(labelWidth)}  ${"Stripe Price".padEnd(priceWidth)}  Result`);
   for (const result of results) {
     write(`${result.label.padEnd(labelWidth)}  ${result.stripePriceId.padEnd(priceWidth)}  ${result.status}`);
@@ -120,10 +158,13 @@ function writeRegistrationSummary(results, write) {
 
 function validateApplyConfiguration(config, args) {
   if (!args.apply) return;
-  if (config.environmentId !== LOCAL_CATALOG_DEFAULTS.FLOCKFRONT_ENVIRONMENT_ID) {
+  const expectedEnvironment = args.live
+    ? "production"
+    : LOCAL_CATALOG_DEFAULTS.FLOCKFRONT_ENVIRONMENT_ID;
+  if (config.environmentId !== expectedEnvironment) {
     throw new StripeSaasError(
       "STRIPE_SAAS_UTILITY_APPLY_ENVIRONMENT_REFUSED",
-      "Catalog apply is restricted to the local environment.",
+      `Catalog apply is restricted to the ${expectedEnvironment} environment.`,
     );
   }
   if (config.platformAccountId !== LOCAL_CATALOG_DEFAULTS.STRIPE_PLATFORM_ACCOUNT_ID) {
@@ -146,26 +187,39 @@ export async function verifyApprovedSaasCatalogWithKey({
     STRIPE_PLATFORM_ACCOUNT_ID: env?.STRIPE_PLATFORM_ACCOUNT_ID
       ?? LOCAL_CATALOG_DEFAULTS.STRIPE_PLATFORM_ACCOUNT_ID,
     STRIPE_SAAS_LIVEMODE: env?.STRIPE_SAAS_LIVEMODE
-      ?? LOCAL_CATALOG_DEFAULTS.STRIPE_SAAS_LIVEMODE,
+      ?? (args.live ? "true" : LOCAL_CATALOG_DEFAULTS.STRIPE_SAAS_LIVEMODE),
     FLOCKFRONT_ENVIRONMENT_ID: env?.FLOCKFRONT_ENVIRONMENT_ID
-      ?? LOCAL_CATALOG_DEFAULTS.FLOCKFRONT_ENVIRONMENT_ID,
+      ?? (args.live ? "production" : LOCAL_CATALOG_DEFAULTS.FLOCKFRONT_ENVIRONMENT_ID),
     STRIPE_SAAS_CATALOG_READ_KEY: catalogReadKey,
   };
   const config = parseStripeSaasCatalogConfig(configSource);
-  if (config.livemode) {
+  if (config.livemode !== args.live) {
     throw new StripeSaasError(
-      "STRIPE_SAAS_UTILITY_LIVE_MODE_REFUSED",
-      "SaaS catalog verification is sandbox-only.",
+      "STRIPE_SAAS_UTILITY_MODE_SELECTION_MISMATCH",
+      "Configured Stripe mode must agree with the explicit catalog mode.",
+    );
+  }
+  const expectedEnvironment = args.live
+    ? "production"
+    : LOCAL_CATALOG_DEFAULTS.FLOCKFRONT_ENVIRONMENT_ID;
+  if (config.environmentId !== expectedEnvironment) {
+    throw new StripeSaasError(
+      "STRIPE_SAAS_UTILITY_ENVIRONMENT_SELECTION_MISMATCH",
+      "Configured environment must agree with the explicit catalog mode.",
     );
   }
   validateApplyConfiguration(config, args);
+
+  const manifest = config.livemode
+    ? APPROVED_LIVE_SAAS_CATALOG_MANIFEST
+    : APPROVED_SAAS_CATALOG_MANIFEST;
 
   const stripe = createStripeClient(config.catalogReadApiKey);
   const products = new Map();
   const results = [];
   const registrations = [];
 
-  for (const entry of APPROVED_SAAS_CATALOG_MANIFEST) {
+  for (const entry of manifest) {
     try {
       const price = await stripe.prices.retrieve(entry.stripePriceId);
       if (providerProductId(price) !== entry.stripeProductId) {
@@ -197,7 +251,7 @@ export async function verifyApprovedSaasCatalogWithKey({
     }
   }
 
-  writeSummary(results, write);
+  writeSummary(results, write, config.livemode);
   return Object.freeze({
     passed: results.every(({ status }) => status === "PASS"),
     results: Object.freeze(results),
@@ -210,6 +264,8 @@ async function registerApprovedSaasCatalog({
   credentialSource,
   createSupabaseClient,
   write,
+  manifest,
+  live,
 }) {
   const applyConfig = parseCatalogApplyConfig(credentialSource);
   const supabaseUrl = validateSupabaseProjectUrl(applyConfig.supabaseUrl);
@@ -240,12 +296,12 @@ async function registerApprovedSaasCatalog({
       );
     }
     registrationResults.push(Object.freeze({
-      label: APPROVED_SAAS_CATALOG_MANIFEST[index].label,
+      label: manifest[index].label,
       stripePriceId: expectedPriceId,
       status,
     }));
   }
-  writeRegistrationSummary(registrationResults, write);
+  writeRegistrationSummary(registrationResults, write, live);
   return Object.freeze(registrationResults);
 }
 
@@ -281,6 +337,10 @@ export async function verifyApprovedSaasCatalog({
       },
       createSupabaseClient,
       write,
+      manifest: args.live
+        ? APPROVED_LIVE_SAAS_CATALOG_MANIFEST
+        : APPROVED_SAAS_CATALOG_MANIFEST,
+      live: args.live,
     });
     return Object.freeze({ ...verification, applied: true, registrationResults });
   };
@@ -296,6 +356,7 @@ export async function verifyApprovedSaasCatalog({
   }
   return runLocalForm({
     apply: args.apply,
+    keyMode: args.live ? "live" : "test",
     runOperation,
   });
 }
