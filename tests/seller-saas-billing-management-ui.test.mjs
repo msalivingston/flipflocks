@@ -87,9 +87,17 @@ test("billing controls expose accessible busy styling and prevent duplicate requ
   assert.match(panel, /disabled:cursor-not-allowed/);
   assert.match(panel, /disabled:opacity-50/);
   assert.match(panel, /const actionInFlight = useRef\(false\)/);
-  assert.equal((panel.match(/if \(actionInFlight\.current\) return;/g) ?? []).length, 2);
+  assert.equal((panel.match(/if \(actionInFlight\.current\) return;/g) ?? []).length, 1);
   assert.equal((panel.match(/"Opening…"/g) ?? []).length, 4);
   assert.match(panel, /setActionError\(true\);[\s\S]{0,100}setActiveAction\(null\);/);
+});
+
+test("Keep my subscription opens general billing without invoking the resume endpoint", () => {
+  assert.match(panel, /openPortal\("manage_billing", "keep_subscription"\)/);
+  assert.match(panel, /activeAction === "keep_subscription"/);
+  assert.doesNotMatch(panel, /stripe-saas-subscription-action/);
+  assert.doesNotMatch(panel, /body: \{ action: "resume" \}/);
+  assert.doesNotMatch(panel, /requestResume|resumePending/);
 });
 
 test("invoice history uses the general Portal entry without a separate control", () => {

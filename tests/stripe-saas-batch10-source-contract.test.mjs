@@ -31,7 +31,8 @@ test("browser inputs cannot supply provider or tenant authority", () => {
     assert.doesNotMatch(source, /customer_id|subscription_id|store_id|price_id|product_id/);
   }
   assert.match(panel, /body: \{ action \}/);
-  assert.match(panel, /body: \{ action: "resume" \}/);
+  assert.doesNotMatch(panel, /stripe-saas-subscription-action/);
+  assert.doesNotMatch(panel, /body: \{ action: "resume" \}/);
 });
 
 test("Portal uses fixed server configuration and host validation", () => {
@@ -130,7 +131,7 @@ test("seller controls are authoritative-state gated and Portal-return is present
   assert.match(management, /current_enrollment_exists/);
   assert.match(management, /customer_binding_exists/);
   assert.match(panel, /Canceling stops your next renewal/);
-  assert.match(panel, /Stripe is confirming that your subscription will continue/);
+  assert.doesNotMatch(panel, /Stripe is confirming that your subscription will continue/);
   assert.match(panel, /billing.*portal_return/);
   assert.match(panel, /trial_canceling_at_period_end/);
   assert.doesNotMatch(panel, /cancel_at_period_end\s*:/);
@@ -141,13 +142,15 @@ test("seller controls are authoritative-state gated and Portal-return is present
 test("billing management controls lock visibly and synchronously during requests", () => {
   assert.match(panel, /enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-50/);
   assert.match(panel, /const actionInFlight = useRef\(false\)/);
-  assert.equal((panel.match(/if \(actionInFlight\.current\) return;/g) ?? []).length, 2);
-  assert.equal((panel.match(/actionInFlight\.current = true;/g) ?? []).length, 2);
+  assert.equal((panel.match(/if \(actionInFlight\.current\) return;/g) ?? []).length, 1);
+  assert.equal((panel.match(/actionInFlight\.current = true;/g) ?? []).length, 1);
   assert.match(panel, /disabled=\{Boolean\(activeAction\)\}/);
   assert.match(panel, /activeAction === "manage_billing" \? "Opening…" : "Manage billing & invoices"/);
   assert.match(panel, /activeAction === "update_payment_method" \? "Opening…" : "Update payment method"/);
   assert.match(panel, /activeAction === "cancel_subscription" \? "Opening…" : "Continue to cancellation"/);
-  assert.match(panel, /activeAction === "resume" \? "Opening…" : "Keep my subscription"/);
+  assert.match(panel, /openPortal\("manage_billing", "keep_subscription"\)/);
+  assert.match(panel, /activeAction === "keep_subscription" \? "Opening…" : "Keep my subscription"/);
+  assert.doesNotMatch(panel, /requestResume|resumePending/);
   assert.match(panel, /actionInFlight\.current = false;[\s\S]{0,100}setActionError\(true\);[\s\S]{0,100}setActiveAction\(null\);/);
   assert.doesNotMatch(panel, />\s*View invoices\s*</);
   assert.doesNotMatch(panel, /openPortal\("invoice_history"\)/);

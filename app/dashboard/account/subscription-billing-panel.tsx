@@ -18,7 +18,6 @@ export function SubscriptionBillingPanel() {
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [actionError, setActionError] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
-  const [resumePending, setResumePending] = useState(false);
   const actionInFlight = useRef(false);
   const pollingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -98,11 +97,14 @@ export function SubscriptionBillingPanel() {
   const activeThrough = formatBillingDate(status.entitlement_access_until) ??
     "the end of your confirmed access period";
 
-  async function openPortal(action: "manage_billing" | "update_payment_method" | "invoice_history" | "cancel_subscription") {
+  async function openPortal(
+    action: "manage_billing" | "update_payment_method" | "invoice_history" | "cancel_subscription",
+    control: string = action,
+  ) {
     if (actionInFlight.current) return;
     actionInFlight.current = true;
     setActionError(false);
-    setActiveAction(action);
+    setActiveAction(control);
     try {
       const { data, error: requestError } = await supabase.functions.invoke<{ portal_url?: string }>(
         "stripe-saas-portal",
@@ -120,43 +122,6 @@ export function SubscriptionBillingPanel() {
       setActionError(true);
       setActiveAction(null);
     }
-  }
-
-  async function requestResume() {
-    if (actionInFlight.current) return;
-    actionInFlight.current = true;
-    setActionError(false);
-    setActiveAction("resume");
-    let requestSucceeded = false;
-    try {
-      const { data, error: requestError } = await supabase.functions.invoke<{ status?: string }>(
-        "stripe-saas-subscription-action",
-        {
-          body: { action: "resume" },
-        },
-      );
-      requestSucceeded = !requestError && data?.status === "resume_requested";
-    } catch {
-      requestSucceeded = false;
-    }
-    actionInFlight.current = false;
-    setActiveAction(null);
-    if (!requestSucceeded) {
-      setActionError(true);
-      return;
-    }
-    setResumePending(true);
-    let polls = 0;
-    const poll = async () => {
-      polls += 1;
-      const refreshed = await reload();
-      if (refreshed && !refreshed.cancel_at_period_end) {
-        setResumePending(false);
-        return;
-      }
-      if (polls < 5) pollingTimer.current = setTimeout(poll, 2_000);
-    };
-    void poll();
   }
 
   return (
@@ -178,11 +143,6 @@ export function SubscriptionBillingPanel() {
           </div>
         ))}
       </dl>
-      {resumePending ? (
-        <p className="mt-4 rounded-md bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-950" role="status">
-          Stripe is confirming that your subscription will continue.
-        </p>
-      ) : null}
       {actionError ? (
         <p className="mt-4 text-sm font-semibold text-red-800" role="alert">
           We could not open billing management. Please try again.
@@ -204,8 +164,8 @@ export function SubscriptionBillingPanel() {
             </button>
           ) : null}
           {management.resumeSubscription ? (
-            <button className={billingActionButtonClass("seller-primary-button")} disabled={Boolean(activeAction) || resumePending} onClick={() => void requestResume()} type="button">
-              {activeAction === "resume" ? "Opening…" : "Keep my subscription"}
+            <button className={billingActionButtonClass("seller-primary-button")} disabled={Boolean(activeAction)} onClick={() => void openPortal("manage_billing", "keep_subscription")} type="button">
+              {activeAction === "keep_subscription" ? "Opening…" : "Keep my subscription"}
             </button>
           ) : null}
         </div>
