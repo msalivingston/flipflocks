@@ -47,10 +47,6 @@ const cancellationReasons = new Set([
   "customer_service", "low_quality", "missing_features", "other",
   "switched_service", "too_complex", "too_expensive", "unused",
 ]);
-const scheduleConditions = new Set([
-  "decreasing_item_amount", "shortening_interval",
-]);
-
 /**
  * Fail-closed validation of the default Portal configuration assigned by
  * Stripe. Subscription mutation controls remain unreachable even if the
@@ -130,15 +126,13 @@ export function isApprovedStripePortalConfiguration(
       (Array.isArray(subscriptionUpdate.products) &&
         subscriptionUpdate.products.length === 0)) ||
     ![null, "unchanged"].includes(subscriptionUpdate.billing_cycle_anchor as null | string) ||
-    subscriptionUpdate.proration_behavior !== "none" ||
+    !["none", "always_invoice"].includes(
+      subscriptionUpdate.proration_behavior as string,
+    ) ||
     !["continue_trial", "end_trial"].includes(
       subscriptionUpdate.trial_update_behavior as string,
     ) || !schedule || !hasKeys(schedule, ["conditions"]) ||
-    !Array.isArray(conditions) || !conditions.every((condition) => {
-      const item = record(condition);
-      return Boolean(item && hasKeys(item, ["type"]) &&
-        typeof item.type === "string" && scheduleConditions.has(item.type));
-    })) return false;
+    !Array.isArray(conditions) || conditions.length !== 0) return false;
 
   return true;
 }

@@ -232,9 +232,56 @@ test("Portal configuration preflight requires subscription pause to be exactly d
   }
 });
 
+test("disabled subscription updates accept only inert proration defaults", () => {
+  const none = portalConfiguration();
+  assert.equal(isApprovedStripePortalConfiguration(
+    none, "bpc_Batch10General", false,
+  ), true);
+
+  const alwaysInvoice = structuredClone(none);
+  alwaysInvoice.features.subscription_update.proration_behavior = "always_invoice";
+  assert.equal(isApprovedStripePortalConfiguration(
+    alwaysInvoice, "bpc_Batch10General", false,
+  ), true);
+
+  const enabled = structuredClone(alwaysInvoice);
+  enabled.features.subscription_update.enabled = true;
+  const unknownProration = structuredClone(none);
+  unknownProration.features.subscription_update.proration_behavior = "create_prorations";
+  const missingProration = structuredClone(none);
+  delete missingProration.features.subscription_update.proration_behavior;
+  const malformedProration = structuredClone(none);
+  malformedProration.features.subscription_update.proration_behavior = { mode: "none" };
+  const productSwitching = structuredClone(none);
+  productSwitching.features.subscription_update.products = [{ product: "prod_Blocked" }];
+  const priceSwitching = structuredClone(none);
+  priceSwitching.features.subscription_update.default_allowed_updates = ["price"];
+  const scheduledUpdate = structuredClone(none);
+  scheduledUpdate.features.subscription_update.schedule_at_period_end.conditions = [
+    { type: "shortening_interval" },
+  ];
+  const unknownNestedField = structuredClone(none);
+  unknownNestedField.features.subscription_update.quantity = { enabled: false };
+
+  for (const configuration of [
+    enabled,
+    unknownProration,
+    missingProration,
+    malformedProration,
+    productSwitching,
+    priceSwitching,
+    scheduledUpdate,
+    unknownNestedField,
+  ]) {
+    assert.equal(isApprovedStripePortalConfiguration(
+      configuration, "bpc_Batch10General", false,
+    ), false);
+  }
+});
+
 test("unsafe, missing, or unavailable Portal configuration returns no URL", async () => {
   const unsafeConfiguration = structuredClone(portalConfiguration());
-  unsafeConfiguration.features.subscription_pause.enabled = true;
+  unsafeConfiguration.features.subscription_update.proration_behavior = "create_prorations";
   const unsafe = harness({
     retrievePortalConfiguration: async () => unsafeConfiguration,
   });
