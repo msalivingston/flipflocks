@@ -87,12 +87,19 @@ export function isApprovedStripePortalConfiguration(
     invoiceHistory.enabled !== true) return false;
 
   const paymentMethodUpdate = record(features.payment_method_update);
+  const usesApprovedPaymentMethodConfiguration =
+    paymentMethodUpdate?.payment_method_configuration ===
+      expectedPaymentMethodConfigurationId ||
+    (paymentMethodUpdate?.payment_method_configuration === null &&
+      configuration.active === true &&
+      configuration.is_default === true &&
+      configuration.livemode === true &&
+      configuration.application === null);
   if (!paymentMethodUpdate || !hasKeys(
     paymentMethodUpdate,
     ["enabled", "payment_method_configuration"],
   ) || paymentMethodUpdate.enabled !== true ||
-    paymentMethodUpdate.payment_method_configuration !==
-      expectedPaymentMethodConfigurationId) return false;
+    !usesApprovedPaymentMethodConfiguration) return false;
 
   const subscriptionCancel = record(features.subscription_cancel);
   const reason = record(subscriptionCancel?.cancellation_reason);
@@ -112,26 +119,17 @@ export function isApprovedStripePortalConfiguration(
     subscriptionPause.enabled !== false) return false;
 
   const subscriptionUpdate = record(features.subscription_update);
-  const schedule = record(subscriptionUpdate?.schedule_at_period_end);
-  const conditions = schedule?.conditions;
-  if (!subscriptionUpdate || !hasKeys(subscriptionUpdate, [
-    "billing_cycle_anchor", "default_allowed_updates", "enabled",
-    "proration_behavior", "schedule_at_period_end", "trial_update_behavior",
-  ], ["products"]) || subscriptionUpdate.enabled !== false ||
-    !Array.isArray(subscriptionUpdate.default_allowed_updates) ||
-    subscriptionUpdate.default_allowed_updates.length !== 0 ||
-    !(subscriptionUpdate.products === undefined ||
-      subscriptionUpdate.products === null ||
-      (Array.isArray(subscriptionUpdate.products) &&
-        subscriptionUpdate.products.length === 0)) ||
-    ![null, "unchanged"].includes(subscriptionUpdate.billing_cycle_anchor as null | string) ||
-    !["none", "always_invoice"].includes(
-      subscriptionUpdate.proration_behavior as string,
-    ) ||
-    !["continue_trial", "end_trial"].includes(
-      subscriptionUpdate.trial_update_behavior as string,
-    ) || !schedule || !hasKeys(schedule, ["conditions"]) ||
-    !Array.isArray(conditions) || conditions.length !== 0) return false;
+  const allowedUpdates = subscriptionUpdate?.default_allowed_updates;
+  if (!subscriptionUpdate || !hasKeys(
+    subscriptionUpdate,
+    ["enabled"],
+    [
+      "billing_cycle_anchor", "default_allowed_updates", "proration_behavior",
+      "products", "schedule_at_period_end", "trial_update_behavior",
+    ],
+  ) || subscriptionUpdate.enabled !== false ||
+    !(allowedUpdates === undefined ||
+      (Array.isArray(allowedUpdates) && allowedUpdates.length === 0))) return false;
 
   return true;
 }

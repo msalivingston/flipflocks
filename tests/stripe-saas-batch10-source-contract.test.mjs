@@ -61,11 +61,12 @@ test("Portal uses fixed server configuration and host validation", () => {
   assert.match(portalHandler, /"subscription_cancel", "subscription_pause", "subscription_update"/);
   assert.match(portalHandler, /hasKeys\(subscriptionPause, \["enabled"\]\)/);
   assert.match(portalHandler, /subscriptionPause\.enabled !== false/);
-  assert.match(portalHandler, /\["none", "always_invoice"\]\.includes\([\s\S]*subscriptionUpdate\.proration_behavior/);
-  assert.match(portalHandler, /!Array\.isArray\(conditions\) \|\| conditions\.length !== 0/);
+  assert.match(portalHandler, /subscriptionUpdate\.enabled !== false/);
+  assert.match(portalHandler, /allowedUpdates === undefined \|\|[\s\S]*allowedUpdates\.length === 0/);
   assert.match(portalHandler, /subscriptionCancel\.mode !== "at_period_end"/);
   assert.match(portalHandler, /subscriptionCancel\.proration_behavior !== "none"/);
-  assert.match(portalHandler, /paymentMethodUpdate\.payment_method_configuration !==[\s\S]*expectedPaymentMethodConfigurationId/);
+  assert.match(portalHandler, /paymentMethodUpdate\?\.payment_method_configuration ===[\s\S]*expectedPaymentMethodConfigurationId/);
+  assert.match(portalHandler, /paymentMethodUpdate\?\.payment_method_configuration === null/);
   assert.doesNotMatch(portalIndex, /paymentMethodConfigurations\.retrieve/);
   assert.doesNotMatch(portalHandler, /STRIPE_PORTAL_PAYMENT_METHOD_KEYS/);
 });
