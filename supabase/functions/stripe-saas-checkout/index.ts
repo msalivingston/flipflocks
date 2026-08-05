@@ -8,6 +8,7 @@ import {
 } from "../_shared/stripe-saas-runtime.mjs";
 import {
   CheckoutProviderError,
+  checkoutCustomerParameters,
   createStripeSaasCheckoutHandler,
   type SaasCheckoutAttempt,
   type SafeCheckoutSession,
@@ -97,7 +98,7 @@ const handler = createStripeSaasCheckoutHandler({
   async authenticate(authorization) {
     const { data: { user }, error } = await authenticatedClient(authorization)
       .auth.getUser();
-    return error ? null : user?.id ?? null;
+    return error || !user ? null : { id: user.id, email: user.email ?? null };
   },
   async beginCheckout(authenticatedUserId, planKey, cadence) {
     const { data, error } = await serviceClient.rpc(
@@ -114,7 +115,7 @@ const handler = createStripeSaasCheckoutHandler({
     if (error) throw new Error("Checkout is unavailable.");
     return firstRow<SaasCheckoutAttempt>(data);
   },
-  async createCheckoutSession(attempt, planKey, cadence) {
+  async createCheckoutSession(attempt, planKey, cadence, authenticatedEmail) {
     const metadata = {
       checkout_attempt_id: attempt.attempt_id!,
       store_id: attempt.store_id,
@@ -143,7 +144,7 @@ const handler = createStripeSaasCheckoutHandler({
         cancel_url:
           `${publicSiteOrigin}/onboarding?billing=checkout_canceled`,
         client_reference_id: attempt.attempt_id!,
-        customer: attempt.stripe_customer_id ?? undefined,
+        ...checkoutCustomerParameters(attempt, authenticatedEmail),
         allow_promotion_codes: false,
         metadata,
         subscription_data: {

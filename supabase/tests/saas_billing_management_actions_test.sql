@@ -265,20 +265,19 @@ select throws_ok(
   $$select * from public.begin_saas_billing_portal_action(
     'fa000000-0000-4000-8000-000000000002', 'portal_general', false,
     'acct_1CTOghL1R5g4hhXt', 'local')$$,
-  '55000', 'SAAS_BILLING_PORTAL_COHORT_REQUIRED',
-  'global flag without same-store cohort remains blocked'
+  '55000', 'BILLING_MANAGEMENT_STATE_INELIGIBLE',
+  'a seller without a verified Stripe enrollment remains blocked'
 );
 select is(
   public.set_saas_billing_portal_store_cohort(
     'fa000000-0000-4000-9000-000000000001', false
   ), 'revoked', 'cohort access can be revoked without deleting history'
 );
-select throws_ok(
-  $$select * from public.begin_saas_billing_portal_action(
+select is(
+  (select action_state from public.begin_saas_billing_portal_action(
     'fa000000-0000-4000-8000-000000000001', 'portal_general', false,
-    'acct_1CTOghL1R5g4hhXt', 'local')$$,
-  '55000', 'SAAS_BILLING_PORTAL_COHORT_REQUIRED',
-  'revoked cohort remains blocked'
+    'acct_1CTOghL1R5g4hhXt', 'local')),
+  'created', 'verified enrollment remains eligible without rollout cohort membership'
 );
 select is(
   public.set_saas_billing_portal_store_cohort(
@@ -308,7 +307,7 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', 'fa000000-0000-4000-8000-000000000001', true);
 select is(
   (select portal_enabled from public.seller_get_saas_billing_status()),
-  true, 'master flag plus same-store cohort exposes Portal in the read model'
+  true, 'master flag exposes Portal for the owner read model after verified enrollment'
 );
 select is(
   (select lifecycle_state from public.seller_get_saas_billing_status()),

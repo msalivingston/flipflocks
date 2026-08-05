@@ -45,7 +45,10 @@ test("all SaaS function entrypoints use the shared production runtime safeguard"
 });
 
 test("Stripe parameters are server-owned, subscription-only, and trial decision is trusted", async () => {
-  const index = await readFile(indexPath, "utf8");
+  const [index, handler] = await Promise.all([
+    readFile(indexPath, "utf8"),
+    readFile(handlerPath, "utf8"),
+  ]);
   assert.match(index, /mode: "subscription"/);
   assert.match(index, /payment_method_types: \["card"\]/);
   assert.match(index, /payment_method_collection: "always"/);
@@ -60,6 +63,9 @@ test("Stripe parameters are server-owned, subscription-only, and trial decision 
   assert.match(index, /success_url:[\s\S]*?publicSiteOrigin/);
   assert.match(index, /cancel_url:[\s\S]*?publicSiteOrigin/);
   assert.match(index, /idempotencyKey: attempt\.stripe_idempotency_key!/);
+  assert.match(index, /user\.email/);
+  assert.match(index, /checkoutCustomerParameters\(attempt, authenticatedEmail\)/);
+  assert.doesNotMatch(handler, /allowedBodyKeys[^\n]*email/);
   assert.doesNotMatch(index, /price_1Tzp|prod_Uzo/);
   assert.doesNotMatch(index, /success_url.*request|cancel_url.*request/i);
   assert.doesNotMatch(index, /NEXT_PUBLIC_[A-Z0-9_]*STRIPE|publishable/i);

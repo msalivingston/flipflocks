@@ -32,6 +32,9 @@ test("return parameters remain presentation-only and never reach billing writes"
   assert.match(returnClient, /seller_get_saas_billing_status/);
   assert.doesNotMatch(returnClient, /seller_save_onboarding|apply_verified|billing_complete|stripe_customer_id|stripe_subscription_id/);
   assert.doesNotMatch(returnClient, /localStorage|sessionStorage|console\./);
+  assert.match(returnClient, /router\.replace\("\/onboarding"\)/);
+  assert.doesNotMatch(returnClient, /View Account|Back to setup/);
+  assert.match(returnClient, /Continue setup/);
 });
 
 test("return polling is bounded, sequential, and cleaned up", () => {

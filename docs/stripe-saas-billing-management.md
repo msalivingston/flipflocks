@@ -55,12 +55,11 @@ uses one general `Manage billing & invoices` action for the Portal home and
 invoice history. Payment-method update and cancellation remain separate,
 targeted actions.
 
-The global `saas_billing_portal_enabled` setting is only a master switch. A
-seller also needs an active row in the service-managed
-`saas_billing_portal_store_cohort` ledger. Browser roles cannot read or modify
-that ledger, revocation preserves its history, and the deployment migration
-adds no store. Both the master flag and cohort membership are required by the
-read model, Portal authorization, and resume authorization.
+The global `saas_billing_portal_enabled` setting is the master switch. After
+the controlled rollout completed, Portal eligibility became permanent for an
+authenticated owner whose store has a valid current Stripe enrollment and
+immutable Customer binding. The historical rollout-cohort ledger remains
+browser-inaccessible but is no longer an authorization requirement.
 
 `FLOCKFRONT_APP_ORIGIN` is the fixed return origin. It must use HTTPS outside
 local development. The server always returns to
@@ -83,9 +82,7 @@ cancellation fields are clear. The matching verified
 audit record only after immutable Store, Customer, Subscription, enrollment,
 account, mode, environment, catalog, and event identity checks have passed.
 
-For controlled rollout, deploy the migration and updated functions while the
-master flag remains false. Then use the service-only
-`set_saas_billing_portal_store_cohort(store_id, true)` contract for exactly one
-internal store before enabling the master flag. Revoke with the same contract
-and `false`; do not delete cohort history. If verification fails, disable the
-master flag first and then revoke the cohort membership.
+The Portal master flag can disable Session creation globally without changing
+subscription or entitlement authority. Enabling it exposes management only to
+owners whose immutable current Stripe enrollment and Customer binding pass the
+existing server-side authorization contract.

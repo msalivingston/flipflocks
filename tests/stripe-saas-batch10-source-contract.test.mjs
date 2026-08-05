@@ -7,6 +7,7 @@ const root = process.cwd();
 const read = (value) => fs.readFileSync(path.join(root, value), "utf8");
 const migration = read("supabase/migrations/20260802105000_saas_billing_management_actions.sql");
 const safetyMigration = read("supabase/migrations/20260803103000_saas_billing_portal_controlled_rollout.sql");
+const verifiedEnrollmentAccessMigration = read("supabase/migrations/20260803107000_saas_billing_portal_verified_enrollment_access.sql");
 const cancellationMigration = read("supabase/migrations/20260803104000_saas_trial_scheduled_cancellation.sql");
 const portalIndex = read("supabase/functions/stripe-saas-portal/index.ts");
 const portalHandler = read("supabase/functions/stripe-saas-portal/handler.ts");
@@ -103,6 +104,13 @@ test("action contracts are service-only and same-store bound", () => {
   );
   assert.match(safetyMigration, /begin_saas_billing_portal_action_unscoped_v1[\s\S]*from public, anon, authenticated, service_role/);
   assert.match(safetyMigration, /begin_saas_subscription_resume_unscoped_v1[\s\S]*from public, anon, authenticated, service_role/);
+  assert.match(verifiedEnrollmentAccessMigration, /begin_saas_billing_portal_action_unscoped_v1/);
+  assert.match(verifiedEnrollmentAccessMigration, /begin_saas_subscription_resume_unscoped_v1/);
+  assert.doesNotMatch(verifiedEnrollmentAccessMigration, /SAAS_BILLING_PORTAL_COHORT_REQUIRED/);
+  assert.doesNotMatch(verifiedEnrollmentAccessMigration, /saas_billing_portal_store_cohort/);
+  assert.match(verifiedEnrollmentAccessMigration, /coalesce\(base\.portal_enabled, false\)/);
+  assert.match(verifiedEnrollmentAccessMigration, /grant execute on function public\.begin_saas_billing_portal_action[\s\S]*to service_role/);
+  assert.match(verifiedEnrollmentAccessMigration, /grant execute on function public\.seller_get_saas_billing_status\(\)[\s\S]*to authenticated/);
 });
 
 test("verified Subscription processing completes only matching pending resume audit", () => {

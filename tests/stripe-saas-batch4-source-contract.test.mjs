@@ -188,5 +188,5 @@ test("current SaaS billing batch changes no Pay at Pickup, refund, or Connect ap
   assert.ok(changed.every((file) => batch9Ui.test(file)
     || /^app\/admin\/[^/]+\/(?:page|[^/]+-form)\.tsx$/.test(file)
     || /^app\/admin\/stripe-subscription-resync\/(?:page|stripe-subscription-resync-form)\.tsx$/.test(file)
-    || /^(?:package\.json|scripts\/stripe\/[^/]+\.mjs|lib\/saas-billing-(?:status|management)\.ts|docs\/stripe-saas-|supabase\/(?:config\.toml|functions\/(?:_shared\/stripe-saas-|stripe-saas-)|migrations\/(?:20260802|2026080310(?:0000|1000|2000|3000|4000|5000|6000)_saas_)|tests\/(?:seller_saas_|verified_saas_|saas_))|tests\/(?:authoritative-entitlements|seller-saas-|stripe-saas-))/.test(file)));
+    || /^(?:package\.json|scripts\/stripe\/[^/]+\.mjs|lib\/saas-billing-(?:status|management)\.ts|docs\/stripe-saas-|supabase\/(?:config\.toml|functions\/(?:_shared\/stripe-saas-|stripe-saas-)|migrations\/(?:20260802|2026080310(?:0000|1000|2000|3000|4000|5000|6000|7000)_saas_)|tests\/(?:seller_saas_|verified_saas_|saas_))|tests\/(?:authoritative-entitlements|seller-saas-|stripe-saas-))/.test(file)));
 });

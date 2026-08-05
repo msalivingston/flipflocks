@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  checkoutCustomerParameters,
   CheckoutProviderError,
   createStripeSaasCheckoutHandler,
 } from "../supabase/functions/stripe-saas-checkout/handler.ts";
@@ -66,13 +67,16 @@ function harness(overrides = {}) {
     allowedOrigin: "https://flockfront.test",
     stripeLivemode: false,
     stripeAccountId: "acct_Batch5Platform",
-    authenticate: async () => "d5000000-0000-4000-8000-000000000001",
+    authenticate: async () => ({
+      id: "d5000000-0000-4000-8000-000000000001",
+      email: "owner@example.test",
+    }),
     beginCheckout: async (...args) => {
       calls.begin.push(args);
       return attempt();
     },
-    createCheckoutSession: async (value) => {
-      calls.create.push(value);
+    createCheckoutSession: async (...args) => {
+      calls.create.push(args);
       return session();
     },
     retrieveCheckoutSession: async (sessionId) => {
@@ -110,6 +114,24 @@ test("approved-origin Checkout preflight returns 204 without starting Checkout",
   assert.equal(fixture.calls.create.length, 0);
 });
 
+test("new Checkout uses authenticated email while an existing Customer binding is reused", () => {
+  assert.deepEqual(
+    checkoutCustomerParameters({ stripe_customer_id: null }, "owner@example.test"),
+    { customer_email: "owner@example.test" },
+  );
+  assert.deepEqual(
+    checkoutCustomerParameters(
+      { stripe_customer_id: "cus_ExistingBinding" },
+      "changed-login@example.test",
+    ),
+    { customer: "cus_ExistingBinding" },
+  );
+  assert.throws(
+    () => checkoutCustomerParameters({ stripe_customer_id: null }, null),
+    /authenticated_email_unavailable/,
+  );
+});
+
 test("verified user intent creates and records one trusted Checkout Session", async () => {
   const testHarness = harness();
   const response = await testHarness.handler(checkoutRequest());
@@ -126,6 +148,7 @@ test("verified user intent creates and records one trusted Checkout Session", as
     "monthly",
   ]]);
   assert.equal(testHarness.calls.create.length, 1);
+  assert.equal(testHarness.calls.create[0][3], "owner@example.test");
   assert.equal(testHarness.calls.record.length, 1);
   assert.equal("stripe_price_id" in body, false);
   assert.equal("attempt_id" in body, false);
@@ -165,6 +188,7 @@ test("request accepts only canonical plan and cadence intent", async () => {
     { plan_key: "small_flock", billing_cadence: "annual" },
     { plan_key: "small_flock", billing_cadence: "monthly", stripe_price_id: "price_browser" },
     { plan_key: "small_flock", billing_cadence: "monthly", trial_eligible: true },
+    { plan_key: "small_flock", billing_cadence: "monthly", email: "other@example.test" },
   ]) {
     const testHarness = harness();
     const response = await testHarness.handler(checkoutRequest(body));

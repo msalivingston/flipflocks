@@ -26,6 +26,25 @@ export type SafeCheckoutSession = {
   metadata: Record<string, string>;
 };
 
+export type AuthenticatedCheckoutUser = {
+  id: string;
+  email: string | null;
+};
+
+export function checkoutCustomerParameters(
+  attempt: Pick<SaasCheckoutAttempt, "stripe_customer_id">,
+  authenticatedEmail: string | null,
+): { customer: string } | { customer_email: string } {
+  if (attempt.stripe_customer_id) {
+    return { customer: attempt.stripe_customer_id };
+  }
+  const email = authenticatedEmail?.trim() ?? "";
+  if (!/^[^\s@]+@[^\s@]+$/.test(email)) {
+    throw new Error("authenticated_email_unavailable");
+  }
+  return { customer_email: email };
+}
+
 export class CheckoutProviderError extends Error {
   readonly failureCode: string;
   readonly definitive: boolean;
@@ -45,7 +64,7 @@ export type StripeSaasCheckoutDependencies = {
   allowedOrigin: string;
   stripeLivemode: boolean;
   stripeAccountId: string;
-  authenticate: (authorization: string) => Promise<string | null>;
+  authenticate: (authorization: string) => Promise<AuthenticatedCheckoutUser | null>;
   beginCheckout: (
     authenticatedUserId: string,
     planKey: "small_flock" | "full_flock",
@@ -55,6 +74,7 @@ export type StripeSaasCheckoutDependencies = {
     attempt: SaasCheckoutAttempt,
     planKey: "small_flock" | "full_flock",
     cadence: "monthly" | "yearly",
+    authenticatedEmail: string | null,
   ) => Promise<SafeCheckoutSession>;
   retrieveCheckoutSession: (sessionId: string) => Promise<SafeCheckoutSession>;
   recordCheckoutSession: (
@@ -191,13 +211,13 @@ export function createStripeSaasCheckoutHandler(
       return jsonResponse(401, { error: "unauthorized" }, headers);
     }
 
-    let userId: string | null = null;
+    let authenticatedUser: AuthenticatedCheckoutUser | null = null;
     try {
-      userId = await dependencies.authenticate(authorization);
+      authenticatedUser = await dependencies.authenticate(authorization);
     } catch {
       // Authentication failures are intentionally indistinguishable.
     }
-    if (!userId) {
+    if (!authenticatedUser) {
       return jsonResponse(401, { error: "unauthorized" }, headers);
     }
 
@@ -214,7 +234,7 @@ export function createStripeSaasCheckoutHandler(
     let attempt: SaasCheckoutAttempt;
     try {
       attempt = await dependencies.beginCheckout(
-        userId,
+        authenticatedUser.id,
         intent.planKey,
         intent.cadence,
       );
@@ -259,6 +279,7 @@ export function createStripeSaasCheckoutHandler(
           attempt,
           intent.planKey,
           intent.cadence,
+          authenticatedUser.email,
         );
       } catch (error) {
         if (error instanceof CheckoutProviderError && error.definitive) {

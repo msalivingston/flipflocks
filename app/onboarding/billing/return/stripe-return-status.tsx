@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -23,6 +24,7 @@ export function StripeReturnStatus({
   hasSessionHint: boolean;
   successHint: boolean;
 }) {
+  const router = useRouter();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [status, setStatus] = useState<SellerBillingStatus | null>(null);
   const [timedOut, setTimedOut] = useState(false);
@@ -70,6 +72,12 @@ export function StripeReturnStatus({
     };
   }, [validReturnHint]);
 
+  useEffect(() => {
+    if (status && isConfirmedBillingLifecycle(status.lifecycle_state)) {
+      router.replace("/onboarding");
+    }
+  }, [router, status]);
+
   const content = getReturnContent({ failed, status, timedOut, validReturnHint });
 
   return (
@@ -99,8 +107,7 @@ export function StripeReturnStatus({
           </div>
         ) : null}
         <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-          <Link className="seller-primary-button min-h-12 justify-center" href="/dashboard/account">View Account</Link>
-          <Link className="seller-secondary-button min-h-12 justify-center" href="/onboarding">Back to setup</Link>
+          <Link className="seller-primary-button min-h-12 justify-center" href="/onboarding">Continue setup</Link>
         </div>
       </section>
     </main>
