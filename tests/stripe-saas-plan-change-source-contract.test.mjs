@@ -62,6 +62,11 @@ test("period-end downgrade creates and configures one release schedule", async (
 test("invoice and Subscription event order converges before entitlement changes", async () => {
   const [migration, , , webhook] = await sources();
   assert.match(webhook, /get_open_saas_plan_change_for_subscription/);
+  assert.match(
+    webhook,
+    /p_stripe_account_id: stripeConfig\.platformAccountId/,
+  );
+  assert.match(webhook, /p_stripe_livemode: stripeConfig\.livemode/);
   assert.match(webhook, /hasAuthorizedImmediatePlanChangeForInvoice/);
   assert.match(webhook, /const candidateLines = usePlanChangeValidation/);
   assert.match(webhook, /apply_verified_saas_plan_change_invoice_event/);

@@ -294,8 +294,8 @@ async function retrieveInvoiceLifecycleEvidence(
     "get_open_saas_plan_change_for_subscription",
     {
       p_stripe_subscription_id: subscriptionId,
-      p_stripe_account_id: stripeConfig.stripeAccountId,
-      p_stripe_livemode: stripeConfig.stripeLivemode,
+      p_stripe_account_id: stripeConfig.platformAccountId,
+      p_stripe_livemode: stripeConfig.livemode,
     },
   );
   if (openChangeError) {
