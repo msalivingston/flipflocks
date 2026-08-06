@@ -378,6 +378,13 @@ create temporary table valid_claim as
 select pg_temp.claim_early_conversion_invoice(
   'evt_EarlyValidConversion', 'in_EarlyValidConversion'
 ) as token;
+select is(
+  (select count(*) from public.billing_subscription_plan_changes
+   where subscription_enrollment_id =
+     'fa000000-0000-4000-b000-000000000001'),
+  0::bigint,
+  'the early conversion has no plan-change record'
+);
 create temporary table valid_result as
 select * from pg_temp.apply_early_conversion_invoice(
   'evt_EarlyValidConversion', 'in_EarlyValidConversion',
@@ -408,6 +415,18 @@ select is(
   'paid',
   'the canonical entitlement resolver recognizes the paid conversion'
 );
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config(
+  'request.jwt.claim.sub',
+  'fa000000-0000-4000-8000-000000000001',
+  true
+);
+select is(
+  (select lifecycle_state from public.seller_get_saas_billing_status()),
+  'active_paid',
+  'the Account billing lifecycle becomes active paid after conversion'
+);
+select set_config('request.jwt.claim.role', 'service_role', true);
 select is(
   (select application_state from pg_temp.apply_early_conversion_invoice(
     'evt_EarlyValidConversion', 'in_EarlyValidConversion',

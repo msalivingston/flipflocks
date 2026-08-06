@@ -14,7 +14,9 @@ import {
   createStripeSaasWebhookHandler,
   checkoutCompletionRpcArguments,
   enrollmentRpcError,
+  hasAuthorizedImmediatePlanChangeForInvoice,
   SaasWebhookDomainError,
+  type OpenSaasPlanChange,
   type ProviderEventIdentity,
   type SaasCheckoutApplicationResult,
   type SaasCheckoutCompletionEvidence,
@@ -288,12 +290,30 @@ async function retrieveInvoiceLifecycleEvidence(
   }
   const item = subscription.items.data[0];
   const currentPrice = item.price;
+  const { data: openChanges, error: openChangeError } = await serviceClient.rpc(
+    "get_open_saas_plan_change_for_subscription",
+    {
+      p_stripe_subscription_id: subscriptionId,
+      p_stripe_account_id: stripeConfig.stripeAccountId,
+      p_stripe_livemode: stripeConfig.stripeLivemode,
+    },
+  );
+  if (openChangeError) {
+    throw new SaasWebhookDomainError("plan_change_lookup_failed", true);
+  }
+  const openChange = (Array.isArray(openChanges) ? openChanges[0] : null) as
+    OpenSaasPlanChange | null;
+  const usePlanChangeValidation = hasAuthorizedImmediatePlanChangeForInvoice(
+    invoice.billing_reason,
+    invoice.id,
+    openChange,
+  );
   const subscriptionLines = invoice.lines.data.filter((line) => {
     const details = line.parent?.subscription_item_details;
     return details != null && details.subscription === subscriptionId &&
       expandableId(line.pricing?.price_details?.price) != null;
   });
-  const candidateLines = invoice.billing_reason === "subscription_update"
+  const candidateLines = usePlanChangeValidation
     ? subscriptionLines.filter((line) => line.amount > 0)
     : subscriptionLines.filter((line) =>
       !line.parent?.subscription_item_details?.proration &&

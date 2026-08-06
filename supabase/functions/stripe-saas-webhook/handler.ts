@@ -250,6 +250,24 @@ export type SaasInvoiceLifecycleEvidence = {
   lineItem: SaasRecurringPriceEvidence;
 };
 
+export type OpenSaasPlanChange = {
+  plan_change_id: string;
+  source_stripe_price_id: string;
+  target_stripe_price_id: string;
+  change_timing: string;
+  stripe_invoice_id: string | null;
+};
+
+export function hasAuthorizedImmediatePlanChangeForInvoice(
+  billingReason: string,
+  invoiceId: string,
+  change: OpenSaasPlanChange | null,
+): change is OpenSaasPlanChange {
+  return billingReason === "subscription_update" &&
+    change?.change_timing === "immediate" &&
+    (change.stripe_invoice_id === null || change.stripe_invoice_id === invoiceId);
+}
+
 export type SaasInvoiceApplicationResult = {
   application_state:
     | "already_processed"

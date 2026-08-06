@@ -7,6 +7,7 @@ import {
   STRIPE_SAAS_WEBHOOK_MAX_BODY_BYTES,
   createStripeSaasWebhookConfigurationErrorHandler,
   createStripeSaasWebhookHandler,
+  hasAuthorizedImmediatePlanChangeForInvoice,
 } from "../supabase/functions/stripe-saas-webhook/handler.ts";
 
 const ACCOUNT_ID = "acct_Batch6Platform";
@@ -14,6 +15,57 @@ const SIGNATURE = "mock-signature-not-a-secret";
 const RAW_BODY = JSON.stringify({ fixture: "not-provider-payload" });
 const ATTEMPT_ID = "d7000000-0000-4000-8000-000000000001";
 const STORE_ID = "d7000000-0000-4000-8000-000000000002";
+
+test("subscription_update proration routing requires an authorized immediate change", () => {
+  const immediateChange = {
+    plan_change_id: "d7000000-0000-4000-8000-000000000099",
+    source_stripe_price_id: "price_CoopMonthly",
+    target_stripe_price_id: "price_MarketMonthly",
+    change_timing: "immediate",
+    stripe_invoice_id: null,
+  };
+
+  assert.equal(
+    hasAuthorizedImmediatePlanChangeForInvoice(
+      "subscription_update",
+      "in_ImmediateUpgrade",
+      immediateChange,
+    ),
+    true,
+  );
+  assert.equal(
+    hasAuthorizedImmediatePlanChangeForInvoice(
+      "subscription_update",
+      "in_EarlyTrialConversion",
+      null,
+    ),
+    false,
+  );
+  assert.equal(
+    hasAuthorizedImmediatePlanChangeForInvoice(
+      "subscription_update",
+      "in_WrongInvoice",
+      { ...immediateChange, stripe_invoice_id: "in_ImmediateUpgrade" },
+    ),
+    false,
+  );
+  assert.equal(
+    hasAuthorizedImmediatePlanChangeForInvoice(
+      "subscription_update",
+      "in_ScheduledDowngrade",
+      { ...immediateChange, change_timing: "period_end" },
+    ),
+    false,
+  );
+  assert.equal(
+    hasAuthorizedImmediatePlanChangeForInvoice(
+      "subscription_cycle",
+      "in_Recurring",
+      immediateChange,
+    ),
+    false,
+  );
+});
 
 function event(type = "checkout.session.completed", overrides = {}) {
   const objectType = type.startsWith("checkout.")

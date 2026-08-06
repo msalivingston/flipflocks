@@ -62,6 +62,8 @@ test("period-end downgrade creates and configures one release schedule", async (
 test("invoice and Subscription event order converges before entitlement changes", async () => {
   const [migration, , , webhook] = await sources();
   assert.match(webhook, /get_open_saas_plan_change_for_subscription/);
+  assert.match(webhook, /hasAuthorizedImmediatePlanChangeForInvoice/);
+  assert.match(webhook, /const candidateLines = usePlanChangeValidation/);
   assert.match(webhook, /apply_verified_saas_plan_change_invoice_event/);
   assert.match(webhook, /apply_verified_saas_plan_change_subscription_event/);
   assert.match(migration, /p_outcome = 'payment_succeeded'[\s\S]*?p_current_subscription_price_id = v_change\.target_stripe_price_id[\s\S]*?complete_verified_saas_plan_change/);
