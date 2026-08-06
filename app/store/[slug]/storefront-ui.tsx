@@ -110,7 +110,7 @@ export const storefrontHeroFrame = {
   aspectClass: "aspect-[10/3]",
   aspectRatio: 10 / 3,
   publicClass:
-    "relative mx-4 mt-3 h-[13rem] overflow-hidden rounded-lg bg-white shadow-sm min-[390px]:h-[13.35rem] sm:mx-7 sm:h-[clamp(18.5rem,40vw,23rem)] lg:mx-0 lg:mt-0 lg:h-[clamp(18.75rem,33vw,23.25rem)] lg:rounded-none lg:shadow-none",
+    "relative mx-4 mt-3 h-[13rem] overflow-hidden rounded-lg bg-white shadow-sm min-[390px]:h-[13.35rem] sm:mx-7 sm:h-[clamp(18.5rem,40vw,23rem)] lg:mx-0 lg:mt-0 lg:h-[clamp(18.75rem,33vw,32.5rem)] lg:rounded-none lg:shadow-none",
   setupPreviewScale: 0.72,
   setupPreviewClass:
     "relative mx-auto aspect-[10/3] w-full max-w-[50rem] overflow-hidden border border-stone-200 bg-stone-100",
