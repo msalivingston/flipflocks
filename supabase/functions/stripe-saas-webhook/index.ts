@@ -287,25 +287,52 @@ async function retrieveInvoiceLifecycleEvidence(
     );
   }
   const item = subscription.items.data[0];
-  const price = item.price;
-  const product = await retrieveProductForPrice(price);
-  const recurringLines = invoice.lines.data.filter((line) => {
+  const currentPrice = item.price;
+  const subscriptionLines = invoice.lines.data.filter((line) => {
     const details = line.parent?.subscription_item_details;
-    return details != null && !details.proration &&
-      details.subscription === subscriptionId &&
-      expandableId(line.pricing?.price_details?.price) === price.id &&
-      line.pricing?.price_details?.product === product.id;
+    return details != null && details.subscription === subscriptionId &&
+      expandableId(line.pricing?.price_details?.price) != null;
   });
-  if (recurringLines.length !== 1) {
+  const candidateLines = invoice.billing_reason === "subscription_update"
+    ? subscriptionLines.filter((line) => line.amount > 0)
+    : subscriptionLines.filter((line) =>
+      !line.parent?.subscription_item_details?.proration &&
+      expandableId(line.pricing?.price_details?.price) === currentPrice.id
+    );
+  if (candidateLines.length !== 1) {
     throw new SaasWebhookDomainError(
       "invoice_recurring_line_conflict",
       false,
     );
   }
-  const line = recurringLines[0];
+  const line = candidateLines[0];
+  const targetPriceId = expandableId(line.pricing?.price_details?.price);
+  const involvedPriceIds = new Set(subscriptionLines.map((candidate) =>
+    expandableId(candidate.pricing?.price_details?.price)
+  ));
+  if (!targetPriceId || involvedPriceIds.has(null) || involvedPriceIds.size > 2 ||
+    (involvedPriceIds.size === 2 && !involvedPriceIds.has(currentPrice.id))) {
+    throw new SaasWebhookDomainError(
+      "invoice_recurring_line_conflict",
+      false,
+    );
+  }
+  const price = targetPriceId === currentPrice.id
+    ? currentPrice
+    : await stripe.prices.retrieve(targetPriceId, { expand: ["product"] });
+  const product = await retrieveProductForPrice(price);
+  if (line.pricing?.price_details?.product !== product.id) {
+    throw new SaasWebhookDomainError(
+      "invoice_recurring_line_conflict",
+      false,
+    );
+  }
   const servicePeriodStart = isoFromStripeSeconds(line.period.start);
   const servicePeriodEnd = isoFromStripeSeconds(line.period.end);
+  const currentPeriodStart = isoFromStripeSeconds(item.current_period_start);
+  const currentPeriodEnd = isoFromStripeSeconds(item.current_period_end);
   if (!servicePeriodStart || !servicePeriodEnd || line.quantity !== 1 ||
+    !currentPeriodStart || !currentPeriodEnd || item.quantity !== 1 ||
     !Number.isSafeInteger(line.amount) || line.amount < 0) {
     throw new SaasWebhookDomainError(
       "invoice_recurring_line_conflict",
@@ -344,6 +371,12 @@ async function retrieveInvoiceLifecycleEvidence(
       paidAt,
       nextPaymentAttemptAt,
       failureCode,
+      currentSubscriptionPriceId: currentPrice.id,
+      currentSubscriptionQuantity: item.quantity ?? 0,
+      currentPeriodStart,
+      currentPeriodEnd,
+      targetLineIsProration:
+        line.parent?.subscription_item_details?.proration ?? false,
     },
     lineItem: recurringPriceEvidence(price, product, item.quantity ?? 0),
   };
@@ -403,7 +436,7 @@ function lifecycleRpcError(
       `SAAS_${domain.toUpperCase()}_ENROLLMENT_NOT_FOUND`;
   const permanent = /^SAAS_(?:INVOICE|SUBSCRIPTION)_(?:EVIDENCE_INVALID|SHAPE_INVALID|PROVIDER_SHAPE_INVALID|SUCCESS_INVALID|FAILURE_STATUS_INVALID|ACTION_STATUS_INVALID|FINALIZATION_STATUS_INVALID|FAILURE_CODE_INVALID|EVENT_CLAIM_INVALID|EVENT_FENCE_INVALID|STORE_NOT_FOUND|BINDING_CONFLICT|CATALOG_CONFLICT|IDENTITY_CONFLICT|SERVICE_PERIOD_INVALID|TERMINAL_STATE_INVALID|TERMINAL_CONFLICT|TRIAL_CONFLICT|EVENT_FINALIZATION_FAILED)$/.test(
     message,
-  );
+  ) || /^SAAS_PLAN_CHANGE_(?:EVENT_INVALID|EVIDENCE_INVALID|BINDING_CONFLICT|CATALOG_CONFLICT|SERVICE_PERIOD_INVALID|INVOICE_CONFLICT|STATE_CONFLICT)$/.test(message);
   return new SaasWebhookDomainError(
     enrollmentMissing
       ? "immutable_enrollment_not_ready"
@@ -487,6 +520,80 @@ const handler = createStripeSaasWebhookHandler({
     processingLeaseToken: string,
     evidence: SaasInvoiceLifecycleEvidence,
   ) {
+    const invoice = evidence.invoice;
+    const line = evidence.lineItem;
+    const { data: openChanges, error: openChangeError } = await serviceClient.rpc(
+      "get_open_saas_plan_change_for_subscription",
+      {
+        p_stripe_subscription_id: invoice.subscriptionId,
+        p_stripe_account_id: identity.stripeAccountId,
+        p_stripe_livemode: identity.stripeLivemode,
+      },
+    );
+    if (openChangeError) throw new SaasWebhookDomainError("plan_change_lookup_failed", true);
+    const openChange = Array.isArray(openChanges) ? openChanges[0] : null;
+    if (openChange && openChange.target_stripe_price_id === line.priceId &&
+      (!openChange.stripe_invoice_id || openChange.stripe_invoice_id === invoice.id)) {
+      const outcome = {
+        "invoice.payment_succeeded": "payment_succeeded",
+        "invoice.payment_failed": "payment_failed",
+        "invoice.payment_action_required": "payment_action_required",
+      }[identity.eventType];
+      if (!outcome) throw new SaasWebhookDomainError("invoice_event_type_invalid", false);
+      const { data, error } = await serviceClient.rpc(
+        "apply_verified_saas_plan_change_invoice_event",
+        {
+          p_outcome: outcome,
+          p_provider_event_id: identity.providerEventId,
+          p_payload_hash: identity.payloadHash,
+          p_processing_lease_token: processingLeaseToken,
+          p_stripe_account_id: identity.stripeAccountId,
+          p_stripe_livemode: identity.stripeLivemode,
+          p_environment_id: identity.environmentId,
+          p_provider_event_created_at: identity.providerEventCreatedAt,
+          p_stripe_invoice_id: invoice.id,
+          p_invoice_livemode: invoice.livemode,
+          p_stripe_customer_id: invoice.customerId,
+          p_stripe_subscription_id: invoice.subscriptionId,
+          p_target_stripe_price_id: line.priceId,
+          p_target_stripe_product_id: line.productId,
+          p_current_subscription_price_id: invoice.currentSubscriptionPriceId,
+          p_current_subscription_quantity: invoice.currentSubscriptionQuantity,
+          p_current_period_start: invoice.currentPeriodStart,
+          p_current_period_end: invoice.currentPeriodEnd,
+          p_billing_reason: invoice.billingReason,
+          p_collection_method: invoice.collectionMethod,
+          p_invoice_status: invoice.status,
+          p_currency: invoice.currency,
+          p_amount_due_cents: invoice.amountDueCents,
+          p_amount_paid_cents: invoice.amountPaidCents,
+          p_amount_remaining_cents: invoice.amountRemainingCents,
+          p_target_line_amount_cents: invoice.recurringLineAmountCents,
+          p_service_period_start: invoice.servicePeriodStart,
+          p_service_period_end: invoice.servicePeriodEnd,
+          p_observed_at: identity.eventType === "invoice.payment_succeeded"
+            ? invoice.paidAt
+            : identity.providerEventCreatedAt,
+          p_next_payment_attempt_at: invoice.nextPaymentAttemptAt,
+          p_line_quantity: line.quantity,
+          p_price_livemode: line.priceLivemode,
+          p_product_livemode: line.productLivemode,
+          p_price_active: line.priceActive,
+          p_product_active: line.productActive,
+          p_unit_amount_cents: line.unitAmountCents,
+          p_price_currency: line.currency,
+          p_recurring_interval: line.recurringInterval,
+          p_recurring_interval_count: line.recurringIntervalCount,
+          p_price_type: line.priceType,
+          p_billing_scheme: line.billingScheme,
+          p_recurring_usage_type: line.recurringUsageType,
+          p_tax_behavior: line.taxBehavior,
+          p_product_tax_code: line.productTaxCode,
+        },
+      );
+      if (error) throw lifecycleRpcError(error, "invoice");
+      return firstRow<SaasInvoiceApplicationResult>(data);
+    }
     const rpcName = {
       "invoice.payment_succeeded":
         "apply_verified_saas_invoice_payment_succeeded",
@@ -499,8 +606,6 @@ const handler = createStripeSaasWebhookHandler({
     if (!rpcName) {
       throw new SaasWebhookDomainError("invoice_event_type_invalid", false);
     }
-    const invoice = evidence.invoice;
-    const line = evidence.lineItem;
     const observedParameter = identity.eventType === "invoice.payment_succeeded"
       ? "p_paid_at"
       : identity.eventType === "invoice.payment_failed"
@@ -563,6 +668,59 @@ const handler = createStripeSaasWebhookHandler({
   ) {
     const subscription = evidence.subscription;
     const line = evidence.lineItem;
+    const { data: openChanges, error: openChangeError } = await serviceClient.rpc(
+      "get_open_saas_plan_change_for_subscription",
+      {
+        p_stripe_subscription_id: subscription.id,
+        p_stripe_account_id: identity.stripeAccountId,
+        p_stripe_livemode: identity.stripeLivemode,
+      },
+    );
+    if (openChangeError) throw new SaasWebhookDomainError("plan_change_lookup_failed", true);
+    const openChange = Array.isArray(openChanges) ? openChanges[0] : null;
+    if (openChange && [
+      openChange.source_stripe_price_id,
+      openChange.target_stripe_price_id,
+    ].includes(line.priceId)) {
+      const { data, error } = await serviceClient.rpc(
+        "apply_verified_saas_plan_change_subscription_event",
+        {
+          p_provider_event_id: identity.providerEventId,
+          p_payload_hash: identity.payloadHash,
+          p_processing_lease_token: processingLeaseToken,
+          p_stripe_account_id: identity.stripeAccountId,
+          p_stripe_livemode: identity.stripeLivemode,
+          p_environment_id: identity.environmentId,
+          p_provider_event_created_at: identity.providerEventCreatedAt,
+          p_event_type: identity.eventType,
+          p_stripe_subscription_id: subscription.id,
+          p_subscription_livemode: subscription.livemode,
+          p_stripe_customer_id: subscription.customerId,
+          p_stripe_price_id: line.priceId,
+          p_stripe_product_id: line.productId,
+          p_subscription_status: subscription.status,
+          p_current_period_start: subscription.currentPeriodStart,
+          p_current_period_end: subscription.currentPeriodEnd,
+          p_cancel_at_period_end: subscription.cancelAtPeriodEnd,
+          p_line_quantity: line.quantity,
+          p_price_livemode: line.priceLivemode,
+          p_product_livemode: line.productLivemode,
+          p_price_active: line.priceActive,
+          p_product_active: line.productActive,
+          p_unit_amount_cents: line.unitAmountCents,
+          p_currency: line.currency,
+          p_recurring_interval: line.recurringInterval,
+          p_recurring_interval_count: line.recurringIntervalCount,
+          p_price_type: line.priceType,
+          p_billing_scheme: line.billingScheme,
+          p_recurring_usage_type: line.recurringUsageType,
+          p_tax_behavior: line.taxBehavior,
+          p_product_tax_code: line.productTaxCode,
+        },
+      );
+      if (error) throw lifecycleRpcError(error, "subscription");
+      return firstRow<SaasSubscriptionApplicationResult>(data);
+    }
     const { data, error } = await serviceClient.rpc(
       "apply_verified_stripe_subscription_event",
       {

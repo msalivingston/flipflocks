@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   createStripeSaasSubscriptionActionHandler,
+  PlanChangeProviderError,
   ResumeProviderError,
 } from "../supabase/functions/stripe-saas-subscription-action/handler.ts";
 
@@ -30,7 +31,10 @@ function request(body = { action: "resume" }, overrides = {}) {
   });
 }
 function harness(overrides = {}) {
-  const calls = { begin: [], update: [], record: [], failed: [] };
+  const calls = {
+    begin: [], update: [], record: [], failed: [], beginPlan: [], change: [],
+    bind: [], beginCancel: [], cancel: [], canceled: [], planFailed: [],
+  };
   const dependencies = {
     allowedOrigin: "https://flockfront.test",
     authenticate: async () => "fa000000-0000-4000-8000-000000000001",
@@ -41,9 +45,54 @@ function harness(overrides = {}) {
     requestResume: async (...args) => calls.update.push(args),
     recordResumeRequested: async (...args) => calls.record.push(args),
     markActionFailed: async (...args) => calls.failed.push(args),
+    beginPlanChange: async (...args) => {
+      calls.beginPlan.push(args);
+      return planAuthorization();
+    },
+    requestPlanChange: async (...args) => {
+      calls.change.push(args);
+      return { stripe_invoice_id: "in_PlanChange", status: "pending_payment" };
+    },
+    recordPlanChangeProviderBinding: async (...args) => calls.bind.push(args),
+    beginScheduledChangeCancellation: async (...args) => {
+      calls.beginCancel.push(args);
+      return scheduledCancellation();
+    },
+    requestScheduledChangeCancellation: async (...args) => calls.cancel.push(args),
+    recordScheduledChangeCanceled: async (...args) => calls.canceled.push(args),
+    markPlanChangeFailed: async (...args) => calls.planFailed.push(args),
     ...overrides,
   };
   return { handler: createStripeSaasSubscriptionActionHandler(dependencies), calls };
+}
+
+function planAuthorization(overrides = {}) {
+  return {
+    action_state: "created",
+    plan_change_id: "fa000000-0000-4000-a000-000000000003",
+    store_id: "fa000000-0000-4000-9000-000000000001",
+    stripe_customer_id: "cus_Batch10",
+    stripe_subscription_id: "sub_Batch10",
+    source_stripe_price_id: "price_CoopMonthly",
+    target_stripe_price_id: "price_MarketMonthly",
+    change_timing: "immediate",
+    stripe_idempotency_key: "ff:saas-plan-change:local:fa000000-0000-4000-a000-000000000003:v1",
+    stripe_invoice_id: null,
+    stripe_schedule_id: null,
+    effective_at: null,
+    ...overrides,
+  };
+}
+
+function scheduledCancellation(overrides = {}) {
+  return {
+    plan_change_id: "fa000000-0000-4000-a000-000000000003",
+    stripe_customer_id: "cus_Batch10",
+    stripe_subscription_id: "sub_Batch10",
+    stripe_schedule_id: "sub_sched_Batch10",
+    stripe_idempotency_key: "ff:saas-plan-change-cancel:local:fa000000-0000-4000-a000-000000000003:v1",
+    ...overrides,
+  };
 }
 
 test("resume requires valid authentication and exact request body", async () => {
@@ -119,4 +168,77 @@ test("database record failure does not optimistically report authoritative resum
 
 test("subscription action import performs no provider call", () => {
   assert.equal(typeof createStripeSaasSubscriptionActionHandler, "function");
+});
+
+test("Coop monthly upgrade accepts enums only and waits for verified payment", async () => {
+  const { handler, calls } = harness();
+  const response = await handler(request({
+    action: "change_plan",
+    target_plan_key: "full_flock",
+    target_billing_cadence: "monthly",
+  }));
+  assert.equal(response.status, 202);
+  assert.deepEqual(await response.json(), { status: "pending_payment" });
+  assert.equal(calls.change.length, 1);
+  assert.deepEqual(calls.bind[0], [
+    "fa000000-0000-4000-a000-000000000003",
+    { stripe_invoice_id: "in_PlanChange", status: "pending_payment" },
+  ]);
+  assert.equal((await harness().handler(request({
+    action: "change_plan",
+    target_plan_key: "price_browser_controlled",
+    target_billing_cadence: "monthly",
+  }))).status, 400);
+});
+
+test("definitive upgrade rejection is recorded without exposing provider detail", async () => {
+  const { handler, calls } = harness({
+    requestPlanChange: async () => {
+      throw new PlanChangeProviderError("stripe_plan_change_state_rejected", true);
+    },
+  });
+  const response = await handler(request({
+    action: "change_plan", target_plan_key: "full_flock", target_billing_cadence: "monthly",
+  }));
+  assert.equal(response.status, 503);
+  assert.deepEqual(calls.planFailed[0], [
+    "fa000000-0000-4000-a000-000000000003", "stripe_plan_change_state_rejected",
+  ]);
+});
+
+test("unbound ambiguous plan change retries while a provider-bound change is idempotent", async () => {
+  const unbound = harness({
+    beginPlanChange: async () => planAuthorization({ action_state: "already_pending" }),
+  });
+  assert.equal((await unbound.handler(request({
+    action: "change_plan", target_plan_key: "full_flock", target_billing_cadence: "monthly",
+  }))).status, 202);
+  assert.equal(unbound.calls.change.length, 1);
+
+  const bound = harness({
+    beginPlanChange: async () => planAuthorization({
+      action_state: "already_pending", stripe_invoice_id: "in_PlanChange",
+    }),
+  });
+  assert.equal((await bound.handler(request({
+    action: "change_plan", target_plan_key: "full_flock", target_billing_cadence: "monthly",
+  }))).status, 202);
+  assert.equal(bound.calls.change.length, 0);
+});
+
+test("scheduled downgrade cancellation records cancellation only after provider success", async () => {
+  const success = harness();
+  const response = await success.handler(request({ action: "cancel_scheduled_change" }));
+  assert.equal(response.status, 202);
+  assert.equal(success.calls.cancel.length, 1);
+  assert.equal(success.calls.canceled.length, 1);
+
+  const failure = harness({
+    requestScheduledChangeCancellation: async () => {
+      throw new PlanChangeProviderError("stripe_schedule_release_rejected", true);
+    },
+  });
+  assert.equal((await failure.handler(request({ action: "cancel_scheduled_change" }))).status, 503);
+  assert.equal(failure.calls.canceled.length, 0);
+  assert.equal(failure.calls.planFailed.length, 0);
 });

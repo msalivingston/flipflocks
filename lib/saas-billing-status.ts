@@ -50,6 +50,13 @@ export type SellerBillingStatus = {
   resumable_checkout: boolean;
   storefront_access_until: string | null;
   subscription_status: string | null;
+  subscription_changes_available: boolean;
+  pending_plan_change_status: string | null;
+  pending_plan_key: string | null;
+  pending_billing_cadence: string | null;
+  pending_effective_at: string | null;
+  pending_payment_required: boolean;
+  scheduled_change_cancelable: boolean;
   trial_eligibility: "trial_eligible" | "trial_already_used" | null;
   trial_ends_at: string | null;
   trial_started_at: string | null;

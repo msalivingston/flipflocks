@@ -244,12 +244,19 @@ select ok(
   'read model exposes no Stripe identifiers or provider-event evidence'
 );
 select ok(
-  position('seller_get_saas_billing_status_base_v1' in (
+  position('seller_get_saas_billing_status_without_plan_changes_v1' in (
     select pg_get_functiondef(procedure.oid)
     from pg_proc as procedure
     join pg_namespace as namespace on namespace.oid = procedure.pronamespace
     where namespace.nspname = 'public'
       and procedure.proname = 'seller_get_saas_billing_status'
+  )) > 0
+  and position('seller_get_saas_billing_status_base_v1' in (
+    select pg_get_functiondef(procedure.oid)
+    from pg_proc as procedure
+    join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'public'
+      and procedure.proname = 'seller_get_saas_billing_status_without_plan_changes_v1'
   )) > 0
   and position('resolve_store_entitlement' in (
     select pg_get_functiondef(procedure.oid)

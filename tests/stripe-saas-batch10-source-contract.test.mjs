@@ -32,7 +32,8 @@ test("browser inputs cannot supply provider or tenant authority", () => {
     assert.doesNotMatch(source, /customer_id|subscription_id|store_id|price_id|product_id/);
   }
   assert.match(panel, /body: \{ action \}/);
-  assert.doesNotMatch(panel, /stripe-saas-subscription-action/);
+  assert.match(panel, /target_plan_key: targetPlanKey/);
+  assert.match(panel, /target_billing_cadence: "monthly"/);
   assert.doesNotMatch(panel, /body: \{ action: "resume" \}/);
 });
 
@@ -72,8 +73,9 @@ test("Portal uses fixed server configuration and host validation", () => {
 });
 
 test("resume updates only provider cancellation scheduling with stable idempotency", () => {
-  assert.match(resumeIndex, /subscriptions\.update\([\s\S]*\{ cancel_at_period_end: false, cancel_at: "" \}[\s\S]*idempotencyKey/);
-  assert.doesNotMatch(resumeIndex, /price:|trial_end|billing_cycle_anchor|default_payment_method|collection_method|metadata:/);
+  const resumeProvider = resumeIndex.match(/async requestResume\(authorization\)[\s\S]*?^  },/m)?.[0] ?? "";
+  assert.match(resumeProvider, /subscriptions\.update\([\s\S]*\{ cancel_at_period_end: false, cancel_at: "" \}[\s\S]*idempotencyKey/);
+  assert.doesNotMatch(resumeProvider, /price:|trial_end|billing_cycle_anchor|default_payment_method|collection_method|metadata:/);
   assert.match(migration, /ff:saas_resume:' \|\| p_environment_id \|\| ':' \|\| v_action_id::text \|\| ':v1'/);
   assert.doesNotMatch(migration, /set\s+cancel_at_period_end\s*=\s*false/i);
   assert.doesNotMatch(migration, /set\s+paid_through_at|set\s+plan_key|set\s+storefront_enabled/i);
@@ -140,8 +142,8 @@ test("seller controls are authoritative-state gated and Portal-return is present
 test("billing management controls lock visibly and synchronously during requests", () => {
   assert.match(panel, /enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-50/);
   assert.match(panel, /const actionInFlight = useRef\(false\)/);
-  assert.equal((panel.match(/if \(actionInFlight\.current\) return;/g) ?? []).length, 1);
-  assert.equal((panel.match(/actionInFlight\.current = true;/g) ?? []).length, 1);
+  assert.equal((panel.match(/if \(actionInFlight\.current\) return;/g) ?? []).length, 3);
+  assert.equal((panel.match(/actionInFlight\.current = true;/g) ?? []).length, 3);
   assert.match(panel, /disabled=\{Boolean\(activeAction\)\}/);
   assert.match(panel, /activeAction === "manage_billing" \? "Opening…" : "Manage billing & invoices"/);
   assert.match(panel, /activeAction === "update_payment_method" \? "Opening…" : "Update payment method"/);

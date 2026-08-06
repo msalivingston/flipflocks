@@ -159,6 +159,11 @@ function invoiceEvidence(overrides = {}) {
       paidAt: "2026-08-02T16:00:00.000Z",
       nextPaymentAttemptAt: null,
       failureCode: null,
+      currentSubscriptionPriceId: "price_Batch8",
+      currentSubscriptionQuantity: 1,
+      currentPeriodStart: "2026-08-02T16:00:00.000Z",
+      currentPeriodEnd: "2026-09-02T16:00:00.000Z",
+      targetLineIsProration: false,
     },
     lineItem: recurringPriceEvidence(),
   };

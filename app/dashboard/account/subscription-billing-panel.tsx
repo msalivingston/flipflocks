@@ -13,11 +13,26 @@ import {
 } from "@/lib/saas-billing-status";
 import { useSellerBillingStatus } from "../_components/seller-billing-context";
 
+type DowngradeInventoryRow = {
+  inventory_item_id: string;
+  breed_display_name: string;
+  species_name: string;
+  inventory_type: string;
+  quantity_available: number;
+  bird_units: number;
+  effective_unit_price: number | null;
+  inventory_visibility_status: string;
+  listing_batch_visibility_status: string;
+};
+
 export function SubscriptionBillingPanel() {
   const { error, isLoading, reload, status } = useSellerBillingStatus();
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [actionError, setActionError] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [confirmingPlanChange, setConfirmingPlanChange] = useState<"upgrade" | "downgrade" | null>(null);
+  const [downgradeInventory, setDowngradeInventory] = useState<DowngradeInventoryRow[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
   const actionInFlight = useRef(false);
   const pollingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -76,6 +91,8 @@ export function SubscriptionBillingPanel() {
       status.requested_billing_cadence !== status.effective_billing_cadence
     ),
   );
+  const pendingPlan = getPlanDisplayName(status.pending_plan_key);
+  const pendingCadence = getCadenceDisplayName(status.pending_billing_cadence);
 
   const rows: Array<[string, string | null]> = [
     ["Status", presentation.label],
@@ -91,6 +108,9 @@ export function SubscriptionBillingPanel() {
     ["Grace ends", formatBillingDate(status.grace_ends_at, { includeTime: true })],
     ["Scheduled to end", status.cancel_at_period_end ? formatBillingDate(status.entitlement_access_until) : null],
     ["Complimentary access ends", formatBillingDate(status.complimentary_access_ends_at)],
+    ["Scheduled plan", status.pending_plan_change_status === "scheduled" ? pendingPlan : null],
+    ["Scheduled billing", status.pending_plan_change_status === "scheduled" ? pendingCadence : null],
+    ["Scheduled effective date", formatBillingDate(status.pending_effective_at)],
   ];
 
   const management = getBillingManagementAvailability(status);
@@ -124,6 +144,88 @@ export function SubscriptionBillingPanel() {
     }
   }
 
+  function pollBillingStatus() {
+    if (pollingTimer.current) clearTimeout(pollingTimer.current);
+    let polls = 0;
+    const poll = async () => {
+      polls += 1;
+      await reload();
+      if (polls < 8) pollingTimer.current = setTimeout(poll, 2_000);
+    };
+    pollingTimer.current = setTimeout(poll, 500);
+  }
+
+  async function requestPlanChange(targetPlanKey: "small_flock" | "full_flock") {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
+    setActionError(false);
+    setActiveAction("change_plan");
+    try {
+      const { error: requestError } = await supabase.functions.invoke(
+        "stripe-saas-subscription-action",
+        { body: {
+          action: "change_plan",
+          target_plan_key: targetPlanKey,
+          target_billing_cadence: "monthly",
+        } },
+      );
+      if (requestError) throw requestError;
+      setConfirmingPlanChange(null);
+      pollBillingStatus();
+    } catch {
+      setActionError(true);
+    } finally {
+      actionInFlight.current = false;
+      setActiveAction(null);
+    }
+  }
+
+  async function openDowngradeConfirmation() {
+    setInventoryLoading(true);
+    setActionError(false);
+    try {
+      const { data, error: inventoryError } = await supabase.rpc(
+        "seller_get_saas_downgrade_inventory_preview",
+      );
+      if (inventoryError || !Array.isArray(data)) throw inventoryError;
+      setDowngradeInventory(data as DowngradeInventoryRow[]);
+      setConfirmingPlanChange("downgrade");
+    } catch {
+      setActionError(true);
+    } finally {
+      setInventoryLoading(false);
+    }
+  }
+
+  async function cancelScheduledChange() {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
+    setActiveAction("cancel_scheduled_change");
+    setActionError(false);
+    try {
+      const { error: requestError } = await supabase.functions.invoke(
+        "stripe-saas-subscription-action",
+        { body: { action: "cancel_scheduled_change" } },
+      );
+      if (requestError) throw requestError;
+      pollBillingStatus();
+    } catch {
+      setActionError(true);
+    } finally {
+      actionInFlight.current = false;
+      setActiveAction(null);
+    }
+  }
+
+  const canUpgrade = status.subscription_changes_available &&
+    status.effective_plan_key === "small_flock" &&
+    status.effective_billing_cadence === "monthly" &&
+    !status.pending_plan_change_status;
+  const canDowngrade = status.subscription_changes_available &&
+    status.effective_plan_key === "full_flock" &&
+    status.effective_billing_cadence === "monthly" &&
+    !status.pending_plan_change_status;
+
   return (
     <section className="rounded-lg border border-stone-200 bg-white px-4 py-4" aria-labelledby="subscription-billing-heading">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -145,8 +247,70 @@ export function SubscriptionBillingPanel() {
       </dl>
       {actionError ? (
         <p className="mt-4 text-sm font-semibold text-red-800" role="alert">
-          We could not open billing management. Please try again.
+          We could not complete that billing request. Please try again.
         </p>
+      ) : null}
+      {status.pending_payment_required ? (
+        <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-3" role="status">
+          <p className="text-sm font-semibold text-amber-950">Your Market upgrade is waiting for Stripe payment confirmation. Coop remains your current plan.</p>
+          <button className="seller-secondary-button mt-3" disabled={Boolean(activeAction)} onClick={() => void openPortal("manage_billing")} type="button">
+            Manage payment &amp; invoice
+          </button>
+        </div>
+      ) : null}
+      {canUpgrade ? (
+        <div className="mt-4 border-t border-stone-200 pt-4">
+          <p className="text-sm font-semibold text-stone-950">Upgrade to Market monthly</p>
+          <p className="mt-1 text-sm leading-6 text-stone-600">Stripe will prorate the rest of this billing period and charge the difference. Coop stays active until payment and the Market Price are verified.</p>
+          <button className="seller-primary-button mt-3" disabled={Boolean(activeAction)} onClick={() => setConfirmingPlanChange("upgrade")} type="button">Review upgrade</button>
+        </div>
+      ) : null}
+      {canDowngrade ? (
+        <div className="mt-4 border-t border-stone-200 pt-4">
+          <p className="text-sm font-semibold text-stone-950">Downgrade to Coop monthly</p>
+          <p className="mt-1 text-sm leading-6 text-stone-600">Market remains active through the current paid period. Live-poultry quantities reset to zero only when Coop takes effect.</p>
+          <button className="seller-secondary-button mt-3" disabled={Boolean(activeAction) || inventoryLoading} onClick={() => void openDowngradeConfirmation()} type="button">
+            {inventoryLoading ? "Loading inventory…" : "Review downgrade"}
+          </button>
+        </div>
+      ) : null}
+      {status.scheduled_change_cancelable ? (
+        <div className="mt-4 rounded-md border border-sky-300 bg-sky-50 p-3" role="status">
+          <p className="text-sm font-semibold text-sky-950">Market remains current. Coop monthly is scheduled for {formatBillingDate(status.pending_effective_at) ?? "the current paid-period boundary"}.</p>
+          <button className="seller-secondary-button mt-3" disabled={Boolean(activeAction)} onClick={() => void cancelScheduledChange()} type="button">
+            {activeAction === "cancel_scheduled_change" ? "Canceling…" : "Cancel scheduled change"}
+          </button>
+        </div>
+      ) : null}
+      {confirmingPlanChange === "upgrade" ? (
+        <div className="mt-4 rounded-md border border-emerald-300 bg-emerald-50 p-3" role="group" aria-label="Confirm Market upgrade">
+          <p className="text-sm font-semibold text-emerald-950">Upgrade from Coop monthly to Market monthly now?</p>
+          <p className="mt-1 text-sm leading-6 text-emerald-900">The change completes only after Stripe successfully collects the prorated charge.</p>
+          <div className="mt-3 flex gap-2">
+            <button className="seller-primary-button" disabled={Boolean(activeAction)} onClick={() => void requestPlanChange("full_flock")} type="button">{activeAction === "change_plan" ? "Confirming…" : "Confirm upgrade"}</button>
+            <button className="seller-secondary-button" disabled={Boolean(activeAction)} onClick={() => setConfirmingPlanChange(null)} type="button">Not now</button>
+          </div>
+        </div>
+      ) : null}
+      {confirmingPlanChange === "downgrade" ? (
+        <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-3" role="group" aria-label="Confirm Coop downgrade">
+          <p className="text-sm font-semibold text-amber-950">Your current live-poultry inventory</p>
+          <p className="mt-1 text-sm leading-6 text-amber-900">When Coop takes effect, all quantities below become zero. Listings, photos, descriptions, prices, visibility, and history stay saved.</p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead><tr><th className="pr-4">Listing</th><th className="pr-4">Type</th><th>Quantity</th></tr></thead>
+              <tbody>{downgradeInventory.map((item) => (
+                <tr key={item.inventory_item_id}><td className="pr-4">{item.breed_display_name}</td><td className="pr-4">{item.inventory_type}</td><td>{item.quantity_available}</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-sm font-semibold text-amber-950">Total bird units: {downgradeInventory.reduce((total, item) => total + item.bird_units, 0)}</p>
+          <button className="seller-secondary-button mt-3" onClick={() => downloadInventoryCsv(downgradeInventory)} type="button">Download inventory CSV</button>
+          <div className="mt-3 flex gap-2">
+            <button className="seller-primary-button" disabled={Boolean(activeAction)} onClick={() => void requestPlanChange("small_flock")} type="button">{activeAction === "change_plan" ? "Scheduling…" : "Schedule downgrade"}</button>
+            <button className="seller-secondary-button" disabled={Boolean(activeAction)} onClick={() => setConfirmingPlanChange(null)} type="button">Not now</button>
+          </div>
+        </div>
       ) : null}
       {management.manageBilling ? (
         <div className="mt-5 flex flex-col gap-2 border-t border-stone-200 pt-4 sm:flex-row sm:flex-wrap">
@@ -191,6 +355,42 @@ export function SubscriptionBillingPanel() {
 
 function billingActionButtonClass(baseClass: string) {
   return `${baseClass} min-h-11 enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-50`;
+}
+
+function downloadInventoryCsv(rows: DowngradeInventoryRow[]) {
+  const escapeCell = (value: string | number | null) => {
+    const text = value == null ? "" : String(value);
+    const protectedText = /^[=+\-@]/.test(text) ? `'${text}` : text;
+    return `"${protectedText.replaceAll('"', '""')}"`;
+  };
+  const header = [
+    "Listing", "Species", "Inventory type", "Quantity", "Bird units",
+    "Unit price", "Inventory visibility", "Listing visibility",
+  ];
+  const lines = [
+    header.map(escapeCell).join(","),
+    ...rows.map((row) => [
+      row.breed_display_name,
+      row.species_name,
+      row.inventory_type,
+      row.quantity_available,
+      row.bird_units,
+      row.effective_unit_price,
+      row.inventory_visibility_status,
+      row.listing_batch_visibility_status,
+    ].map(escapeCell).join(",")),
+  ];
+  const blob = new Blob([`\uFEFF${lines.join("\r\n")}\r\n`], {
+    type: "text/csv;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "flockfront-live-poultry-before-coop-downgrade.csv";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function getBillingPresentation(status: SellerBillingStatus) {

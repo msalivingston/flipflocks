@@ -7,6 +7,7 @@ export const STRIPE_SAAS_WEBHOOK_EVENT_TYPES = Object.freeze([
   "customer.subscription.updated",
   "customer.subscription.deleted",
   "customer.subscription.trial_will_end",
+  "customer.subscription.pending_update_applied",
   "invoice.payment_succeeded",
   "invoice.payment_failed",
   "invoice.payment_action_required",
@@ -240,6 +241,11 @@ export type SaasInvoiceLifecycleEvidence = {
     paidAt: string | null;
     nextPaymentAttemptAt: string | null;
     failureCode: string | null;
+    currentSubscriptionPriceId: string;
+    currentSubscriptionQuantity: number;
+    currentPeriodStart: string;
+    currentPeriodEnd: string;
+    targetLineIsProration: boolean;
   };
   lineItem: SaasRecurringPriceEvidence;
 };
@@ -800,7 +806,15 @@ function validateInvoiceLifecycleEvidence(
     invoice.recurringLineAmountCents < 0 ||
     invoice.amountPaidCents + invoice.amountRemainingCents !==
       invoice.amountDueCents ||
-    invoice.recurringLineAmountCents !== evidence.lineItem.unitAmountCents ||
+    (invoice.billingReason !== "subscription_update" &&
+      invoice.recurringLineAmountCents !== evidence.lineItem.unitAmountCents) ||
+    (invoice.billingReason === "subscription_update" &&
+      invoice.recurringLineAmountCents > evidence.lineItem.unitAmountCents) ||
+    !/^price_[A-Za-z0-9]+$/.test(invoice.currentSubscriptionPriceId) ||
+    invoice.currentSubscriptionQuantity !== 1 ||
+    !validIsoTimestamp(invoice.currentPeriodStart) ||
+    !validIsoTimestamp(invoice.currentPeriodEnd) ||
+    Date.parse(invoice.currentPeriodEnd) <= Date.parse(invoice.currentPeriodStart) ||
     !validIsoTimestamp(invoice.servicePeriodStart) ||
     !validIsoTimestamp(invoice.servicePeriodEnd) ||
     Date.parse(invoice.servicePeriodEnd) <=
@@ -1318,6 +1332,7 @@ function isSubscriptionLifecycleEvent(eventType: string): boolean {
   return [
     "customer.subscription.created", "customer.subscription.updated",
     "customer.subscription.deleted",
+    "customer.subscription.pending_update_applied",
   ].includes(eventType);
 }
 
