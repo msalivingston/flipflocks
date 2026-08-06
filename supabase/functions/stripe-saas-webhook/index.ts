@@ -315,6 +315,11 @@ async function retrieveInvoiceLifecycleEvidence(
   });
   const candidateLines = usePlanChangeValidation
     ? subscriptionLines.filter((line) => line.amount > 0)
+    : invoice.billing_reason === "subscription_update"
+    ? subscriptionLines.filter((line) =>
+      line.amount > 0 &&
+      expandableId(line.pricing?.price_details?.price) === currentPrice.id
+    )
     : subscriptionLines.filter((line) =>
       !line.parent?.subscription_item_details?.proration &&
       expandableId(line.pricing?.price_details?.price) === currentPrice.id

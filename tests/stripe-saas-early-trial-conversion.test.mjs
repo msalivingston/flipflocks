@@ -16,6 +16,17 @@ const invoiceFoundation = readFileSync(
   ),
   "utf8",
 );
+const prorationCorrection = readFileSync(
+  new URL(
+    "../supabase/migrations/20260806100000_saas_prorated_early_trial_conversion_invoice.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const webhook = readFileSync(
+  new URL("../supabase/functions/stripe-saas-webhook/index.ts", import.meta.url),
+  "utf8",
+);
 
 test("early trial conversion authority is narrow and invoice-backed", () => {
   assert.match(migration, /v_reason = 'subscription_update'/);
@@ -36,6 +47,27 @@ test("existing recurring invoice authority remains intact", () => {
   assert.match(
     migration,
     /v_reason in \('subscription_create', 'subscription_cycle'\)/,
+  );
+});
+
+test("verified early conversion accepts a positive current-Price proration", () => {
+  assert.match(
+    webhook,
+    /invoice\.billing_reason === "subscription_update"[\s\S]*?line\.amount > 0[\s\S]*?currentPrice\.id/,
+  );
+  assert.match(prorationCorrection, /v_reason = 'subscription_update'/);
+  assert.match(prorationCorrection, /billing_trial_claims as conversion_claim/);
+  assert.match(
+    prorationCorrection,
+    /p_service_period_start = v_billing\.current_period_start/,
+  );
+  assert.match(
+    prorationCorrection,
+    /p_service_period_end = v_billing\.current_period_end/,
+  );
+  assert.match(
+    prorationCorrection,
+    /unit_amount_cents is distinct from p_recurring_line_amount_cents/,
   );
 });
 

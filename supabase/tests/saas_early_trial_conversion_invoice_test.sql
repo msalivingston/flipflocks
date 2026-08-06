@@ -390,7 +390,9 @@ select * from pg_temp.apply_early_conversion_invoice(
   'evt_EarlyValidConversion', 'in_EarlyValidConversion',
   (select token from valid_claim),
   (select period_start from early_conversion_period),
-  (select period_end from early_conversion_period)
+  (select period_end from early_conversion_period),
+  p_amount_due => 408,
+  p_line_amount => 408
 );
 select is(
   (select application_state from valid_result),
@@ -408,6 +410,20 @@ select ok(
    from public.billing_subscription_invoices
    where stripe_invoice_id = 'in_EarlyValidConversion'),
   'the qualifying invoice records paid-through application evidence'
+);
+select is(
+  (select amount_paid_cents
+   from public.billing_subscription_invoices
+   where stripe_invoice_id = 'in_EarlyValidConversion'),
+  408::bigint,
+  'a legitimate $4.08 proration records verified paid invoice evidence'
+);
+select is(
+  (select base_line_amount_cents
+   from public.billing_subscription_invoices
+   where stripe_invoice_id = 'in_EarlyValidConversion'),
+  408::bigint,
+  'the prorated line need not equal the full catalog unit amount'
 );
 select is(
   (select access_reason from public.resolve_store_entitlement(
