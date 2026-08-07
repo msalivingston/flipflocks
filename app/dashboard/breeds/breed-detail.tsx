@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -96,6 +97,7 @@ const annualEggProductionOptions = [
 export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
   const { seller } = useSellerContext();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const storeId = seller?.store_id ?? "";
   const [species, setSpecies] = useState<BreedSpecies[]>([]);
   const [libraryBreeds, setLibraryBreeds] = useState<BreedLibraryItem[]>([]);
@@ -122,6 +124,7 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const autoOpenedRestoreDialogRef = useRef(false);
 
   useEffect(() => {
     if (!storeId) return;
@@ -265,7 +268,7 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
     setSuccessMessage(null);
   }
 
-  function openRestoreDialog() {
+  const openRestoreDialog = useCallback(() => {
     const nextSelection: RestoreCatalogSelection = {
       description: false,
       details: false,
@@ -284,7 +287,28 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
     setSaveError(null);
     setSuccessMessage(null);
     setIsRestoreDialogOpen(true);
-  }
+  }, [hasCatalogDescription, restoreOptions]);
+
+  useEffect(() => {
+    if (
+      searchParams.get("restore") !== "1" ||
+      isLoading ||
+      isRestoreDialogOpen ||
+      !hasRestoreOptions ||
+      autoOpenedRestoreDialogRef.current
+    ) {
+      return;
+    }
+
+    autoOpenedRestoreDialogRef.current = true;
+    openRestoreDialog();
+  }, [
+    hasRestoreOptions,
+    isLoading,
+    isRestoreDialogOpen,
+    openRestoreDialog,
+    searchParams,
+  ]);
 
   async function saveChanges() {
     if (!profile || !draft || isSaving) return;
@@ -662,7 +686,7 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
               {catalogBreed ? (
                 <button
                   className="seller-small-button"
-                  disabled={isRestoringCatalogDefaults || !hasRestoreOptions}
+                  disabled={isRestoringCatalogDefaults}
                   onClick={openRestoreDialog}
                   type="button"
                 >
@@ -925,23 +949,29 @@ function RestoreCatalogDefaultsDialog({
 
         <div className="grid gap-4 px-5 py-4">
           <div className="grid gap-2">
-            {options.map((option) => (
-              <label
-                className="flex items-center gap-3 rounded-md border border-stone-200 px-3 py-2 text-sm font-semibold text-stone-800"
-                key={option.key}
-              >
-                <input
-                  checked={selection[option.key]}
-                  className="size-4 accent-emerald-800"
-                  disabled={isSubmitting}
-                  type="checkbox"
-                  onChange={(event) =>
-                    onChange(option.key, event.target.checked)
-                  }
-                />
-                {option.label}
-              </label>
-            ))}
+            {options.length > 0 ? (
+              options.map((option) => (
+                <label
+                  className="flex items-center gap-3 rounded-md border border-stone-200 px-3 py-2 text-sm font-semibold text-stone-800"
+                  key={option.key}
+                >
+                  <input
+                    checked={selection[option.key]}
+                    className="size-4 accent-emerald-800"
+                    disabled={isSubmitting}
+                    type="checkbox"
+                    onChange={(event) =>
+                      onChange(option.key, event.target.checked)
+                    }
+                  />
+                  {option.label}
+                </label>
+              ))
+            ) : (
+              <p className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm leading-5 text-stone-600">
+                No catalog defaults are available for this breed yet.
+              </p>
+            )}
           </div>
 
           <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">

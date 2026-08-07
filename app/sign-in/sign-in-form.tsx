@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PublicSignupCta } from "@/app/_components/public-signup-cta";
+import { PasswordInput } from "@/app/_components/password-input";
 import { PasswordResetRequest } from "@/app/_components/password-reset-request";
 import { supabase } from "@/lib/supabase";
 import { isCurrentUserPlatformAdmin } from "@/app/admin/_lib/admin-auth";
@@ -107,13 +108,12 @@ export function SignInForm({
                 Password
               </label>
             </div>
-            <input
+            <PasswordInput
               autoComplete="current-password"
               className="mt-1 min-h-12 w-full rounded-lg border border-stone-300 bg-white px-3 text-base font-medium text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-[#246f38] focus:ring-2 focus:ring-[#246f38]/25"
               disabled={isSubmitting}
               id="sign-in-password"
               onChange={(event) => setPassword(event.target.value)}
-              type="password"
               value={password}
             />
             <div className="mt-2">

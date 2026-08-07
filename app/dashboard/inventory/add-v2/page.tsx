@@ -4,6 +4,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  getPlanCapabilities,
+  type SaleCategory,
+} from "@/lib/plan-capabilities";
 import { useSellerContext } from "../../_components/seller-context";
 import {
   DashboardPageContent,
@@ -12,6 +16,7 @@ import {
 import { liveBirdsV2DraftMarker } from "./live-birds/constants";
 
 type InventoryOption = {
+  category: SaleCategory;
   title: string;
   description: string;
   glyph: string;
@@ -20,24 +25,28 @@ type InventoryOption = {
 
 const inventoryOptions: InventoryOption[] = [
   {
+    category: "live_birds",
     title: "Live Birds",
     description: "Start the new inventory flow for birds available now or soon.",
     glyph: "/glyphs/hen.png",
     href: "/dashboard/inventory/add-v2/live-birds",
   },
   {
+    category: "hatching_eggs",
     title: "Hatching Eggs",
     description: "Create hatching egg inventory by breed, available date, quantity, and price per egg.",
     glyph: "/glyphs/egg-carton.png",
     href: "/dashboard/listings/new/birds/hatching-eggs",
   },
   {
+    category: "processed_poultry",
     title: "Poultry Products",
     description: "Create simple local-pickup inventory for eggs, meat, broth, feathers, or other poultry products.",
     glyph: "/glyphs/chicken-leg.png",
     href: "/dashboard/listings/new/processed-poultry",
   },
   {
+    category: "equipment_supplies",
     title: "Equipment & Supplies",
     description: "Create simple local-pickup inventory for equipment and supplies.",
     glyph: "/glyphs/feed-sack.png",
@@ -70,6 +79,7 @@ type SavedDraft = {
 
 export default function AddInventoryV2Page() {
   const { seller } = useSellerContext();
+  const plan = seller ? getPlanCapabilities(seller.plan_key) : null;
   const [draftRows, setDraftRows] = useState<DraftRow[]>([]);
   const [draftsLoading, setDraftsLoading] = useState(true);
   const [draftsError, setDraftsError] = useState<string | null>(null);
@@ -125,7 +135,11 @@ export default function AddInventoryV2Page() {
       <DashboardPageContent>
         <div className="grid max-w-5xl gap-4 md:grid-cols-2">
           {inventoryOptions.map((option) => (
-            <InventoryOptionCard key={option.title} option={option} />
+            <InventoryOptionCard
+              isAvailable={plan?.allowedSaleCategories.includes(option.category) ?? true}
+              key={option.title}
+              option={option}
+            />
           ))}
         </div>
         <SavedDraftsSection
@@ -138,34 +152,64 @@ export default function AddInventoryV2Page() {
   );
 }
 
-function InventoryOptionCard({ option }: { option: InventoryOption }) {
+function InventoryOptionCard({
+  isAvailable,
+  option,
+}: {
+  isAvailable: boolean;
+  option: InventoryOption;
+}) {
+  const cardClassName = isAvailable
+    ? "border-transparent bg-white shadow-sm sm:border-stone-200"
+    : "cursor-not-allowed border-stone-200 bg-stone-100/80 opacity-65 shadow-none grayscale";
+  const iconClassName = isAvailable
+    ? "border-emerald-100 bg-emerald-50"
+    : "border-stone-200 bg-stone-200";
+  const titleClassName = isAvailable ? "text-stone-950" : "text-stone-600";
+  const descriptionClassName = isAvailable
+    ? "text-stone-600"
+    : "text-stone-500";
+
   const cardContent = (
     <>
-      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-emerald-100 bg-emerald-50">
+      <div
+        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-md border ${iconClassName}`}
+      >
         <Image src={option.glyph} alt="" width={36} height={36} />
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-xl font-bold text-stone-950 sm:text-lg sm:font-semibold">
+          <h2
+            className={`text-xl font-bold sm:text-lg sm:font-semibold ${titleClassName}`}
+          >
             {option.title}
           </h2>
-          {option.href ? null : (
+          {!isAvailable ? (
+            <span className="rounded-full bg-stone-200 px-2 py-1 text-xs font-semibold text-stone-600">
+              Market upgrade
+            </span>
+          ) : option.href ? null : (
             <span className="rounded-full bg-stone-100 px-2.5 py-1 text-sm font-semibold text-stone-600 sm:text-xs">
               Coming soon
             </span>
           )}
         </div>
-        <p className="mt-2 text-base leading-8 text-stone-600">
+        <p className={`mt-2 text-base leading-8 ${descriptionClassName}`}>
           {option.description}
         </p>
+        {!isAvailable ? (
+          <p className="mt-2 text-sm font-semibold text-stone-500">
+            Upgrade to Market to add this inventory.
+          </p>
+        ) : null}
       </div>
     </>
   );
 
   const className =
-    "flex min-h-40 gap-4 rounded-xl border border-transparent bg-white p-5 text-left shadow-sm transition sm:rounded-lg sm:border-stone-200";
+    `flex min-h-40 gap-4 rounded-xl border p-5 text-left transition sm:rounded-lg ${cardClassName}`;
 
-  if (option.href) {
+  if (option.href && isAvailable) {
     return (
       <Link
         className={`${className} hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2`}

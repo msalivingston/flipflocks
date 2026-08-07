@@ -32,11 +32,8 @@ export function PlanUpgradePrompt({
       className={`rounded-lg border border-amber-200 bg-amber-50/80 text-amber-950 ${compact ? "p-3" : "p-4"} ${className}`}
     >
       <div className="flex items-start gap-3">
-        <span
-          aria-hidden="true"
-          className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-sm font-bold text-amber-800 shadow-sm"
-        >
-          Lock
+        <span className="mt-0.5 inline-flex h-6 shrink-0 items-center rounded-full border border-amber-200 bg-white px-2 text-[10px] font-extrabold uppercase tracking-wide text-amber-800">
+          Market
         </span>
         <div className="min-w-0">
           <p className="text-sm font-bold">{title}</p>

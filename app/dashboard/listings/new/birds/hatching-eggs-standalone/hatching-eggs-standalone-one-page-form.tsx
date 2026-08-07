@@ -1466,21 +1466,6 @@ function MobileHatchingEggWorkflow({
                 onChange={(value) => onFormUpdate({ price: value })}
               />
             </CompactField>
-            <CompactField label="Minimum Order">
-              <input
-                className={inputClass}
-                disabled={fieldsLockedAfterAddSave}
-                inputMode="numeric"
-                min="1"
-                placeholder="Optional"
-                step="1"
-                type="number"
-                value={form.minimumOrderQuantity}
-                onChange={(event) =>
-                  onFormUpdate({ minimumOrderQuantity: event.target.value })
-                }
-              />
-            </CompactField>
             {isEditMode ? (
               <CompactField label="Visibility">
                 <select
@@ -2066,21 +2051,6 @@ function DesktopHatchingEggWorkflow({
                 onChange={(value) => onFormUpdate({ price: value })}
               />
             </CompactField>
-            <CompactField label="Minimum Order">
-              <input
-                className={inputClass}
-                disabled={fieldsLockedAfterAddSave}
-                inputMode="numeric"
-                min="1"
-                placeholder="Optional"
-                step="1"
-                type="number"
-                value={form.minimumOrderQuantity}
-                onChange={(event) =>
-                  onFormUpdate({ minimumOrderQuantity: event.target.value })
-                }
-              />
-            </CompactField>
           </div>
           {fieldsLockedAfterAddSave ? (
             <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800">
@@ -2152,7 +2122,7 @@ function DesktopHatchingEggWorkflow({
                   Shared with your other {matchingDescriptionGroup.displayName}{" "}
                   hatching eggs.
                 </p>
-                <p>Price, quantity, date, minimum order, and photos stay separate.</p>
+                <p>Price, quantity, date, and photos stay separate.</p>
               </div>
             ) : null}
             <label className="mt-4 flex min-h-0 flex-1 flex-col">
@@ -2371,11 +2341,6 @@ function HatchingEggDesktopSummary({
       glyph: "/glyphs/camera.png",
       label: "Photos",
       value: String(activePhotoCount),
-    },
-    {
-      glyph: "/glyphs/clipboard.png",
-      label: "Minimum order",
-      value: form.minimumOrderQuantity.trim() || "Not set",
     },
   ];
 

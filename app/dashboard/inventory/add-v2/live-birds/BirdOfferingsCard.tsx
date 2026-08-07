@@ -4,9 +4,6 @@ import {
   type PlanCapabilities,
 } from "@/lib/plan-capabilities";
 import {
-  PlanUpgradePrompt,
-} from "../../../_components/plan-upgrade-prompt";
-import {
   inputClass,
   mutedTextActionClass,
   soldAsOptions,
@@ -410,13 +407,6 @@ function ExpandedOfferingCard({
           />
         </div>
       </div>
-      {!plan.flockGroupListingsEnabled ? (
-        <PlanUpgradePrompt
-          className="mx-0 mb-4 sm:mx-4"
-          compact
-          feature="flock_group"
-        />
-      ) : null}
       {hasDuplicateCombination ? (
         <p className="mx-4 mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-base font-semibold leading-7 text-amber-800">
           Duplicate breed and sex/type combination. Choose a different sex/type

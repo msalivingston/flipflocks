@@ -12,6 +12,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import {
   type KeyboardEvent,
   type ReactNode,
@@ -803,6 +804,13 @@ export function MobileBreedsLibrary({
           onClose={() => setActionProfileId(null)}
         >
           <div className="divide-y divide-stone-200">
+            <Link
+              className="flex min-h-14 w-full items-center px-2 text-left text-lg font-semibold text-emerald-900"
+              href={`/dashboard/breeds/${actionProfile.id}?restore=1`}
+              onClick={() => setActionProfileId(null)}
+            >
+              Edit details &amp; restore defaults
+            </Link>
             <button
               className="flex min-h-14 w-full items-center px-2 text-left text-lg font-semibold text-red-700 disabled:opacity-50"
               disabled={Boolean(usageLoadError)}

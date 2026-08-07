@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PasswordResetRequest } from "@/app/_components/password-reset-request";
+import { PasswordInput } from "@/app/_components/password-input";
 import { supabase } from "@/lib/supabase";
 import { isCurrentUserPlatformAdmin } from "../_lib/admin-auth";
 
@@ -106,13 +107,12 @@ export function AdminLoginForm({ initialError }: { initialError?: string }) {
                 Password
               </label>
             </div>
-            <input
+            <PasswordInput
               autoComplete="current-password"
               className="mt-1 min-h-12 w-full rounded-md border border-stone-300 bg-white px-3 text-base font-medium text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-emerald-900 focus:ring-2 focus:ring-emerald-900/20"
               disabled={isSubmitting}
               id="admin-sign-in-password"
               onChange={(event) => setPassword(event.target.value)}
-              type="password"
               value={password}
             />
             <div className="mt-2">

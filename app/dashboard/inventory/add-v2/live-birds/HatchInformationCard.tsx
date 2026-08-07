@@ -389,7 +389,7 @@ function DateField({
 }) {
   return (
     <label className="block min-w-0">
-      <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
+      <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600 max-sm:flex max-sm:min-h-12 max-sm:items-end">
         {label}
       </span>
       <span className="relative block w-full min-w-0 max-w-full max-sm:overflow-hidden max-sm:rounded-md">

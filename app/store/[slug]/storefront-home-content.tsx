@@ -253,9 +253,7 @@ function HeroBackdrop({
         />
         <Image
           alt={alt}
-          className={`absolute inset-0 hidden h-full w-full object-cover object-center lg:inset-x-auto lg:left-1/2 lg:block lg:w-[min(100%,93.75rem)] lg:-translate-x-1/2 ${
-            crop ? "lg:object-contain" : ""
-          }`}
+          className="absolute inset-0 hidden h-full w-full object-cover object-center lg:block"
           fill
           priority
           sizes="(max-width: 1024px) 100vw, 70rem"
@@ -289,9 +287,7 @@ function HeroBackdrop({
         />
         <Image
           alt={alt}
-          className={`absolute inset-0 hidden h-full w-full object-cover object-center lg:inset-x-auto lg:left-1/2 lg:block lg:w-[min(100%,93.75rem)] lg:-translate-x-1/2 ${
-            crop ? "lg:object-contain" : ""
-          }`}
+          className="absolute inset-0 hidden h-full w-full object-cover object-center lg:block"
         fill
         priority
         sizes="(max-width: 1024px) 100vw, 70rem"

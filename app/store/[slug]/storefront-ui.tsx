@@ -588,7 +588,7 @@ export function StoreLogo({
   return (
     <Image
       alt={store.logo_image_alt_text || `${store.store_name} logo`}
-      className={`${sizeClass} shrink-0 rounded-md object-cover`}
+      className={`${sizeClass} shrink-0 rounded-md object-contain`}
       height={96}
       src={toPublicImageUrl(store.logo_image_url)}
       unoptimized
