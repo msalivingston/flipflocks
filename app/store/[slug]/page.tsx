@@ -12,19 +12,25 @@ import {
 } from "./storefront-data";
 import { StorefrontHomeContent } from "./storefront-home-content";
 import { StorefrontPreviewClient } from "./storefront-preview-client";
+import { getStorefrontPreviewReturnHref } from "@/lib/storefront-preview-routing";
 
 export default async function StorefrontHomePage({
   params,
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ preview?: string }>;
+  searchParams?: Promise<{ preview?: string; returnTo?: string }>;
 }) {
   const { slug } = await params;
   const query = searchParams ? await searchParams : {};
 
   if (query.preview === "1") {
-    return <StorefrontPreviewClient slug={slug} />;
+    return (
+      <StorefrontPreviewClient
+        returnTo={getStorefrontPreviewReturnHref(query.returnTo)}
+        slug={slug}
+      />
+    );
   }
 
   const [

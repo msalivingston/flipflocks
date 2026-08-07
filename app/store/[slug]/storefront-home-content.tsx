@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import {
   cx,
   formatCurrency,
@@ -44,6 +45,7 @@ export function StorefrontHomeContent({
   hatchingEggs,
   inventory,
   livePoultryProfileImages = {},
+  previewExitHref,
   processedPoultry,
   showPreviewBanner = false,
   store,
@@ -52,6 +54,7 @@ export function StorefrontHomeContent({
   hatchingEggs: StorefrontHatchingEggItem[];
   inventory: StorefrontInventoryItem[];
   livePoultryProfileImages?: StorefrontProfileImageMap;
+  previewExitHref?: string;
   processedPoultry: StorefrontProcessedPoultryItem[];
   showPreviewBanner?: boolean;
   store: StorefrontHome;
@@ -92,8 +95,18 @@ export function StorefrontHomeContent({
   return (
     <>
       {showPreviewBanner ? (
-        <div className="sticky top-0 z-50 border-b border-amber-200 bg-amber-50 px-5 py-3 text-center text-sm font-semibold text-amber-950 shadow-sm">
-          Preview mode &mdash; this store is hidden from customers.
+        <div className="sticky top-0 z-50 border-b border-amber-200 bg-amber-50 px-4 py-2.5 shadow-sm sm:px-5 sm:py-3">
+          <div className="mx-auto flex max-w-[70rem] flex-wrap items-center justify-center gap-x-3 gap-y-2 text-center text-sm font-semibold text-amber-950">
+            <span>Preview mode &mdash; this store is hidden from customers.</span>
+            {previewExitHref ? (
+              <Link
+                className="inline-flex min-h-9 items-center justify-center rounded-md border border-amber-300 bg-white px-3 text-sm font-bold text-amber-950 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+                href={previewExitHref}
+              >
+                Exit Preview
+              </Link>
+            ) : null}
+          </div>
         </div>
       ) : null}
       <StorefrontChrome categories={categories} store={store}>

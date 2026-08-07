@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { buildStorefrontPreviewHref } from "@/lib/storefront-preview-routing";
 import { SellerContextProvider, useSellerContext } from "./seller-context";
 import { SellerBillingStatusProvider } from "./seller-billing-context";
 import { SellerBillingBanner } from "./seller-billing-banner";
@@ -96,6 +97,9 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
 
   const storefrontHref = `/store/${seller.store_slug}`;
   const isLive = seller.is_publicly_available;
+  const sellerStorefrontHref = isLive
+    ? storefrontHref
+    : buildStorefrontPreviewHref(seller.store_slug, pathname);
 
   return (
     <SellerBillingStatusProvider>
@@ -116,7 +120,7 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
               {seller.store_name}
             </p>
             <StorefrontStatusLink
-              href={isLive ? storefrontHref : `${storefrontHref}?preview=1`}
+              href={sellerStorefrontHref}
               isLive={isLive}
             />
           </div>
@@ -185,7 +189,7 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
             </div>
             <Link
               className="seller-small-button shrink-0"
-              href={storefrontHref}
+              href={sellerStorefrontHref}
               rel="noopener noreferrer"
               target="_blank"
             >

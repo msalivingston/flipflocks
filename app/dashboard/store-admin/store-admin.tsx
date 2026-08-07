@@ -17,6 +17,7 @@ import {
   type LockedPlanFeature,
 } from "@/lib/plan-capabilities";
 import { supabase } from "@/lib/supabase";
+import { buildStorefrontPreviewHref } from "@/lib/storefront-preview-routing";
 import { PlanUpgradeDialog } from "../_components/plan-upgrade-prompt";
 import { useSellerContext } from "../_components/seller-context";
 import {
@@ -1964,7 +1965,7 @@ export function StoreAdmin() {
   const isVisibleToCustomers = seller.is_publicly_available;
   const previewStoreUrl = isVisibleToCustomers
     ? `/store/${form.store_slug}`
-    : `/store/${form.store_slug}?preview=1`;
+    : buildStorefrontPreviewHref(form.store_slug, "/dashboard/store-admin");
 
   return (
     <>

@@ -38,7 +38,13 @@ type PreviewState =
       store: PreviewHome;
     };
 
-export function StorefrontPreviewClient({ slug }: { slug: string }) {
+export function StorefrontPreviewClient({
+  returnTo,
+  slug,
+}: {
+  returnTo: string;
+  slug: string;
+}) {
   const [state, setState] = useState<PreviewState>({ status: "loading" });
 
   useEffect(() => {
@@ -128,6 +134,7 @@ export function StorefrontPreviewClient({ slug }: { slug: string }) {
         inventory={state.inventory}
         livePoultryProfileImages={state.livePoultryProfileImages}
         processedPoultry={state.processedPoultry}
+        previewExitHref={returnTo}
         showPreviewBanner={state.store.preview_is_hidden}
         store={state.store}
       />
