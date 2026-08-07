@@ -32,6 +32,12 @@ import {
   type BreedLibraryItem,
   type BreedSpecies,
 } from "./breed-data";
+import {
+  createBlankCustomBreedDraft,
+  CustomBreedForm,
+  type CustomBreedDraft,
+  validateCustomBreedDraft,
+} from "./custom-breed-form";
 
 type AddResult =
   | { breedProfileId: string; ok: true; warning?: string }
@@ -45,11 +51,7 @@ type MobileAddBreedSheetProps = {
   onAddLibraryBreed: (breed: BreedLibraryItem) => Promise<AddResult>;
   onClose: (addedCount: number) => void;
   onCreateCustomBreed: (
-    draft: {
-      description: string;
-      name: string;
-      speciesId: string;
-    },
+    draft: CustomBreedDraft,
     photos: { crop: PhotoCropMetadata; file: File }[],
   ) => Promise<AddResult>;
   onCustomCreated: (breedProfileId: string, warning?: string) => void;
@@ -57,8 +59,6 @@ type MobileAddBreedSheetProps = {
 };
 
 type MobileAddMode = "choose" | "custom" | "library";
-
-const descriptionMaxLength = 1000;
 
 export function MobileAddBreedSheet({
   existingBreedIds,
@@ -78,11 +78,9 @@ export function MobileAddBreedSheet({
   const [sessionAddedIds, setSessionAddedIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const [customDraft, setCustomDraft] = useState({
-    description: "",
-    name: "",
-    speciesId: species[0]?.id ?? "",
-  });
+  const [customDraft, setCustomDraft] = useState<CustomBreedDraft>(() =>
+    createBlankCustomBreedDraft(species[0]?.id ?? ""),
+  );
   const [isCreatingCustom, setIsCreatingCustom] = useState(false);
   const [customPhotos, setCustomPhotos] = useState<
     {
@@ -209,31 +207,20 @@ export function MobileAddBreedSheet({
   async function createCustomBreed() {
     if (isCreatingCustom) return;
 
-    const nextDraft = {
-      description: customDraft.description.trim(),
-      name: customDraft.name.trim(),
-      speciesId: customDraft.speciesId,
-    };
+    const validation = validateCustomBreedDraft({
+      draft: customDraft,
+      species,
+    });
 
-    if (!nextDraft.speciesId) {
-      setError("Choose a species.");
-      return;
-    }
-    if (!nextDraft.name) {
-      setError("Add a breed name.");
-      return;
-    }
-    if (nextDraft.description.length > descriptionMaxLength) {
-      setError(
-        `Storefront description must be ${descriptionMaxLength} characters or less.`,
-      );
+    if (!validation.ok) {
+      setError(validation.message);
       return;
     }
 
     setIsCreatingCustom(true);
     setError(null);
     const result = await onCreateCustomBreed(
-      nextDraft,
+      validation.draft,
       customPhotos.map((photo) => ({
         crop: photo.crop,
         file: photo.file,
@@ -487,57 +474,13 @@ export function MobileAddBreedSheet({
                 </p>
               ) : null}
               <div className="mt-5 grid gap-5">
-                <label className="grid gap-2 text-base font-bold text-stone-800">
-                  Species
-                  <select
-                    className="h-14 w-full rounded-lg border border-stone-300 bg-white px-3 text-base font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
-                    onChange={(event) =>
-                      setCustomDraft((current) => ({
-                        ...current,
-                        speciesId: event.target.value,
-                      }))
-                    }
-                    value={customDraft.speciesId}
-                  >
-                    {species.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.common_name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="grid gap-2 text-base font-bold text-stone-800">
-                  Breed name
-                  <input
-                    className="h-14 w-full rounded-lg border border-stone-300 bg-white px-3 text-base font-normal text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
-                    onChange={(event) =>
-                      setCustomDraft((current) => ({
-                        ...current,
-                        name: event.target.value,
-                      }))
-                    }
-                    placeholder="Example: Blue Splash Olive Egger"
-                    value={customDraft.name}
-                  />
-                </label>
-                <label className="grid gap-2 text-base font-bold text-stone-800">
-                  Storefront description
-                  <textarea
-                    className="min-h-36 w-full resize-y rounded-lg border border-stone-300 bg-white px-3 py-3 text-base font-normal leading-6 text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
-                    maxLength={descriptionMaxLength}
-                    onChange={(event) =>
-                      setCustomDraft((current) => ({
-                        ...current,
-                        description: event.target.value,
-                      }))
-                    }
-                    placeholder="Add the description buyers should see."
-                    value={customDraft.description}
-                  />
-                  <span className="text-right text-sm font-medium text-stone-500">
-                    {customDraft.description.length}/{descriptionMaxLength}
-                  </span>
-                </label>
+                <CustomBreedForm
+                  draft={customDraft}
+                  disabled={isCreatingCustom}
+                  layout="mobile"
+                  onDraftChange={setCustomDraft}
+                  species={species}
+                />
                 <div>
                   <p className="text-base font-bold text-stone-800">
                     Photos{" "}

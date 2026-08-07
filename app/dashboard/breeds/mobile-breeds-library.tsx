@@ -40,6 +40,7 @@ import {
   type BreedSpecies,
   type SellerBreedProfile,
 } from "./breed-data";
+import { breedDescriptionMaxLength } from "./custom-breed-form";
 
 type MobileBreedsLibraryProps = {
   actionError: string | null;
@@ -620,7 +621,7 @@ export function MobileBreedsLibrary({
                       <textarea
                         aria-label={`Storefront description for ${profile.display_name}`}
                         className="min-h-32 w-full resize-y rounded-lg border border-stone-300 bg-white px-3 py-3 text-base font-normal leading-6 text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
-                        maxLength={1000}
+                        maxLength={breedDescriptionMaxLength}
                         onChange={(event) => {
                           setDescriptionDraft(event.target.value);
                           setDescriptionError(null);
@@ -643,7 +644,7 @@ export function MobileBreedsLibrary({
                         ) : null}
                       </div>
                       <span className="shrink-0 text-sm font-medium text-stone-500">
-                        {descriptionDraft.length}/1000
+                        {descriptionDraft.length}/{breedDescriptionMaxLength}
                       </span>
                     </div>
                     <div className="mt-4">
@@ -763,6 +764,12 @@ export function MobileBreedsLibrary({
                         <MoreHorizontal aria-hidden="true" className="size-6" />
                       </button>
                     </div>
+                    <Link
+                      className="mt-2 flex min-h-12 w-full items-center justify-center rounded-lg border border-stone-300 bg-white px-4 text-base font-bold text-emerald-900 shadow-sm"
+                      href={`/dashboard/breeds/${profile.id}?restore=1`}
+                    >
+                      Restore catalog defaults
+                    </Link>
                   </div>
                 ) : null}
               </article>
@@ -806,10 +813,10 @@ export function MobileBreedsLibrary({
           <div className="divide-y divide-stone-200">
             <Link
               className="flex min-h-14 w-full items-center px-2 text-left text-lg font-semibold text-emerald-900"
-              href={`/dashboard/breeds/${actionProfile.id}?restore=1`}
+              href={`/dashboard/breeds/${actionProfile.id}`}
               onClick={() => setActionProfileId(null)}
             >
-              Edit details &amp; restore defaults
+              Edit details
             </Link>
             <button
               className="flex min-h-14 w-full items-center px-2 text-left text-lg font-semibold text-red-700 disabled:opacity-50"

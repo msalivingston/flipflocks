@@ -11,6 +11,11 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
+import {
+  annualEggProductionOptions,
+  catalogBirdTypeOptions,
+  eggColorOptions,
+} from "@/lib/chicken-metadata-options";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../_components/seller-context";
 import {
@@ -36,6 +41,7 @@ import {
   type BreedSpecies,
   type SellerBreedProfile,
 } from "./breed-data";
+import { breedDescriptionMaxLength } from "./custom-breed-form";
 
 type BreedDraft = {
   annualEggProduction: string;
@@ -69,30 +75,6 @@ type RestoreCatalogOption = {
   key: RestoreOptionKey;
   label: string;
 };
-
-const buyerDescriptionMaxLength = 1000;
-const birdTypeOptions = [
-  { label: "Egg Layer", value: "layer" },
-  { label: "Meat Bird", value: "meat" },
-  { label: "Dual Purpose", value: "dual_purpose" },
-];
-const eggColorOptions = [
-  { label: "White", value: "white" },
-  { label: "Light Brown", value: "light_brown" },
-  { label: "Brown", value: "brown" },
-  { label: "Dark Brown", value: "dark_brown" },
-  { label: "Blue", value: "blue" },
-  { label: "Blue-Green", value: "blue_green" },
-  { label: "Green", value: "green" },
-  { label: "Olive", value: "olive" },
-];
-const annualEggProductionOptions = [
-  { label: "Less than 150 eggs/year", value: "under_150" },
-  { label: "150–200 eggs/year", value: "150_200" },
-  { label: "200–250 eggs/year", value: "200_250" },
-  { label: "250–300 eggs/year", value: "250_300" },
-  { label: "More than 300 eggs/year", value: "over_300" },
-];
 
 export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
   const { seller } = useSellerContext();
@@ -318,9 +300,9 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
       return;
     }
 
-    if (draft.sellerDescription.length > buyerDescriptionMaxLength) {
+    if (draft.sellerDescription.length > breedDescriptionMaxLength) {
       setSaveError(
-        `Breed description must be ${buyerDescriptionMaxLength} characters or less.`,
+        `Breed description must be ${breedDescriptionMaxLength} characters or less.`,
       );
       return;
     }
@@ -728,7 +710,7 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
                       }
                     >
                       <option value="">Choose purpose</option>
-                      {birdTypeOptions.map((option) => (
+                      {catalogBirdTypeOptions.map((option) => (
                         <option key={option.value} value={option.value}>
                           {option.label}
                         </option>
@@ -804,12 +786,15 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
               <span className="sr-only">Breed Description</span>
               <textarea
                 className="seller-form-field min-h-44 resize-y py-3"
-                maxLength={buyerDescriptionMaxLength}
+                maxLength={breedDescriptionMaxLength}
                 value={draft.sellerDescription}
                 onChange={(event) =>
                   updateDraft({ sellerDescription: event.target.value })
                 }
               />
+              <span className="text-right text-sm font-medium text-stone-500">
+                {draft.sellerDescription.length}/{breedDescriptionMaxLength}
+              </span>
             </label>
           </SellerCard>
         </div>

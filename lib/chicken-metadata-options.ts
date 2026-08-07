@@ -14,3 +14,11 @@ export const catalogBirdTypeOptions = [
   { label: "Meat", value: "meat" },
   { label: "Dual-Purpose", value: "dual_purpose" },
 ] as const;
+
+export const annualEggProductionOptions = [
+  { label: "Less than 150 eggs/year", value: "under_150" },
+  { label: "150-200 eggs/year", value: "150_200" },
+  { label: "200-250 eggs/year", value: "200_250" },
+  { label: "250-300 eggs/year", value: "250_300" },
+  { label: "More than 300 eggs/year", value: "over_300" },
+] as const;

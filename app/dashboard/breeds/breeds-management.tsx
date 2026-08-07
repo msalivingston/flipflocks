@@ -47,6 +47,13 @@ import {
   type BreedSpecies,
   type SellerBreedProfile,
 } from "./breed-data";
+import {
+  breedDescriptionMaxLength,
+  createBlankCustomBreedDraft,
+  CustomBreedForm,
+  type CustomBreedDraft,
+  validateCustomBreedDraft,
+} from "./custom-breed-form";
 import { MobileAddBreedSheet } from "./mobile-add-breed-sheet";
 import { MobileBreedsLibrary } from "./mobile-breeds-library";
 
@@ -71,12 +78,6 @@ type MobileBreedPhotoChange =
       removedMediaLinkIds: string[];
     };
 
-type CustomBreedDraft = {
-  description: string;
-  name: string;
-  speciesId: string;
-};
-
 type BreedUsageRow = {
   seller_breed_profile_id: string | null;
 };
@@ -89,7 +90,6 @@ const breedHelperStorageKey = "flockfront:breeds-helper-expanded";
 const breedHelperPreferenceEvent =
   "flockfront:breeds-helper-preference-change";
 const breedDesktopMediaQuery = "(min-width: 1024px)";
-const breedDescriptionMaxLength = 1000;
 
 export function BreedsManagement() {
   const { seller } = useSellerContext();
@@ -374,9 +374,12 @@ export function BreedsManagement() {
 
   async function addCustomBreed(draft: CustomBreedDraft): Promise<AddBreedResult> {
     const { data, error } = await supabase.rpc("seller_upsert_breed_profile", {
+      p_annual_egg_production: draft.annualEggProduction || null,
+      p_bird_type: draft.birdType || null,
       p_breed_id: null,
       p_custom_breed_name: draft.name,
       p_display_name: draft.name,
+      p_egg_color: draft.eggColor || null,
       p_seller_breed_profile_id: null,
       p_seller_description: draft.description || null,
       p_seller_notes: null,
@@ -1821,9 +1824,7 @@ function DesktopAddBreedModal({
   const [speciesFilter, setSpeciesFilter] = useState("all");
   const [addingBreedId, setAddingBreedId] = useState<string | null>(null);
   const [customDraft, setCustomDraft] = useState<CustomBreedDraft>({
-    description: "",
-    name: "",
-    speciesId: species[0]?.id ?? "",
+    ...createBlankCustomBreedDraft(species[0]?.id ?? ""),
   });
   const [isCreatingCustom, setIsCreatingCustom] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1873,26 +1874,20 @@ function DesktopAddBreedModal({
   async function createCustomBreed() {
     if (isCreatingCustom) return;
 
-    const nextDraft = {
-      ...customDraft,
-      description: customDraft.description.trim(),
-      name: customDraft.name.trim(),
-    };
+    const validation = validateCustomBreedDraft({
+      draft: customDraft,
+      species,
+    });
 
-    if (!nextDraft.name) {
-      setError("Add a breed name.");
-      return;
-    }
-
-    if (!nextDraft.speciesId) {
-      setError("Choose a species.");
+    if (!validation.ok) {
+      setError(validation.message);
       return;
     }
 
     setIsCreatingCustom(true);
     setError(null);
 
-    const result = await onAddCustomBreed(nextDraft);
+    const result = await onAddCustomBreed(validation.draft);
 
     if (!result.ok) {
       setError(result.message);
@@ -1906,8 +1901,8 @@ function DesktopAddBreedModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-stone-950/60 px-3 py-4 sm:items-center">
-      <div className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-lg bg-white shadow-xl">
-        <div className="flex items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
+      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+        <div className="shrink-0 flex items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
           <div>
             <h2 className="text-xl font-semibold text-stone-950">Add Breed</h2>
             <p className="mt-1 text-sm leading-6 text-stone-600">
@@ -2040,46 +2035,13 @@ function DesktopAddBreedModal({
         ) : null}
 
         {mode === "custom" ? (
-          <div className="grid gap-4 p-5">
-            <FilterControl
-              label="Species"
-              options={species.map((item) => ({
-                label: item.common_name,
-                value: item.id,
-              }))}
-              value={customDraft.speciesId}
-              onChange={(value) =>
-                setCustomDraft((current) => ({ ...current, speciesId: value }))
-              }
+          <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-5">
+            <CustomBreedForm
+              draft={customDraft}
+              disabled={isCreatingCustom}
+              onDraftChange={setCustomDraft}
+              species={species}
             />
-            <label className="grid gap-1 text-sm font-semibold text-stone-700">
-              Breed name
-              <input
-                className="seller-form-field"
-                placeholder="Example: Blue Splash Olive Egger"
-                value={customDraft.name}
-                onChange={(event) =>
-                  setCustomDraft((current) => ({
-                    ...current,
-                    name: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <label className="grid gap-1 text-sm font-semibold text-stone-700">
-              Description
-              <textarea
-                className="seller-form-field min-h-28 resize-y py-3"
-                placeholder="Add the description buyers should see."
-                value={customDraft.description}
-                onChange={(event) =>
-                  setCustomDraft((current) => ({
-                    ...current,
-                    description: event.target.value,
-                  }))
-                }
-              />
-            </label>
             <button
               className="seller-primary-button w-full sm:w-fit"
               disabled={isCreatingCustom}
@@ -2092,7 +2054,7 @@ function DesktopAddBreedModal({
         ) : null}
 
         {mode !== "choose" ? (
-          <div className="border-t border-stone-200 bg-stone-50 px-5 py-4">
+          <div className="shrink-0 border-t border-stone-200 bg-stone-50 px-5 py-4">
             <button
               className="seller-small-button"
               onClick={() => {

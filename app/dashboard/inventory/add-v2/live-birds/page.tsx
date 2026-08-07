@@ -25,8 +25,15 @@ import {
   sellerMediaSelect,
   toDisplayImageUrl,
   type BreedLibraryItem,
+  type BreedSpecies,
   type SellerBreedProfile,
 } from "../../../breeds/breed-data";
+import {
+  createBlankCustomBreedDraft,
+  CustomBreedForm,
+  type CustomBreedDraft,
+  validateCustomBreedDraft,
+} from "../../../breeds/custom-breed-form";
 import type { ListingPhotoItem } from "../../../listings/[listingBatchId]/listing-photos-section";
 import { BirdOfferingsCard } from "./BirdOfferingsCard";
 import { AgeBasedPriceChangesCard } from "./AgeBasedPriceChangesCard";
@@ -240,7 +247,9 @@ export function LiveBirdsListingForm({
   const [customBreedOfferingId, setCustomBreedOfferingId] = useState<
     string | null
   >(null);
-  const [customBreedName, setCustomBreedName] = useState("");
+  const [customBreedDraft, setCustomBreedDraft] = useState<CustomBreedDraft>(() =>
+    createBlankCustomBreedDraft(""),
+  );
   const [customBreedError, setCustomBreedError] = useState<string | null>(null);
   const [customBreedDuplicate, setCustomBreedDuplicate] =
     useState<BreedOption | null>(null);
@@ -258,6 +267,20 @@ export function LiveBirdsListingForm({
         species,
       }),
     [catalogBreeds, breedMediaItems, sellerBreedProfiles, species],
+  );
+  const customBreedSpecies = useMemo<BreedSpecies[]>(
+    () =>
+      species.id
+        ? [
+            {
+              common_name: species.label,
+              id: species.id,
+              slug: species.slug ?? "",
+              sort_order: 0,
+            },
+          ]
+        : [],
+    [species.id, species.label, species.slug],
   );
   const breedMediaItemsByProfileId = useMemo(
     () => groupBreedMediaByProfileId(breedMediaItems),
@@ -740,7 +763,7 @@ export function LiveBirdsListingForm({
     function handleModalKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape" && !customBreedSaving) {
         setCustomBreedOfferingId(null);
-        setCustomBreedName("");
+        setCustomBreedDraft(createBlankCustomBreedDraft(""));
         setCustomBreedError(null);
         setCustomBreedDuplicate(null);
       }
@@ -951,7 +974,7 @@ export function LiveBirdsListingForm({
 
   function openCustomBreedModal(offeringId: string) {
     setCustomBreedOfferingId(offeringId);
-    setCustomBreedName("");
+    setCustomBreedDraft(createBlankCustomBreedDraft(species.id ?? ""));
     setCustomBreedError(null);
     setCustomBreedDuplicate(null);
   }
@@ -960,13 +983,13 @@ export function LiveBirdsListingForm({
     if (customBreedSaving) return;
 
     setCustomBreedOfferingId(null);
-    setCustomBreedName("");
+    setCustomBreedDraft(createBlankCustomBreedDraft(""));
     setCustomBreedError(null);
     setCustomBreedDuplicate(null);
   }
 
-  function updateCustomBreedName(value: string) {
-    setCustomBreedName(value);
+  function updateCustomBreedDraft(draft: CustomBreedDraft) {
+    setCustomBreedDraft(draft);
     setCustomBreedError(null);
     setCustomBreedDuplicate(null);
   }
@@ -981,21 +1004,24 @@ export function LiveBirdsListingForm({
   async function submitCustomBreed() {
     if (customBreedSaving || !customBreedOfferingId) return;
 
-    const trimmedName = customBreedName.trim();
-
     if (!species.id) {
       setCustomBreedError("Select a species before adding a custom breed.");
       return;
     }
 
-    if (!trimmedName) {
-      setCustomBreedError("Enter a breed name.");
+    const validation = validateCustomBreedDraft({
+      draft: customBreedDraft,
+      species: customBreedSpecies,
+    });
+
+    if (!validation.ok) {
+      setCustomBreedError(validation.message);
       return;
     }
 
     const duplicateOption = findDuplicateBreedOption({
       breedOptions,
-      name: trimmedName,
+      name: validation.draft.name,
       speciesId: species.id,
     });
 
@@ -1014,7 +1040,7 @@ export function LiveBirdsListingForm({
     setCustomBreedError(null);
 
     const createdProfile = await createSellerCustomBreedProfile({
-      breedName: trimmedName,
+      draft: validation.draft,
       speciesId: species.id,
       storeId: seller.store_id,
     });
@@ -2299,12 +2325,13 @@ export function LiveBirdsListingForm({
       {customBreedOfferingId ? (
         <CustomBreedDialog
           duplicateBreed={customBreedDuplicate}
+          draft={customBreedDraft}
           error={customBreedError}
           inputRef={customBreedInputRef}
-          name={customBreedName}
           saving={customBreedSaving}
+          species={customBreedSpecies}
           onCancel={closeCustomBreedModal}
-          onNameChange={updateCustomBreedName}
+          onDraftChange={updateCustomBreedDraft}
           onSubmit={() => void submitCustomBreed()}
           onUseExisting={useDuplicateCustomBreed}
         />
@@ -2569,22 +2596,24 @@ function DesktopLiveBirdsProgress({
 
 function CustomBreedDialog({
   duplicateBreed,
+  draft,
   error,
   inputRef,
-  name,
   saving,
+  species,
   onCancel,
-  onNameChange,
+  onDraftChange,
   onSubmit,
   onUseExisting,
 }: {
   duplicateBreed: BreedOption | null;
+  draft: CustomBreedDraft;
   error: string | null;
   inputRef: { current: HTMLInputElement | null };
-  name: string;
   saving: boolean;
+  species: BreedSpecies[];
   onCancel: () => void;
-  onNameChange: (value: string) => void;
+  onDraftChange: (draft: CustomBreedDraft) => void;
   onSubmit: () => void;
   onUseExisting: () => void;
 }) {
@@ -2592,55 +2621,71 @@ function CustomBreedDialog({
     <div
       aria-labelledby="custom-breed-title"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/35 px-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-stone-950/60 px-3 py-4 sm:items-center"
       role="dialog"
     >
       <form
-        className="w-full max-w-md rounded-lg border border-stone-200 bg-white p-5 shadow-xl"
+        className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
         onSubmit={(event) => {
           event.preventDefault();
           onSubmit();
         }}
       >
-        <h2
-          className="text-lg font-semibold text-stone-950"
-          id="custom-breed-title"
-        >
-          Add custom breed
-        </h2>
-        <label className="mt-4 block">
-          <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
-            Breed name
-          </span>
-          <input
-            className="block min-h-12 w-full rounded-md border border-stone-300 bg-white px-3 text-base text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 sm:min-h-10 sm:text-sm"
-            disabled={saving}
-            ref={inputRef}
-            type="text"
-            value={name}
-            onChange={(event) => onNameChange(event.target.value)}
-          />
-        </label>
-        {error ? (
-          <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold leading-6 text-red-700">
-            <p>{error}</p>
-            {duplicateBreed ? (
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-red-800">{duplicateBreed.label}</span>
-                <button
-                  className="inline-flex min-h-10 items-center rounded-md bg-emerald-800 px-3 text-sm font-bold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-                  type="button"
-                  onClick={onUseExisting}
-                >
-                  Use existing breed
-                </button>
-              </div>
-            ) : null}
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
+          <div>
+            <h2
+              className="text-xl font-semibold text-stone-950"
+              id="custom-breed-title"
+            >
+              Add Breed
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-stone-600">
+              Create a custom breed for your Breed Catalog.
+            </p>
           </div>
-        ) : null}
-        <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button
-            className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-4 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10 sm:text-sm sm:font-semibold"
+            aria-label="Close Add Breed"
+            className="rounded-md px-2 py-1 text-2xl leading-none text-stone-500 hover:bg-stone-100 hover:text-stone-950"
+            disabled={saving}
+            onClick={onCancel}
+            type="button"
+          >
+            x
+          </button>
+        </div>
+
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-5">
+          <CustomBreedForm
+            draft={draft}
+            disabled={saving}
+            nameInputRef={inputRef}
+            onDraftChange={onDraftChange}
+            species={species}
+            speciesLocked
+          />
+
+          {error ? (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold leading-6 text-red-700">
+              <p>{error}</p>
+              {duplicateBreed ? (
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-red-800">{duplicateBreed.label}</span>
+                  <button
+                    className="inline-flex min-h-10 items-center rounded-md bg-emerald-800 px-3 text-sm font-bold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+                    type="button"
+                    onClick={onUseExisting}
+                  >
+                    Use existing breed
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-stone-200 bg-stone-50 px-5 py-4 sm:flex-row sm:justify-end">
+          <button
+            className="seller-secondary-button"
             disabled={saving}
             type="button"
             onClick={onCancel}
@@ -2649,11 +2694,11 @@ function CustomBreedDialog({
           </button>
           {!duplicateBreed ? (
             <button
-              className="inline-flex min-h-12 items-center rounded-md bg-emerald-800 px-4 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-emerald-800/45 sm:min-h-10 sm:text-sm sm:font-semibold"
-              disabled={saving || name.trim().length === 0}
+              className="seller-primary-button"
+              disabled={saving || draft.name.trim().length === 0}
               type="submit"
             >
-              {saving ? "Adding..." : "Add breed"}
+              {saving ? "Creating" : "Create Custom Breed"}
             </button>
           ) : null}
         </div>
@@ -4293,24 +4338,26 @@ async function createSellerBreedProfileFromCatalogBreed({
 }
 
 async function createSellerCustomBreedProfile({
-  breedName,
+  draft,
   speciesId,
   storeId,
 }: {
-  breedName: string;
+  draft: CustomBreedDraft;
   speciesId: string;
   storeId: string;
 }): Promise<
   | { ok: true; profile: SellerBreedProfile }
   | { ok: false; message: string }
 > {
-  const trimmedName = breedName.trim();
   const upsertResult = await supabase.rpc("seller_upsert_breed_profile", {
+    p_annual_egg_production: draft.annualEggProduction || null,
+    p_bird_type: draft.birdType || null,
     p_breed_id: null,
-    p_custom_breed_name: trimmedName,
-    p_display_name: trimmedName,
+    p_custom_breed_name: draft.name,
+    p_display_name: draft.name,
+    p_egg_color: draft.eggColor || null,
     p_seller_breed_profile_id: null,
-    p_seller_description: null,
+    p_seller_description: draft.description || null,
     p_seller_notes: null,
     p_species_id: speciesId,
     p_store_id: storeId,
