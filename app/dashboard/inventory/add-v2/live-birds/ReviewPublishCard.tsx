@@ -41,10 +41,17 @@ export function ReviewPublishCard({
   mobileActive?: boolean;
   validationIssues: PublishValidationIssue[];
 }) {
+  const readyToPublish =
+    !stepLocked && !publishDisabledReason && validationIssues.length === 0;
+
   function renderContent() {
     return (
       <div className="space-y-4 sm:space-y-6">
-        <div className="flex flex-col items-center py-3 text-center sm:hidden">
+        <div
+          className={`flex flex-col items-center py-3 text-center sm:hidden ${
+            readyToPublish ? "" : "hidden"
+          }`}
+        >
           <span
             aria-hidden="true"
             className="flex size-20 animate-[live-birds-check_280ms_ease-out] items-center justify-center rounded-full bg-emerald-800 text-4xl font-bold text-white shadow-[0_10px_30px_rgba(6,95,70,0.2)]"
@@ -57,7 +64,7 @@ export function ReviewPublishCard({
         </div>
         <div
           className={`hidden items-center gap-5 rounded-lg bg-emerald-50 px-5 py-4 ${
-            !stepLocked && validationIssues.length === 0 ? "sm:flex" : ""
+            readyToPublish ? "sm:flex" : ""
           }`}
         >
           <span
@@ -165,6 +172,7 @@ export function ReviewPublishCard({
         <button
           aria-expanded={mobileActive}
           className="flex min-h-11 w-full items-center gap-3 text-left"
+          disabled={stepLocked}
           type="button"
           onClick={onMobileOpen}
         >
@@ -180,9 +188,17 @@ export function ReviewPublishCard({
         {mobileActive ? (
           <div className="mt-3">{renderContent()}</div>
         ) : (
-          <p className="mt-1 flex items-center gap-2 pl-11 text-sm font-semibold leading-5 text-emerald-800">
-            <span aria-hidden="true">✓</span>
-            Everything ready to publish
+          <p
+            className={`mt-1 flex items-center gap-2 pl-11 text-sm font-semibold leading-5 ${
+              readyToPublish ? "text-emerald-800" : "text-stone-500"
+            }`}
+          >
+            {readyToPublish ? <span aria-hidden="true">✓</span> : null}
+            {readyToPublish
+              ? "Everything ready to publish"
+              : stepLocked
+                ? "Complete earlier steps first"
+                : "Finish details before publishing"}
           </p>
         )}
       </section>
@@ -266,7 +282,8 @@ function FinalActionStatus({
 
   if (
     messages.length === 0 &&
-    validationIssues.length === 0
+    validationIssues.length === 0 &&
+    !visibleDisabledReason
   ) {
     return (
       <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-base font-semibold leading-7 text-emerald-800">

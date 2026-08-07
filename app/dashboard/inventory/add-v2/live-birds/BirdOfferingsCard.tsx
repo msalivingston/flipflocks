@@ -24,6 +24,7 @@ export function BirdOfferingsCard({
   breedOptions,
   breedOptionsMessage,
   canAddCustomBreed,
+  completionErrorMessage,
   duplicateOfferingIds,
   desktopActive,
   desktopDisabled,
@@ -52,6 +53,7 @@ export function BirdOfferingsCard({
   breedOptions: BreedOption[];
   breedOptionsMessage: string | null;
   canAddCustomBreed: boolean;
+  completionErrorMessage?: string | null;
   duplicateOfferingIds: Set<string>;
   desktopActive: boolean;
   desktopDisabled: boolean;
@@ -190,6 +192,11 @@ export function BirdOfferingsCard({
         <p className="text-base font-medium leading-7 text-stone-500 sm:order-last sm:w-full">
           Use this for another breed, sex/type, quantity, or current price.
         </p>
+        {completionErrorMessage ? (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-base font-semibold leading-7 text-amber-900 sm:order-last sm:w-full">
+            {completionErrorMessage}
+          </p>
+        ) : null}
         {!groupsReviewMode ? (
           <button
             className="inline-flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-800 px-4 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400 sm:min-h-10 sm:w-auto sm:text-sm sm:font-semibold"
