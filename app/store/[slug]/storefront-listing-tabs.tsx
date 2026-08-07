@@ -638,15 +638,15 @@ function ListingFilters({
   return (
     <aside
       className={cx(
-        "h-fit rounded-lg border border-[#e3d9c8] bg-white p-3",
+        "h-fit min-w-0 rounded-lg border border-[#e3d9c8] bg-white p-3",
         className,
       )}
     >
-      <div className="grid gap-2.5">
-        <label className="grid gap-1 text-xs font-semibold text-stone-800">
+      <div className="grid min-w-0 gap-2.5">
+        <label className="grid min-w-0 gap-1 text-xs font-semibold text-stone-800">
           Search
           <input
-            className="storefront-primary-focus min-h-10 rounded-md border border-[#ddd5c7] bg-white px-2.5 text-sm font-medium normal-case tracking-normal text-stone-950 outline-none transition placeholder:text-stone-400 lg:min-h-8 lg:text-xs"
+            className="storefront-primary-focus min-h-10 min-w-0 w-full rounded-md border border-[#ddd5c7] bg-white px-2.5 text-sm font-medium normal-case tracking-normal text-stone-950 outline-none transition placeholder:text-stone-400 lg:min-h-8 lg:text-xs"
             id="storefront-search"
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder="Search listings"
@@ -783,10 +783,10 @@ function FilterSelect({
   value: string;
 }) {
   return (
-    <label className="grid gap-1 text-[0.68rem] font-bold uppercase tracking-[0.06em] text-stone-700">
+    <label className="grid min-w-0 gap-1 text-[0.68rem] font-bold uppercase tracking-[0.06em] text-stone-700">
       {label}
       <select
-        className="storefront-primary-focus min-h-10 rounded-md border border-[#ddd5c7] bg-white px-2.5 text-sm font-medium normal-case tracking-normal text-stone-700 outline-none transition lg:min-h-8 lg:text-xs"
+        className="storefront-primary-focus min-h-10 min-w-0 w-full rounded-md border border-[#ddd5c7] bg-white px-2.5 text-sm font-medium normal-case tracking-normal text-stone-700 outline-none transition lg:min-h-8 lg:text-xs"
         onChange={(event) => onChange(event.target.value)}
         value={value}
       >

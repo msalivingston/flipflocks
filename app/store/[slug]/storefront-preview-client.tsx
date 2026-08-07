@@ -6,14 +6,13 @@ import {
   EmptyStorefront,
   StorefrontShell,
 } from "./storefront-ui";
-import {
+import type {
+  StorefrontEquipmentItem,
+  StorefrontHatchingEggItem,
   StorefrontHome,
+  StorefrontInventoryItem,
+  StorefrontProcessedPoultryItem,
   StorefrontProfileImageMap,
-  loadStorefrontEquipment,
-  loadStorefrontHatchingEggInventory,
-  loadStorefrontInventory,
-  loadStorefrontProfileImages,
-  loadStorefrontProcessedPoultry,
 } from "./storefront-data";
 import { StorefrontHomeContent } from "./storefront-home-content";
 
@@ -21,19 +20,24 @@ type PreviewHome = StorefrontHome & {
   preview_is_hidden: boolean;
 };
 
+type PreviewData = {
+  equipment: StorefrontEquipmentItem[];
+  hatching_eggs: StorefrontHatchingEggItem[];
+  inventory: StorefrontInventoryItem[];
+  live_poultry_profile_images: StorefrontProfileImageMap;
+  processed_poultry: StorefrontProcessedPoultryItem[];
+  storefront_home: PreviewHome;
+};
+
 type PreviewState =
   | { status: "loading" }
   | { status: "error"; message: string }
   | {
-      equipment: Awaited<ReturnType<typeof loadStorefrontEquipment>>["data"];
-      hatchingEggs: Awaited<
-        ReturnType<typeof loadStorefrontHatchingEggInventory>
-      >["data"];
-      inventory: Awaited<ReturnType<typeof loadStorefrontInventory>>["data"];
+      equipment: StorefrontEquipmentItem[];
+      hatchingEggs: StorefrontHatchingEggItem[];
+      inventory: StorefrontInventoryItem[];
       livePoultryProfileImages: StorefrontProfileImageMap;
-      processedPoultry: Awaited<
-        ReturnType<typeof loadStorefrontProcessedPoultry>
-      >["data"];
+      processedPoultry: StorefrontProcessedPoultryItem[];
       status: "ready";
       store: PreviewHome;
     };
@@ -51,9 +55,10 @@ export function StorefrontPreviewClient({
     let isMounted = true;
 
     async function loadPreview() {
-      const { data: userData, error: userError } = await supabase.auth.getUser();
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
 
-      if (userError || !userData.user) {
+      if (sessionError || !sessionData.session) {
         if (isMounted) {
           setState({
             status: "error",
@@ -63,33 +68,22 @@ export function StorefrontPreviewClient({
         return;
       }
 
-      const [
-        homeResult,
-        inventoryResult,
-        equipmentResult,
-        hatchingEggResult,
-        processedPoultryResult,
-      ] = await Promise.all([
+      const [homeResult, previewResult] = await Promise.all([
         supabase
           .rpc("get_seller_storefront_home_preview", {
             p_store_slug: slug,
           })
           .maybeSingle(),
-        loadStorefrontInventory(slug),
-        loadStorefrontEquipment(slug),
-        loadStorefrontHatchingEggInventory(slug),
-        loadStorefrontProcessedPoultry(slug),
+        supabase
+          .rpc("get_seller_storefront_preview_data", {
+            p_store_slug: slug,
+          })
+          .maybeSingle(),
       ]);
-      const error =
-        homeResult.error ??
-        inventoryResult.error ??
-        equipmentResult.error ??
-        hatchingEggResult.error ??
-        processedPoultryResult.error;
 
       if (!isMounted) return;
 
-      if (error || !homeResult.data) {
+      if (homeResult.error || !homeResult.data) {
         setState({
           status: "error",
           message: "This storefront preview is not available for your account.",
@@ -97,25 +91,28 @@ export function StorefrontPreviewClient({
         return;
       }
 
-      const livePoultryProfileImagesResult = await loadStorefrontProfileImages(
-        slug,
-        inventoryResult.data
-          .filter(isLivePoultryItem)
-          .map((item) => item.seller_breed_profile_id),
-      );
+      if (previewResult.error || !previewResult.data) {
+        setState({
+          status: "error",
+          message: "This storefront's preview inventory is not available.",
+        });
+        return;
+      }
 
-      if (!isMounted) return;
+      const previewData = previewResult.data as unknown as PreviewData;
+      const authorizedHome = homeResult.data as PreviewHome;
 
       setState({
-        equipment: equipmentResult.data,
-        hatchingEggs: hatchingEggResult.data,
-        inventory: inventoryResult.data,
-        livePoultryProfileImages: livePoultryProfileImagesResult.error
-          ? {}
-          : livePoultryProfileImagesResult.data,
-        processedPoultry: processedPoultryResult.data,
+        equipment: previewData.equipment,
+        hatchingEggs: previewData.hatching_eggs,
+        inventory: previewData.inventory,
+        livePoultryProfileImages: previewData.live_poultry_profile_images,
+        processedPoultry: previewData.processed_poultry,
         status: "ready",
-        store: homeResult.data as PreviewHome,
+        store: withPreviewInventoryCounts(
+          authorizedHome,
+          previewData.storefront_home,
+        ),
       });
     }
 
@@ -161,16 +158,18 @@ export function StorefrontPreviewClient({
   );
 }
 
-function isHatchingEggItem(item: {
-  batch_type: string | null;
-  inventory_type: string;
-}) {
-  return item.batch_type === "hatching_eggs" || item.inventory_type === "hatching_eggs";
-}
-
-function isLivePoultryItem(item: {
-  batch_type: string | null;
-  inventory_type: string;
-}) {
-  return !isHatchingEggItem(item);
+function withPreviewInventoryCounts(
+  authorizedHome: PreviewHome,
+  inventoryHome: PreviewHome,
+): PreviewHome {
+  return {
+    ...authorizedHome,
+    has_public_inventory: inventoryHome.has_public_inventory,
+    next_available_date: inventoryHome.next_available_date,
+    public_inventory_item_count: inventoryHome.public_inventory_item_count,
+    ready_now_item_count: inventoryHome.ready_now_item_count,
+    reserve_now_item_count: inventoryHome.reserve_now_item_count,
+    sold_out_item_count: inventoryHome.sold_out_item_count,
+    total_quantity_available: inventoryHome.total_quantity_available,
+  };
 }

@@ -1,10 +1,16 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
+const configuredCorsOrigin = Deno.env.get("FLIPFLOCKS_PUBLIC_API_ORIGIN");
+const allowedCorsOrigins = new Set([
+  "https://www.flockfront.com",
+  "http://localhost:3000",
+  ...(configuredCorsOrigin ? [configuredCorsOrigin] : []),
+]);
 const corsHeaders = {
-  "Access-Control-Allow-Origin": Deno.env.get("FLIPFLOCKS_PUBLIC_API_ORIGIN") ?? "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Vary": "Origin",
 };
 
 const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
@@ -26,6 +32,7 @@ type PublicErrorCode =
   | "unsupported_media_type"
   | "file_too_large"
   | "invalid_image"
+  | "origin_not_allowed"
   | "upload_failed"
   | "save_failed"
   | "server_error";
@@ -49,18 +56,40 @@ class PublicSafeError extends Error {
   }
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
+function getCorsHeaders(req: Request): Record<string, string> {
+  const requestOrigin = req.headers.get("Origin");
+
+  if (requestOrigin && allowedCorsOrigins.has(requestOrigin)) {
+    return {
+      ...corsHeaders,
+      "Access-Control-Allow-Origin": requestOrigin,
+    };
+  }
+
+  return corsHeaders;
+}
+
+function jsonResponse(
+  body: unknown,
+  status = 200,
+  headers: Record<string, string> = corsHeaders,
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...corsHeaders,
+      ...headers,
       "Content-Type": "application/json",
     },
   });
 }
 
-function errorResponse(code: PublicErrorCode, message: string, status = 400): Response {
-  return jsonResponse({ error: { code, message } }, status);
+function errorResponse(
+  code: PublicErrorCode,
+  message: string,
+  status = 400,
+  headers: Record<string, string> = corsHeaders,
+): Response {
+  return jsonResponse({ error: { code, message } }, status, headers);
 }
 
 function getRequiredEnv(name: string): string {
@@ -295,15 +324,27 @@ function buildStoragePath(storeId: string, mimeType: string): string {
 }
 
 Deno.serve(async (req) => {
+  const responseHeaders = getCorsHeaders(req);
+  const requestOrigin = req.headers.get("Origin");
+
+  if (requestOrigin && !allowedCorsOrigins.has(requestOrigin)) {
+    return errorResponse(
+      "origin_not_allowed",
+      "This origin is not allowed to upload seller media.",
+      403,
+      responseHeaders,
+    );
+  }
+
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
-      headers: corsHeaders,
+      headers: responseHeaders,
     });
   }
 
   if (req.method !== "POST") {
-    return errorResponse("invalid_request", "Method not allowed", 405);
+    return errorResponse("invalid_request", "Method not allowed", 405, responseHeaders);
   }
 
   try {
@@ -313,7 +354,7 @@ Deno.serve(async (req) => {
     const authorization = req.headers.get("Authorization");
 
     if (!authorization) {
-      return errorResponse("unauthorized", "Authentication required", 401);
+      return errorResponse("unauthorized", "Authentication required", 401, responseHeaders);
     }
 
     const userClient = createClient(supabaseUrl, anonKey, {
@@ -331,13 +372,13 @@ Deno.serve(async (req) => {
     } = await userClient.auth.getUser();
 
     if (userError || !user) {
-      return errorResponse("unauthorized", "Authentication required", 401);
+      return errorResponse("unauthorized", "Authentication required", 401, responseHeaders);
     }
 
     const contentType = req.headers.get("Content-Type") ?? "";
 
     if (!contentType.toLowerCase().includes("multipart/form-data")) {
-      return errorResponse("invalid_request", "Expected multipart form data", 415);
+      return errorResponse("invalid_request", "Expected multipart form data", 415, responseHeaders);
     }
 
     const formData = await req.formData();
@@ -357,28 +398,28 @@ Deno.serve(async (req) => {
     const fileValue = formData.get("file");
 
     if (!(fileValue instanceof File)) {
-      return errorResponse("invalid_request", "A media file is required", 400);
+      return errorResponse("invalid_request", "A media file is required", 400, responseHeaders);
     }
 
     if (fileValue.size <= 0) {
-      return errorResponse("invalid_request", "Media file size is invalid", 400);
+      return errorResponse("invalid_request", "Media file size is invalid", 400, responseHeaders);
     }
 
     if (fileValue.size > MAX_FILE_SIZE_BYTES) {
-      return errorResponse("file_too_large", "Media file must be 8 MB or smaller", 400);
+      return errorResponse("file_too_large", "Media file must be 8 MB or smaller", 400, responseHeaders);
     }
 
     const bytes = new Uint8Array(await fileValue.arrayBuffer());
     const detectedMimeType = sniffMimeType(bytes);
 
     if (!detectedMimeType || !ALLOWED_TYPES.has(detectedMimeType)) {
-      return errorResponse("unsupported_media_type", "Unsupported media type", 400);
+      return errorResponse("unsupported_media_type", "Unsupported media type", 400, responseHeaders);
     }
 
     const dimensions = getImageDimensions(bytes, detectedMimeType);
 
     if (!dimensions || dimensions.width <= 0 || dimensions.height <= 0) {
-      return errorResponse("invalid_image", "Unable to validate image dimensions", 400);
+      return errorResponse("invalid_image", "Unable to validate image dimensions", 400, responseHeaders);
     }
 
     const entityId = normalizeRequiredText(formData.get("entity_id"), "entity_id");
@@ -399,7 +440,7 @@ Deno.serve(async (req) => {
 
     if (uploadError) {
       console.error("seller-media-upload storage upload failed", uploadError);
-      return errorResponse("upload_failed", "Unable to upload image. Please try again.", 500);
+      return errorResponse("upload_failed", "Unable to upload image. Please try again.", 500, responseHeaders);
     }
 
     const { data: mediaRows, error: rpcError } = await serviceClient.rpc("seller_create_uploaded_media", {
@@ -423,15 +464,15 @@ Deno.serve(async (req) => {
     if (rpcError) {
       await serviceClient.storage.from(BUCKET_NAME).remove([storagePath]);
       console.error("seller-media-upload metadata save failed", rpcError);
-      return errorResponse("save_failed", "Unable to save image. Please try again.", 500);
+      return errorResponse("save_failed", "Unable to save image. Please try again.", 500, responseHeaders);
     }
 
     return jsonResponse({
       media: Array.isArray(mediaRows) ? mediaRows[0] ?? null : mediaRows,
-    });
+    }, 200, responseHeaders);
   } catch (error) {
     if (error instanceof PublicSafeError) {
-      return errorResponse(error.code, error.publicMessage, error.status);
+      return errorResponse(error.code, error.publicMessage, error.status, responseHeaders);
     }
 
     console.error("seller-media-upload unexpected failure", error);
@@ -439,6 +480,7 @@ Deno.serve(async (req) => {
       "server_error",
       "Image upload is temporarily unavailable. Please try again later.",
       500,
+      responseHeaders,
     );
   }
 });
