@@ -73,24 +73,6 @@ export function getStorefrontCropStyle(
   };
 }
 
-export function getMobileStorefrontHeroCropStyle(
-  crop: StorefrontCropMetadata | null | undefined,
-) {
-  if (!crop) return undefined;
-
-  const zoom = Number.isFinite(crop.zoom) && crop.zoom > 0 ? crop.zoom : 1;
-  const x = Number.isFinite(crop.x) ? Math.round(crop.x * 0.82) : 0;
-  const y = Number.isFinite(crop.y) ? Math.round(crop.y * 0.82) : 0;
-  const rotation = [0, 90, 180, 270].includes(crop.rotation)
-    ? crop.rotation
-    : 0;
-
-  return {
-    transform: `translate(${x}px, ${y}px) scale(${zoom * 1.22}) rotate(${rotation}deg)`,
-    transformOrigin: "center center",
-  };
-}
-
 export const storefrontHeroTypography = {
   eyebrow: "text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-emerald-800 lg:text-xs lg:tracking-[0.12em]",
   title:
@@ -107,13 +89,12 @@ export const storefrontHeroMobilePreviewTypography = {
 };
 
 export const storefrontHeroFrame = {
-  aspectClass: "aspect-[10/3]",
-  aspectRatio: 10 / 3,
+  desktopReferenceHeight: 475.2,
+  desktopReferenceWidth: 1440,
+  mobileReferenceHeight: 213.6,
+  mobileReferenceWidth: 358,
   publicClass:
     "relative mx-4 mt-3 h-[13rem] overflow-hidden rounded-lg bg-white shadow-sm min-[390px]:h-[13.35rem] sm:mx-7 sm:h-[clamp(18.5rem,40vw,23rem)] lg:mx-0 lg:mt-0 lg:h-[clamp(18.75rem,33vw,32.5rem)] lg:rounded-none lg:shadow-none",
-  setupPreviewScale: 0.72,
-  setupPreviewClass:
-    "relative mx-auto aspect-[10/3] w-full max-w-[50rem] overflow-hidden border border-stone-200 bg-stone-100",
 };
 
 export function storefrontButtonClass({
@@ -593,37 +574,6 @@ export function StoreLogo({
       src={toPublicImageUrl(store.logo_image_url)}
       unoptimized
       width={96}
-    />
-  );
-}
-
-export function HeroImage({
-  alt,
-  src,
-}: {
-  alt: string;
-  src: string | null;
-}) {
-  if (!src) {
-    return (
-      <div className="relative h-full min-h-80 overflow-hidden bg-[linear-gradient(135deg,#f6ead8_0%,#d9e6cf_45%,#8fae72_100%)] sm:min-h-[28rem]">
-        <div className="absolute inset-x-0 bottom-0 h-28 bg-[linear-gradient(180deg,transparent,#5e7d3d)] opacity-45" />
-        <div className="absolute bottom-0 left-[12%] h-24 w-44 rounded-t-lg bg-[#8d3f20] shadow-[22px_-42px_0_-18px_#7d341c,140px_-34px_0_-14px_#f4dfbf]" />
-        <div className="absolute bottom-0 right-[8%] h-32 w-20 rounded-t-full bg-[#d8c9aa] shadow-[-34px_4px_0_-8px_#c6b796]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_24%_20%,rgba(255,255,255,0.7),transparent_26%),linear-gradient(90deg,rgba(255,255,255,0.72)_0%,rgba(255,255,255,0.22)_38%,rgba(255,255,255,0)_66%)]" />
-      </div>
-    );
-  }
-
-  return (
-    <Image
-      alt={alt}
-      className="h-full min-h-80 w-full object-cover sm:min-h-[28rem]"
-      height={720}
-      priority
-      src={toPublicImageUrl(src)}
-      unoptimized
-      width={1280}
     />
   );
 }

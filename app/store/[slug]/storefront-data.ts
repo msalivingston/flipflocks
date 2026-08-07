@@ -1,9 +1,8 @@
 import { publicSupabase } from "@/lib/public-supabase";
 import { normalizeHatchingEggBreedName } from "@/lib/hatching-egg-breed-name";
+import type { StorefrontHeroPresentation } from "@/lib/storefront-hero-presentation";
 import type { StorefrontCropMetadata } from "./storefront-ui";
 import type { StorefrontFontPairId } from "./storefront-fonts";
-
-export type StorefrontHeroCropMetadata = StorefrontCropMetadata;
 
 export type StorefrontCustomPolicy = {
   title: string;
@@ -36,7 +35,7 @@ export type StorefrontHome = {
   npip_number: string | null;
   hero_image_url: string | null;
   hero_image_alt_text: string | null;
-  hero_crop_metadata: StorefrontHeroCropMetadata | null;
+  hero_presentation: StorefrontHeroPresentation | null;
   hero_image_layout: "full" | "right" | string | null;
   logo_image_url: string | null;
   logo_image_alt_text: string | null;
@@ -116,7 +115,7 @@ export type StorefrontMedia = {
   caption: string | null;
   sort_order: number;
   is_featured: boolean;
-  crop_metadata?: StorefrontHeroCropMetadata | null;
+  crop_metadata?: StorefrontCropMetadata | null;
   width_px: number | null;
   height_px: number | null;
 };

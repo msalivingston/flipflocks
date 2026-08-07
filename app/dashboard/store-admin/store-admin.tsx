@@ -32,13 +32,21 @@ import {
 } from "../_components/photo-crop-editor";
 import {
   cx,
-  getMobileStorefrontHeroCropStyle,
   getStorefrontThemeStyle,
   storefrontButtonClass,
   storefrontHeroFrame,
   storefrontHeroMobilePreviewTypography,
   storefrontHeroTypography,
 } from "@/app/store/[slug]/storefront-ui";
+import { StorefrontHeroBackdrop } from "@/app/store/[slug]/storefront-hero-backdrop";
+import {
+  DEFAULT_HERO_FOCAL_POINT,
+  normalizeHeroFocalPoint,
+  normalizeHeroPresentation,
+  resolveHeroFocalPoint,
+  type StorefrontHeroPresentation,
+  type StorefrontHeroViewport,
+} from "@/lib/storefront-hero-presentation";
 import {
   defaultStorefrontTheme,
   getStorefrontFontPair,
@@ -176,6 +184,7 @@ type StoreMediaItem = {
   sort_order: number | null;
   is_featured: boolean;
   crop_metadata?: PhotoCropMetadata | null;
+  hero_presentation?: StorefrontHeroPresentation | null;
   moderation_status: string;
   asset_status: string;
   visibility_status: string;
@@ -264,7 +273,7 @@ const unsavedWarning =
   "You have unsaved Store Admin changes. Save or discard before leaving.";
 
 const STORE_MEDIA_SELECT =
-  "media_asset_id, media_link_id, store_id, entity_type, entity_id, display_context, public_url, alt_text, caption, sort_order, is_featured, crop_metadata, hero_layout, moderation_status, asset_status, visibility_status, original_filename, content_type, file_size_bytes, width_px, height_px, source_type, source_image_url";
+  "media_asset_id, media_link_id, store_id, entity_type, entity_id, display_context, public_url, alt_text, caption, sort_order, is_featured, crop_metadata, hero_layout, hero_presentation, moderation_status, asset_status, visibility_status, original_filename, content_type, file_size_bytes, width_px, height_px, source_type, source_image_url";
 
 const acceptedStoreImageTypes = ["image/jpeg", "image/png", "image/webp"];
 const maxStoreImageSizeBytes = 8 * 1024 * 1024;
@@ -689,9 +698,9 @@ export function StoreAdmin() {
         draft_status: "new",
         preview_url: previewUrl,
       };
-      const draftWithCrop = {
+      const draftWithPresentation = {
         ...draftMedia,
-        crop_metadata: buildHeroInitialCrop(draftMedia),
+        hero_presentation: normalizeHeroPresentation(null),
       };
 
       setSaveState("idle");
@@ -699,7 +708,7 @@ export function StoreAdmin() {
       setStoreMediaItems((current) =>
         sortStoreMedia([
           ...current.filter((item) => item.display_context !== "hero"),
-          draftWithCrop,
+          draftWithPresentation,
         ]),
       );
       return;
@@ -851,15 +860,15 @@ export function StoreAdmin() {
       hero_layout: currentHero?.hero_layout ?? "full",
       draft_status: "new",
     };
-    const draftWithCrop = {
+    const draftWithPresentation = {
       ...draftMedia,
-      crop_metadata: buildHeroInitialCrop(draftMedia),
+      hero_presentation: normalizeHeroPresentation(null),
     };
 
     setStoreMediaItems((current) =>
       sortStoreMedia([
         ...current.filter((item) => item.display_context !== "hero"),
-        draftWithCrop,
+        draftWithPresentation,
       ]),
     );
   }
@@ -899,7 +908,7 @@ export function StoreAdmin() {
     void reloadStoreMedia();
   }
 
-  function saveHeroCrop(crop: PhotoCropMetadata | null) {
+  function saveHeroPresentation(presentation: StorefrontHeroPresentation) {
     const hero = getStoreMediaByRole(storeMediaItems, "hero");
 
     if (!hero) return;
@@ -909,7 +918,7 @@ export function StoreAdmin() {
     setStoreMediaItems((current) =>
       current.map((item) =>
         item.media_link_id === hero.media_link_id
-          ? { ...item, crop_metadata: crop }
+          ? { ...item, hero_presentation: normalizeHeroPresentation(presentation) }
           : item,
       ),
     );
@@ -976,13 +985,12 @@ export function StoreAdmin() {
 
       if (!savedHero.ok) return savedHero;
 
-      const cropResult = await persistMediaCrop(
+      const presentationResult = await persistHeroPresentation(
         savedHero.media.media_link_id,
-        currentHero.crop_metadata ?? buildHeroInitialCrop(currentHero),
-        "The hero image position",
+        normalizeHeroPresentation(currentHero.hero_presentation),
       );
 
-      if (!cropResult.ok) return cropResult;
+      if (!presentationResult.ok) return presentationResult;
 
       const layoutResult = await persistHeroLayout(
         savedHero.media.media_link_id,
@@ -992,16 +1000,15 @@ export function StoreAdmin() {
       if (!layoutResult.ok) return layoutResult;
     } else if (currentHero && initialHero) {
       if (
-        JSON.stringify(normalizeCrop(currentHero.crop_metadata)) !==
-        JSON.stringify(normalizeCrop(initialHero.crop_metadata))
+        JSON.stringify(normalizeHeroPresentation(currentHero.hero_presentation)) !==
+        JSON.stringify(normalizeHeroPresentation(initialHero.hero_presentation))
       ) {
-        const cropResult = await persistMediaCrop(
+        const presentationResult = await persistHeroPresentation(
           currentHero.media_link_id,
-          currentHero.crop_metadata ?? null,
-          "The hero image position",
+          normalizeHeroPresentation(currentHero.hero_presentation),
         );
 
-        if (!cropResult.ok) return cropResult;
+        if (!presentationResult.ok) return presentationResult;
       }
 
       if (
@@ -1139,6 +1146,28 @@ export function StoreAdmin() {
       return {
         ok: false,
         message: `${label} was not saved. Please try again.`,
+      };
+    }
+
+    return { ok: true };
+  }
+
+  async function persistHeroPresentation(
+    mediaLinkId: string,
+    presentation: StorefrontHeroPresentation,
+  ): Promise<{ ok: true } | { ok: false; message: string }> {
+    const { error } = await supabase.rpc(
+      "seller_update_store_hero_presentation",
+      {
+        p_hero_presentation: normalizeHeroPresentation(presentation),
+        p_media_link_id: mediaLinkId,
+      },
+    );
+
+    if (error) {
+      return {
+        ok: false,
+        message: "The hero image position was not saved. Please try again.",
       };
     }
 
@@ -2063,7 +2092,9 @@ export function StoreAdmin() {
                 mediaError={mediaError}
                 onRemove={removeStoreMedia}
                 onSaveAboutCrop={(crop) => void saveAboutCrop(crop)}
-                onSaveHeroCrop={(crop) => void saveHeroCrop(crop)}
+                onSaveHeroPresentation={(presentation) =>
+                  void saveHeroPresentation(presentation)
+                }
                 onSaveHeroLayout={(layout) => void saveHeroLayout(layout)}
                 onSelectHeroLibrary={(image) => void selectHeroLibraryImage(image)}
                 onUpload={(role, files) => void uploadStoreMedia(role, files)}
@@ -3046,7 +3077,7 @@ function PhotosTab({
   mediaError,
   onRemove,
   onSaveAboutCrop,
-  onSaveHeroCrop,
+  onSaveHeroPresentation,
   onSaveHeroLayout,
   onSelectHeroLibrary,
   onUpload,
@@ -3062,7 +3093,7 @@ function PhotosTab({
   mediaError: string | null;
   onRemove: (item: StoreMediaItem | null) => void;
   onSaveAboutCrop: (crop: PhotoCropMetadata | null) => void;
-  onSaveHeroCrop: (crop: PhotoCropMetadata | null) => void;
+  onSaveHeroPresentation: (presentation: StorefrontHeroPresentation) => void;
   onSaveHeroLayout: (layout: HeroLayout) => void;
   onSelectHeroLibrary: (image: HeroLibraryImage) => void;
   onUpload: (role: StoreMediaRole, files: FileList | null) => void;
@@ -3142,7 +3173,7 @@ function PhotosTab({
           heroImage={heroImage}
           isUploading={isUploading === "hero"}
           onRemove={() => onRemove(heroImage)}
-          onSaveCrop={onSaveHeroCrop}
+          onSavePresentation={onSaveHeroPresentation}
           onSaveLayout={onSaveHeroLayout}
           onSelectLibrary={onSelectHeroLibrary}
           onUpload={(files) => onUpload("hero", files)}
@@ -3254,7 +3285,7 @@ function HeroPhotoSection({
   heroImage,
   isUploading,
   onRemove,
-  onSaveCrop,
+  onSavePresentation,
   onSaveLayout,
   onSelectLibrary,
   onUpload,
@@ -3266,7 +3297,7 @@ function HeroPhotoSection({
   heroImage: StoreMediaItem | null;
   isUploading: boolean;
   onRemove: () => void;
-  onSaveCrop: (crop: PhotoCropMetadata | null) => void;
+  onSavePresentation: (presentation: StorefrontHeroPresentation) => void;
   onSaveLayout: (layout: HeroLayout) => void;
   onSelectLibrary: (image: HeroLibraryImage) => void;
   onUpload: (files: FileList | null) => void;
@@ -3283,60 +3314,32 @@ function HeroPhotoSection({
     normalizeHeroLayout(heroImage?.hero_layout),
   );
   const [showTips, setShowTips] = useState(false);
-  const [mobilePreviewMode, setMobilePreviewMode] = useState<
-    "mobile" | "desktop"
-  >("mobile");
-  const [desktopPreviewScale, setDesktopPreviewScale] = useState(
-    storefrontHeroFrame.setupPreviewScale,
-  );
-  const [draftCrop, setDraftCrop] = useState<PhotoCropMetadata>(
-    buildHeroInitialCrop(heroImage),
-  );
-  const desktopPreviewRef = useRef<HTMLDivElement | null>(null);
+  const [previewMode, setPreviewMode] = useState<StorefrontHeroViewport>("mobile");
+  const [draftPresentation, setDraftPresentation] =
+    useState<StorefrontHeroPresentation>(() =>
+      normalizeHeroPresentation(heroImage?.hero_presentation),
+    );
+  const draftPresentationRef = useRef(draftPresentation);
   const dragStartRef = useRef<{
     pointerId: number;
     startX: number;
     startY: number;
-    x: number;
-    y: number;
-    movementScale: number;
+    focalX: number;
+    focalY: number;
+    frameWidth: number;
+    frameHeight: number;
+    viewport: StorefrontHeroViewport;
   } | null>(null);
 
-  useEffect(() => {
-    const preview = desktopPreviewRef.current;
-
-    if (!preview) return;
-
-    const logicalPreviewWidth =
-      800 / storefrontHeroFrame.setupPreviewScale;
-    const updateScale = (width: number) => {
-      if (width <= 0) return;
-
-      setDesktopPreviewScale(
-        Math.min(
-          storefrontHeroFrame.setupPreviewScale,
-          width / logicalPreviewWidth,
-        ),
-      );
-    };
-    const observer = new ResizeObserver((entries) => {
-      updateScale(entries[0]?.contentRect.width ?? 0);
-    });
-
-    updateScale(preview.getBoundingClientRect().width);
-    observer.observe(preview);
-
-    return () => observer.disconnect();
-  }, [mobilePreviewMode]);
-
-  function updateDraftCrop(updates: Partial<PhotoCropMetadata>) {
-    const nextCrop = { ...draftCrop, ...updates };
-    setDraftCrop(nextCrop);
-    return nextCrop;
+  function updatePresentation(next: StorefrontHeroPresentation) {
+    const normalized = normalizeHeroPresentation(next);
+    draftPresentationRef.current = normalized;
+    setDraftPresentation(normalized);
+    return normalized;
   }
 
-  function commitCrop(crop = draftCrop) {
-    if (heroImage) onSaveCrop(crop);
+  function commitPresentation() {
+    if (heroImage) onSavePresentation(draftPresentationRef.current);
   }
 
   function chooseLayout(nextLayout: HeroLayout) {
@@ -3346,18 +3349,22 @@ function HeroPhotoSection({
 
   function beginDrag(
     event: React.PointerEvent<HTMLDivElement>,
-    movementScale = storefrontHeroFrame.setupPreviewScale,
+    viewport: StorefrontHeroViewport,
   ) {
     if (!heroImage) return;
 
     event.currentTarget.setPointerCapture(event.pointerId);
+    const frame = event.currentTarget.getBoundingClientRect();
+    const focalPoint = resolveHeroFocalPoint(draftPresentation, viewport);
     dragStartRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      x: draftCrop.x,
-      y: draftCrop.y,
-      movementScale,
+      focalX: focalPoint.x,
+      focalY: focalPoint.y,
+      frameWidth: frame.width,
+      frameHeight: frame.height,
+      viewport,
     };
   }
 
@@ -3366,25 +3373,22 @@ function HeroPhotoSection({
 
     if (!start || start.pointerId !== event.pointerId) return;
 
-    setDraftCrop({
-      x: Math.round(
-        start.x +
-          (event.clientX - start.startX) / start.movementScale,
-      ),
-      y: Math.round(
-        start.y +
-          (event.clientY - start.startY) / start.movementScale,
-      ),
-      aspect: draftCrop.aspect,
-      zoom: draftCrop.zoom,
-      rotation: draftCrop.rotation,
+    const focalPoint = normalizeHeroFocalPoint({
+      x: start.focalX - ((event.clientX - start.startX) / start.frameWidth) * 100,
+      y: start.focalY - ((event.clientY - start.startY) / start.frameHeight) * 100,
     });
+    const current = draftPresentationRef.current;
+    updatePresentation(
+      start.viewport === "desktop"
+        ? { ...current, desktop: focalPoint }
+        : { ...current, mobile: focalPoint },
+    );
   }
 
   function endDrag(event: React.PointerEvent<HTMLDivElement>) {
     if (dragStartRef.current?.pointerId === event.pointerId) {
       dragStartRef.current = null;
-      commitCrop();
+      commitPresentation();
     }
   }
 
@@ -3404,8 +3408,8 @@ function HeroPhotoSection({
     <section className="grid gap-3">
       <div className="grid gap-2">
         <p className="text-sm leading-5 text-stone-600">
-          This wide image appears at the top of your storefront behind your title
-          and intro text.
+          Position the important part of your image inside FlockFront&apos;s desktop
+          and mobile hero frames.
         </p>
         <button
           aria-expanded={showTips}
@@ -3465,57 +3469,44 @@ function HeroPhotoSection({
             </div>
           </div>
 
-          <div
-            className={`order-2 grid gap-2 sm:order-none ${
-              mobilePreviewMode === "desktop" ? "" : "hidden sm:grid"
-            }`}
-          >
+          <div className={`order-2 gap-2 sm:order-none sm:grid ${previewMode === "desktop" ? "grid" : "hidden"}`}>
             <div className="grid gap-1">
               <p className="text-sm font-semibold text-stone-800">
                 Desktop Hero Preview
               </p>
               <p className="text-sm font-medium leading-5 text-stone-600 sm:text-xs sm:leading-4 sm:text-stone-500">
-                Preview shown at a typical desktop width. Text wrapping and
-                image crop may vary slightly by screen size.
+                This uses the same desktop frame ratio as the buyer storefront.
               </p>
             </div>
             <div
-              className={storefrontHeroFrame.setupPreviewClass}
+              className={cx(
+                storefrontFontVariablesClass,
+                "buyer-storefront relative mx-auto w-full max-w-[50rem] touch-none overflow-hidden border border-stone-200 bg-stone-100",
+              )}
               onPointerCancel={endDrag}
-              onPointerDown={(event) =>
-                beginDrag(event, desktopPreviewScale)
-              }
+              onPointerDown={(event) => beginDrag(event, "desktop")}
               onPointerMove={moveImage}
               onPointerUp={endDrag}
-              ref={desktopPreviewRef}
+              style={{
+                ...themeStyle,
+                aspectRatio:
+                  storefrontHeroFrame.desktopReferenceWidth /
+                  storefrontHeroFrame.desktopReferenceHeight,
+              }}
             >
-              <div
-                className={cx(
-                  storefrontFontVariablesClass,
-                  "buyer-storefront absolute left-0 top-0 h-[calc(100%/var(--hero-preview-scale))] w-[calc(100%/var(--hero-preview-scale))] origin-top-left scale-[var(--hero-preview-scale)]",
-                )}
-                style={
-                  {
-                    ...themeStyle,
-                    "--hero-preview-scale": desktopPreviewScale,
-                  } as CSSProperties
-                }
-              >
-                <HeroPreviewBackdrop
-                  crop={draftCrop}
-                  imageAlt={heroImage?.alt_text || "Storefront hero preview"}
-                  imageUrl={imageUrl}
-                  layout={layout}
-                  mode="desktop"
-                  useCrop={Boolean(heroImage)}
-                />
-                <HeroPreviewContent
-                  heroSubheading={previewSubheading}
-                  heroTitle={heroTitle}
-                  layout={layout}
-                  mode="desktop"
-                />
-              </div>
+              <StorefrontHeroBackdrop
+                alt={heroImage?.alt_text || "Storefront hero preview"}
+                layout={layout}
+                presentation={draftPresentation}
+                src={imageUrl}
+                viewport="desktop"
+              />
+              <HeroPreviewContent
+                heroSubheading={previewSubheading}
+                heroTitle={heroTitle}
+                layout={layout}
+                mode="desktop"
+              />
               {heroImage ? (
                 <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full bg-stone-950/70 px-3 py-1 text-xs font-semibold text-white">
                   Drag to reposition
@@ -3526,23 +3517,6 @@ function HeroPhotoSection({
 
           <div className="order-3 grid gap-2 sm:order-none">
             <div className="grid gap-2">
-              <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                Zoom
-                <input
-                  className="accent-emerald-800"
-                  disabled={!heroImage}
-                  max="3"
-                  min="0.5"
-                  step="0.05"
-                  type="range"
-                  value={draftCrop.zoom}
-                  onChange={(event) =>
-                    updateDraftCrop({ zoom: Number(event.target.value) })
-                  }
-                  onKeyUp={() => commitCrop()}
-                  onPointerUp={() => commitCrop()}
-                />
-              </label>
               <div className="flex flex-wrap gap-2">
                 <UploadButton
                   isUploading={isUploading}
@@ -3560,12 +3534,14 @@ function HeroPhotoSection({
                       className="seller-secondary-button"
                       type="button"
                       onClick={() => {
-                        const resetCrop = buildHeroDefaultCrop(heroImage);
-                        setDraftCrop(resetCrop);
-                        onSaveCrop(resetCrop);
+                        const reset = updatePresentation({
+                          ...draftPresentationRef.current,
+                          desktop: DEFAULT_HERO_FOCAL_POINT,
+                        });
+                        onSavePresentation(reset);
                       }}
                     >
-                      Reset
+                      Center desktop
                     </button>
                     <button
                       className="seller-secondary-button border-red-200 text-red-700 hover:bg-red-50"
@@ -3588,7 +3564,7 @@ function HeroPhotoSection({
               role="group"
             >
               {(["mobile", "desktop"] as const).map((mode) => {
-                const isSelected = mobilePreviewMode === mode;
+                const isSelected = previewMode === mode;
                 const label = mode === "mobile" ? "Mobile" : "Desktop";
 
                 return (
@@ -3600,7 +3576,7 @@ function HeroPhotoSection({
                         : "text-stone-600 hover:bg-white/70 hover:text-stone-950"
                     }`}
                     key={mode}
-                    onClick={() => setMobilePreviewMode(mode)}
+                    onClick={() => setPreviewMode(mode)}
                     type="button"
                   >
                     {label}
@@ -3611,31 +3587,56 @@ function HeroPhotoSection({
           </div>
 
           <div
-            className={`order-2 grid gap-2 pt-1 sm:order-none sm:grid ${
-              mobilePreviewMode === "mobile" ? "" : "hidden"
-            }`}
+            className={`order-2 gap-2 pt-1 sm:order-none sm:grid ${previewMode === "mobile" ? "grid" : "hidden"}`}
           >
-            <p className="text-sm font-semibold text-stone-800">
-              Mobile Hero Preview
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-stone-800">Mobile Hero Preview</p>
+                <p className="text-xs font-medium text-stone-500">
+                  {draftPresentation.mobile
+                    ? "Using a separate mobile position"
+                    : "Using the desktop position"}
+                </p>
+              </div>
+              {draftPresentation.mobile ? (
+                <button
+                  className="seller-secondary-button"
+                  type="button"
+                  onClick={() => {
+                    const desktopOnly = {
+                      desktop: draftPresentationRef.current.desktop,
+                    };
+                    const reset = updatePresentation(desktopOnly);
+                    onSavePresentation(reset);
+                  }}
+                >
+                  Use desktop position
+                </button>
+              ) : null}
+            </div>
             <div
               className={cx(
                 storefrontFontVariablesClass,
-                "buyer-storefront relative mx-auto h-[13.35rem] w-full max-w-[390px] touch-none overflow-hidden rounded-lg bg-white shadow-sm [container-type:inline-size]",
+                "buyer-storefront relative mx-auto w-full touch-none overflow-hidden rounded-lg bg-white shadow-sm [container-type:inline-size]",
               )}
               onPointerCancel={endDrag}
-              onPointerDown={(event) => beginDrag(event, 0.82)}
+              onPointerDown={(event) => beginDrag(event, "mobile")}
               onPointerMove={moveImage}
               onPointerUp={endDrag}
-              style={themeStyle}
+              style={{
+                ...themeStyle,
+                aspectRatio:
+                  storefrontHeroFrame.mobileReferenceWidth /
+                  storefrontHeroFrame.mobileReferenceHeight,
+                maxWidth: storefrontHeroFrame.mobileReferenceWidth,
+              }}
             >
-              <HeroPreviewBackdrop
-                crop={draftCrop}
-                imageAlt={heroImage?.alt_text || "Storefront hero preview"}
-                imageUrl={imageUrl}
+              <StorefrontHeroBackdrop
+                alt={heroImage?.alt_text || "Storefront hero preview"}
                 layout={layout}
-                mode="mobile"
-                useCrop={Boolean(heroImage)}
+                presentation={draftPresentation}
+                src={imageUrl}
+                viewport="mobile"
               />
               <HeroPreviewContent
                 heroSubheading={previewSubheading}
@@ -3654,85 +3655,6 @@ function HeroPhotoSection({
 
       </div>
     </section>
-  );
-}
-
-function HeroPreviewBackdrop({
-  crop,
-  imageAlt,
-  imageUrl,
-  layout,
-  mode,
-  useCrop,
-}: {
-  crop: PhotoCropMetadata;
-  imageAlt: string;
-  imageUrl: string;
-  layout: HeroLayout;
-  mode: "desktop" | "mobile";
-  useCrop: boolean;
-}) {
-  const isMobile = mode === "mobile";
-  const imageStyle = useCrop
-    ? isMobile
-      ? getMobileStorefrontHeroCropStyle(crop)
-      : getCropImageStyle(crop)
-    : undefined;
-
-  return (
-    <>
-      {layout === "right" ? (
-        <Image
-          alt=""
-          aria-hidden="true"
-          className="absolute inset-0 h-full w-full scale-110 select-none object-cover blur-2xl saturate-110"
-          draggable={false}
-          fill
-          sizes={isMobile ? "390px" : "(max-width: 1280px) 100vw, 760px"}
-          src={imageUrl}
-          style={{
-            filter: "blur(26px) brightness(0.62) saturate(1.12)",
-          }}
-          unoptimized
-        />
-      ) : null}
-      <Image
-        alt={imageAlt}
-        className={cx(
-          "absolute inset-0 h-full w-full select-none object-center",
-          isMobile ? "object-cover" : "object-contain",
-        )}
-        draggable={false}
-        fill
-        sizes={isMobile ? "390px" : "(max-width: 1280px) 100vw, 760px"}
-        src={imageUrl}
-        style={{
-          ...imageStyle,
-          transformOrigin: "center center",
-          ...(!isMobile && layout === "right"
-            ? {
-                WebkitMaskImage:
-                  "linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.2) 18%, black 34%, black 100%)",
-                maskImage:
-                  "linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.2) 18%, black 34%, black 100%)",
-              }
-            : {}),
-        }}
-        unoptimized
-      />
-      {isMobile ? (
-        <div
-          className={cx(
-            "pointer-events-none absolute inset-0 z-[1]",
-            layout === "right"
-              ? "bg-[linear-gradient(90deg,rgba(28,25,23,0.8)_0%,rgba(28,25,23,0.64)_42%,rgba(28,25,23,0.28)_78%,rgba(28,25,23,0.08)_100%)]"
-              : "bg-[linear-gradient(90deg,rgba(28,25,23,0.8)_0%,rgba(28,25,23,0.64)_42%,rgba(28,25,23,0.3)_74%,rgba(28,25,23,0.08)_100%)]",
-          )}
-        />
-      ) : (
-        <HeroFade layout={layout} />
-      )}
-    </>
   );
 }
 
@@ -4197,61 +4119,17 @@ function TipsPanel({
   );
 }
 
-function HeroFade({ layout }: { layout: HeroLayout }) {
-  if (layout === "full") return null;
-
-  return (
-    <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(90deg,rgba(28,25,23,0.46)_0%,rgba(28,25,23,0.34)_36%,rgba(28,25,23,0.04)_72%)]" />
-  );
-}
-
 function normalizeHeroLayout(value: string | null | undefined): HeroLayout {
   return value === "right" ? "right" : "full";
 }
 
 function isDefaultHeroPosition(media: StoreMediaItem | null | undefined) {
-  if (!media?.crop_metadata) return true;
-
+  const presentation = normalizeHeroPresentation(media?.hero_presentation);
   return (
-    JSON.stringify(normalizeCrop(media.crop_metadata)) ===
-    JSON.stringify(normalizeCrop(buildHeroDefaultCrop(media)))
+    presentation.desktop.x === DEFAULT_HERO_FOCAL_POINT.x &&
+    presentation.desktop.y === DEFAULT_HERO_FOCAL_POINT.y &&
+    !presentation.mobile
   );
-}
-
-function buildHeroInitialCrop(media: StoreMediaItem | null | undefined) {
-  if (media?.crop_metadata) {
-    const normalized = normalizeCrop(media.crop_metadata);
-
-    return {
-      ...normalized,
-      aspect: storefrontHeroFrame.aspectRatio,
-      zoom: Math.max(normalized.zoom, getHeroCoverZoom(media)),
-    };
-  }
-
-  return buildHeroDefaultCrop(media);
-}
-
-function buildHeroDefaultCrop(media: StoreMediaItem | null | undefined) {
-  return {
-    ...normalizeCrop(null),
-    aspect: storefrontHeroFrame.aspectRatio,
-    zoom: getHeroCoverZoom(media),
-  };
-}
-
-function getHeroCoverZoom(media: StoreMediaItem | null | undefined) {
-  const fallbackZoom = 1.35;
-  const width = media?.width_px ?? 0;
-  const height = media?.height_px ?? 0;
-
-  if (width <= 0 || height <= 0) return fallbackZoom;
-
-  const imageRatio = width / height;
-  const frameRatio = storefrontHeroFrame.aspectRatio;
-  const zoom = Math.max(1, imageRatio / frameRatio, frameRatio / imageRatio);
-
-  return Math.round(zoom * 100) / 100;
 }
 
 function buildAboutInitialCrop(media: StoreMediaItem | null | undefined) {
@@ -5198,6 +5076,7 @@ function toMediaDirtySignature(items: StoreMediaItem[]) {
     draftStatus: item.draft_status ?? null,
     filename: item.draft_file?.name ?? item.original_filename ?? null,
     heroLayout: item.hero_layout ?? null,
+    heroPresentation: item.hero_presentation ?? null,
     id: item.media_link_id,
     publicUrl: item.preview_url ?? item.public_url,
     sourceImageUrl: item.source_image_url ?? null,
