@@ -1,16 +1,25 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { cache } from "react";
 import {
   EmptyStorefront,
   StorefrontPage,
   StorefrontShell,
   cx,
   formatLocation,
+  toPublicImageUrl,
 } from "../storefront-ui";
 import { loadStorefrontChrome } from "../storefront-chrome-data";
 import { storefrontSerifClass } from "../storefront-fonts";
 import { StorefrontChrome } from "../storefront-shell-components";
 import type { StorefrontCustomPolicy } from "../storefront-data";
+import { NOINDEX_ROBOTS } from "@/lib/seo-config";
+import {
+  buildPublicMetadata,
+  withFlockFrontBrand,
+} from "@/lib/public-metadata";
+
+const loadStorefrontChromeCached = cache(loadStorefrontChrome);
 
 export async function generateMetadata({
   params,
@@ -18,10 +27,35 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const { error, store } = await loadStorefrontChromeCached(slug);
+  const canonicalPath = `/store/${encodeURIComponent(slug)}/policies`;
 
-  return {
-    alternates: { canonical: `/store/${encodeURIComponent(slug)}/policies` },
-  };
+  if (error || !store) {
+    return {
+      ...buildPublicMetadata({
+        canonicalPath,
+        title: "Storefront Not Found | FlockFront",
+        description: "This storefront is not publicly available on FlockFront.",
+      }),
+      robots: NOINDEX_ROBOTS,
+    };
+  }
+
+  const imageUrl = store.hero_image_url
+    ? toPublicImageUrl(store.hero_image_url)
+    : null;
+
+  return buildPublicMetadata({
+    canonicalPath,
+    title: withFlockFrontBrand(`${store.store_name} Policies`),
+    description: `Review the seller-provided policies for ${store.store_name} on FlockFront.`,
+    image: imageUrl
+      ? {
+          alt: store.hero_image_alt_text || undefined,
+          url: imageUrl,
+        }
+      : null,
+  });
 }
 
 export default async function StorefrontPoliciesPage({
@@ -30,7 +64,7 @@ export default async function StorefrontPoliciesPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const { categories, error, store } = await loadStorefrontChrome(slug);
+  const { categories, error, store } = await loadStorefrontChromeCached(slug);
 
   if (error) {
     return (

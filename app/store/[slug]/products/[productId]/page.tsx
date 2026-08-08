@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { cache } from "react";
 import {
   AvailabilityBadge,
@@ -30,7 +29,14 @@ import {
 import { storefrontSerifClass } from "../../storefront-fonts";
 import { StorefrontProductGallery } from "../../storefront-product-gallery";
 import { ProductOrderOptions } from "./product-order-options";
-import { absoluteUrl as productionUrl } from "@/lib/seo-config";
+import {
+  absoluteUrl as productionUrl,
+  NOINDEX_ROBOTS,
+} from "@/lib/seo-config";
+import {
+  buildPublicMetadata,
+  withFlockFrontBrand,
+} from "@/lib/public-metadata";
 
 type StorefrontProductPageParams = Promise<{ productId: string; slug: string }>;
 
@@ -40,7 +46,6 @@ export async function generateMetadata({
   params: StorefrontProductPageParams;
 }): Promise<Metadata> {
   const { productId, slug } = await params;
-  const origin = await getRequestOrigin();
   const canonicalUrl = productionUrl(buildCanonicalProductPath(slug, productId));
   const data = await loadProductPageData(slug, productId);
 
@@ -48,17 +53,22 @@ export async function generateMetadata({
     const title = "Product not found | FlockFront";
     const description = "This product may no longer be visible on FlockFront.";
 
-    return buildProductMetadata({
-      canonicalUrl,
-      description,
-      image: null,
-      title,
-    });
+    return {
+      ...buildProductMetadata({
+        canonicalUrl,
+        description,
+        image: null,
+        title,
+      }),
+      robots: NOINDEX_ROBOTS,
+    };
   }
 
   const gallery = buildProductGallery(data.product, data.gallery);
-  const image = getProductMetadataImage(data.product, gallery, origin);
-  const title = `${data.product.name} | ${data.store.store_name}`;
+  const image = getProductMetadataImage(data.product, gallery);
+  const title = withFlockFrontBrand(
+    `${data.product.name} | ${data.store.store_name}`,
+  );
   const description = buildMetadataDescription({
     isHatchingEggProduct: data.isHatchingEggProduct,
     product: data.product,
@@ -363,47 +373,27 @@ function buildProductMetadata({
   image,
   title,
 }: {
-  canonicalUrl: string | null;
+  canonicalUrl: string;
   description: string;
   image: ProductMetadataImage | null;
   title: string;
 }): Metadata {
-  const metadata: Metadata = {
+  return buildPublicMetadata({
+    canonicalPath: canonicalUrl,
     description,
+    image,
+    largeImage: isSuitableLargeImage(image),
     title,
-    openGraph: {
-      description,
-      title,
-      type: "website",
-      ...(canonicalUrl ? { url: canonicalUrl } : {}),
-      ...(image
-        ? {
-            images: [
-              {
-                alt: image.alt,
-                url: image.url,
-                ...(image.width ? { width: image.width } : {}),
-                ...(image.height ? { height: image.height } : {}),
-              },
-            ],
-          }
-        : {}),
-    },
-    twitter: {
-      card: image ? "summary_large_image" : "summary",
-      description,
-      title,
-      ...(image ? { images: [image.url] } : {}),
-    },
-  };
+  });
+}
 
-  if (canonicalUrl) {
-    metadata.alternates = {
-      canonical: canonicalUrl,
-    };
-  }
-
-  return metadata;
+function isSuitableLargeImage(image: ProductMetadataImage | null) {
+  return Boolean(
+    image?.width &&
+      image.height &&
+      image.width >= 600 &&
+      image.width / image.height >= 1.5,
+  );
 }
 
 function buildMetadataDescription({
@@ -441,11 +431,10 @@ type ProductMetadataImage = {
 function getProductMetadataImage(
   product: StorefrontProduct,
   gallery: StorefrontMedia[],
-  origin: string | null,
 ): ProductMetadataImage | null {
   const image = gallery[0];
   const imageUrl = image?.public_url ?? product.imageUrl;
-  const absoluteUrl = toAbsoluteImageUrl(imageUrl, origin);
+  const absoluteUrl = toAbsoluteImageUrl(imageUrl);
 
   if (!absoluteUrl) return null;
 
@@ -457,7 +446,7 @@ function getProductMetadataImage(
   };
 }
 
-function toAbsoluteImageUrl(value: string | null | undefined, origin: string | null) {
+function toAbsoluteImageUrl(value: string | null | undefined) {
   const trimmed = value?.trim();
 
   if (!trimmed) return null;
@@ -465,37 +454,13 @@ function toAbsoluteImageUrl(value: string | null | undefined, origin: string | n
   const publicUrl = toPublicImageUrl(trimmed);
 
   if (/^https?:\/\//i.test(publicUrl)) return publicUrl;
-  if (!origin || !publicUrl.startsWith("/")) return null;
+  if (!publicUrl.startsWith("/")) return null;
 
   try {
-    return new URL(publicUrl, origin).toString();
+    return productionUrl(publicUrl);
   } catch {
     return null;
   }
-}
-
-async function getRequestOrigin() {
-  const headersList = await headers();
-  const host = getForwardedHeaderValue(headersList.get("x-forwarded-host")) ??
-    headersList.get("host");
-
-  if (!host) return null;
-
-  const proto =
-    getForwardedHeaderValue(headersList.get("x-forwarded-proto")) ??
-    (host.startsWith("localhost") || host.startsWith("127.0.0.1")
-      ? "http"
-      : "https");
-
-  try {
-    return new URL(`${proto}://${host}`).origin;
-  } catch {
-    return null;
-  }
-}
-
-function getForwardedHeaderValue(value: string | null) {
-  return value?.split(",")[0]?.trim() || null;
 }
 
 function buildCanonicalProductPath(slug: string, productId: string) {

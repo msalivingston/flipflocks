@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import Link from "next/link";
 import {
   AvailabilityBadge,
@@ -29,7 +28,14 @@ import {
 import { storefrontSerifClass } from "../../storefront-fonts";
 import { StorefrontProductGallery } from "../../storefront-product-gallery";
 import { ProcessedPoultryOrderOptions } from "./processed-poultry-order-options";
-import { absoluteUrl as productionUrl } from "@/lib/seo-config";
+import {
+  absoluteUrl as productionUrl,
+  NOINDEX_ROBOTS,
+} from "@/lib/seo-config";
+import {
+  buildPublicMetadata,
+  withFlockFrontBrand,
+} from "@/lib/public-metadata";
 
 type StorefrontProcessedPoultryPageParams = Promise<{
   processedPoultryItemId: string;
@@ -42,7 +48,6 @@ export async function generateMetadata({
   params: StorefrontProcessedPoultryPageParams;
 }): Promise<Metadata> {
   const { processedPoultryItemId, slug } = await params;
-  const origin = await getRequestOrigin();
   const canonicalUrl = productionUrl(
     buildCanonicalProcessedPoultryPath(slug, processedPoultryItemId),
   );
@@ -53,26 +58,32 @@ export async function generateMetadata({
   ]);
 
   if (homeResult.error || itemResult.error || galleryResult.error) {
-    return buildListingMetadata({
-      canonicalUrl,
-      description:
-        "This poultry product may no longer be visible on FlockFront.",
-      image: null,
-      title: "Poultry product not found | FlockFront",
-    });
+    return {
+      ...buildListingMetadata({
+        canonicalUrl,
+        description:
+          "This poultry product may no longer be visible on FlockFront.",
+        image: null,
+        title: "Poultry product not found | FlockFront",
+      }),
+      robots: NOINDEX_ROBOTS,
+    };
   }
 
   const store = homeResult.data;
   const item = itemResult.data;
 
   if (!store || !item) {
-    return buildListingMetadata({
-      canonicalUrl,
-      description:
-        "This poultry product may no longer be visible on FlockFront.",
-      image: null,
-      title: "Poultry product not found | FlockFront",
-    });
+    return {
+      ...buildListingMetadata({
+        canonicalUrl,
+        description:
+          "This poultry product may no longer be visible on FlockFront.",
+        image: null,
+        title: "Poultry product not found | FlockFront",
+      }),
+      robots: NOINDEX_ROBOTS,
+    };
   }
 
   const gallery = buildProcessedPoultryGallery(item, galleryResult.data);
@@ -80,9 +91,10 @@ export async function generateMetadata({
     fallbackAlt: item.featured_image_alt_text || item.product_name,
     fallbackUrl: item.featured_image_url,
     gallery,
-    origin,
   });
-  const title = `${item.product_name} | ${store.store_name}`;
+  const title = withFlockFrontBrand(
+    `${item.product_name} | ${store.store_name}`,
+  );
   const description = buildProcessedPoultryMetadataDescription(
     item,
     store.store_name,
@@ -375,47 +387,27 @@ function buildListingMetadata({
   image,
   title,
 }: {
-  canonicalUrl: string | null;
+  canonicalUrl: string;
   description: string;
   image: ListingMetadataImage | null;
   title: string;
 }): Metadata {
-  const metadata: Metadata = {
+  return buildPublicMetadata({
+    canonicalPath: canonicalUrl,
     description,
+    image,
+    largeImage: isSuitableLargeImage(image),
     title,
-    openGraph: {
-      description,
-      title,
-      type: "website",
-      ...(canonicalUrl ? { url: canonicalUrl } : {}),
-      ...(image
-        ? {
-            images: [
-              {
-                alt: image.alt,
-                url: image.url,
-                ...(image.width ? { width: image.width } : {}),
-                ...(image.height ? { height: image.height } : {}),
-              },
-            ],
-          }
-        : {}),
-    },
-    twitter: {
-      card: image ? "summary_large_image" : "summary",
-      description,
-      title,
-      ...(image ? { images: [image.url] } : {}),
-    },
-  };
+  });
+}
 
-  if (canonicalUrl) {
-    metadata.alternates = {
-      canonical: canonicalUrl,
-    };
-  }
-
-  return metadata;
+function isSuitableLargeImage(image: ListingMetadataImage | null) {
+  return Boolean(
+    image?.width &&
+      image.height &&
+      image.width >= 600 &&
+      image.width / image.height >= 1.5,
+  );
 }
 
 function buildProcessedPoultryMetadataDescription(
@@ -443,16 +435,14 @@ function getListingMetadataImage({
   fallbackAlt,
   fallbackUrl,
   gallery,
-  origin,
 }: {
   fallbackAlt: string;
   fallbackUrl: string | null;
   gallery: StorefrontMedia[];
-  origin: string | null;
 }): ListingMetadataImage | null {
   const image = gallery[0];
   const imageUrl = image?.public_url ?? fallbackUrl;
-  const absoluteUrl = toAbsoluteImageUrl(imageUrl, origin);
+  const absoluteUrl = toAbsoluteImageUrl(imageUrl);
 
   if (!absoluteUrl) return null;
 
@@ -464,7 +454,7 @@ function getListingMetadataImage({
   };
 }
 
-function toAbsoluteImageUrl(value: string | null | undefined, origin: string | null) {
+function toAbsoluteImageUrl(value: string | null | undefined) {
   const trimmed = value?.trim();
 
   if (!trimmed) return null;
@@ -472,37 +462,13 @@ function toAbsoluteImageUrl(value: string | null | undefined, origin: string | n
   const publicUrl = toPublicImageUrl(trimmed);
 
   if (/^https?:\/\//i.test(publicUrl)) return publicUrl;
-  if (!origin || !publicUrl.startsWith("/")) return null;
+  if (!publicUrl.startsWith("/")) return null;
 
   try {
-    return new URL(publicUrl, origin).toString();
+    return productionUrl(publicUrl);
   } catch {
     return null;
   }
-}
-
-async function getRequestOrigin() {
-  const headersList = await headers();
-  const host = getForwardedHeaderValue(headersList.get("x-forwarded-host")) ??
-    headersList.get("host");
-
-  if (!host) return null;
-
-  const proto =
-    getForwardedHeaderValue(headersList.get("x-forwarded-proto")) ??
-    (host.startsWith("localhost") || host.startsWith("127.0.0.1")
-      ? "http"
-      : "https");
-
-  try {
-    return new URL(`${proto}://${host}`).origin;
-  } catch {
-    return null;
-  }
-}
-
-function getForwardedHeaderValue(value: string | null) {
-  return value?.split(",")[0]?.trim() || null;
 }
 
 function buildCanonicalProcessedPoultryPath(

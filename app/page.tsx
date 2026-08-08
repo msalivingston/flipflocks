@@ -5,12 +5,21 @@ import { MobileMarketingMenu } from "./_components/mobile-marketing-menu";
 import { PublicSignupCta } from "./_components/public-signup-cta";
 import { legalRoutes } from "@/lib/legal";
 import { loadSellerSignupsEnabled } from "@/lib/platform-settings";
+import { buildPublicMetadata } from "@/lib/public-metadata";
 
-export const metadata: Metadata = {
-  title: "FlockFront | Simple storefronts for poultry sellers",
+export const metadata: Metadata = buildPublicMetadata({
+  canonicalPath: "/",
+  title: "Online Storefronts for Poultry Sellers | FlockFront",
   description:
-    "A simple storefront and order tool for poultry sellers who want less message chasing and more time for healthy birds.",
-};
+    "Create and share your own poultry storefront, manage listings and local pickup orders, and keep customer details organized with FlockFront.",
+  image: {
+    alt: "Chickens in a pasture near a barn at golden hour",
+    height: 724,
+    url: "/landing-page/hero-image.png",
+    width: 2172,
+  },
+  largeImage: true,
+});
 
 const placeholderHref = "#";
 const demoStoreHref = "/store/meadowgate-poultry";

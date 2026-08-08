@@ -1,5 +1,6 @@
 import Image from "next/image";
 import type { Metadata } from "next";
+import { cache } from "react";
 import {
   EmptyStorefront,
   StorefrontPage,
@@ -14,6 +15,15 @@ import {
 import { loadStorefrontChrome } from "../storefront-chrome-data";
 import { storefrontSerifClass } from "../storefront-fonts";
 import { StorefrontChrome } from "../storefront-shell-components";
+import { NOINDEX_ROBOTS } from "@/lib/seo-config";
+import {
+  buildPublicMetadata,
+  cleanMetadataText,
+  truncateMetadataText,
+  withFlockFrontBrand,
+} from "@/lib/public-metadata";
+
+const loadStorefrontChromeCached = cache(loadStorefrontChrome);
 
 const aboutAssets = {
   barn: "/about-page/barn-illustration-transparent.png",
@@ -31,10 +41,39 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const { error, store } = await loadStorefrontChromeCached(slug);
+  const canonicalPath = `/store/${encodeURIComponent(slug)}/about`;
 
-  return {
-    alternates: { canonical: `/store/${encodeURIComponent(slug)}/about` },
-  };
+  if (error || !store) {
+    return {
+      ...buildPublicMetadata({
+        canonicalPath,
+        title: "Storefront Not Found | FlockFront",
+        description: "This storefront is not publicly available on FlockFront.",
+      }),
+      robots: NOINDEX_ROBOTS,
+    };
+  }
+
+  const aboutText = cleanMetadataText(store.about_text);
+  const imageUrl = store.hero_image_url
+    ? toPublicImageUrl(store.hero_image_url)
+    : null;
+
+  return buildPublicMetadata({
+    canonicalPath,
+    title: withFlockFrontBrand(`About ${store.store_name}`),
+    description: truncateMetadataText(
+      aboutText ||
+        `Learn about ${store.store_name} and its public storefront on FlockFront.`,
+    ),
+    image: imageUrl
+      ? {
+          alt: store.hero_image_alt_text || undefined,
+          url: imageUrl,
+        }
+      : null,
+  });
 }
 
 export const revalidate = 0;
@@ -46,7 +85,7 @@ export default async function StorefrontAboutPage({
 }) {
   const { slug } = await params;
   const [chromeResult, galleryResult] = await Promise.all([
-    loadStorefrontChrome(slug),
+    loadStorefrontChromeCached(slug),
     loadStoreGallery(slug, {
       entityType: "store",
       limit: 4,

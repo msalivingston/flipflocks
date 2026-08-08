@@ -6,12 +6,20 @@ import { PublicSignupCta } from "../_components/public-signup-cta";
 import { publicSupabase } from "@/lib/public-supabase";
 import { loadSellerSignupsEnabled } from "@/lib/platform-settings";
 import { FaqAccordion, type PublicFaq } from "./faq-accordion";
+import { buildPublicMetadata } from "@/lib/public-metadata";
 
-export const metadata: Metadata = {
-  title: "FAQ | FlockFront",
+export const metadata: Metadata = buildPublicMetadata({
+  canonicalPath: "/faq",
+  title: "Frequently Asked Questions | FlockFront",
   description:
-    "Frequently asked questions about FlockFront for poultry sellers.",
-};
+    "Find answers about FlockFront storefronts, poultry listings, local order management, seller plans, and getting started.",
+  image: {
+    alt: "Curious quail surrounded by question marks",
+    height: 1254,
+    url: "/faq-quail-sketch.png",
+    width: 1254,
+  },
+});
 
 const previewStoreHref = "/store/meadowgate-poultry";
 

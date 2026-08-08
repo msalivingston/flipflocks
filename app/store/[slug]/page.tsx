@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import {
   EmptyStorefront,
   StorefrontShell,
+  toPublicImageUrl,
 } from "./storefront-ui";
 import {
   loadStorefrontEquipment,
@@ -15,6 +17,14 @@ import { StorefrontHomeContent } from "./storefront-home-content";
 import { StorefrontPreviewClient } from "./storefront-preview-client";
 import { getStorefrontPreviewReturnHref } from "@/lib/storefront-preview-routing";
 import { NOINDEX_ROBOTS } from "@/lib/seo-config";
+import {
+  buildPublicMetadata,
+  cleanMetadataText,
+  truncateMetadataText,
+  withFlockFrontBrand,
+} from "@/lib/public-metadata";
+
+const loadStorefrontHomeCached = cache(loadStorefrontHome);
 
 export async function generateMetadata({
   params,
@@ -26,12 +36,41 @@ export async function generateMetadata({
   const { slug } = await params;
   const query = searchParams ? await searchParams : {};
 
-  return {
-    alternates: {
-      canonical: `/store/${encodeURIComponent(slug)}`,
-    },
-    ...(query.preview === "1" ? { robots: NOINDEX_ROBOTS } : {}),
-  };
+  if (query.preview === "1") return { robots: NOINDEX_ROBOTS };
+
+  const { data: store, error } = await loadStorefrontHomeCached(slug);
+  const canonicalPath = `/store/${encodeURIComponent(slug)}`;
+
+  if (error || !store) {
+    return {
+      ...buildPublicMetadata({
+        canonicalPath,
+        title: "Storefront Not Found | FlockFront",
+        description: "This storefront is not publicly available on FlockFront.",
+      }),
+      robots: NOINDEX_ROBOTS,
+    };
+  }
+
+  const tagline = cleanMetadataText(store.store_tagline);
+  const description = truncateMetadataText(
+    tagline || `View the public storefront for ${store.store_name} on FlockFront.`,
+  );
+  const imageUrl = store.hero_image_url
+    ? toPublicImageUrl(store.hero_image_url)
+    : null;
+
+  return buildPublicMetadata({
+    canonicalPath,
+    title: withFlockFrontBrand(store.store_name),
+    description,
+    image: imageUrl
+      ? {
+          alt: store.hero_image_alt_text || undefined,
+          url: imageUrl,
+        }
+      : null,
+  });
 }
 
 export default async function StorefrontHomePage({
@@ -60,7 +99,7 @@ export default async function StorefrontHomePage({
     hatchingEggResult,
     processedPoultryResult,
   ] = await Promise.all([
-    loadStorefrontHome(slug),
+    loadStorefrontHomeCached(slug),
     loadStorefrontInventory(slug),
     loadStorefrontEquipment(slug),
     loadStorefrontHatchingEggInventory(slug),

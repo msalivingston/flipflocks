@@ -4,12 +4,21 @@ import Link from "next/link";
 import { MobileMarketingMenu } from "../_components/mobile-marketing-menu";
 import { PublicSignupCta } from "../_components/public-signup-cta";
 import { loadSellerSignupsEnabled } from "@/lib/platform-settings";
+import { buildPublicMetadata } from "@/lib/public-metadata";
 
-export const metadata: Metadata = {
-  title: "About | FlockFront",
+export const metadata: Metadata = buildPublicMetadata({
+  canonicalPath: "/about",
+  title: "About FlockFront | Built for Poultry Sellers",
   description:
-    "Learn why FlockFront was built for poultry sellers and the farm life behind it.",
-};
+    "Learn why FlockFront was built to help independent poultry sellers manage storefronts, listings, customers, and local orders.",
+  image: {
+    alt: "White goose standing in grass on the farm",
+    height: 821,
+    url: "/about-page/about-banner-goose-final.png",
+    width: 1916,
+  },
+  largeImage: true,
+});
 
 const mobileNavLinks = [
   { href: "/#how-it-works", label: "How it works" },
