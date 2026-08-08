@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { MobileMarketingMenu } from "./_components/mobile-marketing-menu";
 import { PublicSignupCta } from "./_components/public-signup-cta";
+import { legalRoutes } from "@/lib/legal";
 import { loadSellerSignupsEnabled } from "@/lib/platform-settings";
 
 export const metadata: Metadata = {
@@ -17,7 +18,7 @@ const demoStoreHref = "/store/meadowgate-poultry";
 const benefits = [
   {
     title: "List once",
-    copy: "Prices adjust by age so your listing stays current.",
+    copy: "Prices can adjust as chicks grow, so your listings stay current.",
     icon: "/landing-page/calendar-transparent.png",
     alt: "",
   },
@@ -29,7 +30,7 @@ const benefits = [
   },
   {
     title: "Easy pickup orders",
-    copy: "Customers order online. You confirm. They pick up.",
+    copy: "Customers place an order through your storefront. You confirm. They pick up.",
     icon: "/landing-page/shopping-bag-transparent.png",
     alt: "",
   },
@@ -207,12 +208,11 @@ export default async function Home() {
             <h1 className="text-balance font-serif text-[clamp(2.05rem,3.5vw,3.35rem)] leading-[1.05] max-[899px]:leading-[1.02]">
               A better way to sell poultry.
               <br />
-              List your birds once, sell from one simple link.
+              List once. Sell from one simple link.
             </h1>
             <p className="mt-4 max-w-2xl text-balance text-[17px] font-medium leading-7 text-white/95 md:mt-5 md:text-[23px] md:leading-9">
-              FlockFront gives poultry sellers a simple storefront and order
-              tool&mdash;so you can stop chasing messages and focus on raising
-              healthy birds.
+              FlockFront gives independent poultry sellers their own simple storefront and
+              order tool&mdash;so you can stop chasing messages and get back to your birds.
             </p>
             <PlaceholderLink
               className="mt-5 inline-flex min-h-11 items-center justify-center rounded-md bg-white px-6 text-[17px] font-bold text-[#0e4a2d] shadow-sm shadow-black/15 transition hover:bg-[#f5f1e8] md:mt-6"
@@ -340,7 +340,7 @@ export default async function Home() {
               Ready to simplify how you sell?
             </h2>
             <p className="mt-1 text-[16px] text-[#303830]">
-              Join FlockFront and start selling with confidence.
+              Give customers one simple place to order.
             </p>
             <PublicSignupCta
               className="mt-3 inline-flex min-h-11 items-center justify-center gap-3 rounded-md bg-[#08633c] px-7 text-[17px] font-bold text-white shadow-sm transition hover:bg-[#064b2f]"
@@ -364,36 +364,68 @@ export default async function Home() {
       </section>
 
       <footer className="border-t border-[#ddd5c6] bg-white/70 px-5 py-3 max-[899px]:px-4 md:px-8">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 max-[899px]:items-center max-[899px]:gap-3 max-[899px]:text-center md:flex-row md:items-center md:justify-between md:max-[899px]:flex-col">
-          <div className="flex items-center gap-3 text-sm max-[899px]:flex-col max-[899px]:gap-1.5">
-            <BrandLogo className="w-[173px]" />
-            <p className="text-base text-[#394137]">
-              Simple tools for poultry sellers.
-            </p>
+        <div className="mx-auto flex max-w-6xl flex-col">
+          <div className="flex flex-col gap-4 max-[899px]:items-center max-[899px]:gap-3 max-[899px]:text-center md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3 text-sm max-[899px]:flex-col max-[899px]:gap-1.5">
+              <BrandLogo className="w-[173px]" />
+              <p className="whitespace-nowrap text-base text-[#394137] max-[899px]:text-center md:translate-y-0.5 md:border-l md:border-[#e4dccf] md:pl-6 md:text-center">
+                Simple tools for poultry sellers.
+              </p>
+            </div>
+            <nav
+              aria-label="Footer navigation"
+              className="flex flex-wrap items-center justify-end gap-x-9 gap-y-3 text-base font-medium text-[#303830] max-[899px]:grid max-[899px]:w-full max-[899px]:max-w-xs max-[899px]:grid-cols-2 max-[899px]:justify-items-center max-[899px]:gap-x-4 max-[899px]:gap-y-2 max-[899px]:border-t max-[899px]:border-[#e4dccf] max-[899px]:pt-4"
+            >
+              <PlaceholderLink className="hover:text-[#0e4a2d]" href="/#how-it-works">
+                How it works
+              </PlaceholderLink>
+              <PlaceholderLink className="hover:text-[#0e4a2d]" href="/pricing">
+                Pricing
+              </PlaceholderLink>
+              <PlaceholderLink className="hover:text-[#0e4a2d]" href="/about">
+                About
+              </PlaceholderLink>
+              <PlaceholderLink className="hover:text-[#0e4a2d]" href="/faq">
+                FAQ
+              </PlaceholderLink>
+              <PlaceholderLink className="hover:text-[#0e4a2d]" href="/login">
+                Sign in
+              </PlaceholderLink>
+              <PlaceholderLink className="hover:text-[#0e4a2d]" href="mailto:hello@flockfront.com">
+                Contact
+              </PlaceholderLink>
+            </nav>
           </div>
-          <nav
-            aria-label="Footer navigation"
-            className="flex flex-wrap gap-x-9 gap-y-3 text-base font-medium text-[#303830] max-[899px]:grid max-[899px]:w-full max-[899px]:max-w-xs max-[899px]:grid-cols-2 max-[899px]:justify-items-center max-[899px]:gap-x-4 max-[899px]:gap-y-2"
-          >
-            <PlaceholderLink className="hover:text-[#0e4a2d]" href="/#how-it-works">
-              How it works
-            </PlaceholderLink>
-            <PlaceholderLink className="hover:text-[#0e4a2d]" href="/pricing">
-              Pricing
-            </PlaceholderLink>
-            <PlaceholderLink className="hover:text-[#0e4a2d]" href="/about">
-              About
-            </PlaceholderLink>
-            <PlaceholderLink className="hover:text-[#0e4a2d]" href="/faq">
-              FAQ
-            </PlaceholderLink>
-            <PlaceholderLink className="hover:text-[#0e4a2d]" href="/login">
-              Sign in
-            </PlaceholderLink>
-            <PlaceholderLink className="hover:text-[#0e4a2d]" href="mailto:hello@flockfront.com">
-              Contact
-            </PlaceholderLink>
-          </nav>
+          <div className="mt-5 flex items-center justify-between gap-4 border-t border-[#e4dccf] pt-4 max-[899px]:mt-4 max-[899px]:flex-col max-[899px]:gap-3 max-[899px]:text-center">
+            <p className="text-sm text-[#697267]">
+              © 2026 FlockFront. All rights reserved.
+            </p>
+            <nav
+              aria-label="Legal navigation"
+              className="flex flex-wrap justify-end gap-x-5 gap-y-2 text-sm font-medium text-[#697267] max-[899px]:justify-center"
+            >
+              <Link
+                className="underline decoration-[#aab4a8] underline-offset-2 hover:text-[#0e4a2d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0e4a2d]"
+                href={legalRoutes.terms}
+              >
+                Terms
+              </Link>
+              <span aria-hidden="true">•</span>
+              <Link
+                className="underline decoration-[#aab4a8] underline-offset-2 hover:text-[#0e4a2d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0e4a2d]"
+                href={legalRoutes.privacy}
+              >
+                Privacy
+              </Link>
+              <span aria-hidden="true">•</span>
+              <Link
+                className="underline decoration-[#aab4a8] underline-offset-2 hover:text-[#0e4a2d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0e4a2d]"
+                href={legalRoutes.acceptableUse}
+              >
+                Acceptable Use
+              </Link>
+            </nav>
+          </div>
         </div>
       </footer>
     </main>
