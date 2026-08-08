@@ -53,13 +53,7 @@ const sellerAddInventoryNavItem = {
   glyph: "/glyphs/egg-carton.png",
 };
 
-const mobileQuickNavItems = [
-  sellerNavItems[0],
-  sellerNavItems[1],
-  sellerNavItems[2],
-  sellerNavItems[3],
-  sellerAddInventoryNavItem,
-];
+const mobileSellerNavItems = [...sellerNavItems, sellerAccountNavItem];
 
 export function SellerAppShell({ children }: { children: React.ReactNode }) {
   return (
@@ -266,9 +260,9 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
             isFocusedInventoryForm ? "hidden" : ""
           }`}
         >
-          <div className="px-2 py-2">
-            <div className="grid grid-cols-5 gap-1">
-              <MobileSellerNavLinks items={mobileQuickNavItems} />
+          <div className="overflow-x-auto px-2 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex gap-1">
+              <MobileSellerNavLinks items={mobileSellerNavItems} />
             </div>
           </div>
         </nav>
@@ -344,7 +338,7 @@ function MobileSellerNavLinks({
       <Link
         key={item.href}
         href={item.href}
-        className={`flex min-h-[4.25rem] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-0.5 py-2 text-center text-[0.68rem] font-bold leading-tight min-[360px]:text-[0.74rem] ${
+        className={`flex min-h-[4.25rem] min-w-[4.55rem] flex-col items-center justify-center gap-1 rounded-2xl px-1.5 py-2 text-center text-[0.78rem] font-bold leading-tight ${
           isActive
             ? "bg-emerald-100 text-emerald-950 shadow-sm"
             : "text-stone-700"

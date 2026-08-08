@@ -8,14 +8,18 @@ const readShell = () =>
     "utf8",
   );
 
-test("mobile seller navigation keeps a fixed quick set and a complete menu", async () => {
+test("mobile seller navigation restores the pre-Step-6 scrolling quick bar", async () => {
   const source = await readShell();
 
-  assert.match(source, /const mobileQuickNavItems = \[/);
-  assert.match(source, /sellerAddInventoryNavItem/);
-  assert.match(source, /<MobileSellerNavLinks items=\{mobileQuickNavItems\} \/>/);
-  assert.doesNotMatch(source, /overflow-x-auto/);
-  assert.match(source, /grid grid-cols-5/);
+  assert.match(
+    source,
+    /const mobileSellerNavItems = \[\.\.\.sellerNavItems, sellerAccountNavItem\]/,
+  );
+  assert.match(source, /overflow-x-auto/);
+  assert.match(source, /<MobileSellerNavLinks items=\{mobileSellerNavItems\} \/>/);
+  assert.match(source, /flex gap-1/);
+  assert.match(source, /min-w-\[4\.55rem\]/);
+  assert.doesNotMatch(source, /mobileQuickNavItems/);
 
   for (const label of [
     "Dashboard",
@@ -45,4 +49,5 @@ test("mobile seller menu is accessible and closes on navigation or Escape", asyn
   assert.match(source, /mobileMenuPathname === pathname/);
   assert.match(source, /onClick=\{onClose\}/);
   assert.match(source, /function isSellerNavItemActive/);
+  assert.match(source, /<MobileMenuLink item=\{sellerAddInventoryNavItem\}/);
 });
