@@ -2,15 +2,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.0";
 import {
   createManualOrderEmailKickHandler,
   type KickAuthorization,
+  type ManualOrderEmailKickDependencies,
 } from "./handler.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": Deno.env.get("FLIPFLOCKS_PUBLIC_API_ORIGIN") ??
-    "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { resolveFlockFrontCors } from "../_shared/cors.ts";
 
 function getRequiredEnv(name: string): string {
   const value = Deno.env.get(name)?.trim();
@@ -41,8 +35,7 @@ function userClient(authorization: string) {
   });
 }
 
-const handler = createManualOrderEmailKickHandler({
-  corsHeaders,
+const handlerDependencies = {
   async authenticate(authorization) {
     const {
       data: { user },
@@ -142,6 +135,30 @@ const handler = createManualOrderEmailKickHandler({
       return false;
     }
   },
-});
+} satisfies Omit<ManualOrderEmailKickDependencies, "corsHeaders">;
 
-Deno.serve(handler);
+Deno.serve(async (request) => {
+  const corsPolicy = resolveFlockFrontCors(request.headers.get("Origin"), {
+    configuredOrigin: Deno.env.get("FLIPFLOCKS_PUBLIC_API_ORIGIN"),
+  });
+
+  if (!corsPolicy.originAllowed) {
+    return new Response(JSON.stringify({
+      success: false,
+      error: "origin_not_allowed",
+    }), {
+      status: 403,
+      headers: {
+        ...corsPolicy.headers,
+        "Content-Type": "application/json",
+      },
+    });
+  }
+
+  const handler = createManualOrderEmailKickHandler({
+    ...handlerDependencies,
+    corsHeaders: corsPolicy.headers,
+  });
+
+  return handler(request);
+});

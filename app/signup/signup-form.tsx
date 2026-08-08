@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { legalRoutes } from "@/lib/legal";
 import { supabase } from "@/lib/supabase";
 
 type SignupErrors = {
@@ -185,14 +186,14 @@ export function SignupForm() {
           By creating an account, you agree to our{" "}
           <Link
             className="font-semibold text-[#1f6f38] underline underline-offset-2"
-            href="#"
+            href={legalRoutes.terms}
           >
             Terms of Service
           </Link>{" "}
           and{" "}
           <Link
             className="whitespace-nowrap font-semibold text-[#1f6f38] underline underline-offset-2"
-            href="#"
+            href={legalRoutes.privacy}
           >
             Privacy Policy
           </Link>

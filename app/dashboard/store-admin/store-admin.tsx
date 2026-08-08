@@ -66,6 +66,7 @@ import {
 } from "./delivery-options-section";
 import type { PickupDeliveryTabProps } from "./pickup-delivery-tab";
 import type { PoliciesTabProps } from "./policies-tab";
+import { SellerTermsAcceptance } from "@/app/_components/seller-terms-acceptance";
 
 const DynamicPickupDeliveryTab = dynamic<PickupDeliveryTabProps>(
   () => import("./pickup-delivery-tab"),
@@ -1982,6 +1983,12 @@ export function StoreAdmin() {
   const launchSummary = buildLaunchSummary(readinessItems, form);
   const sellerRequiredItems = launchSummary.requiredItems;
   const sellerWarningItems = launchSummary.warningItems;
+  const termsAccepted = readinessItems.some(
+    (item) => item.item_key === "terms_accepted" && item.passed,
+  );
+  const billingAccessActive = readinessItems.some(
+    (item) => item.item_key === "billing_access_active" && item.passed,
+  );
   const platformReviewNeeded = launchSummary.platformReviewNeeded;
   const missingRequiredCount = sellerRequiredItems.filter(
     (item) => !item.passed,
@@ -2075,12 +2082,16 @@ export function StoreAdmin() {
                 launchAllowed={launchAllowed}
                 onLaunch={() => void launchStore()}
                 onRestoreDefaultStory={() => restoreDefaultStory()}
+                onTermsAccepted={reloadReadiness}
                 onUpdateField={updateField}
                 platformReviewNeeded={platformReviewNeeded}
                 readinessError={readinessError}
                 requiredItems={sellerRequiredItems}
                 sellerStatus={seller.store_status}
+                storeId={seller.store_id}
                 storeUrl={storeUrl}
+                termsAccepted={termsAccepted}
+                billingAccessActive={billingAccessActive}
                 warningItems={sellerWarningItems}
               />
             ) : null}
@@ -2461,12 +2472,16 @@ function StorefrontTab({
   launchAllowed,
   onLaunch,
   onRestoreDefaultStory,
+  onTermsAccepted,
   onUpdateField,
   platformReviewNeeded,
   readinessError,
   requiredItems,
   sellerStatus,
+  storeId,
   storeUrl,
+  termsAccepted,
+  billingAccessActive,
   warningItems,
 }: {
   form: StoreAdminForm;
@@ -2478,12 +2493,16 @@ function StorefrontTab({
   launchAllowed: boolean;
   onLaunch: () => void;
   onRestoreDefaultStory: () => void;
+  onTermsAccepted: () => void | Promise<void>;
   onUpdateField: StoreAdminFieldUpdater;
   platformReviewNeeded: boolean;
   readinessError: string | null;
   requiredItems: SellerLaunchItem[];
   sellerStatus: string;
+  storeId: string;
   storeUrl: string;
+  termsAccepted: boolean;
+  billingAccessActive: boolean;
   warningItems: SellerLaunchItem[];
 }) {
   const contactEmail = getStorefrontContactEmail(form);
@@ -2552,10 +2571,14 @@ function StorefrontTab({
             isReadinessLoading={isReadinessLoading}
             launchAllowed={launchAllowed}
             onLaunch={onLaunch}
+            onTermsAccepted={onTermsAccepted}
             platformReviewNeeded={platformReviewNeeded}
             readinessError={readinessError}
             requiredItems={requiredItems}
             sellerStatus={sellerStatus}
+            storeId={storeId}
+            termsAccepted={termsAccepted}
+            billingAccessActive={billingAccessActive}
             warningItems={warningItems}
           />
         )}
@@ -4525,10 +4548,14 @@ function LaunchStoreCardContent({
   isReadinessLoading,
   launchAllowed,
   onLaunch,
+  onTermsAccepted,
   platformReviewNeeded,
   readinessError,
   requiredItems,
   sellerStatus,
+  storeId,
+  termsAccepted,
+  billingAccessActive,
   warningItems,
 }: {
   hasUnsavedChanges: boolean;
@@ -4536,10 +4563,14 @@ function LaunchStoreCardContent({
   isReadinessLoading: boolean;
   launchAllowed: boolean;
   onLaunch: () => void;
+  onTermsAccepted: () => void | Promise<void>;
   platformReviewNeeded: boolean;
   readinessError: string | null;
   requiredItems: SellerLaunchItem[];
   sellerStatus: string;
+  storeId: string;
+  termsAccepted: boolean;
+  billingAccessActive: boolean;
   warningItems: SellerLaunchItem[];
 }) {
   return (
@@ -4575,9 +4606,28 @@ function LaunchStoreCardContent({
         ) : null}
 
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {requiredItems.map((item) => (
-            <SellerReadinessRow item={item} key={item.key} />
-          ))}
+          {requiredItems.map((item) => {
+            const showTermsAction =
+              item.key === "billing-terms" && !termsAccepted;
+            return (
+              <SellerReadinessRow item={item} key={item.key}>
+                {showTermsAction ? (
+                  <SellerTermsAcceptance
+                    compact
+                    onAccepted={onTermsAccepted}
+                    storeId={storeId}
+                  />
+                ) : null}
+                {item.key === "billing-terms" &&
+                termsAccepted &&
+                !billingAccessActive ? (
+                  <p className="mt-3 border-t border-stone-200 pt-3 text-xs font-semibold leading-5 text-amber-800">
+                    Seller Terms are accepted. Billing access still needs attention.
+                  </p>
+                ) : null}
+              </SellerReadinessRow>
+            );
+          })}
         </div>
 
         {warningItems.some((item) => !item.passed) ? (
@@ -4625,7 +4675,13 @@ function LaunchStoreCardContent({
   );
 }
 
-function SellerReadinessRow({ item }: { item: SellerLaunchItem }) {
+function SellerReadinessRow({
+  children,
+  item,
+}: {
+  children?: React.ReactNode;
+  item: SellerLaunchItem;
+}) {
   return (
     <div
       className={`rounded-lg border px-3 py-3 ${
@@ -4651,6 +4707,7 @@ function SellerReadinessRow({ item }: { item: SellerLaunchItem }) {
           {item.action}
         </p>
       ) : null}
+      {children}
     </div>
   );
 }
@@ -5188,7 +5245,11 @@ function buildLaunchSummary(
       key: "billing-terms",
       label: "Billing and terms",
       passed: isReady("terms_accepted") && isReady("billing_access_active"),
-      action: "Finish billing and seller terms.",
+      action: !isReady("terms_accepted") && !isReady("billing_access_active")
+        ? "Finish billing and accept the Seller Terms."
+        : !isReady("terms_accepted")
+          ? "Review and accept the Seller Terms."
+          : "Finish billing setup.",
     },
     {
       key: "available-inventory",

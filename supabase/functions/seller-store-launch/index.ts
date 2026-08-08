@@ -1,17 +1,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.0";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": Deno.env.get("FLIPFLOCKS_PUBLIC_API_ORIGIN") ??
-    "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { resolveFlockFrontCors } from "../_shared/cors.ts";
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function jsonResponse(status: number, body: Record<string, unknown>): Response {
+function jsonResponse(
+  status: number,
+  body: Record<string, unknown>,
+  corsHeaders: Record<string, string>,
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
@@ -26,6 +23,7 @@ function errorResponse(
   message: string,
   status = 400,
   details?: unknown,
+  corsHeaders: Record<string, string> = {},
 ): Response {
   return jsonResponse(status, {
     error: {
@@ -33,7 +31,7 @@ function errorResponse(
       message,
       details: details ?? null,
     },
-  });
+  }, corsHeaders);
 }
 
 function getRequiredEnv(name: string): string {
@@ -89,14 +87,36 @@ async function parseRequestBody(req: Request): Promise<{ store_id: string }> {
 }
 
 Deno.serve(async (req) => {
+  const corsPolicy = resolveFlockFrontCors(req.headers.get("Origin"), {
+    configuredOrigin: Deno.env.get("FLIPFLOCKS_PUBLIC_API_ORIGIN"),
+  });
+  const corsHeaders = corsPolicy.headers;
+
+  if (!corsPolicy.originAllowed) {
+    return errorResponse(
+      "origin_not_allowed",
+      "This origin is not allowed to launch a store.",
+      403,
+      undefined,
+      corsHeaders,
+    );
+  }
+
   if (req.method === "OPTIONS") {
-    return new Response("ok", {
+    return new Response(null, {
+      status: 204,
       headers: corsHeaders,
     });
   }
 
   if (req.method !== "POST") {
-    return errorResponse("method_not_allowed", "Use POST for store launch.", 405);
+    return errorResponse(
+      "method_not_allowed",
+      "Use POST for store launch.",
+      405,
+      undefined,
+      corsHeaders,
+    );
   }
 
   try {
@@ -106,7 +126,13 @@ Deno.serve(async (req) => {
     const authorization = req.headers.get("Authorization");
 
     if (!authorization) {
-      return errorResponse("unauthorized", "Authentication required.", 401);
+      return errorResponse(
+        "unauthorized",
+        "Authentication required.",
+        401,
+        undefined,
+        corsHeaders,
+      );
     }
 
     const { store_id } = await parseRequestBody(req);
@@ -125,7 +151,13 @@ Deno.serve(async (req) => {
     } = await userClient.auth.getUser();
 
     if (userError || !user) {
-      return errorResponse("unauthorized", "Authentication required.", 401);
+      return errorResponse(
+        "unauthorized",
+        "Authentication required.",
+        401,
+        undefined,
+        corsHeaders,
+      );
     }
 
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);
@@ -140,18 +172,25 @@ Deno.serve(async (req) => {
         error.message || "Store could not be launched.",
         400,
         serializeRpcError(error),
+        corsHeaders,
       );
     }
 
     return jsonResponse(200, {
       launched: true,
       store: Array.isArray(data) ? data[0] ?? null : data,
-    });
+    }, corsHeaders);
   } catch (error) {
     const message = error instanceof Error
       ? error.message
       : "Store launch failed.";
 
-    return errorResponse("server_error", message, 500);
+    return errorResponse(
+      "server_error",
+      message,
+      500,
+      undefined,
+      corsHeaders,
+    );
   }
 });

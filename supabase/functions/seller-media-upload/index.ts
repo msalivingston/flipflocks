@@ -1,17 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { resolveFlockFrontCors } from "../_shared/cors.ts";
 
-const configuredCorsOrigin = Deno.env.get("FLIPFLOCKS_PUBLIC_API_ORIGIN");
-const allowedCorsOrigins = new Set([
-  "https://www.flockfront.com",
-  "http://localhost:3000",
-  ...(configuredCorsOrigin ? [configuredCorsOrigin] : []),
-]);
-const corsHeaders = {
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Vary": "Origin",
-};
+const corsHeaders = resolveFlockFrontCors(null).headers;
 
 const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
 const BUCKET_NAME = "seller-media";
@@ -54,19 +44,6 @@ class PublicSafeError extends Error {
     this.publicMessage = message;
     this.status = status;
   }
-}
-
-function getCorsHeaders(req: Request): Record<string, string> {
-  const requestOrigin = req.headers.get("Origin");
-
-  if (requestOrigin && allowedCorsOrigins.has(requestOrigin)) {
-    return {
-      ...corsHeaders,
-      "Access-Control-Allow-Origin": requestOrigin,
-    };
-  }
-
-  return corsHeaders;
 }
 
 function jsonResponse(
@@ -324,10 +301,12 @@ function buildStoragePath(storeId: string, mimeType: string): string {
 }
 
 Deno.serve(async (req) => {
-  const responseHeaders = getCorsHeaders(req);
-  const requestOrigin = req.headers.get("Origin");
+  const corsPolicy = resolveFlockFrontCors(req.headers.get("Origin"), {
+    configuredOrigin: Deno.env.get("FLIPFLOCKS_PUBLIC_API_ORIGIN"),
+  });
+  const responseHeaders = corsPolicy.headers;
 
-  if (requestOrigin && !allowedCorsOrigins.has(requestOrigin)) {
+  if (!corsPolicy.originAllowed) {
     return errorResponse(
       "origin_not_allowed",
       "This origin is not allowed to upload seller media.",

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { SellerTermsAcceptance } from "@/app/_components/seller-terms-acceptance";
 import { supabase } from "@/lib/supabase";
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { storeSetupSuccessSoundKey } from "@/lib/success-sound";
@@ -46,6 +47,7 @@ type BillingReview = {
 type ReviewData = {
   billing: BillingReview | null;
   store: StoreReview | null;
+  termsAccepted: boolean;
 };
 
 export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
@@ -53,6 +55,7 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
   const [reviewData, setReviewData] = useState<ReviewData>({
     billing: null,
     store: null,
+    termsAccepted: false,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -69,7 +72,7 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
       setError(null);
 
       try {
-        const [storeResult, billingResult] = await withTimeout(
+        const [storeResult, billingResult, readinessResult] = await withTimeout(
           Promise.all([
             supabase
               .from("stores")
@@ -79,13 +82,17 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
               .eq("id", storeId)
               .maybeSingle<StoreReview>(),
             supabase.rpc("get_seller_context"),
+            supabase.rpc("seller_get_store_launch_readiness", {
+              p_store_id: storeId,
+            }),
           ]),
           8000,
         );
 
         if (!isMounted) return;
 
-        const firstError = storeResult.error ?? billingResult.error;
+        const firstError =
+          storeResult.error ?? billingResult.error ?? readinessResult.error;
 
         if (firstError) {
           setError(friendlyReviewError(firstError.message));
@@ -98,6 +105,12 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
               (row) => row.store_id === storeId,
             ) ?? null,
           store: storeResult.data ?? null,
+          termsAccepted: ((readinessResult.data ?? []) as Array<{
+            item_key: string;
+            passed: boolean;
+          }>).some(
+            (item) => item.item_key === "terms_accepted" && item.passed,
+          ),
         });
       } catch (loadError) {
         if (!isMounted) return;
@@ -270,6 +283,19 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
           <ReviewRow label="Access" value={formatPlanAccess(billing)} />
         </ReviewSection>
 
+        <ReviewSection title="Seller Terms">
+          <SellerTermsAcceptance
+            initiallyAccepted={reviewData.termsAccepted}
+            onAccepted={() => {
+              setReviewData((current) => ({
+                ...current,
+                termsAccepted: true,
+              }));
+            }}
+            storeId={storeId}
+          />
+        </ReviewSection>
+
         <div className="rounded-lg border border-[#dbe8d8] bg-[#eff8ed] px-4 py-3">
           <p className="text-sm font-medium leading-6 text-stone-700">
             You can edit your store details, pickup windows, biosecurity
@@ -298,11 +324,15 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
           </button>
           <button
             className="flex min-h-12 w-full items-center justify-center rounded-md bg-[#246f38] px-3 text-base font-bold text-white shadow-sm transition hover:bg-[#1c5c2d] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-10 sm:px-4 sm:text-[15px]"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !reviewData.termsAccepted}
             onClick={finishOnboarding}
             type="button"
           >
-            {isSubmitting ? "Opening dashboard..." : "Start building my store"}
+            {isSubmitting
+              ? "Opening dashboard..."
+              : reviewData.termsAccepted
+                ? "Start building my store"
+                : "Accept Seller Terms to continue"}
           </button>
         </div>
       </div>

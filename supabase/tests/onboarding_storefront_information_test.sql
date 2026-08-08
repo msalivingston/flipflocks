@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(6);
+select plan(9);
 
 select set_config('request.jwt.claim.role', 'service_role', true);
 
@@ -105,6 +105,85 @@ select ok(
     pg_get_functiondef('public.seller_bootstrap_store_from_onboarding(jsonb)'::regprocedure)
   ) > 0,
   'the authoritative RPC validates required hero copy and pickup address'
+);
+
+select results_eq(
+  $$
+    select billing_complete, terms_accepted, ready_to_launch,
+      first_listing_created, onboarding_complete
+    from public.seller_onboarding_state
+    where store_id = (
+      select id from public.stores
+      where owner_user_id = 'e5000000-0000-4000-8000-000000000001'::uuid
+    )
+  $$,
+  $$values (false, false, false, false, false)$$,
+  'a new onboarding row still initializes later progress flags as incomplete'
+);
+
+update public.seller_onboarding_state
+set
+  billing_complete = true,
+  terms_accepted = true,
+  ready_to_launch = true,
+  first_listing_created = true,
+  categories_complete = true,
+  pickup_complete = true,
+  onboarding_complete = true,
+  onboarding_completed_at = now()
+where store_id = (
+  select id from public.stores
+  where owner_user_id = 'e5000000-0000-4000-8000-000000000001'::uuid
+);
+
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claim.sub', 'e5000000-0000-4000-8000-000000000001', true);
+set local role authenticated;
+
+select lives_ok(
+  $call$
+    select * from public.seller_bootstrap_store_from_onboarding(
+      '{
+        "store_name":"Onboarding Storefront Farm Updated",
+        "phone":"9705551212",
+        "billing_address_line1":"11 Billing Road",
+        "billing_city":"Billing City",
+        "billing_state":"CO",
+        "billing_postal_code":"81401",
+        "billing_country":"US",
+        "public_city":"Billing City",
+        "public_state":"CO",
+        "store_tagline":"Updated local birds raised with care",
+        "hero_subheading":"Healthy poultry for established backyard flocks.",
+        "pickup_address_line1":"21 Pickup Lane",
+        "pickup_address_line2":"Barn 3",
+        "pickup_city":"Pickup Town",
+        "pickup_state":"CO",
+        "pickup_postal_code":"81402",
+        "pickup_country":"US",
+        "about_text":"An established local farm offering poultry.",
+        "location_display_preference":"city_state"
+      }'::jsonb
+    )
+  $call$,
+  'an established seller can update Farm Information'
+);
+
+reset role;
+
+select results_eq(
+  $$
+    select billing_complete, terms_accepted, ready_to_launch,
+      first_listing_created, categories_complete, pickup_complete,
+      onboarding_complete, onboarding_completed_at is not null
+    from public.seller_onboarding_state
+    where store_id = (
+      select id from public.stores
+      where owner_user_id = 'e5000000-0000-4000-8000-000000000001'::uuid
+    )
+  $$,
+  $$values (true, true, true, true, true, true, true, true)$$,
+  'editing existing Farm Information preserves all later onboarding progress'
 );
 
 select * from finish();
