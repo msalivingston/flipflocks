@@ -65,7 +65,11 @@ type SellerOrderTotalRow = {
  * Read-only seller customer list built from the existing customer summary
  * projection. It keeps customer management focused on lookup, not CRM tools.
  */
-export function CustomersList() {
+export function CustomersList({
+  showDeletedSuccess = false,
+}: {
+  showDeletedSuccess?: boolean;
+}) {
   const { seller } = useSellerContext();
   const [customers, setCustomers] = useState<SellerCustomerSummaryRow[]>([]);
   const [query, setQuery] = useState("");
@@ -177,6 +181,15 @@ export function CustomersList() {
 
   return (
     <div className="min-w-0 space-y-4">
+      {showDeletedSuccess ? (
+        <p
+          aria-live="polite"
+          className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900"
+          role="status"
+        >
+          Customer deleted successfully.
+        </p>
+      ) : null}
       <div className="grid min-w-0 gap-3 rounded-2xl border border-stone-200 bg-white p-3 shadow-[0_16px_38px_rgba(46,39,25,0.05)] lg:grid-cols-[minmax(20rem,1fr)_minmax(15rem,18rem)_auto] lg:items-end lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
         <label className="relative block lg:hidden">
           <span className="sr-only">Search customers</span>

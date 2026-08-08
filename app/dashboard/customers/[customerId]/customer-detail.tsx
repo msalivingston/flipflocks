@@ -2,8 +2,17 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { supabase } from "@/lib/supabase";
 import {
   EditCustomerButton,
@@ -22,6 +31,10 @@ import {
   formatOrderLifecycle,
   formatOrderSource,
 } from "../../orders/order-formatters";
+import {
+  CUSTOMER_ORDER_HISTORY_MESSAGE,
+  isCustomerOrderHistoryDeleteError,
+} from "../customer-delete";
 
 type SellerCustomerDetailRow = {
   customer_id: string;
@@ -117,6 +130,7 @@ type CustomerTimelineEntry =
  * projections. This is intentionally lookup-focused, not a CRM surface.
  */
 export function CustomerDetail({ customerId }: { customerId: string }) {
+  const router = useRouter();
   const { seller } = useSellerContext();
   const [data, setData] = useState<CustomerDetailState>({
     customer: null,
@@ -128,6 +142,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
     useState<ActivityView>("orders");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -219,7 +234,7 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
     return () => {
       isMounted = false;
     };
-  }, [customerId, seller]);
+  }, [customerId, refreshKey, seller]);
 
   const customer = data.customer;
   const customerName = useMemo(
@@ -324,6 +339,17 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
           <WorkingOrdersCard count={customer.open_order_count ?? 0} />
         </aside>
       </div>
+
+      <CustomerRecordSection
+        customerId={customer.customer_id}
+        customerName={customerName}
+        orderCount={customer.order_count ?? 0}
+        onOrderHistoryDetected={() => setRefreshKey((current) => current + 1)}
+        onDeleted={() => {
+          router.push("/dashboard/customers?deleted=1");
+          router.refresh();
+        }}
+      />
     </DashboardPageContent>
   );
 }
@@ -1234,6 +1260,237 @@ function WorkingOrdersCard({ count }: { count: number }) {
         Open orders that may still need pickup coordination.
       </p>
     </section>
+  );
+}
+
+function CustomerRecordSection({
+  customerId,
+  customerName,
+  onDeleted,
+  onOrderHistoryDetected,
+  orderCount,
+}: {
+  customerId: string;
+  customerName: string;
+  onDeleted: () => void;
+  onOrderHistoryDetected: () => void;
+  orderCount: number;
+}) {
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [dialogError, setDialogError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const canDelete = orderCount === 0;
+
+  function closeDialog() {
+    if (isDeleting) return;
+
+    setIsDialogOpen(false);
+    setDialogError(null);
+    window.setTimeout(() => triggerRef.current?.focus(), 0);
+  }
+
+  async function deleteCustomer() {
+    setIsDeleting(true);
+    setDialogError(null);
+
+    const { error } = await supabase.rpc("seller_delete_customer", {
+      p_customer_id: customerId,
+    });
+
+    if (!error) {
+      onDeleted();
+      return;
+    }
+
+    setIsDeleting(false);
+
+    if (isCustomerOrderHistoryDeleteError(error.message)) {
+      setFeedback(CUSTOMER_ORDER_HISTORY_MESSAGE);
+      setIsDialogOpen(false);
+      window.setTimeout(() => triggerRef.current?.focus(), 0);
+      onOrderHistoryDetected();
+      return;
+    }
+
+    setDialogError(
+      "This customer could not be deleted. Please refresh the page and try again.",
+    );
+  }
+
+  return (
+    <section className="rounded-xl border border-stone-200 bg-stone-50 p-4 lg:rounded-lg lg:p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="max-w-2xl">
+          <h2 className="text-base font-semibold text-stone-950">
+            Customer record
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-stone-600">
+            {canDelete
+              ? "Permanently remove this customer and their private customer notes."
+              : CUSTOMER_ORDER_HISTORY_MESSAGE}
+          </p>
+        </div>
+        {canDelete ? (
+          <button
+            ref={triggerRef}
+            className="inline-flex min-h-11 shrink-0 items-center justify-center self-start rounded-md border border-red-300 bg-white px-4 text-sm font-bold text-red-800 transition hover:border-red-500 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-700/30 sm:self-auto"
+            onClick={() => {
+              setFeedback(null);
+              setDialogError(null);
+              setIsDialogOpen(true);
+            }}
+            type="button"
+          >
+            Delete customer
+          </button>
+        ) : null}
+      </div>
+
+      {feedback ? (
+        <p
+          aria-live="assertive"
+          className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800"
+          role="alert"
+        >
+          {feedback}
+        </p>
+      ) : null}
+
+      {isDialogOpen ? (
+        <DeleteCustomerDialog
+          customerName={customerName}
+          error={dialogError}
+          isDeleting={isDeleting}
+          onClose={closeDialog}
+          onConfirm={() => void deleteCustomer()}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function DeleteCustomerDialog({
+  customerName,
+  error,
+  isDeleting,
+  onClose,
+  onConfirm,
+}: {
+  customerName: string;
+  error: string | null;
+  isDeleting: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const titleId = useId();
+  const descriptionId = useId();
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const cancelRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    cancelRef.current?.focus();
+
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape" && !isDeleting) {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key !== "Tab" || !dialogRef.current) return;
+
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled])',
+        ),
+      );
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isDeleting, onClose]);
+
+  function handleDialogKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Enter" && event.target instanceof HTMLButtonElement) {
+      event.stopPropagation();
+    }
+  }
+
+  return (
+    <div
+      aria-describedby={descriptionId}
+      aria-labelledby={titleId}
+      aria-modal="true"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-stone-950/45 px-4 py-6"
+      role="dialog"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !isDeleting) onClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-5 shadow-2xl sm:p-6"
+        onKeyDown={handleDialogKeyDown}
+      >
+        <h2 id={titleId} className="text-xl font-bold text-stone-950">
+          Delete this customer permanently?
+        </h2>
+        <p id={descriptionId} className="mt-3 text-sm leading-6 text-stone-600">
+          This permanently removes {customerName}&apos;s customer record and
+          cannot be undone.
+        </p>
+
+        {error ? (
+          <p
+            aria-live="assertive"
+            className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800"
+            role="alert"
+          >
+            {error}
+          </p>
+        ) : null}
+
+        <div className="mt-6 grid gap-2 sm:grid-cols-2">
+          <button
+            ref={cancelRef}
+            className="seller-secondary-button min-h-11 rounded-md px-4 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isDeleting}
+            onClick={onClose}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className="inline-flex min-h-11 items-center justify-center rounded-md bg-red-700 px-4 text-sm font-bold text-white transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-700/30 disabled:cursor-not-allowed disabled:bg-stone-300"
+            disabled={isDeleting}
+            onClick={onConfirm}
+            type="button"
+          >
+            {isDeleting ? "Deleting..." : "Delete customer"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

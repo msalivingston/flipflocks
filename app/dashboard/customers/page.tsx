@@ -2,7 +2,13 @@ import { DashboardPageContent, SellerPageHeader } from "../_components/seller-ui
 import { AddCustomerButton } from "./add-customer-modal";
 import { CustomersList } from "./customers-list";
 
-export default function SellerCustomersPage() {
+export default async function SellerCustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ deleted?: string | string[] }>;
+}) {
+  const { deleted } = await searchParams;
+
   return (
     <>
       <div className="lg:hidden">
@@ -35,7 +41,7 @@ export default function SellerCustomersPage() {
         />
       </div>
       <DashboardPageContent className="px-4 py-4 sm:px-5 lg:px-7 lg:py-5">
-        <CustomersList />
+        <CustomersList showDeletedSuccess={deleted === "1"} />
       </DashboardPageContent>
     </>
   );
