@@ -40,6 +40,10 @@ import {
 } from "@/app/store/[slug]/storefront-ui";
 import { StorefrontHeroBackdrop } from "@/app/store/[slug]/storefront-hero-backdrop";
 import {
+  heroHeadlineMaxLength,
+  heroSubheadingMaxLength,
+} from "@/lib/storefront-hero-copy";
+import {
   DEFAULT_HERO_FOCAL_POINT,
   normalizeHeroFocalPoint,
   normalizeHeroPresentation,
@@ -277,8 +281,6 @@ const STORE_MEDIA_SELECT =
 
 const acceptedStoreImageTypes = ["image/jpeg", "image/png", "image/webp"];
 const maxStoreImageSizeBytes = 8 * 1024 * 1024;
-const heroHeadlineMaxLength = 45;
-const heroSubheadingMaxLength = 90;
 const farmStoryMaxLength = 2500;
 const defaultPickupPolicy =
   "All pickups are by appointment and need at least 24 hours advance notice. At pickup, please come prepared with appropriate transport for your birds. Pet carriers sized appropriately work well. If you bring cardboard boxes, please cut air holes in advance. Please do not bring plastic tubs unless they have appropriate ventilation. Younger birds should have something so they are not standing on slick surfaces.";

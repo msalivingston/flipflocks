@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import {
+  heroHeadlineMaxLength,
+  heroSubheadingMaxLength,
+} from "@/lib/storefront-hero-copy";
 import { supabase } from "@/lib/supabase";
 
 type Step2Errors = {
@@ -9,6 +13,12 @@ type Step2Errors = {
   city?: string;
   state?: string;
   postalCode?: string;
+  pickupAddressLine1?: string;
+  pickupCity?: string;
+  pickupState?: string;
+  pickupPostalCode?: string;
+  heroTagline?: string;
+  heroSubheading?: string;
   storeName?: string;
   aboutText?: string;
   locationDisplayPreference?: string;
@@ -45,6 +55,8 @@ type Step2FormProps = {
     state?: string | null;
     storeName?: string | null;
     aboutText?: string | null;
+    heroTagline?: string | null;
+    heroSubheading?: string | null;
   };
   onComplete: (store: { storeId: string; storeName: string | null }) => void;
 };
@@ -72,7 +84,18 @@ export function Step2FarmBasicsForm({
   const [city, setCity] = useState(initialValues?.city ?? "");
   const [state, setState] = useState(initialValues?.state ?? "");
   const [postalCode, setPostalCode] = useState("");
+  const [pickupAddressLine1, setPickupAddressLine1] = useState("");
+  const [pickupAddressLine2, setPickupAddressLine2] = useState("");
+  const [pickupCity, setPickupCity] = useState("");
+  const [pickupState, setPickupState] = useState("");
+  const [pickupPostalCode, setPickupPostalCode] = useState("");
   const [storeName, setStoreName] = useState(initialValues?.storeName ?? "");
+  const [heroTagline, setHeroTagline] = useState(
+    initialValues?.heroTagline ?? "",
+  );
+  const [heroSubheading, setHeroSubheading] = useState(
+    initialValues?.heroSubheading ?? "",
+  );
   const [useStarterDescription, setUseStarterDescription] = useState(
     !initialValues?.aboutText,
   );
@@ -96,7 +119,13 @@ export function Step2FarmBasicsForm({
       city,
       state,
       postalCode,
+      pickupAddressLine1,
+      pickupCity,
+      pickupState,
+      pickupPostalCode,
       storeName,
+      heroTagline,
+      heroSubheading,
       aboutText,
       locationDisplayPreference,
     });
@@ -123,6 +152,14 @@ export function Step2FarmBasicsForm({
           public_city: city.trim(),
           public_state: state.trim(),
           store_name: storeName.trim(),
+          store_tagline: heroTagline.trim(),
+          hero_subheading: heroSubheading.trim(),
+          pickup_address_line1: pickupAddressLine1.trim(),
+          pickup_address_line2: pickupAddressLine2.trim() || null,
+          pickup_city: pickupCity.trim(),
+          pickup_state: pickupState.trim(),
+          pickup_postal_code: pickupPostalCode.trim(),
+          pickup_country: "US",
           about_text: aboutText.trim() || null,
           location_display_preference: locationDisplayPreference,
         },
@@ -206,7 +243,7 @@ export function Step2FarmBasicsForm({
   return (
     <section className="rounded-[0.95rem] bg-white px-4 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-7 lg:py-5">
       <h2 className="font-serif text-[1.45rem] font-semibold leading-tight text-stone-950 sm:text-[1.7rem]">
-        Farm &amp; contact basics
+        Farm &amp; storefront information
       </h2>
 
       <form className="mt-3 space-y-3" onSubmit={handleSubmit} noValidate>
@@ -233,43 +270,133 @@ export function Step2FarmBasicsForm({
           />
         </div>
 
-        <Field
-          autoComplete="street-address"
-          error={errors.billingAddress}
-          helperText="Not visible to buyers."
-          id="billing-address"
-          label="Billing address *"
-          onChange={setBillingAddress}
-          value={billingAddress}
-        />
+        <fieldset className="space-y-3 border-t border-stone-200 pt-4">
+          <legend className="text-sm font-bold text-stone-950 sm:text-[13px]">
+            Billing address
+          </legend>
+          <p className="-mt-2 text-sm leading-5 text-stone-500 sm:text-xs">
+            Used for billing only. It is not visible to buyers.
+          </p>
+          <Field
+            autoComplete="street-address"
+            error={errors.billingAddress}
+            id="billing-address"
+            label="Billing address *"
+            onChange={setBillingAddress}
+            value={billingAddress}
+          />
+          <div className="grid gap-3 sm:grid-cols-[1fr_0.55fr_0.7fr]">
+            <Field
+              autoComplete="address-level2"
+              error={errors.city}
+              id="city"
+              label="City *"
+              onChange={setCity}
+              value={city}
+            />
+            <Field
+              autoComplete="address-level1"
+              error={errors.state}
+              id="state"
+              label="State *"
+              maxLength={2}
+              onChange={setState}
+              value={state}
+            />
+            <Field
+              autoComplete="postal-code"
+              error={errors.postalCode}
+              id="postal-code"
+              label="ZIP code *"
+              onChange={setPostalCode}
+              value={postalCode}
+            />
+          </div>
+        </fieldset>
 
-        <div className="grid gap-3 sm:grid-cols-[1fr_0.55fr_0.7fr]">
+        <fieldset className="space-y-3 border-t border-stone-200 pt-4">
+          <legend className="text-sm font-bold text-stone-950 sm:text-[13px]">
+            Hero storefront text
+          </legend>
+          <p className="-mt-2 text-sm leading-5 text-stone-500 sm:text-xs">
+            This text appears in the main hero area of your storefront.
+          </p>
           <Field
-            autoComplete="address-level2"
-            error={errors.city}
-            id="city"
-            label="City *"
-            onChange={setCity}
-            value={city}
+            error={errors.heroTagline}
+            id="hero-tagline"
+            label="Hero tagline *"
+            maxLength={heroHeadlineMaxLength}
+            onChange={setHeroTagline}
+            value={heroTagline}
           />
           <Field
-            autoComplete="address-level1"
-            error={errors.state}
-            id="state"
-            label="State *"
-            maxLength={2}
-            onChange={setState}
-            value={state}
+            error={errors.heroSubheading}
+            id="hero-subheading"
+            label="Hero subline *"
+            maxLength={heroSubheadingMaxLength}
+            onChange={setHeroSubheading}
+            value={heroSubheading}
+          />
+        </fieldset>
+
+        <fieldset className="space-y-3 border-t border-stone-200 pt-4">
+          <legend className="text-sm font-bold text-stone-950 sm:text-[13px]">
+            Pickup address
+          </legend>
+          <p className="-mt-2 text-sm leading-5 text-stone-500 sm:text-xs">
+            Your full pickup address is not shown on your public storefront. Buyers receive it in their order confirmation after purchase.
+          </p>
+          <Field
+            autoComplete="shipping street-address"
+            error={errors.pickupAddressLine1}
+            id="pickup-address-line1"
+            label="Address line 1 *"
+            onChange={setPickupAddressLine1}
+            value={pickupAddressLine1}
           />
           <Field
-            autoComplete="postal-code"
-            error={errors.postalCode}
-            id="postal-code"
-            label="ZIP code *"
-            onChange={setPostalCode}
-            value={postalCode}
+            autoComplete="shipping address-line2"
+            id="pickup-address-line2"
+            label="Address line 2"
+            onChange={setPickupAddressLine2}
+            value={pickupAddressLine2}
           />
-        </div>
+          <div className="grid gap-3 sm:grid-cols-[1fr_0.55fr_0.7fr]">
+            <Field
+              autoComplete="shipping address-level2"
+              error={errors.pickupCity}
+              id="pickup-city"
+              label="City *"
+              onChange={setPickupCity}
+              value={pickupCity}
+            />
+            <Field
+              autoComplete="shipping address-level1"
+              error={errors.pickupState}
+              id="pickup-state"
+              label="State *"
+              maxLength={2}
+              onChange={setPickupState}
+              value={pickupState}
+            />
+            <Field
+              autoComplete="shipping postal-code"
+              error={errors.pickupPostalCode}
+              id="pickup-postal-code"
+              label="ZIP code *"
+              onChange={setPickupPostalCode}
+              value={pickupPostalCode}
+            />
+          </div>
+          <Field
+            autoComplete="shipping country"
+            id="pickup-country"
+            label="Country"
+            onChange={() => undefined}
+            readOnly
+            value="United States"
+          />
+        </fieldset>
 
         <div>
           <label className="flex items-center gap-2 rounded-md border border-[#dbe8d8] bg-[#eff8ed] px-3 py-2 text-sm font-bold text-[#16572a]">
@@ -432,6 +559,7 @@ type FieldProps = {
   label: string;
   maxLength?: number;
   onChange: (value: string) => void;
+  readOnly?: boolean;
   type?: "tel" | "text";
   value: string;
 };
@@ -444,6 +572,7 @@ function Field({
   label,
   maxLength,
   onChange,
+  readOnly,
   type = "text",
   value,
 }: FieldProps) {
@@ -466,6 +595,7 @@ function Field({
         id={id}
         maxLength={maxLength}
         onChange={(event) => onChange(event.target.value)}
+        readOnly={readOnly}
         type={type}
         value={value}
       />
@@ -517,7 +647,13 @@ function validateStep2({
   city,
   state,
   postalCode,
+  pickupAddressLine1,
+  pickupCity,
+  pickupState,
+  pickupPostalCode,
   storeName,
+  heroTagline,
+  heroSubheading,
   aboutText,
   locationDisplayPreference,
 }: {
@@ -526,7 +662,13 @@ function validateStep2({
   city: string;
   state: string;
   postalCode: string;
+  pickupAddressLine1: string;
+  pickupCity: string;
+  pickupState: string;
+  pickupPostalCode: string;
   storeName: string;
+  heroTagline: string;
+  heroSubheading: string;
   aboutText: string;
   locationDisplayPreference: LocationDisplayPreference | "";
 }) {
@@ -543,8 +685,26 @@ function validateStep2({
   if (!city.trim()) nextErrors.city = "Enter your city.";
   if (!state.trim()) nextErrors.state = "Enter your state.";
   if (!postalCode.trim()) nextErrors.postalCode = "Enter your ZIP code.";
+  if (!pickupAddressLine1.trim()) {
+    nextErrors.pickupAddressLine1 = "Enter your pickup address.";
+  }
+  if (!pickupCity.trim()) nextErrors.pickupCity = "Enter your pickup city.";
+  if (!pickupState.trim()) nextErrors.pickupState = "Enter your pickup state.";
+  if (!pickupPostalCode.trim()) {
+    nextErrors.pickupPostalCode = "Enter your pickup ZIP code.";
+  }
   if (!storeName.trim()) {
     nextErrors.storeName = "Enter your farm or seller name.";
+  }
+  if (!heroTagline.trim()) {
+    nextErrors.heroTagline = "Enter your hero tagline.";
+  } else if (heroTagline.length > heroHeadlineMaxLength) {
+    nextErrors.heroTagline = `Keep your hero tagline to ${heroHeadlineMaxLength} characters or fewer.`;
+  }
+  if (!heroSubheading.trim()) {
+    nextErrors.heroSubheading = "Enter your hero subline.";
+  } else if (heroSubheading.length > heroSubheadingMaxLength) {
+    nextErrors.heroSubheading = `Keep your hero subline to ${heroSubheadingMaxLength} characters or fewer.`;
   }
   if (!aboutText.trim()) {
     nextErrors.aboutText = "Enter a farm description.";

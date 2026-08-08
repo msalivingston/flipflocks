@@ -415,6 +415,8 @@ export function OnboardingFlow({ checkoutCanceled = false }: { checkoutCanceled?
           initialValues={{
             aboutText: seller?.about_text,
             city: seller?.public_city,
+            heroSubheading: seller?.hero_subheading,
+            heroTagline: seller?.store_tagline,
             phone: seller?.public_phone,
             state: seller?.public_state,
             storeName: seller?.store_name,
