@@ -394,7 +394,7 @@ function DateField({
       </span>
       <span className="relative block w-full min-w-0 max-w-full max-sm:overflow-hidden max-sm:rounded-md">
         <input
-          className={`${inputClass} block box-border w-full max-w-full min-w-0 max-sm:appearance-none max-sm:pr-11 max-sm:text-left max-sm:[-webkit-appearance:none] max-sm:[&::-webkit-calendar-picker-indicator]:absolute max-sm:[&::-webkit-calendar-picker-indicator]:inset-0 max-sm:[&::-webkit-calendar-picker-indicator]:h-full max-sm:[&::-webkit-calendar-picker-indicator]:w-full max-sm:[&::-webkit-calendar-picker-indicator]:cursor-pointer max-sm:[&::-webkit-calendar-picker-indicator]:opacity-0`}
+          className={`${inputClass} block box-border w-full max-w-full min-w-0 max-sm:h-12 max-sm:appearance-none max-sm:py-0 max-sm:pr-11 max-sm:text-left max-sm:leading-[3rem] max-sm:[-webkit-appearance:none] max-sm:[&::-webkit-calendar-picker-indicator]:absolute max-sm:[&::-webkit-calendar-picker-indicator]:inset-0 max-sm:[&::-webkit-calendar-picker-indicator]:h-full max-sm:[&::-webkit-calendar-picker-indicator]:w-full max-sm:[&::-webkit-calendar-picker-indicator]:cursor-pointer max-sm:[&::-webkit-calendar-picker-indicator]:opacity-0 max-sm:[&::-webkit-date-and-time-value]:min-h-12 max-sm:[&::-webkit-date-and-time-value]:leading-[3rem]`}
           data-live-birds-field={fieldId}
           type="date"
           value={value}
