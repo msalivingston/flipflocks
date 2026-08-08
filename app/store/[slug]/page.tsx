@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import {
   EmptyStorefront,
   StorefrontShell,
@@ -13,6 +14,25 @@ import {
 import { StorefrontHomeContent } from "./storefront-home-content";
 import { StorefrontPreviewClient } from "./storefront-preview-client";
 import { getStorefrontPreviewReturnHref } from "@/lib/storefront-preview-routing";
+import { NOINDEX_ROBOTS } from "@/lib/seo-config";
+
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ preview?: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const query = searchParams ? await searchParams : {};
+
+  return {
+    alternates: {
+      canonical: `/store/${encodeURIComponent(slug)}`,
+    },
+    ...(query.preview === "1" ? { robots: NOINDEX_ROBOTS } : {}),
+  };
+}
 
 export default async function StorefrontHomePage({
   params,

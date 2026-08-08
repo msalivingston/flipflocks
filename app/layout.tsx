@@ -1,19 +1,16 @@
 import type { Metadata } from "next";
+import {
+  INDEXING_ENABLED,
+  NOINDEX_ROBOTS,
+  PRODUCTION_ORIGIN,
+} from "@/lib/seo-config";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(PRODUCTION_ORIGIN),
   title: "FlockFront",
   description: "Independent poultry storefronts for local pickup.",
-  robots: {
-    index: false,
-    follow: false,
-    nocache: true,
-    googleBot: {
-      index: false,
-      follow: false,
-      noimageindex: true,
-    },
-  },
+  robots: INDEXING_ENABLED ? undefined : NOINDEX_ROBOTS,
 };
 
 export default function RootLayout({

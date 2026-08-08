@@ -29,6 +29,7 @@ import {
 import { storefrontSerifClass } from "../../storefront-fonts";
 import { StorefrontProductGallery } from "../../storefront-product-gallery";
 import { ProcessedPoultryOrderOptions } from "./processed-poultry-order-options";
+import { absoluteUrl as productionUrl } from "@/lib/seo-config";
 
 type StorefrontProcessedPoultryPageParams = Promise<{
   processedPoultryItemId: string;
@@ -42,12 +43,9 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { processedPoultryItemId, slug } = await params;
   const origin = await getRequestOrigin();
-  const canonicalUrl = origin
-    ? new URL(
-        buildCanonicalProcessedPoultryPath(slug, processedPoultryItemId),
-        origin,
-      ).toString()
-    : null;
+  const canonicalUrl = productionUrl(
+    buildCanonicalProcessedPoultryPath(slug, processedPoultryItemId),
+  );
   const [homeResult, itemResult, galleryResult] = await Promise.all([
     loadStorefrontHome(slug),
     loadStorefrontProcessedPoultryItem(slug, processedPoultryItemId),

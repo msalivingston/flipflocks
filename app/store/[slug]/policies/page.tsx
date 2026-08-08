@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import {
   EmptyStorefront,
   StorefrontPage,
@@ -10,6 +11,18 @@ import { loadStorefrontChrome } from "../storefront-chrome-data";
 import { storefrontSerifClass } from "../storefront-fonts";
 import { StorefrontChrome } from "../storefront-shell-components";
 import type { StorefrontCustomPolicy } from "../storefront-data";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+
+  return {
+    alternates: { canonical: `/store/${encodeURIComponent(slug)}/policies` },
+  };
+}
 
 export default async function StorefrontPoliciesPage({
   params,

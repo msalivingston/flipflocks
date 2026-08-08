@@ -29,6 +29,7 @@ import {
 import { storefrontSerifClass } from "../../storefront-fonts";
 import { StorefrontProductGallery } from "../../storefront-product-gallery";
 import { EquipmentOrderOptions } from "./equipment-order-options";
+import { absoluteUrl as productionUrl } from "@/lib/seo-config";
 
 type StorefrontEquipmentPageParams = Promise<{
   equipmentItemId: string;
@@ -42,9 +43,9 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { equipmentItemId, slug } = await params;
   const origin = await getRequestOrigin();
-  const canonicalUrl = origin
-    ? new URL(buildCanonicalEquipmentPath(slug, equipmentItemId), origin).toString()
-    : null;
+  const canonicalUrl = productionUrl(
+    buildCanonicalEquipmentPath(slug, equipmentItemId),
+  );
   const [homeResult, itemResult, galleryResult] = await Promise.all([
     loadStorefrontHome(slug),
     loadStorefrontEquipmentItem(slug, equipmentItemId),

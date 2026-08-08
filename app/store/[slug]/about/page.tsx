@@ -1,4 +1,5 @@
 import Image from "next/image";
+import type { Metadata } from "next";
 import {
   EmptyStorefront,
   StorefrontPage,
@@ -23,6 +24,18 @@ const aboutAssets = {
   sprigRight: "/about-page/quote-sprig-right-transparent.png",
   tallPlant: "/about-page/tall-plant-transparent.png",
 };
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+
+  return {
+    alternates: { canonical: `/store/${encodeURIComponent(slug)}/about` },
+  };
+}
 
 export const revalidate = 0;
 
