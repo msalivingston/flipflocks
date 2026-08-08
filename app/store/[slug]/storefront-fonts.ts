@@ -1,72 +1,73 @@
-import {
-  DM_Sans,
-  Fraunces,
-  Inter,
-  Libre_Caslon_Text,
-  Lora,
-  Montserrat,
-  Nunito_Sans,
-  Oswald,
-  Roboto_Slab,
-  Source_Sans_3,
-} from "next/font/google";
+import localFont from "next/font/local";
 
-export const storefrontSans = Source_Sans_3({
-  subsets: ["latin"],
+export const storefrontSans = localFont({
+  src: "./fonts/source-sans-3-400.ttf",
   variable: "--font-source-sans-3",
   weight: "400",
 });
 
-export const storefrontSerif = Libre_Caslon_Text({
-  subsets: ["latin"],
+export const storefrontSerif = localFont({
+  src: [
+    { path: "./fonts/libre-caslon-text-400.ttf", weight: "400" },
+    { path: "./fonts/libre-caslon-text-700.ttf", weight: "700" },
+  ],
   variable: "--font-libre-caslon-text",
-  weight: ["400", "700"],
 });
 
-const lora = Lora({
-  subsets: ["latin"],
+const lora = localFont({
+  src: [
+    { path: "./fonts/lora-400.ttf", weight: "400" },
+    { path: "./fonts/lora-700.ttf", weight: "700" },
+  ],
   variable: "--font-lora",
-  weight: ["400", "700"],
 });
 
-const nunitoSans = Nunito_Sans({
-  subsets: ["latin"],
+const nunitoSans = localFont({
+  src: "./fonts/nunito-sans-400.ttf",
   variable: "--font-nunito-sans",
   weight: "400",
 });
 
-const oswald = Oswald({
-  subsets: ["latin"],
+const oswald = localFont({
+  src: [
+    { path: "./fonts/oswald-400.ttf", weight: "400" },
+    { path: "./fonts/oswald-600.ttf", weight: "600" },
+  ],
   variable: "--font-oswald",
-  weight: ["400", "600"],
 });
 
-const robotoSlab = Roboto_Slab({
-  subsets: ["latin"],
+const robotoSlab = localFont({
+  src: [
+    { path: "./fonts/roboto-slab-400.ttf", weight: "400" },
+    { path: "./fonts/roboto-slab-700.ttf", weight: "700" },
+  ],
   variable: "--font-roboto-slab",
-  weight: ["400", "700"],
 });
 
-const dmSans = DM_Sans({
-  subsets: ["latin"],
+const dmSans = localFont({
+  src: "./fonts/dm-sans-400.ttf",
   variable: "--font-dm-sans",
   weight: "400",
 });
 
-const fraunces = Fraunces({
-  subsets: ["latin"],
+const fraunces = localFont({
+  src: [
+    { path: "./fonts/fraunces-400.ttf", weight: "400" },
+    { path: "./fonts/fraunces-700.ttf", weight: "700" },
+  ],
   variable: "--font-fraunces",
-  weight: ["400", "700"],
 });
 
-const montserrat = Montserrat({
-  subsets: ["latin"],
+const montserrat = localFont({
+  src: [
+    { path: "./fonts/montserrat-400.ttf", weight: "400" },
+    { path: "./fonts/montserrat-700.ttf", weight: "700" },
+  ],
   variable: "--font-montserrat",
-  weight: ["400", "700"],
 });
 
-const inter = Inter({
-  subsets: ["latin"],
+const inter = localFont({
+  src: "./fonts/inter-400.ttf",
   variable: "--font-inter",
   weight: "400",
 });
