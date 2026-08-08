@@ -3,7 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { LogOut, Menu, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { buildStorefrontPreviewHref } from "@/lib/storefront-preview-routing";
 import { SellerContextProvider, useSellerContext } from "./seller-context";
@@ -46,7 +47,19 @@ const sellerAccountNavItem = {
   glyph: "/glyphs/person.png",
 };
 
-const mobileSellerNavItems = [...sellerNavItems, sellerAccountNavItem];
+const sellerAddInventoryNavItem = {
+  label: "Add Inventory",
+  href: ADD_INVENTORY_HREF,
+  glyph: "/glyphs/egg-carton.png",
+};
+
+const mobileQuickNavItems = [
+  sellerNavItems[0],
+  sellerNavItems[1],
+  sellerNavItems[2],
+  sellerNavItems[3],
+  sellerAddInventoryNavItem,
+];
 
 export function SellerAppShell({ children }: { children: React.ReactNode }) {
   return (
@@ -60,6 +73,10 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
   const { seller, isLoading, error, reload } = useSellerContext();
   const router = useRouter();
   const pathname = usePathname();
+  const [mobileMenuPathname, setMobileMenuPathname] = useState<string | null>(
+    null,
+  );
+  const isMobileMenuOpen = mobileMenuPathname === pathname;
   const isFocusedInventoryForm =
     pathname === "/dashboard/inventory/add-v2/live-birds" ||
     pathname.startsWith("/dashboard/inventory/add-v2/live-birds/") ||
@@ -71,6 +88,17 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
     router.replace("/login");
   }
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setMobileMenuPathname(null);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isMobileMenuOpen]);
 
   if (isLoading) {
     return (
@@ -195,7 +223,29 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
             >
               Storefront
             </Link>
+            <button
+              aria-controls="mobile-seller-menu"
+              aria-expanded={isMobileMenuOpen}
+              aria-label={isMobileMenuOpen ? "Close seller menu" : "Open seller menu"}
+              className="inline-flex size-10 shrink-0 items-center justify-center rounded-md border border-stone-300 bg-white text-stone-800 transition hover:border-emerald-800 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
+              onClick={() =>
+                setMobileMenuPathname(isMobileMenuOpen ? null : pathname)
+              }
+              type="button"
+            >
+              {isMobileMenuOpen ? (
+                <X aria-hidden="true" className="size-5" />
+              ) : (
+                <Menu aria-hidden="true" className="size-5" />
+              )}
+            </button>
           </div>
+          {isMobileMenuOpen ? (
+            <MobileSellerMenu
+              onClose={() => setMobileMenuPathname(null)}
+              onSignOut={handleSignOut}
+            />
+          ) : null}
         </header>
 
         <SellerBillingBanner />
@@ -216,9 +266,9 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
             isFocusedInventoryForm ? "hidden" : ""
           }`}
         >
-          <div className="overflow-x-auto px-2 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="flex gap-1">
-              <MobileSellerNavLinks />
+          <div className="px-2 py-2">
+            <div className="grid grid-cols-5 gap-1">
+              <MobileSellerNavLinks items={mobileQuickNavItems} />
             </div>
           </div>
         </nav>
@@ -280,20 +330,21 @@ function SellerNavLinks() {
   });
 }
 
-function MobileSellerNavLinks() {
+function MobileSellerNavLinks({
+  items,
+}: {
+  items: Array<{ label: string; href: string; glyph: string }>;
+}) {
   const pathname = usePathname();
 
-  return mobileSellerNavItems.map((item) => {
-    const isActive =
-      item.href === "/dashboard"
-        ? pathname === item.href
-        : pathname.startsWith(item.href);
+  return items.map((item) => {
+    const isActive = isSellerNavItemActive(item.href, pathname);
 
     return (
       <Link
         key={item.href}
         href={item.href}
-        className={`flex min-h-[4.25rem] min-w-[4.55rem] flex-col items-center justify-center gap-1 rounded-2xl px-1.5 py-2 text-center text-[0.78rem] font-bold leading-tight ${
+        className={`flex min-h-[4.25rem] min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-0.5 py-2 text-center text-[0.68rem] font-bold leading-tight min-[360px]:text-[0.74rem] ${
           isActive
             ? "bg-emerald-100 text-emerald-950 shadow-sm"
             : "text-stone-700"
@@ -304,6 +355,85 @@ function MobileSellerNavLinks() {
       </Link>
     );
   });
+}
+
+function MobileSellerMenu({
+  onClose,
+  onSignOut,
+}: {
+  onClose: () => void;
+  onSignOut: () => void;
+}) {
+  return (
+    <div
+      aria-label="Complete seller navigation"
+      className="border-t border-stone-200 bg-white px-4 pb-4 pt-3 shadow-[0_12px_20px_rgba(67,55,38,0.08)]"
+      id="mobile-seller-menu"
+      role="dialog"
+    >
+      <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-stone-500">
+        Seller menu
+      </p>
+      <nav aria-label="Complete seller navigation" className="grid gap-1">
+        <MobileMenuLink item={sellerAddInventoryNavItem} onClose={onClose} />
+        {sellerNavItems.map((item) => (
+          <MobileMenuLink key={item.href} item={item} onClose={onClose} />
+        ))}
+        <MobileMenuLink item={sellerAccountNavItem} onClose={onClose} />
+      </nav>
+      <div className="mt-2 border-t border-stone-200 pt-2">
+        <a
+          className="flex min-h-11 items-center gap-3 rounded-lg px-2 text-sm font-semibold text-stone-800 transition hover:bg-[#f7faf3] hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-1"
+          href={`mailto:${SUPPORT_EMAIL}`}
+          onClick={onClose}
+        >
+          <NavGlyph src="/glyphs/chat.png" alt="" />
+          Contact support
+        </a>
+        <button
+          className="flex min-h-11 w-full items-center gap-3 rounded-lg px-2 text-left text-sm font-semibold text-stone-800 transition hover:bg-[#f7faf3] hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-1"
+          onClick={onSignOut}
+          type="button"
+        >
+          <LogOut aria-hidden="true" className="ml-0.5 size-5 shrink-0" />
+          Sign out
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MobileMenuLink({
+  item,
+  onClose,
+}: {
+  item: { label: string; href: string; glyph: string };
+  onClose: () => void;
+}) {
+  const pathname = usePathname();
+  const isActive = isSellerNavItemActive(item.href, pathname);
+
+  return (
+    <Link
+      aria-current={isActive ? "page" : undefined}
+      className={`flex min-h-11 items-center gap-3 rounded-lg px-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-1 ${
+        isActive
+          ? "bg-[#f0f5ea] text-emerald-950"
+          : "text-stone-800 hover:bg-[#f7faf3] hover:text-emerald-900"
+      }`}
+      href={item.href}
+      onClick={onClose}
+    >
+      <NavGlyph src={item.glyph} alt="" />
+      {item.label}
+    </Link>
+  );
+}
+
+function isSellerNavItemActive(href: string, pathname: string) {
+  return href === "/dashboard"
+    ? pathname === href
+    : pathname.startsWith(href);
 }
 
 function SellerUtilityLink({
