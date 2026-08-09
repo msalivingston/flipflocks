@@ -262,7 +262,6 @@ export function OnboardingFlow({ checkoutCanceled = false }: { checkoutCanceled?
                 aboutText: store?.about_text ?? seller?.about_text,
                 heroSubheading: store?.hero_subheading ?? seller?.hero_subheading,
                 heroTagline: store?.store_tagline ?? seller?.store_tagline,
-                locationDisplayPreference: store?.location_display_preference,
                 storeName: store?.store_name ?? seller?.store_name,
               }}
               onBack={() => {

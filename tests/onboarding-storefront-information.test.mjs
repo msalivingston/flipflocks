@@ -122,8 +122,18 @@ test("Step 4 restores controlled saved values and saves only storefront details"
   assert.match(source, /value=\{heroTagline\}/);
   assert.match(source, /value=\{heroSubheading\}/);
   assert.match(source, /seller_save_onboarding_storefront_details/);
+  assert.match(source, /location_display_preference: "city_state"/);
+  assert.match(source, /locationDisplayPreference: "city_state"/);
   assert.match(source, /Your main storefront headline\. Keep it short and welcoming\./);
   assert.match(source, /A brief line telling customers what you offer and who it.s for\. You can change this anytime\./);
+  assert.match(
+    source,
+    /Your storefront shows your city and state\. Your street and pickup\s+addresses stay private\./,
+  );
+  assert.doesNotMatch(
+    source,
+    /Public location preference|Show city \+ state only|Saved full-address preference|Manage precise location manually|type="radio"|RadioOption/,
+  );
 
   const detailsFunction = migration.slice(
     migration.indexOf("seller_save_onboarding_storefront_details"),
@@ -134,6 +144,32 @@ test("Step 4 restores controlled saved values and saves only storefront details"
     detailsFunction,
     /billing_address_line1\s*=|requested_plan_key\s*=|pickup_address_line1\s*=|store_slug\s*=/,
   );
+});
+
+test("public storefront location is limited to city and state", async () => {
+  const [storefrontUi, storefrontHome, storefrontData] = await Promise.all([
+    read("app/store/[slug]/storefront-ui.tsx"),
+    read("app/store/[slug]/storefront-home-content.tsx"),
+    read("app/store/[slug]/storefront-data.ts"),
+  ]);
+
+  assert.match(
+    storefrontUi,
+    /\[item\.public_city, item\.public_state\]\.filter\(Boolean\)\.join\(", "\)/,
+  );
+  assert.match(
+    storefrontHome,
+    /store: \{ public_city: string \| null; public_state: string \| null \}/,
+  );
+  assert.match(storefrontData, /public_city: string \| null/);
+  assert.match(storefrontData, /public_state: string \| null/);
+
+  for (const source of [storefrontUi, storefrontHome, storefrontData]) {
+    assert.doesNotMatch(
+      source,
+      /billing_address_line1|pickup_address_line1|location_display_preference/,
+    );
+  }
 });
 
 test("fresh Market defaults all modules on, saved choices win, and Coop stays locked false", async () => {

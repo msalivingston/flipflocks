@@ -10,14 +10,11 @@ import {
 } from "@/lib/storefront-hero-copy";
 import { supabase } from "@/lib/supabase";
 
-type LocationDisplayPreference = "city_state" | "full_address" | "manual";
-
 type StorefrontDetailsErrors = {
   aboutText?: string;
   form?: string;
   heroSubheading?: string;
   heroTagline?: string;
-  locationDisplayPreference?: string;
   logo?: string;
 };
 
@@ -26,7 +23,6 @@ type StorefrontDetailsFormProps = {
     aboutText?: string | null;
     heroSubheading?: string | null;
     heroTagline?: string | null;
-    locationDisplayPreference?: string | null;
     storeName?: string | null;
   };
   onBack: () => void;
@@ -34,7 +30,7 @@ type StorefrontDetailsFormProps = {
     aboutText: string;
     heroSubheading: string;
     heroTagline: string;
-    locationDisplayPreference: LocationDisplayPreference;
+    locationDisplayPreference: "city_state";
   }) => void;
   storeId: string;
 };
@@ -67,10 +63,6 @@ export function Step4StorefrontDetailsForm({
   const [useStarterDescription, setUseStarterDescription] = useState(
     initialValues?.aboutText == null || initialAboutText === starterFarmDescription,
   );
-  const [locationDisplayPreference, setLocationDisplayPreference] =
-    useState<LocationDisplayPreference>(
-      normalizeLocationPreference(initialValues?.locationDisplayPreference),
-    );
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<StorefrontDetailsErrors>({});
   const [warning, setWarning] = useState<string | null>(null);
@@ -83,7 +75,6 @@ export function Step4StorefrontDetailsForm({
       aboutText,
       heroSubheading,
       heroTagline,
-      locationDisplayPreference,
     });
 
     if (Object.keys(nextErrors).length > 0) {
@@ -101,7 +92,7 @@ export function Step4StorefrontDetailsForm({
         p_details: {
           about_text: aboutText.trim(),
           hero_subheading: heroSubheading.trim(),
-          location_display_preference: locationDisplayPreference,
+          location_display_preference: "city_state",
           store_tagline: heroTagline.trim(),
         },
       },
@@ -133,7 +124,7 @@ export function Step4StorefrontDetailsForm({
       aboutText: aboutText.trim(),
       heroSubheading: heroSubheading.trim(),
       heroTagline: heroTagline.trim(),
-      locationDisplayPreference,
+      locationDisplayPreference: "city_state",
     });
   }
 
@@ -270,43 +261,10 @@ export function Step4StorefrontDetailsForm({
           </div>
         </div>
 
-        <fieldset className="border-t border-stone-200 pt-4">
-          <legend className="text-sm font-bold text-stone-950 sm:text-[13px]">
-            Public location preference *
-          </legend>
-          <p className="mt-1 text-sm leading-5 text-stone-500 sm:text-xs">
-            The current storefront shows your billing city and state only. Your
-            billing street address and pickup address remain private.
-          </p>
-          <div className="mt-2 grid gap-2">
-            <RadioOption
-              checked={locationDisplayPreference === "city_state"}
-              description="Shows city and state only; no street address is published."
-              label="Show city + state only"
-              onChange={() => setLocationDisplayPreference("city_state")}
-              value="city_state"
-            />
-            <RadioOption
-              checked={locationDisplayPreference === "full_address"}
-              description="Legacy preference retained for saved setups. The current storefront still keeps street addresses private and shows city + state only."
-              label="Saved full-address preference"
-              onChange={() => setLocationDisplayPreference("full_address")}
-              value="full_address"
-            />
-            <RadioOption
-              checked={locationDisplayPreference === "manual"}
-              description="You’ll manage precise pickup instructions later. The storefront continues to show city + state only."
-              label="Manage precise location manually"
-              onChange={() => setLocationDisplayPreference("manual")}
-              value="manual"
-            />
-          </div>
-          {errors.locationDisplayPreference ? (
-            <p className="mt-1 text-xs font-semibold text-red-700">
-              {errors.locationDisplayPreference}
-            </p>
-          ) : null}
-        </fieldset>
+        <p className="border-t border-stone-200 pt-4 text-sm leading-5 text-stone-500 sm:text-xs">
+          Your storefront shows your city and state. Your street and pickup
+          addresses stay private.
+        </p>
 
         {errors.form ? (
           <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800" role="alert">
@@ -378,47 +336,14 @@ function Field({
   );
 }
 
-function RadioOption({
-  checked,
-  description,
-  label,
-  onChange,
-  value,
-}: {
-  checked: boolean;
-  description: string;
-  label: string;
-  onChange: () => void;
-  value: LocationDisplayPreference;
-}) {
-  return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-md border border-stone-200 px-3 py-2.5 has-checked:border-[#246f38] has-checked:bg-[#eff8ed]">
-      <input
-        checked={checked}
-        className="mt-1 size-4 accent-[#246f38]"
-        name="location-display-preference"
-        onChange={onChange}
-        type="radio"
-        value={value}
-      />
-      <span>
-        <span className="block text-sm font-bold text-stone-800">{label}</span>
-        <span className="mt-0.5 block text-xs leading-5 text-stone-500">{description}</span>
-      </span>
-    </label>
-  );
-}
-
 function validateStorefrontDetails({
   aboutText,
   heroSubheading,
   heroTagline,
-  locationDisplayPreference,
 }: {
   aboutText: string;
   heroSubheading: string;
   heroTagline: string;
-  locationDisplayPreference: string;
 }) {
   const nextErrors: StorefrontDetailsErrors = {};
   if (!heroTagline.trim()) nextErrors.heroTagline = "Enter your hero tagline.";
@@ -433,15 +358,7 @@ function validateStorefrontDetails({
   else if (countWords(aboutText) > maxDescriptionWords) {
     nextErrors.aboutText = "Keep your farm description to 250 words or fewer.";
   }
-  if (!locationDisplayPreference) {
-    nextErrors.locationDisplayPreference = "Choose a location display option.";
-  }
   return nextErrors;
-}
-
-function normalizeLocationPreference(value: string | null | undefined): LocationDisplayPreference {
-  if (value === "full_address" || value === "manual") return value;
-  return "city_state";
 }
 
 function friendlyDetailsError(message: string) {
