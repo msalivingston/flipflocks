@@ -51,9 +51,12 @@ export type StorefrontListingSection = {
 
 export function StorefrontListingTabs({
   sections,
+  variant = "storefront",
 }: {
   sections: StorefrontListingSection[];
+  variant?: "embed" | "storefront";
 }) {
+  const isEmbed = variant === "embed";
   const [activeId, setActiveId] = useState(sections[0]?.id ?? "");
   const [ageFilter, setAgeFilter] = useState("all");
   const [availabilityFilter, setAvailabilityFilter] = useState("all");
@@ -94,7 +97,7 @@ export function StorefrontListingTabs({
   );
   const filteredCards = useMemo(
     () =>
-      filterCards(activeSection?.cards ?? [], {
+      filterStorefrontListingCards(activeSection?.cards ?? [], {
         availability: showAvailabilityFilter ? availabilityFilter : "all",
         age: showAgeFilter ? ageFilter : "all",
         breed: showBreedFilter ? breedFilter : "all",
@@ -231,19 +234,36 @@ export function StorefrontListingTabs({
   }
 
   return (
-    <div className="grid gap-2.5 lg:gap-4">
-      <div className="grid gap-3 lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-end">
+    <div
+      className="grid min-w-0 gap-2.5 lg:gap-4"
+      data-storefront-listing-browser={variant}
+    >
+      <div
+        className={cx(
+          "grid min-w-0 gap-3",
+          isEmbed
+            ? "lg:items-end"
+            : "lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-end",
+        )}
+      >
         <h2
           className={cx(
             storefrontSerifClass,
-            "storefront-heading-color sr-only text-2xl font-bold leading-tight text-stone-950 sm:text-3xl lg:not-sr-only lg:text-[2.0625rem]",
+            isEmbed
+              ? "sr-only"
+              : "storefront-heading-color sr-only text-2xl font-bold leading-tight text-stone-950 sm:text-3xl lg:not-sr-only lg:text-[2.0625rem]",
           )}
         >
           Shop
         </h2>
         <div
           aria-label="Storefront listing categories"
-          className="hidden gap-2 border-b border-[#ddd5c7] lg:grid lg:grid-cols-4"
+          className={cx(
+            "hidden gap-2",
+            isEmbed
+              ? "lg:flex lg:flex-wrap"
+              : "border-b border-[#ddd5c7] lg:grid lg:grid-cols-4",
+          )}
           role="tablist"
         >
           {sections.map((section) => {
@@ -254,7 +274,10 @@ export function StorefrontListingTabs({
                 aria-controls={`${section.id}-panel`}
                 aria-selected={active}
                 className={cx(
-                  "relative -mb-px inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-t-md border border-b-0 px-2 text-xs font-semibold transition lg:min-h-11 lg:gap-2 lg:px-3 lg:text-sm",
+                  "relative inline-flex min-h-10 items-center justify-center gap-1.5 border px-2 text-xs font-semibold transition lg:min-h-11 lg:gap-2 lg:px-3 lg:text-sm",
+                  isEmbed
+                    ? "w-auto rounded-md"
+                    : "-mb-px w-full rounded-t-md border-b-0",
                   active
                     ? "storefront-primary-color storefront-primary-border bg-white shadow-[0_-1px_0_var(--storefront-heading-color)_inset]"
                     : "border-[#eee8dc] bg-[#f8f3ea] text-stone-700 hover:border-[#ddd5c7] hover:bg-white hover:text-[var(--storefront-heading-color)]",
@@ -344,7 +367,7 @@ export function StorefrontListingTabs({
         role="tabpanel"
       >
         {activeSection.cards.length > 0 ? (
-          <div className="grid gap-3 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-5">
+          <div className="grid min-w-0 gap-3 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-5">
             <ListingFilters
               age={ageFilter}
               showAgeFilter={showAgeFilter}
@@ -375,9 +398,15 @@ export function StorefrontListingTabs({
               className="hidden lg:block"
             />
             {filteredCards.length > 0 ? (
-              <div className="grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
+              <div
+                aria-label="Available inventory"
+                className={cx(
+                  "grid min-w-0 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3",
+                  isEmbed ? "min-[820px]:grid-cols-3 lg:gap-4" : "lg:gap-5",
+                )}
+              >
                 {filteredCards.map((card) => (
-                  <ListingCard card={card} key={card.href} />
+                  <ListingCard card={card} key={card.href} variant={variant} />
                 ))}
               </div>
             ) : (
@@ -800,12 +829,23 @@ function FilterSelect({
   );
 }
 
-function ListingCard({ card }: { card: StorefrontListingCard }) {
+function ListingCard({
+  card,
+  variant,
+}: {
+  card: StorefrontListingCard;
+  variant: "embed" | "storefront";
+}) {
+  const isEmbed = variant === "embed";
+  const actionLabel = isEmbed ? "View & order" : "View";
+
   return (
     <article className="group overflow-hidden rounded-lg border border-[#e3dccf] bg-white shadow-[0_2px_10px_rgba(41,37,36,0.08)] transition hover:border-[#bfcfb6] hover:shadow-md lg:flex lg:flex-col lg:border-[#ded7c8] lg:shadow-none lg:hover:shadow-sm">
       <Link
         className="grid min-w-0 grid-cols-[42%_minmax(0,1fr)] gap-2 p-2 focus:outline-none focus:ring-2 focus:ring-emerald-700 lg:hidden"
         href={card.href}
+        rel={isEmbed ? "noopener noreferrer" : undefined}
+        target={isEmbed ? "_blank" : undefined}
       >
         <div className="relative overflow-hidden rounded-md">
           <ListingPhoto alt={card.imageAlt} aspect="square" src={card.imageUrl} />
@@ -835,7 +875,7 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
               {card.detail}
             </p>
             <span className="storefront-primary-button mt-1 inline-flex min-h-8 w-full items-center justify-center rounded-md px-3 text-[0.88rem] font-semibold transition">
-              View
+              {actionLabel}
             </span>
           </div>
         </div>
@@ -844,6 +884,8 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
       <Link
         className="hidden flex-col focus:outline-none focus:ring-2 focus:ring-emerald-700 lg:flex"
         href={card.href}
+        rel={isEmbed ? "noopener noreferrer" : undefined}
+        target={isEmbed ? "_blank" : undefined}
       >
         <div className="px-3.5 pb-2 pt-3 lg:px-4 lg:pb-2.5 lg:pt-4">
           <p className="storefront-primary-color truncate text-[0.7rem] font-bold uppercase tracking-[0.08em] text-emerald-700">
@@ -875,7 +917,7 @@ function ListingCard({ card }: { card: StorefrontListingCard }) {
               </p>
             </div>
             <span className="storefront-primary-button inline-flex min-h-10 shrink-0 items-center justify-center rounded-md px-3 text-sm font-semibold transition lg:min-h-11 lg:px-4 lg:text-base">
-              View
+              {actionLabel}
             </span>
           </div>
         </div>
@@ -918,7 +960,7 @@ function buildFilterOptions(values: Array<string | null | undefined>) {
     .map(([, label]) => label);
 }
 
-function filterCards(
+export function filterStorefrontListingCards(
   cards: StorefrontListingCard[],
   filters: {
     age: string;

@@ -7,7 +7,7 @@ import {
 } from "@/app/store/[slug]/storefront-data";
 import {
   buildStorefrontListingSectionsFromPublicData,
-  flattenStorefrontListingSections,
+  getNonEmptyStorefrontListingSections,
 } from "@/app/store/[slug]/storefront-listing-cards";
 import { EmbedInventoryGallery } from "./embed-inventory-gallery";
 
@@ -44,11 +44,11 @@ export default async function EmbeddedStoreInventoryPage({
   const sections = buildStorefrontListingSectionsFromPublicData(
     listingResult.data,
   );
-  const cards = flattenStorefrontListingSections(sections);
+  const visibleSections = getNonEmptyStorefrontListingSections(sections);
 
   return (
     <EmbedFrame>
-      <EmbedInventoryGallery cards={cards} />
+      <EmbedInventoryGallery sections={visibleSections} />
     </EmbedFrame>
   );
 }

@@ -110,6 +110,12 @@ export function flattenStorefrontListingSections(
   return sections.flatMap((section) => section.cards);
 }
 
+export function getNonEmptyStorefrontListingSections(
+  sections: StorefrontListingSection[],
+) {
+  return sections.filter((section) => section.cards.length > 0);
+}
+
 function sortListingCardsByTitle(cards: StorefrontListingCard[]) {
   return [...cards].sort((first, second) =>
     first.title.localeCompare(second.title, undefined, {
