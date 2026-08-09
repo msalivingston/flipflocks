@@ -255,6 +255,90 @@ test("clearing embed filters restores every listing in the selected category", a
   );
 });
 
+test("pagination keeps six-listing page membership consistent at every viewport", async () => {
+  const listingTabs = await loadListingTabsModule();
+  const cards = Array.from({ length: 14 }, (_, index) =>
+    filterCard({
+      href: `/store/example/products/${index + 1}`,
+      title: `Listing ${index + 1}`,
+    }),
+  );
+
+  assert.equal(listingTabs.storefrontListingsPerPage, 6);
+  assert.deepEqual(
+    listingTabs
+      .paginateStorefrontListingCards(cards, 1)
+      .cards.map((card) => card.title),
+    [
+      "Listing 1",
+      "Listing 2",
+      "Listing 3",
+      "Listing 4",
+      "Listing 5",
+      "Listing 6",
+    ],
+  );
+
+  const secondPage = listingTabs.paginateStorefrontListingCards(cards, 2);
+  assert.equal(secondPage.pageCount, 3);
+  assert.equal(secondPage.startResult, 7);
+  assert.equal(secondPage.endResult, 12);
+  assert.equal(secondPage.totalResults, 14);
+  assert.deepEqual(
+    secondPage.cards.map((card) => card.title),
+    [
+      "Listing 7",
+      "Listing 8",
+      "Listing 9",
+      "Listing 10",
+      "Listing 11",
+      "Listing 12",
+    ],
+  );
+
+  const clampedFinalPage = listingTabs.paginateStorefrontListingCards(cards, 99);
+  assert.equal(clampedFinalPage.page, 3);
+  assert.equal(clampedFinalPage.startResult, 13);
+  assert.equal(clampedFinalPage.endResult, 14);
+  assert.deepEqual(
+    clampedFinalPage.cards.map((card) => card.title),
+    ["Listing 13", "Listing 14"],
+  );
+});
+
+test("pagination controls are compact and filters reset page membership", async () => {
+  const listingTabs = await read(listingTabsPath);
+
+  assert.match(listingTabs, /isEmbed \? pagination\.cards : filteredCards/);
+  assert.match(
+    listingTabs,
+    /\{isEmbed \? \([\s\S]*?<StorefrontListingPagination/,
+  );
+  assert.match(listingTabs, /lg:grid-cols-3/);
+  assert.match(listingTabs, /Showing \{startResult\}&ndash;\{endResult\} of \{totalResults\} listings/);
+  assert.match(listingTabs, />\s*Previous\s*</);
+  assert.match(listingTabs, />\s*Next\s*</);
+  assert.match(listingTabs, /aria-current=\{active \? "page" : undefined\}/);
+  assert.match(listingTabs, /className="flex min-w-0 flex-wrap/);
+
+  for (const handler of [
+    "changeCategory",
+    "resetFilters",
+    "changeAgeFilter",
+    "changeAvailabilityFilter",
+    "changeBreedFilter",
+    "changePriceFilter",
+    "changeQuery",
+    "changeSpeciesFilter",
+  ]) {
+    assert.match(
+      listingTabs,
+      new RegExp(`function ${handler}\\([\\s\\S]*?setRequestedPage\\(1\\)`),
+      handler,
+    );
+  }
+});
+
 test("the embed reuses storefront controls while omitting storefront chrome and private seller fields", async () => {
   const [route, gallery, listingTabs] = await Promise.all([
     read(routePath),

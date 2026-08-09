@@ -53,6 +53,34 @@ export type StorefrontListingSection = {
   label: string;
 };
 
+export const storefrontListingsPerPage = 6;
+
+export function paginateStorefrontListingCards(
+  cards: StorefrontListingCard[],
+  requestedPage: number,
+) {
+  const pageCount = Math.ceil(cards.length / storefrontListingsPerPage);
+  const highestPage = Math.max(pageCount, 1);
+  const normalizedPage = Number.isFinite(requestedPage)
+    ? Math.max(1, Math.trunc(requestedPage))
+    : 1;
+  const page = Math.min(normalizedPage, highestPage);
+  const startIndex = (page - 1) * storefrontListingsPerPage;
+  const endIndex = Math.min(
+    startIndex + storefrontListingsPerPage,
+    cards.length,
+  );
+
+  return {
+    cards: cards.slice(startIndex, endIndex),
+    endResult: cards.length > 0 ? endIndex : 0,
+    page,
+    pageCount,
+    startResult: cards.length > 0 ? startIndex + 1 : 0,
+    totalResults: cards.length,
+  };
+}
+
 export function StorefrontListingTabs({
   orderMode = null,
   sections,
@@ -69,6 +97,7 @@ export function StorefrontListingTabs({
   const [breedFilter, setBreedFilter] = useState("all");
   const [priceFilter, setPriceFilter] = useState("all");
   const [query, setQuery] = useState("");
+  const [requestedPage, setRequestedPage] = useState(1);
   const [speciesFilter, setSpeciesFilter] = useState("all");
   const activeSection =
     sections.find((section) => section.id === activeId) ?? sections[0];
@@ -136,6 +165,10 @@ export function StorefrontListingTabs({
     priceFilter !== "all" ||
     query.trim() !== "" ||
     speciesFilter !== "all";
+  const pagination = useMemo(
+    () => paginateStorefrontListingCards(filteredCards, requestedPage),
+    [filteredCards, requestedPage],
+  );
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const activeFilterLabels = buildActiveFilterLabels({
@@ -165,6 +198,7 @@ export function StorefrontListingTabs({
       setBreedFilter("all");
       setPriceFilter("all");
       setQuery("");
+      setRequestedPage(1);
       setSpeciesFilter("all");
 
       return true;
@@ -226,6 +260,7 @@ export function StorefrontListingTabs({
     setBreedFilter("all");
     setPriceFilter("all");
     setQuery("");
+    setRequestedPage(1);
     setSpeciesFilter("all");
     setIsCategoryMenuOpen(false);
   }
@@ -236,7 +271,38 @@ export function StorefrontListingTabs({
     setBreedFilter("all");
     setPriceFilter("all");
     setQuery("");
+    setRequestedPage(1);
     setSpeciesFilter("all");
+  }
+
+  function changeAgeFilter(value: string) {
+    setAgeFilter(value);
+    setRequestedPage(1);
+  }
+
+  function changeAvailabilityFilter(value: string) {
+    setAvailabilityFilter(value);
+    setRequestedPage(1);
+  }
+
+  function changeBreedFilter(value: string) {
+    setBreedFilter(value);
+    setRequestedPage(1);
+  }
+
+  function changePriceFilter(value: string) {
+    setPriceFilter(value);
+    setRequestedPage(1);
+  }
+
+  function changeQuery(value: string) {
+    setQuery(value);
+    setRequestedPage(1);
+  }
+
+  function changeSpeciesFilter(value: string) {
+    setSpeciesFilter(value);
+    setRequestedPage(1);
   }
 
   return (
@@ -394,31 +460,43 @@ export function StorefrontListingTabs({
               query={query}
               species={speciesFilter}
               speciesOptions={speciesOptions}
-              onAgeChange={setAgeFilter}
-              onAvailabilityChange={setAvailabilityFilter}
-              onBreedChange={setBreedFilter}
-              onPriceChange={setPriceFilter}
-              onQueryChange={setQuery}
+              onAgeChange={changeAgeFilter}
+              onAvailabilityChange={changeAvailabilityFilter}
+              onBreedChange={changeBreedFilter}
+              onPriceChange={changePriceFilter}
+              onQueryChange={changeQuery}
               onReset={resetFilters}
-              onSpeciesChange={setSpeciesFilter}
+              onSpeciesChange={changeSpeciesFilter}
               className="hidden lg:block"
             />
             {filteredCards.length > 0 ? (
-              <div
-                aria-label="Available inventory"
-                className={cx(
-                  "grid min-w-0 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3",
-                  isEmbed ? "min-[820px]:grid-cols-3 lg:gap-4" : "lg:gap-5",
-                )}
-              >
-                {filteredCards.map((card) => (
-                  <ListingCard
-                    card={card}
-                    key={card.href}
-                    orderMode={orderMode}
-                    variant={variant}
+              <div className="min-w-0">
+                <div
+                  aria-label="Available inventory"
+                  className={cx(
+                    "grid min-w-0 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3",
+                    isEmbed ? "min-[820px]:grid-cols-3 lg:gap-4" : "lg:gap-5",
+                  )}
+                >
+                  {(isEmbed ? pagination.cards : filteredCards).map((card) => (
+                    <ListingCard
+                      card={card}
+                      key={card.href}
+                      orderMode={orderMode}
+                      variant={variant}
+                    />
+                  ))}
+                </div>
+                {isEmbed ? (
+                  <StorefrontListingPagination
+                    endResult={pagination.endResult}
+                    onPageChange={setRequestedPage}
+                    page={pagination.page}
+                    pageCount={pagination.pageCount}
+                    startResult={pagination.startResult}
+                    totalResults={pagination.totalResults}
                   />
-                ))}
+                ) : null}
               </div>
             ) : (
               <EmptyStorefront
@@ -496,13 +574,13 @@ export function StorefrontListingTabs({
             query={query}
             species={speciesFilter}
             speciesOptions={speciesOptions}
-            onAgeChange={setAgeFilter}
-            onAvailabilityChange={setAvailabilityFilter}
-            onBreedChange={setBreedFilter}
-            onPriceChange={setPriceFilter}
-            onQueryChange={setQuery}
+            onAgeChange={changeAgeFilter}
+            onAvailabilityChange={changeAvailabilityFilter}
+            onBreedChange={changeBreedFilter}
+            onPriceChange={changePriceFilter}
+            onQueryChange={changeQuery}
             onReset={resetFilters}
-            onSpeciesChange={setSpeciesFilter}
+            onSpeciesChange={changeSpeciesFilter}
             className="border-0 p-0 shadow-none"
           />
           <div className="mt-4 grid grid-cols-2 gap-2">
@@ -524,6 +602,94 @@ export function StorefrontListingTabs({
         </MobileSheet>
       ) : null}
     </div>
+  );
+}
+
+function StorefrontListingPagination({
+  endResult,
+  onPageChange,
+  page,
+  pageCount,
+  startResult,
+  totalResults,
+}: {
+  endResult: number;
+  onPageChange: (page: number) => void;
+  page: number;
+  pageCount: number;
+  startResult: number;
+  totalResults: number;
+}) {
+  const pages = Array.from({ length: pageCount }, (_, index) => index + 1);
+
+  return (
+    <div className="mt-4 grid min-w-0 gap-2.5 border-t border-[#e5decf] pt-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between">
+      <p
+        aria-live="polite"
+        className="text-center text-xs font-semibold text-stone-600 sm:text-left sm:text-sm"
+      >
+        Showing {startResult}&ndash;{endResult} of {totalResults} listings
+      </p>
+      <nav
+        aria-label="Listing pages"
+        className="flex min-w-0 flex-wrap items-center justify-center gap-1"
+      >
+        <PaginationButton
+          disabled={page === 1}
+          onClick={() => onPageChange(page - 1)}
+        >
+          Previous
+        </PaginationButton>
+        {pages.map((pageNumber) => (
+          <PaginationButton
+            active={pageNumber === page}
+            ariaLabel={`Page ${pageNumber}`}
+            key={pageNumber}
+            onClick={() => onPageChange(pageNumber)}
+          >
+            {pageNumber}
+          </PaginationButton>
+        ))}
+        <PaginationButton
+          disabled={page === pageCount}
+          onClick={() => onPageChange(page + 1)}
+        >
+          Next
+        </PaginationButton>
+      </nav>
+    </div>
+  );
+}
+
+function PaginationButton({
+  active = false,
+  ariaLabel,
+  children,
+  disabled = false,
+  onClick,
+}: {
+  active?: boolean;
+  ariaLabel?: string;
+  children: React.ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-current={active ? "page" : undefined}
+      aria-label={ariaLabel}
+      className={cx(
+        "inline-flex min-h-9 min-w-9 items-center justify-center rounded-md border px-2 text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:border-stone-200 disabled:bg-stone-50 disabled:text-stone-400",
+        active
+          ? "storefront-primary-button storefront-primary-border"
+          : "border-[#ddd5c7] bg-white text-stone-700 hover:border-[#bfcfb6]",
+      )}
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
   );
 }
 
