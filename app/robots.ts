@@ -10,18 +10,6 @@ export default function robots(): MetadataRoute.Robots {
       rules: {
         userAgent: "*",
         allow: "/",
-        disallow: [
-          "/admin/",
-          "/dashboard/",
-          "/dev/",
-          "/login",
-          "/onboarding/",
-          "/reset-password",
-          "/sign-in",
-          "/signup",
-          "/store/*/cart",
-          "/store/*/checkout",
-        ],
       },
       sitemap: `${PRODUCTION_ORIGIN}/sitemap.xml`,
       host: PRODUCTION_ORIGIN,

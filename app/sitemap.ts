@@ -16,24 +16,11 @@ const PUBLIC_STATIC_PATHS = [
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const urls = new Set(PUBLIC_STATIC_PATHS.map((path) => absoluteUrl(path)));
+  const publicRows = await loadPublicSitemapRows();
 
-  const [stores, liveBirds, hatchingEggs, equipment, processedPoultry] =
-    await Promise.all([
-      publicSupabase.from("public_storefronts").select("store_slug"),
-      publicSupabase
-        .from("public_storefront_inventory")
-        .select("store_slug,seller_breed_profile_id")
-        .neq("batch_type", "hatching_eggs"),
-      publicSupabase
-        .from("public_storefront_hatching_egg_inventory")
-        .select("store_slug,hatching_egg_product_id"),
-      publicSupabase
-        .from("public_storefront_equipment_inventory")
-        .select("store_slug,equipment_inventory_item_id"),
-      publicSupabase
-        .from("public_storefront_processed_poultry_inventory")
-        .select("store_slug,processed_poultry_inventory_item_id"),
-    ]);
+  if (!publicRows) return [...urls].map((url) => ({ url }));
+
+  const [stores, liveBirds, hatchingEggs, equipment, processedPoultry] = publicRows;
 
   for (const store of stores.data ?? []) {
     const base = `/store/${encodeURIComponent(store.store_slug)}`;
@@ -75,4 +62,29 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   return [...urls].map((url) => ({ url }));
+}
+
+async function loadPublicSitemapRows() {
+  try {
+    const results = await Promise.all([
+      publicSupabase.from("public_storefronts").select("store_slug"),
+      publicSupabase
+        .from("public_storefront_inventory")
+        .select("store_slug,seller_breed_profile_id")
+        .neq("batch_type", "hatching_eggs"),
+      publicSupabase
+        .from("public_storefront_hatching_egg_inventory")
+        .select("store_slug,hatching_egg_product_id"),
+      publicSupabase
+        .from("public_storefront_equipment_inventory")
+        .select("store_slug,equipment_inventory_item_id"),
+      publicSupabase
+        .from("public_storefront_processed_poultry_inventory")
+        .select("store_slug,processed_poultry_inventory_item_id"),
+    ]);
+
+    return results.some((result) => result.error) ? null : results;
+  } catch {
+    return null;
+  }
 }

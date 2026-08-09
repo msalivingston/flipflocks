@@ -6,6 +6,10 @@ import { PublicSignupCta } from "./_components/public-signup-cta";
 import { legalRoutes } from "@/lib/legal";
 import { loadSellerSignupsEnabled } from "@/lib/platform-settings";
 import { buildPublicMetadata } from "@/lib/public-metadata";
+import {
+  HOMEPAGE_STRUCTURED_DATA,
+  serializeJsonLd,
+} from "@/lib/homepage-structured-data";
 
 export const metadata: Metadata = buildPublicMetadata({
   canonicalPath: "/",
@@ -155,6 +159,12 @@ export default async function Home() {
 
   return (
     <main className="min-h-screen bg-white text-[#163824]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeJsonLd(HOMEPAGE_STRUCTURED_DATA),
+        }}
+      />
       <section className="relative isolate min-h-[500px] overflow-hidden text-white max-[899px]:min-h-[390px] md:min-h-[560px]">
         <Image
           src="/landing-page/hero-image.png"
