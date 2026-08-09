@@ -374,23 +374,68 @@ test("the embed reuses storefront controls while omitting storefront chrome and 
   assert.doesNotMatch(gallery, /[a-z]+_(?:id|at)\b/);
 });
 
-test("mobile category and filter controls stay compact and contain horizontal overflow", async () => {
+test("embed mobile category and filter controls use anchored, overflow-safe panels", async () => {
   const [route, gallery, listingTabs] = await Promise.all([
     read(routePath),
     read(galleryPath),
     read(listingTabsPath),
   ]);
+  const anchoredPresentation = listingTabs.slice(
+    listingTabs.indexOf('if (presentation === "anchored")'),
+    listingTabs.indexOf(
+      'className="fixed inset-0 z-50 lg:hidden"',
+      listingTabs.indexOf('if (presentation === "anchored")'),
+    ),
+  );
 
   assert.match(route, /w-full max-w-full overflow-x-hidden/);
   assert.match(gallery, /variant="embed"/);
   assert.match(listingTabs, /isEmbed[\s\S]*?lg:flex lg:flex-wrap/);
   assert.match(listingTabs, /className="lg:hidden"/);
-  assert.match(listingTabs, /<MobileSheet[\s\S]*label="Choose department"/);
-  assert.match(listingTabs, /<MobileSheet[\s\S]*label="Filter listings"/);
-  assert.match(listingTabs, /max-h-\[82vh\]/);
+  assert.match(listingTabs, /<MobilePanel[\s\S]*label="Choose department"/);
+  assert.match(listingTabs, /<MobilePanel[\s\S]*label="Filter listings"/);
+  assert.match(
+    listingTabs,
+    /presentation=\{isEmbed \? "anchored" : "sheet"\}/g,
+  );
+  assert.match(
+    anchoredPresentation,
+    /absolute inset-x-0 top-\[calc\(100%\+0\.5rem\)\] z-40 min-w-0 max-w-full/,
+  );
+  assert.doesNotMatch(anchoredPresentation, /fixed|bottom-0/);
+  assert.match(listingTabs, /max-h-\[min\(32rem,calc\(100vh-6rem\)\)\]/);
   assert.match(listingTabs, /overflow-y-auto/);
   assert.match(listingTabs, /min-w-0/);
   assert.doesNotMatch(gallery, /(?:^|\s)w-\[\d+(?:px|rem)\]/);
+});
+
+test("ordinary storefront keeps its fixed bottom sheet presentation", async () => {
+  const listingTabs = await read(listingTabsPath);
+  const sheetPresentation = listingTabs.slice(
+    listingTabs.indexOf('data-mobile-panel-presentation="sheet"') - 100,
+    listingTabs.indexOf("function buildActiveFilterLabels"),
+  );
+
+  assert.match(sheetPresentation, /fixed inset-0 z-50 lg:hidden/);
+  assert.match(listingTabs, /absolute inset-x-0 bottom-0 max-h-\[82vh\]/);
+  assert.match(listingTabs, /aria-modal=\{presentation === "sheet" \? "true" : undefined\}/);
+});
+
+test("mobile panels close accessibly and restore focus to their triggers", async () => {
+  const listingTabs = await read(listingTabsPath);
+
+  assert.match(listingTabs, /event\.key === "Escape"[\s\S]*?onClose\(\)/);
+  assert.match(listingTabs, /document\.addEventListener\("keydown", handleKeyDown\)/);
+  assert.match(listingTabs, /document\.removeEventListener\("keydown", handleKeyDown\)/);
+  assert.match(listingTabs, /event\.key !== "Tab"/);
+  assert.match(listingTabs, /closeButtonRef\.current\?\.focus\(\)/);
+  assert.match(listingTabs, /categoryTriggerRef\.current\?\.focus\(\)/);
+  assert.match(listingTabs, /filterTriggerRef\.current\?\.focus\(\)/);
+  assert.match(listingTabs, /onClick=\{\(\) => changeCategory\(section\.id\)\}/);
+  assert.match(listingTabs, /if \(isCategoryMenuOpen\) \{[\s\S]*?closeCategoryMenu\(\)/);
+  assert.match(listingTabs, /onClick=\{closeFilterPanel\}[\s\S]*?View Results/);
+  assert.match(listingTabs, /aria-controls="mobile-storefront-category-panel"/);
+  assert.match(listingTabs, /aria-controls="mobile-storefront-filter-panel"/);
 });
 
 test("framing is same-origin by default and HTTPS-only for the embed route", async () => {

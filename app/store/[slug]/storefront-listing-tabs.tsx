@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { Funnel } from "lucide-react";
 import {
@@ -171,6 +177,8 @@ export function StorefrontListingTabs({
   );
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+  const categoryTriggerRef = useRef<HTMLButtonElement>(null);
+  const filterTriggerRef = useRef<HTMLButtonElement>(null);
   const activeFilterLabels = buildActiveFilterLabels({
     age: ageFilter,
     availability: availabilityFilter,
@@ -187,6 +195,14 @@ export function StorefrontListingTabs({
     species: speciesFilter,
   });
   const activeFilterCount = activeFilterLabels.length;
+  const closeCategoryMenu = useCallback(() => {
+    setIsCategoryMenuOpen(false);
+    window.requestAnimationFrame(() => categoryTriggerRef.current?.focus());
+  }, []);
+  const closeFilterPanel = useCallback(() => {
+    setIsFilterPanelOpen(false);
+    window.requestAnimationFrame(() => filterTriggerRef.current?.focus());
+  }, []);
 
   useEffect(() => {
     function activateSectionFromId(sectionId: string) {
@@ -262,7 +278,9 @@ export function StorefrontListingTabs({
     setQuery("");
     setRequestedPage(1);
     setSpeciesFilter("all");
-    setIsCategoryMenuOpen(false);
+    if (isCategoryMenuOpen) {
+      closeCategoryMenu();
+    }
   }
 
   function resetFilters() {
@@ -369,12 +387,17 @@ export function StorefrontListingTabs({
       </div>
 
       <div className="lg:hidden">
-        <div className="flex min-w-0 items-center gap-1.5">
+        <div className="relative flex min-w-0 items-center gap-1.5">
           <button
+            aria-controls="mobile-storefront-category-panel"
             aria-expanded={isCategoryMenuOpen}
             aria-haspopup="dialog"
             className="storefront-primary-border storefront-primary-color inline-flex h-[2.625rem] min-w-0 flex-1 items-center justify-between gap-2 rounded-md border bg-white px-2.5 text-[0.88rem] font-bold shadow-[0_1px_2px_rgba(41,37,36,0.05)] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-            onClick={() => setIsCategoryMenuOpen(true)}
+            onClick={() => {
+              setIsFilterPanelOpen(false);
+              setIsCategoryMenuOpen(true);
+            }}
+            ref={categoryTriggerRef}
             type="button"
           >
             <span className="inline-flex min-w-0 items-center gap-2">
@@ -387,6 +410,7 @@ export function StorefrontListingTabs({
             />
           </button>
           <button
+            aria-controls="mobile-storefront-filter-panel"
             aria-expanded={isFilterPanelOpen}
             aria-haspopup="dialog"
             className={cx(
@@ -395,7 +419,11 @@ export function StorefrontListingTabs({
                 ? "storefront-primary-button storefront-primary-border"
                 : "border-[#ddd5c7] bg-white text-stone-800",
             )}
-            onClick={() => setIsFilterPanelOpen(true)}
+            onClick={() => {
+              setIsCategoryMenuOpen(false);
+              setIsFilterPanelOpen(true);
+            }}
+            ref={filterTriggerRef}
             type="button"
           >
             <Funnel aria-hidden="true" className="size-4" strokeWidth={2.25} />
@@ -405,6 +433,99 @@ export function StorefrontListingTabs({
             {filteredCards.length}{" "}
             {filteredCards.length === 1 ? "listing" : "listings"}
           </p>
+
+          {isCategoryMenuOpen ? (
+            <MobilePanel
+              id="mobile-storefront-category-panel"
+              label="Choose department"
+              onClose={closeCategoryMenu}
+              presentation={isEmbed ? "anchored" : "sheet"}
+              title="Shop department"
+            >
+              <div className="grid gap-2">
+                {sections.map((section) => {
+                  const active = section.id === activeSection.id;
+
+                  return (
+                    <button
+                      aria-current={active ? "true" : undefined}
+                      className={cx(
+                        "flex min-h-12 items-center justify-between gap-3 rounded-md border px-3 text-left text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2",
+                        active
+                          ? "storefront-primary-border storefront-primary-color bg-[#f8f3ea]"
+                          : "border-[#e5decf] bg-white text-stone-800",
+                      )}
+                      key={section.id}
+                      onClick={() => changeCategory(section.id)}
+                      type="button"
+                    >
+                      <span className="inline-flex min-w-0 items-center gap-2">
+                        <ListingTabIcon name={tabIconName(section.label)} />
+                        <span>{section.label}</span>
+                      </span>
+                      {active ? <span className="text-xs">Selected</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </MobilePanel>
+          ) : null}
+
+          {isFilterPanelOpen ? (
+            <MobilePanel
+              id="mobile-storefront-filter-panel"
+              label="Filter listings"
+              onClose={closeFilterPanel}
+              presentation={isEmbed ? "anchored" : "sheet"}
+              title="Filter listings"
+            >
+              <ListingFilters
+                age={ageFilter}
+                showAgeFilter={showAgeFilter}
+                showAvailabilityFilter={showAvailabilityFilter}
+                showBreedFilter={showBreedFilter}
+                showCategoryFilter={showCategoryFilter}
+                showConditionFilter={showConditionFilter}
+                showSpeciesFilter={showSpeciesFilter}
+                availability={availabilityFilter}
+                breed={breedFilter}
+                breedOptions={breedOptions}
+                category={speciesFilter}
+                categoryOptions={categoryOptions}
+                condition={breedFilter}
+                conditionOptions={conditionOptions}
+                hasActiveFilters={hasActiveFilters}
+                price={priceFilter}
+                query={query}
+                species={speciesFilter}
+                speciesOptions={speciesOptions}
+                onAgeChange={changeAgeFilter}
+                onAvailabilityChange={changeAvailabilityFilter}
+                onBreedChange={changeBreedFilter}
+                onPriceChange={changePriceFilter}
+                onQueryChange={changeQuery}
+                onReset={resetFilters}
+                onSpeciesChange={changeSpeciesFilter}
+                className="border-0 p-0 shadow-none"
+              />
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button
+                  className="min-h-11 rounded-md border border-[#ddd5c7] bg-white px-3 text-sm font-bold text-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+                  onClick={resetFilters}
+                  type="button"
+                >
+                  Reset
+                </button>
+                <button
+                  className="storefront-primary-button min-h-11 rounded-md px-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+                  onClick={closeFilterPanel}
+                  type="button"
+                >
+                  View Results
+                </button>
+              </div>
+            </MobilePanel>
+          ) : null}
         </div>
         {activeFilterLabels.length > 0 ? (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -512,95 +633,6 @@ export function StorefrontListingTabs({
           />
         )}
       </section>
-
-      {isCategoryMenuOpen ? (
-        <MobileSheet
-          label="Choose department"
-          onClose={() => setIsCategoryMenuOpen(false)}
-          title="Shop department"
-        >
-          <div className="grid gap-2">
-            {sections.map((section) => {
-              const active = section.id === activeSection.id;
-
-              return (
-                <button
-                  aria-current={active ? "true" : undefined}
-                  className={cx(
-                    "flex min-h-12 items-center justify-between gap-3 rounded-md border px-3 text-left text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2",
-                    active
-                      ? "storefront-primary-border storefront-primary-color bg-[#f8f3ea]"
-                      : "border-[#e5decf] bg-white text-stone-800",
-                  )}
-                  key={section.id}
-                  onClick={() => changeCategory(section.id)}
-                  type="button"
-                >
-                  <span className="inline-flex min-w-0 items-center gap-2">
-                    <ListingTabIcon name={tabIconName(section.label)} />
-                    <span>{section.label}</span>
-                  </span>
-                  {active ? <span className="text-xs">Selected</span> : null}
-                </button>
-              );
-            })}
-          </div>
-        </MobileSheet>
-      ) : null}
-
-      {isFilterPanelOpen ? (
-        <MobileSheet
-          label="Filter listings"
-          onClose={() => setIsFilterPanelOpen(false)}
-          title="Filter listings"
-        >
-          <ListingFilters
-            age={ageFilter}
-            showAgeFilter={showAgeFilter}
-            showAvailabilityFilter={showAvailabilityFilter}
-            showBreedFilter={showBreedFilter}
-            showCategoryFilter={showCategoryFilter}
-            showConditionFilter={showConditionFilter}
-            showSpeciesFilter={showSpeciesFilter}
-            availability={availabilityFilter}
-            breed={breedFilter}
-            breedOptions={breedOptions}
-            category={speciesFilter}
-            categoryOptions={categoryOptions}
-            condition={breedFilter}
-            conditionOptions={conditionOptions}
-            hasActiveFilters={hasActiveFilters}
-            price={priceFilter}
-            query={query}
-            species={speciesFilter}
-            speciesOptions={speciesOptions}
-            onAgeChange={changeAgeFilter}
-            onAvailabilityChange={changeAvailabilityFilter}
-            onBreedChange={changeBreedFilter}
-            onPriceChange={changePriceFilter}
-            onQueryChange={changeQuery}
-            onReset={resetFilters}
-            onSpeciesChange={changeSpeciesFilter}
-            className="border-0 p-0 shadow-none"
-          />
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <button
-              className="min-h-11 rounded-md border border-[#ddd5c7] bg-white px-3 text-sm font-bold text-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-              onClick={resetFilters}
-              type="button"
-            >
-              Reset
-            </button>
-            <button
-              className="storefront-primary-button min-h-11 rounded-md px-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-              onClick={() => setIsFilterPanelOpen(false)}
-              type="button"
-            >
-              View Results
-            </button>
-          </div>
-        </MobileSheet>
-      ) : null}
     </div>
   );
 }
@@ -693,50 +725,125 @@ function PaginationButton({
   );
 }
 
-function MobileSheet({
+function MobilePanel({
   children,
+  id,
   label,
   onClose,
+  presentation,
   title,
 }: {
   children: React.ReactNode;
+  id: string;
   label: string;
   onClose: () => void;
+  presentation: "anchored" | "sheet";
   title: string;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const focusFrame = window.requestAnimationFrame(() => {
+      closeButtonRef.current?.focus();
+    });
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+
+      const focusable = Array.from(
+        panelRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable.at(-1);
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  const panel = (
+    <div
+      aria-label={label}
+      aria-modal={presentation === "sheet" ? "true" : undefined}
+      className={cx(
+        "flex min-w-0 max-w-full flex-col overflow-hidden border border-[#ded7c8] bg-white shadow-2xl",
+        presentation === "anchored"
+          ? "max-h-[min(32rem,calc(100vh-6rem))] rounded-lg"
+          : "absolute inset-x-0 bottom-0 max-h-[82vh] rounded-t-lg",
+      )}
+      id={id}
+      ref={panelRef}
+      role="dialog"
+    >
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#eee6d8] px-4 py-3">
+        <h3 className="storefront-heading-color text-base font-bold text-[#073f1e]">
+          {title}
+        </h3>
+        <button
+          aria-label={`Close ${label}`}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-600 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+          onClick={onClose}
+          ref={closeButtonRef}
+          type="button"
+        >
+          <span aria-hidden="true" className="text-2xl leading-none">
+            x
+          </span>
+        </button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        {children}
+      </div>
+    </div>
+  );
+
+  if (presentation === "anchored") {
+    return (
+      <div
+        className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-40 min-w-0 max-w-full lg:hidden"
+        data-mobile-panel-presentation="anchored"
+      >
+        {panel}
+      </div>
+    );
+  }
+
   return (
-    <div className="fixed inset-0 z-50 lg:hidden">
+    <div
+      className="fixed inset-0 z-50 lg:hidden"
+      data-mobile-panel-presentation="sheet"
+    >
       <button
         aria-label={`Close ${label}`}
         className="absolute inset-0 cursor-default bg-stone-950/35"
         onClick={onClose}
         type="button"
       />
-      <div
-        aria-label={label}
-        aria-modal="true"
-        className="absolute inset-x-0 bottom-0 max-h-[82vh] overflow-hidden rounded-t-lg border border-[#ded7c8] bg-white shadow-2xl"
-        role="dialog"
-      >
-        <div className="flex items-center justify-between gap-3 border-b border-[#eee6d8] px-4 py-3">
-          <h3 className="storefront-heading-color text-base font-bold text-[#073f1e]">
-            {title}
-          </h3>
-          <button
-            aria-label={`Close ${label}`}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-stone-600 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-            onClick={onClose}
-            type="button"
-          >
-            <span aria-hidden="true" className="text-2xl leading-none">
-              x
-            </span>
-          </button>
-        </div>
-        <div className="max-h-[calc(82vh-4.25rem)] overflow-y-auto px-4 py-4">
-          {children}
-        </div>
-      </div>
+      {panel}
     </div>
   );
 }
