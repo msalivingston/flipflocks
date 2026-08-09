@@ -330,7 +330,7 @@ function MobileProcessedIdentity({
       </h1>
       {meta ? <p className="text-sm font-semibold text-stone-700">{meta}</p> : null}
       {item.description ? (
-        <p className="line-clamp-2 text-[0.95rem] leading-5 text-stone-700">
+        <p className="whitespace-pre-line text-[0.95rem] leading-5 text-stone-700">
           {item.description}
         </p>
       ) : null}

@@ -31,19 +31,14 @@ export function StorefrontProductGallery({
     return (
       <div className="grid gap-2 lg:gap-4">
         <div className="overflow-hidden rounded-lg border border-[#e8dfd1] shadow-[0_1px_8px_rgba(41,37,36,0.05)] lg:border-[#ded7c8] lg:shadow-none">
-          <div className="lg:hidden">
-            <ListingPhoto alt={fallbackAlt} aspect="square" src={fallbackSrc} />
-          </div>
-          <div className="hidden lg:block">
-            <ListingPhoto alt={fallbackAlt} src={fallbackSrc} />
-          </div>
+          <ListingPhoto alt={fallbackAlt} aspect="square" src={fallbackSrc} />
         </div>
         {fallbackSrc ? (
           <div className="hidden grid-cols-4 gap-3 lg:grid">
             <Image
               alt={fallbackAlt}
               className="aspect-square w-full rounded-md border border-[#ded7c8] object-cover"
-              height={240}
+              height={320}
               src={toPublicImageUrl(fallbackSrc)}
               unoptimized
               width={320}
@@ -61,10 +56,10 @@ export function StorefrontProductGallery({
           <Image
             alt={selectedImage.alt_text || fallbackAlt}
             className={cx(
-              "aspect-square w-full lg:aspect-[4/3]",
+              "aspect-square w-full",
               selectedImage.crop_metadata ? "object-contain" : "object-cover",
             )}
-            height={720}
+            height={960}
             src={toPublicImageUrl(selectedImage.public_url)}
             style={getStorefrontCropStyle(selectedImage.crop_metadata)}
             unoptimized
@@ -112,7 +107,7 @@ export function StorefrontProductGallery({
                   "aspect-square w-full rounded-[3px]",
                   image.crop_metadata ? "object-contain" : "object-cover",
                 )}
-                height={240}
+                height={320}
                 src={toPublicImageUrl(image.public_url)}
                 style={getStorefrontCropStyle(image.crop_metadata)}
                 unoptimized

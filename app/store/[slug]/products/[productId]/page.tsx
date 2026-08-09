@@ -278,7 +278,7 @@ function MobileProductIdentity({ product }: { product: StorefrontProduct }) {
         {product.speciesName}
       </p>
       {description ? (
-        <p className="line-clamp-2 text-[0.95rem] leading-5 text-stone-700">
+        <p className="whitespace-pre-line text-[0.95rem] leading-5 text-stone-700">
           {description}
         </p>
       ) : null}
