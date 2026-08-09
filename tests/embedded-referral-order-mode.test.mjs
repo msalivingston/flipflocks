@@ -249,7 +249,7 @@ test("cart, checkout, and confirmation preserve focused context without changing
 
   assert.match(cartPage, /const checkoutHref = buildEmbeddedOrderModeHref\(/);
   assert.match(cartPage, /orderMode\?\.returnUrl/);
-  assert.match(cartPage, /`Return to \$\{store\.store_name\}`/);
+  assert.match(cartPage, /orderMode \? "Continue Shopping" : "Continue shopping"/);
   assert.match(checkoutPage, /const cartHref = buildEmbeddedOrderModeHref\(/);
   assert.match(checkoutPage, /orderMode\?\.returnUrl/);
   assert.match(checkoutPage, /if \(success\)[\s\S]*\{continueLabel\}/);

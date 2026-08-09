@@ -374,7 +374,7 @@ test("the embed reuses storefront controls while omitting storefront chrome and 
   );
   assert.match(listingTabs, /target=\{isEmbed \? "_blank" : undefined\}/);
   assert.match(listingTabs, /rel=\{isEmbed \? "noopener noreferrer" : undefined\}/);
-  assert.match(listingTabs, /isEmbed \? "View & order" : "View"/);
+  assert.match(listingTabs, /const actionLabel = "View"/);
   assert.match(route, /Powered by FlockFront/);
   assert.doesNotMatch(gallery, /[a-z]+_(?:id|at)\b/);
 });
@@ -460,10 +460,10 @@ test("embed keeps left-side filters through the 975px breakpoint", async () => {
   );
 });
 
-test("embedded View and order actions are green with white text on both card layouts", async () => {
+test("embedded View actions are green with white text on both card layouts", async () => {
   const listingTabs = await read(listingTabsPath);
 
-  assert.match(listingTabs, /const actionLabel = isEmbed \? "View & order" : "View"/);
+  assert.match(listingTabs, /const actionLabel = "View"/);
   assert.match(
     listingTabs,
     /const actionButtonClass = isEmbed[\s\S]*?bg-\[#24512f\] text-white hover:bg-\[#183b22\]/,

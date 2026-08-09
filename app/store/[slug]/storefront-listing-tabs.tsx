@@ -1182,7 +1182,7 @@ function ListingCard({
   variant: "embed" | "storefront";
 }) {
   const isEmbed = variant === "embed";
-  const actionLabel = isEmbed ? "View & order" : "View";
+  const actionLabel = "View";
   const actionButtonClass = isEmbed
     ? "bg-[#24512f] text-white hover:bg-[#183b22]"
     : "storefront-primary-button";
