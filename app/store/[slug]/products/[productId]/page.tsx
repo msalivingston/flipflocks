@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { cache } from "react";
+import { notFound, redirect } from "next/navigation";
 import {
   AvailabilityBadge,
   EmptyStorefront,
@@ -15,6 +16,7 @@ import {
   findProduct,
   groupHatchingEggInventoryByProduct,
   groupInventoryByProduct,
+  loadStorefrontAccess,
   loadStorefrontEquipment,
   loadStorefrontHatchingEggInventory,
   loadStoreGallery,
@@ -37,21 +39,27 @@ import {
   buildPublicMetadata,
   withFlockFrontBrand,
 } from "@/lib/public-metadata";
+import type { EmbeddedOrderModeSearchParams } from "@/lib/embedded-order-mode";
 import {
-  resolveEmbeddedOrderModeContext,
-  type EmbeddedOrderModeSearchParams,
-} from "@/lib/embedded-order-mode";
+  resolveStorefrontVisibilityDecision,
+  shouldNoIndexStorefrontRoute,
+} from "@/lib/storefront-visibility";
 
 type StorefrontProductPageParams = Promise<{ productId: string; slug: string }>;
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: StorefrontProductPageParams;
+  searchParams: Promise<EmbeddedOrderModeSearchParams>;
 }): Promise<Metadata> {
-  const { productId, slug } = await params;
+  const [{ productId, slug }, query] = await Promise.all([params, searchParams]);
   const canonicalUrl = productionUrl(buildCanonicalProductPath(slug, productId));
-  const data = await loadProductPageData(slug, productId);
+  const [data, accessResult] = await Promise.all([
+    loadProductPageData(slug, productId),
+    loadStorefrontAccess(slug),
+  ]);
 
   if (data.error || !data.store || !data.product) {
     const title = "Product not found | FlockFront";
@@ -66,6 +74,19 @@ export async function generateMetadata({
       }),
       robots: NOINDEX_ROBOTS,
     };
+  }
+
+  if (
+    accessResult.error ||
+    !accessResult.data ||
+    shouldNoIndexStorefrontRoute({
+      searchParams: query,
+      storeSlug: slug,
+      visibility: accessResult.data.storefront_visibility,
+      websiteUrl: accessResult.data.website_url,
+    })
+  ) {
+    return { robots: NOINDEX_ROBOTS };
   }
 
   const gallery = buildProductGallery(data.product, data.gallery);
@@ -106,6 +127,7 @@ export default async function StorefrontProductPage({
     product,
     store,
   } = await loadProductPageData(slug, productId);
+  const accessResult = await loadStorefrontAccess(slug);
 
   if (error) {
     return (
@@ -133,11 +155,18 @@ export default async function StorefrontProductPage({
     );
   }
 
-  const orderMode = resolveEmbeddedOrderModeContext({
+  if (accessResult.error || !accessResult.data) notFound();
+
+  const visibilityDecision = resolveStorefrontVisibilityDecision({
+    isPubliclyAvailable: accessResult.data.is_publicly_available,
     searchParams: query,
     storeSlug: store.store_slug,
-    websiteUrl: store.website_url,
+    visibility: accessResult.data.storefront_visibility,
+    websiteUrl: accessResult.data.website_url,
   });
+  if (visibilityDecision.action === "redirect") redirect(visibilityDecision.url);
+  if (visibilityDecision.action === "deny") notFound();
+  const orderMode = visibilityDecision.orderMode;
 
   if (!product) {
     return (

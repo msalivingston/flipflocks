@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
 import {
   AvailabilityBadge,
   EmptyStorefront,
@@ -14,6 +15,7 @@ import {
   StorefrontMedia,
   StorefrontProcessedPoultryItem,
   groupInventoryByProduct,
+  loadStorefrontAccess,
   loadStorefrontEquipment,
   loadStorefrontHome,
   loadStorefrontInventory,
@@ -36,10 +38,11 @@ import {
   buildPublicMetadata,
   withFlockFrontBrand,
 } from "@/lib/public-metadata";
+import type { EmbeddedOrderModeSearchParams } from "@/lib/embedded-order-mode";
 import {
-  resolveEmbeddedOrderModeContext,
-  type EmbeddedOrderModeSearchParams,
-} from "@/lib/embedded-order-mode";
+  resolveStorefrontVisibilityDecision,
+  shouldNoIndexStorefrontRoute,
+} from "@/lib/storefront-visibility";
 
 type StorefrontProcessedPoultryPageParams = Promise<{
   processedPoultryItemId: string;
@@ -48,17 +51,23 @@ type StorefrontProcessedPoultryPageParams = Promise<{
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: StorefrontProcessedPoultryPageParams;
+  searchParams: Promise<EmbeddedOrderModeSearchParams>;
 }): Promise<Metadata> {
-  const { processedPoultryItemId, slug } = await params;
+  const [{ processedPoultryItemId, slug }, query] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const canonicalUrl = productionUrl(
     buildCanonicalProcessedPoultryPath(slug, processedPoultryItemId),
   );
-  const [homeResult, itemResult, galleryResult] = await Promise.all([
+  const [homeResult, itemResult, galleryResult, accessResult] = await Promise.all([
     loadStorefrontHome(slug),
     loadStorefrontProcessedPoultryItem(slug, processedPoultryItemId),
     loadStorefrontProcessedPoultryGallery(slug, processedPoultryItemId),
+    loadStorefrontAccess(slug),
   ]);
 
   if (homeResult.error || itemResult.error || galleryResult.error) {
@@ -72,6 +81,19 @@ export async function generateMetadata({
       }),
       robots: NOINDEX_ROBOTS,
     };
+  }
+
+  if (
+    accessResult.error ||
+    !accessResult.data ||
+    shouldNoIndexStorefrontRoute({
+      searchParams: query,
+      storeSlug: slug,
+      visibility: accessResult.data.storefront_visibility,
+      websiteUrl: accessResult.data.website_url,
+    })
+  ) {
+    return { robots: NOINDEX_ROBOTS };
   }
 
   const store = homeResult.data;
@@ -131,6 +153,7 @@ export default async function StorefrontProcessedPoultryPage({
     inventoryResult,
     equipmentResult,
     processedPoultryResult,
+    accessResult,
   ] = await Promise.all([
     loadStorefrontHome(slug),
     loadStorefrontProcessedPoultryItem(slug, processedPoultryItemId),
@@ -138,6 +161,7 @@ export default async function StorefrontProcessedPoultryPage({
     loadStorefrontInventory(slug),
     loadStorefrontEquipment(slug),
     loadStorefrontProcessedPoultry(slug),
+    loadStorefrontAccess(slug),
   ]);
   const error =
     homeResult.error ??
@@ -145,7 +169,8 @@ export default async function StorefrontProcessedPoultryPage({
     galleryResult.error ??
     inventoryResult.error ??
     equipmentResult.error ??
-    processedPoultryResult.error;
+    processedPoultryResult.error ??
+    accessResult.error;
 
   if (error) {
     return (
@@ -175,11 +200,18 @@ export default async function StorefrontProcessedPoultryPage({
     );
   }
 
-  const orderMode = resolveEmbeddedOrderModeContext({
+  if (!accessResult.data) notFound();
+
+  const visibilityDecision = resolveStorefrontVisibilityDecision({
+    isPubliclyAvailable: accessResult.data.is_publicly_available,
     searchParams: query,
     storeSlug: store.store_slug,
-    websiteUrl: store.website_url,
+    visibility: accessResult.data.storefront_visibility,
+    websiteUrl: accessResult.data.website_url,
   });
+  if (visibilityDecision.action === "redirect") redirect(visibilityDecision.url);
+  if (visibilityDecision.action === "deny") notFound();
+  const orderMode = visibilityDecision.orderMode;
 
   const item = itemResult.data;
   const categories = getStorefrontCategoryAvailability({

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import type { Metadata } from "next";
 import { cache } from "react";
+import { notFound, redirect } from "next/navigation";
 import {
   EmptyStorefront,
   StorefrontPage,
@@ -11,6 +12,7 @@ import {
 } from "../storefront-ui";
 import {
   loadStoreGallery,
+  loadStorefrontAccess,
 } from "../storefront-data";
 import { loadStorefrontChrome } from "../storefront-chrome-data";
 import { storefrontSerifClass } from "../storefront-fonts";
@@ -22,6 +24,10 @@ import {
   truncateMetadataText,
   withFlockFrontBrand,
 } from "@/lib/public-metadata";
+import {
+  resolveStorefrontVisibilityDecision,
+  shouldNoIndexStorefrontRoute,
+} from "@/lib/storefront-visibility";
 
 const loadStorefrontChromeCached = cache(loadStorefrontChrome);
 
@@ -41,10 +47,13 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const { error, store } = await loadStorefrontChromeCached(slug);
+  const [{ error, store }, accessResult] = await Promise.all([
+    loadStorefrontChromeCached(slug),
+    loadStorefrontAccess(slug),
+  ]);
   const canonicalPath = `/store/${encodeURIComponent(slug)}/about`;
 
-  if (error || !store) {
+  if (error || accessResult.error || !store || !accessResult.data) {
     return {
       ...buildPublicMetadata({
         canonicalPath,
@@ -53,6 +62,17 @@ export async function generateMetadata({
       }),
       robots: NOINDEX_ROBOTS,
     };
+  }
+
+  if (
+    shouldNoIndexStorefrontRoute({
+      searchParams: {},
+      storeSlug: slug,
+      visibility: accessResult.data.storefront_visibility,
+      websiteUrl: accessResult.data.website_url,
+    })
+  ) {
+    return { robots: NOINDEX_ROBOTS };
   }
 
   const aboutText = cleanMetadataText(store.about_text);
@@ -84,14 +104,15 @@ export default async function StorefrontAboutPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [chromeResult, galleryResult] = await Promise.all([
+  const [chromeResult, galleryResult, accessResult] = await Promise.all([
     loadStorefrontChromeCached(slug),
     loadStoreGallery(slug, {
       entityType: "store",
       limit: 4,
     }),
+    loadStorefrontAccess(slug),
   ]);
-  const error = chromeResult.error ?? galleryResult.error;
+  const error = chromeResult.error ?? galleryResult.error ?? accessResult.error;
 
   if (error) {
     return (
@@ -120,6 +141,17 @@ export default async function StorefrontAboutPage({
       </StorefrontShell>
     );
   }
+
+  if (!accessResult.data) notFound();
+  const visibilityDecision = resolveStorefrontVisibilityDecision({
+    isPubliclyAvailable: accessResult.data.is_publicly_available,
+    searchParams: {},
+    storeSlug: store.store_slug,
+    visibility: accessResult.data.storefront_visibility,
+    websiteUrl: accessResult.data.website_url,
+  });
+  if (visibilityDecision.action === "redirect") redirect(visibilityDecision.url);
+  if (visibilityDecision.action === "deny") notFound();
 
   const aboutPhoto =
     galleryResult.data.find((image) => image.display_context === "gallery") ??

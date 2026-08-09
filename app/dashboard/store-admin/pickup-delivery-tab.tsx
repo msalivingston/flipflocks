@@ -14,6 +14,7 @@ import { SortableOptionList } from "./sortable-option-list";
 
 type StoreSetupAccordionId =
   | "status"
+  | "visibility"
   | "information"
   | "appearance"
   | "about"

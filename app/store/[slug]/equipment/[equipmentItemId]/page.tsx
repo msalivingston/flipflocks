@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
 import {
   AvailabilityBadge,
   EmptyStorefront,
@@ -14,6 +15,7 @@ import {
   StorefrontEquipmentItem,
   StorefrontMedia,
   loadStoreGallery,
+  loadStorefrontAccess,
   loadStorefrontEquipment,
   loadStorefrontEquipmentItem,
   loadStorefrontHome,
@@ -36,10 +38,11 @@ import {
   buildPublicMetadata,
   withFlockFrontBrand,
 } from "@/lib/public-metadata";
+import type { EmbeddedOrderModeSearchParams } from "@/lib/embedded-order-mode";
 import {
-  resolveEmbeddedOrderModeContext,
-  type EmbeddedOrderModeSearchParams,
-} from "@/lib/embedded-order-mode";
+  resolveStorefrontVisibilityDecision,
+  shouldNoIndexStorefrontRoute,
+} from "@/lib/storefront-visibility";
 
 type StorefrontEquipmentPageParams = Promise<{
   equipmentItemId: string;
@@ -48,14 +51,19 @@ type StorefrontEquipmentPageParams = Promise<{
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: StorefrontEquipmentPageParams;
+  searchParams: Promise<EmbeddedOrderModeSearchParams>;
 }): Promise<Metadata> {
-  const { equipmentItemId, slug } = await params;
+  const [{ equipmentItemId, slug }, query] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const canonicalUrl = productionUrl(
     buildCanonicalEquipmentPath(slug, equipmentItemId),
   );
-  const [homeResult, itemResult, galleryResult] = await Promise.all([
+  const [homeResult, itemResult, galleryResult, accessResult] = await Promise.all([
     loadStorefrontHome(slug),
     loadStorefrontEquipmentItem(slug, equipmentItemId),
     loadStoreGallery(slug, {
@@ -63,6 +71,7 @@ export async function generateMetadata({
       entityType: "equipment_inventory_item",
       limit: 8,
     }),
+    loadStorefrontAccess(slug),
   ]);
 
   if (homeResult.error || itemResult.error || galleryResult.error) {
@@ -76,6 +85,19 @@ export async function generateMetadata({
       }),
       robots: NOINDEX_ROBOTS,
     };
+  }
+
+  if (
+    accessResult.error ||
+    !accessResult.data ||
+    shouldNoIndexStorefrontRoute({
+      searchParams: query,
+      storeSlug: slug,
+      visibility: accessResult.data.storefront_visibility,
+      websiteUrl: accessResult.data.website_url,
+    })
+  ) {
+    return { robots: NOINDEX_ROBOTS };
   }
 
   const store = homeResult.data;
@@ -130,6 +152,7 @@ export default async function StorefrontEquipmentPage({
     inventoryResult,
     equipmentListResult,
     processedPoultryResult,
+    accessResult,
   ] = await Promise.all([
     loadStorefrontHome(slug),
     loadStorefrontEquipmentItem(slug, equipmentItemId),
@@ -141,6 +164,7 @@ export default async function StorefrontEquipmentPage({
     loadStorefrontInventory(slug),
     loadStorefrontEquipment(slug),
     loadStorefrontProcessedPoultry(slug),
+    loadStorefrontAccess(slug),
   ]);
   const error =
     homeResult.error ??
@@ -148,7 +172,8 @@ export default async function StorefrontEquipmentPage({
     galleryResult.error ??
     inventoryResult.error ??
     equipmentListResult.error ??
-    processedPoultryResult.error;
+    processedPoultryResult.error ??
+    accessResult.error;
 
   if (error) {
     return (
@@ -178,11 +203,18 @@ export default async function StorefrontEquipmentPage({
     );
   }
 
-  const orderMode = resolveEmbeddedOrderModeContext({
+  if (!accessResult.data) notFound();
+
+  const visibilityDecision = resolveStorefrontVisibilityDecision({
+    isPubliclyAvailable: accessResult.data.is_publicly_available,
     searchParams: query,
     storeSlug: store.store_slug,
-    websiteUrl: store.website_url,
+    visibility: accessResult.data.storefront_visibility,
+    websiteUrl: accessResult.data.website_url,
   });
+  if (visibilityDecision.action === "redirect") redirect(visibilityDecision.url);
+  if (visibilityDecision.action === "deny") notFound();
+  const orderMode = visibilityDecision.orderMode;
 
   const item = equipmentResult.data;
   const categories = getStorefrontCategoryAvailability({

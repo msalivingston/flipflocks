@@ -5,10 +5,12 @@ import {
 import { loadStorefrontChrome } from "../storefront-chrome-data";
 import { StorefrontChrome } from "../storefront-shell-components";
 import { CheckoutPage } from "./checkout-page";
+import { notFound, redirect } from "next/navigation";
 import {
-  resolveEmbeddedOrderModeContext,
   type EmbeddedOrderModeSearchParams,
 } from "@/lib/embedded-order-mode";
+import { loadStorefrontAccess } from "../storefront-data";
+import { resolveStorefrontVisibilityDecision } from "@/lib/storefront-visibility";
 
 export default async function StorefrontCheckoutRoute({
   params,
@@ -18,7 +20,10 @@ export default async function StorefrontCheckoutRoute({
   searchParams: Promise<EmbeddedOrderModeSearchParams>;
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
-  const { categories, error, store } = await loadStorefrontChrome(slug);
+  const [{ categories, error, store }, accessResult] = await Promise.all([
+    loadStorefrontChrome(slug),
+    loadStorefrontAccess(slug),
+  ]);
 
   if (error) {
     return (
@@ -46,11 +51,18 @@ export default async function StorefrontCheckoutRoute({
     );
   }
 
-  const orderMode = resolveEmbeddedOrderModeContext({
+  if (accessResult.error || !accessResult.data) notFound();
+
+  const visibilityDecision = resolveStorefrontVisibilityDecision({
+    isPubliclyAvailable: accessResult.data.is_publicly_available,
     searchParams: query,
     storeSlug: store.store_slug,
-    websiteUrl: store.website_url,
+    visibility: accessResult.data.storefront_visibility,
+    websiteUrl: accessResult.data.website_url,
   });
+  if (visibilityDecision.action === "redirect") redirect(visibilityDecision.url);
+  if (visibilityDecision.action === "deny") notFound();
+  const orderMode = visibilityDecision.orderMode;
 
   return (
     <StorefrontChrome

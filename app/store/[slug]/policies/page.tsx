@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { cache } from "react";
+import { notFound, redirect } from "next/navigation";
 import {
   EmptyStorefront,
   StorefrontPage,
@@ -12,12 +13,19 @@ import {
 import { loadStorefrontChrome } from "../storefront-chrome-data";
 import { storefrontSerifClass } from "../storefront-fonts";
 import { StorefrontChrome } from "../storefront-shell-components";
-import type { StorefrontCustomPolicy } from "../storefront-data";
+import {
+  loadStorefrontAccess,
+  type StorefrontCustomPolicy,
+} from "../storefront-data";
 import { NOINDEX_ROBOTS } from "@/lib/seo-config";
 import {
   buildPublicMetadata,
   withFlockFrontBrand,
 } from "@/lib/public-metadata";
+import {
+  resolveStorefrontVisibilityDecision,
+  shouldNoIndexStorefrontRoute,
+} from "@/lib/storefront-visibility";
 
 const loadStorefrontChromeCached = cache(loadStorefrontChrome);
 
@@ -27,10 +35,13 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const { error, store } = await loadStorefrontChromeCached(slug);
+  const [{ error, store }, accessResult] = await Promise.all([
+    loadStorefrontChromeCached(slug),
+    loadStorefrontAccess(slug),
+  ]);
   const canonicalPath = `/store/${encodeURIComponent(slug)}/policies`;
 
-  if (error || !store) {
+  if (error || accessResult.error || !store || !accessResult.data) {
     return {
       ...buildPublicMetadata({
         canonicalPath,
@@ -39,6 +50,17 @@ export async function generateMetadata({
       }),
       robots: NOINDEX_ROBOTS,
     };
+  }
+
+  if (
+    shouldNoIndexStorefrontRoute({
+      searchParams: {},
+      storeSlug: slug,
+      visibility: accessResult.data.storefront_visibility,
+      websiteUrl: accessResult.data.website_url,
+    })
+  ) {
+    return { robots: NOINDEX_ROBOTS };
   }
 
   const imageUrl = store.hero_image_url
@@ -64,7 +86,10 @@ export default async function StorefrontPoliciesPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const { categories, error, store } = await loadStorefrontChromeCached(slug);
+  const [{ categories, error, store }, accessResult] = await Promise.all([
+    loadStorefrontChromeCached(slug),
+    loadStorefrontAccess(slug),
+  ]);
 
   if (error) {
     return (
@@ -91,6 +116,17 @@ export default async function StorefrontPoliciesPage({
       </StorefrontShell>
     );
   }
+
+  if (accessResult.error || !accessResult.data) notFound();
+  const visibilityDecision = resolveStorefrontVisibilityDecision({
+    isPubliclyAvailable: accessResult.data.is_publicly_available,
+    searchParams: {},
+    storeSlug: store.store_slug,
+    visibility: accessResult.data.storefront_visibility,
+    websiteUrl: accessResult.data.website_url,
+  });
+  if (visibilityDecision.action === "redirect") redirect(visibilityDecision.url);
+  if (visibilityDecision.action === "deny") notFound();
 
   const policySections = buildPolicySections({
     customPolicies: store.custom_policies,

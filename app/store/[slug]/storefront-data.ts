@@ -3,6 +3,7 @@ import { normalizeHatchingEggBreedName } from "@/lib/hatching-egg-breed-name";
 import type { StorefrontHeroPresentation } from "@/lib/storefront-hero-presentation";
 import type { StorefrontCropMetadata } from "./storefront-ui";
 import type { StorefrontFontPairId } from "./storefront-fonts";
+import type { StorefrontVisibility } from "@/lib/storefront-visibility";
 
 export type StorefrontCustomPolicy = {
   title: string;
@@ -46,6 +47,13 @@ export type StorefrontHome = {
   total_quantity_available: number;
   next_available_date: string | null;
   has_public_inventory: boolean;
+};
+
+export type StorefrontAccess = {
+  store_slug: string;
+  storefront_visibility: StorefrontVisibility | string;
+  website_url: string | null;
+  is_publicly_available: boolean;
 };
 
 export type StorefrontPickupOption = {
@@ -248,6 +256,19 @@ export async function loadStorefrontHome(slug: string) {
 
   return {
     data: data as StorefrontHome | null,
+    error,
+  };
+}
+
+export async function loadStorefrontAccess(slug: string) {
+  const { data, error } = await publicSupabase
+    .rpc("get_public_storefront_access", {
+      p_store_slug: slug,
+    })
+    .maybeSingle();
+
+  return {
+    data: data as StorefrontAccess | null,
     error,
   };
 }

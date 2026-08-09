@@ -22,6 +22,11 @@ import {
   embeddedOrderModeWebsiteUrlMaxLength,
   validateSellerWebsiteUrl,
 } from "@/lib/embedded-order-mode";
+import {
+  buildStoreEmbedLink,
+  normalizeStorefrontVisibility,
+  type StorefrontVisibility,
+} from "@/lib/storefront-visibility";
 import { PlanUpgradeDialog } from "../_components/plan-upgrade-prompt";
 import { useSellerContext } from "../_components/seller-context";
 import {
@@ -96,6 +101,7 @@ type StoreAdminForm = {
   public_country: string;
   about_text: string;
   website_url: string;
+  storefront_visibility: StorefrontVisibility;
   npip_number: string;
   show_npip: boolean;
   public_email: string;
@@ -151,6 +157,12 @@ type StoreDefaults = {
   communication_email: string | null;
   order_notification_email: string | null;
   currency: string | null;
+};
+
+type StoreVisibilityRow = {
+  store_id: string;
+  storefront_visibility: StorefrontVisibility | string;
+  website_url: string | null;
 };
 
 type PickupOption = {
@@ -366,6 +378,7 @@ const blankForm: StoreAdminForm = {
   public_country: "US",
   about_text: "",
   website_url: "",
+  storefront_visibility: "public",
   npip_number: "",
   show_npip: false,
   public_email: "",
@@ -481,6 +494,7 @@ export function StoreAdmin() {
         deliveryOptionsResult,
         readinessResult,
         mediaResult,
+        visibilityResult,
       ] = await Promise.all([
           supabase
             .from("seller_store_defaults")
@@ -520,6 +534,11 @@ export function StoreAdmin() {
             .order("is_featured", { ascending: false })
             .order("sort_order", { ascending: true })
             .returns<StoreMediaItem[]>(),
+          supabase
+            .rpc("seller_get_store_visibility", {
+              p_store_id: seller.store_id,
+            })
+            .maybeSingle<StoreVisibilityRow>(),
         ]);
 
       if (!isMounted) return;
@@ -528,7 +547,8 @@ export function StoreAdmin() {
         defaultsResult.error ??
         pickupOptionsResult.error ??
         deliveryOptionsResult.error ??
-        mediaResult.error;
+        mediaResult.error ??
+        visibilityResult.error;
 
       if (firstError) {
         setLoadError(firstError.message);
@@ -537,7 +557,11 @@ export function StoreAdmin() {
       }
 
       const defaults = defaultsResult.data;
-      const nextForm = buildInitialForm(seller, defaults);
+      const nextForm = buildInitialForm(
+        seller,
+        defaults,
+        visibilityResult.data?.storefront_visibility,
+      );
       const nextPickupOptions = (pickupOptionsResult.data ?? []).map(
         toPickupOptionDraft,
       );
@@ -1751,7 +1775,6 @@ export function StoreAdmin() {
       public_state: form.public_state,
       public_country: form.public_country,
       about_text: form.about_text,
-      website_url: websiteUrlResult.value,
       npip_number: form.npip_number,
       show_npip: form.show_npip,
       public_email: form.public_email,
@@ -1781,6 +1804,22 @@ export function StoreAdmin() {
       communication_email: form.communication_email,
       order_notification_email: form.order_notification_email,
     };
+
+    const visibilityResult = await supabase.rpc(
+      "seller_update_store_visibility",
+      {
+        p_store_id: seller.store_id,
+        p_visibility: form.storefront_visibility,
+        p_website_url: websiteUrlResult.value,
+      },
+    );
+
+    if (visibilityResult.error) {
+      setIsSaving(false);
+      setSaveState("error");
+      setSaveMessage(visibilityResult.error.message);
+      return;
+    }
 
     const settingsResult = await supabase.rpc("seller_update_store_settings", {
       p_store_id: seller.store_id,
@@ -2088,6 +2127,7 @@ export function StoreAdmin() {
               <StorefrontTab
                 form={form}
                 hasUnsavedChanges={hasUnsavedChanges}
+                initialWebsiteUrl={initialForm.website_url}
                 isLaunching={isLaunching}
                 isReadinessLoading={isReadinessLoading}
                 isStoreLive={isStoreLive}
@@ -2478,6 +2518,7 @@ function StickySaveBar({
 function StorefrontTab({
   form,
   hasUnsavedChanges,
+  initialWebsiteUrl,
   isLaunching,
   isReadinessLoading,
   isStoreLive,
@@ -2499,6 +2540,7 @@ function StorefrontTab({
 }: {
   form: StoreAdminForm;
   hasUnsavedChanges: boolean;
+  initialWebsiteUrl: string;
   isLaunching: boolean;
   isReadinessLoading: boolean;
   isStoreLive: boolean;
@@ -2519,6 +2561,25 @@ function StorefrontTab({
   warningItems: SellerLaunchItem[];
 }) {
   const contactEmail = getStorefrontContactEmail(form);
+  const currentWebsite = validateSellerWebsiteUrl(form.website_url);
+  const savedWebsite = validateSellerWebsiteUrl(initialWebsiteUrl);
+  const hasSavedWebsite =
+    savedWebsite.ok &&
+    Boolean(savedWebsite.value) &&
+    currentWebsite.ok &&
+    currentWebsite.value === savedWebsite.value;
+  const embedLink = hasSavedWebsite
+    ? buildStoreEmbedLink({
+        slug: form.store_slug,
+        websiteUrl: savedWebsite.value,
+      })
+    : null;
+  const visibilitySummary =
+    form.storefront_visibility === "embed_only"
+      ? "Website embed only"
+      : embedLink
+        ? "Public storefront and embed enabled"
+        : "Website embed not configured";
   const selectedStorefrontVisible = Boolean(form.storefront_enabled);
   const hasPendingVisibilityChange =
     isStoreLive && selectedStorefrontVisible !== isVisibleToCustomers;
@@ -2594,6 +2655,80 @@ function StorefrontTab({
             billingAccessActive={billingAccessActive}
             warningItems={warningItems}
           />
+        )}
+      </StoreSetupAccordionSection>
+
+      <StoreSetupAccordionSection
+        glyph="/glyphs/storefront.png"
+        id="visibility"
+        isOpen={openSection === "visibility"}
+        onToggle={(id) => setOpenSection(id as StorefrontAccordionId | "none")}
+        summary={<span className="truncate">{visibilitySummary}</span>}
+        title="Store Visibility and Embed Links"
+      >
+        <fieldset className="grid gap-3">
+          <legend className="text-sm font-bold text-stone-900">
+            Public FlockFront storefront
+          </legend>
+          <div className="grid gap-3 md:grid-cols-2">
+            <VisibilityChoice
+              checked={form.storefront_visibility === "public"}
+              description="Customers can shop through your public FlockFront storefront and an embed on your website."
+              label="Visible"
+              onChange={() => onUpdateField("storefront_visibility", "public")}
+            />
+            <VisibilityChoice
+              checked={form.storefront_visibility === "embed_only"}
+              description="Customers shop through the embed on your website. Your standalone FlockFront storefront will not be publicly listed or indexed."
+              disabled={!hasSavedWebsite && form.storefront_visibility !== "embed_only"}
+              label="Hidden"
+              onChange={() =>
+                onUpdateField("storefront_visibility", "embed_only")
+              }
+            />
+          </div>
+          {!hasSavedWebsite ? (
+            <StoreSetupAlert tone="warning">
+              Save a valid HTTPS Website URL before selecting Hidden. This
+              requirement fails closed if the saved URL is later missing or
+              invalid.
+            </StoreSetupAlert>
+          ) : null}
+        </fieldset>
+
+        <TextField
+          helper="This is the page customers return to after ordering through your embedded store."
+          label="Website URL"
+          maxLength={embeddedOrderModeWebsiteUrlMaxLength}
+          onChange={(value) => onUpdateField("website_url", value)}
+          optional
+          placeholder="https://www.example.com"
+          type="url"
+          value={form.website_url}
+        />
+
+        {embedLink ? (
+          <div className="grid gap-3">
+            <ReadOnlyCopyField
+              buttonLabel="Copy embed link"
+              helper="Use this order-and-return link when embedding your store on your website."
+              label="Embed link"
+              value={embedLink}
+            />
+            <a
+              className="seller-secondary-button w-fit rounded-md bg-white"
+              href={embedLink}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              Preview embedded store
+            </a>
+          </div>
+        ) : (
+          <StorefrontNote>
+            Save a valid HTTPS Website URL before the order-and-return embed
+            link can be generated.
+          </StorefrontNote>
         )}
       </StoreSetupAccordionSection>
 
@@ -2783,16 +2918,6 @@ function StorefrontTab({
             </StorefrontNote>
           </div>
           <div className="grid gap-3 content-start">
-            <TextField
-              helper="Used to securely return customers to your website from embedded ordering."
-              label="Website URL"
-              maxLength={embeddedOrderModeWebsiteUrlMaxLength}
-              onChange={(value) => onUpdateField("website_url", value)}
-              optional
-              placeholder="https://www.example.com"
-              type="url"
-              value={form.website_url}
-            />
             <ReadOnlyField label="Contact email" value={contactEmail} />
             <StorefrontNote>
               This email is managed from your Account page.
@@ -2810,6 +2935,7 @@ function StorefrontTab({
 
 type StorefrontAccordionId =
   | "status"
+  | "visibility"
   | "information"
   | "appearance"
   | "about"
@@ -4887,10 +5013,12 @@ function ReadOnlyField({
 }
 
 function ReadOnlyCopyField({
+  buttonLabel = "Copy",
   helper,
   label,
   value,
 }: {
+  buttonLabel?: string;
   helper?: string;
   label: string;
   value: string;
@@ -4917,7 +5045,7 @@ function ReadOnlyCopyField({
           value={value}
         />
         <button className="seller-secondary-button" type="button" onClick={copyValue}>
-          {copyState === "copied" ? "Copied" : "Copy"}
+          {copyState === "copied" ? "Copied" : buttonLabel}
         </button>
       </div>
       {helper ? (
@@ -4951,9 +5079,49 @@ function ToggleField({
   );
 }
 
+function VisibilityChoice({
+  checked,
+  description,
+  disabled = false,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  description: string;
+  disabled?: boolean;
+  label: string;
+  onChange: () => void;
+}) {
+  return (
+    <label
+      className={`grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg border p-4 shadow-sm transition ${
+        checked
+          ? "border-emerald-800 bg-emerald-50/60 ring-1 ring-emerald-800"
+          : "border-stone-200 bg-white"
+      } ${disabled ? "cursor-not-allowed opacity-60" : "hover:border-stone-400"}`}
+    >
+      <input
+        checked={checked}
+        className="mt-1 h-4 w-4 accent-emerald-800"
+        disabled={disabled}
+        name="storefront-visibility"
+        onChange={onChange}
+        type="radio"
+      />
+      <span>
+        <span className="block text-sm font-bold text-stone-900">{label}</span>
+        <span className="mt-1 block text-sm leading-5 text-stone-600">
+          {description}
+        </span>
+      </span>
+    </label>
+  );
+}
+
 function buildInitialForm(
   seller: NonNullable<ReturnType<typeof useSellerContext>["seller"]>,
   defaults?: StoreDefaults | null,
+  storefrontVisibility?: unknown,
 ): StoreAdminForm {
   return {
     store_name: seller.store_name ?? "",
@@ -4982,6 +5150,7 @@ function buildInitialForm(
     public_country: seller.public_country ?? "US",
     about_text: seller.about_text ?? "",
     website_url: seller.website_url ?? "",
+    storefront_visibility: normalizeStorefrontVisibility(storefrontVisibility),
     npip_number: seller.npip_number ?? "",
     show_npip: seller.show_npip,
     public_email: seller.public_email ?? "",
@@ -5351,6 +5520,12 @@ function validateForm(
   }
   const websiteUrlResult = validateSellerWebsiteUrl(form.website_url);
   if (!websiteUrlResult.ok) return websiteUrlResult.error;
+  if (
+    form.storefront_visibility === "embed_only" &&
+    !websiteUrlResult.value
+  ) {
+    return "A valid HTTPS Website URL must be saved before selecting Hidden.";
+  }
   if (activeTab === "pickup") {
     if (!form.pickup_address_line1.trim()) {
       return "Pickup address needs a street address.";

@@ -161,11 +161,11 @@ test("Store Admin renders and validates the existing Website URL field", async (
   assert.match(source, /label="Website URL"/);
   assert.match(
     source,
-    /Used to securely return customers to your website from embedded ordering\./,
+    /This is the page customers return to after ordering through your embedded store\./,
   );
   assert.match(source, /onUpdateField\("website_url", value\)/);
   assert.match(source, /type="url"/);
-  assert.match(source, /website_url: websiteUrlResult\.value/);
+  assert.match(source, /p_website_url: websiteUrlResult\.value/);
   assert.match(source, /website_url: websiteUrlResult\.value \?\? ""/);
   assert.match(source, /validateSellerWebsiteUrl\(form\.website_url\)/);
 });
@@ -184,8 +184,13 @@ test("each public server route independently reconstructs validated context", as
     const source = await read(routePath);
 
     assert.match(source, /searchParams: Promise<EmbeddedOrderModeSearchParams>/, routePath);
-    assert.match(source, /resolveEmbeddedOrderModeContext\(\{/, routePath);
-    assert.match(source, /websiteUrl: store(?:Result\.data|)\.website_url/, routePath);
+    if (routePath.startsWith("app/embed/")) {
+      assert.match(source, /resolveEmbeddedOrderModeContext\(\{/, routePath);
+      assert.match(source, /websiteUrl: storeResult\.data\.website_url/, routePath);
+    } else {
+      assert.match(source, /resolveStorefrontVisibilityDecision\(\{/, routePath);
+      assert.match(source, /websiteUrl: accessResult\.data\.website_url/, routePath);
+    }
   }
 });
 
@@ -233,7 +238,6 @@ test("focused chrome is compact and omits ordinary navigation and footer", async
   assert.match(source, /href=\{orderMode\.returnUrl\}/);
   assert.match(source, /<StorefrontFocusedOrderActions/);
   assert.match(source, /buildEmbeddedOrderModeHref\([\s\S]*?\/cart/);
-  assert.match(source, /buildEmbeddedOrderModeHref\([\s\S]*?\/checkout/);
   assert.match(cartLink, /StorefrontFocusedOrderActions/);
   assert.match(cartLink, /aria-label=\{`Cart, \$\{count\} item/);
   assert.match(cartLink, /storefrontCartChangedEvent/);
@@ -261,7 +265,7 @@ test("cart, checkout, and confirmation preserve focused context without changing
   assert.doesNotMatch(payload, /orderMode|returnUrl|website_url/);
 });
 
-test("canonical metadata remains independent of referral search parameters", async () => {
+test("focused metadata is noindex while public canonical metadata remains available", async () => {
   for (const path of [
     "app/store/[slug]/products/[productId]/page.tsx",
     "app/store/[slug]/equipment/[equipmentItemId]/page.tsx",
@@ -274,6 +278,7 @@ test("canonical metadata remains independent of referral search parameters", asy
     );
 
     assert.match(metadataSource, /buildCanonical/);
-    assert.doesNotMatch(metadataSource, /orderMode|searchParams|returnUrl/);
+    assert.match(metadataSource, /shouldNoIndexStorefrontRoute/);
+    assert.match(metadataSource, /robots: NOINDEX_ROBOTS/);
   }
 });

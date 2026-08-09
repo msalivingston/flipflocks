@@ -21,6 +21,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (!publicRows) return [...urls].map((url) => ({ url }));
 
   const [stores, liveBirds, hatchingEggs, equipment, processedPoultry] = publicRows;
+  const publicStoreSlugs = new Set(
+    (stores.data ?? []).map((store) => store.store_slug),
+  );
 
   for (const store of stores.data ?? []) {
     const base = `/store/${encodeURIComponent(store.store_slug)}`;
@@ -30,6 +33,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   for (const item of liveBirds.data ?? []) {
+    if (!publicStoreSlugs.has(item.store_slug)) continue;
     urls.add(
       absoluteUrl(
         `/store/${encodeURIComponent(item.store_slug)}/products/${encodeURIComponent(item.seller_breed_profile_id)}`,
@@ -38,6 +42,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   for (const item of hatchingEggs.data ?? []) {
+    if (!publicStoreSlugs.has(item.store_slug)) continue;
     urls.add(
       absoluteUrl(
         `/store/${encodeURIComponent(item.store_slug)}/products/${encodeURIComponent(item.hatching_egg_product_id)}`,
@@ -46,6 +51,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   for (const item of equipment.data ?? []) {
+    if (!publicStoreSlugs.has(item.store_slug)) continue;
     urls.add(
       absoluteUrl(
         `/store/${encodeURIComponent(item.store_slug)}/equipment/${encodeURIComponent(item.equipment_inventory_item_id)}`,
@@ -54,6 +60,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   for (const item of processedPoultry.data ?? []) {
+    if (!publicStoreSlugs.has(item.store_slug)) continue;
     urls.add(
       absoluteUrl(
         `/store/${encodeURIComponent(item.store_slug)}/processed-poultry/${encodeURIComponent(item.processed_poultry_inventory_item_id)}`,

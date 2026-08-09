@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { cache } from "react";
+import { notFound, redirect } from "next/navigation";
 import {
   EmptyStorefront,
   StorefrontShell,
@@ -7,6 +8,7 @@ import {
 } from "./storefront-ui";
 import {
   loadStorefrontHome,
+  loadStorefrontAccess,
   loadPublicStorefrontListingData,
 } from "./storefront-data";
 import { StorefrontHomeContent } from "./storefront-home-content";
@@ -19,6 +21,10 @@ import {
   truncateMetadataText,
   withFlockFrontBrand,
 } from "@/lib/public-metadata";
+import {
+  resolveStorefrontVisibilityDecision,
+  shouldNoIndexStorefrontRoute,
+} from "@/lib/storefront-visibility";
 
 const loadStorefrontHomeCached = cache(loadStorefrontHome);
 
@@ -34,10 +40,13 @@ export async function generateMetadata({
 
   if (query.preview === "1") return { robots: NOINDEX_ROBOTS };
 
-  const { data: store, error } = await loadStorefrontHomeCached(slug);
+  const [{ data: store, error }, accessResult] = await Promise.all([
+    loadStorefrontHomeCached(slug),
+    loadStorefrontAccess(slug),
+  ]);
   const canonicalPath = `/store/${encodeURIComponent(slug)}`;
 
-  if (error || !store) {
+  if (error || accessResult.error || !store || !accessResult.data) {
     return {
       ...buildPublicMetadata({
         canonicalPath,
@@ -46,6 +55,17 @@ export async function generateMetadata({
       }),
       robots: NOINDEX_ROBOTS,
     };
+  }
+
+  if (
+    shouldNoIndexStorefrontRoute({
+      searchParams: {},
+      storeSlug: slug,
+      visibility: accessResult.data.storefront_visibility,
+      websiteUrl: accessResult.data.website_url,
+    })
+  ) {
+    return { robots: NOINDEX_ROBOTS };
   }
 
   const tagline = cleanMetadataText(store.store_tagline);
@@ -88,11 +108,12 @@ export default async function StorefrontHomePage({
     );
   }
 
-  const [homeResult, listingResult] = await Promise.all([
+  const [homeResult, listingResult, accessResult] = await Promise.all([
     loadStorefrontHomeCached(slug),
     loadPublicStorefrontListingData(slug),
+    loadStorefrontAccess(slug),
   ]);
-  const error = homeResult.error ?? listingResult.error;
+  const error = homeResult.error ?? listingResult.error ?? accessResult.error;
 
   if (error) {
     return (
@@ -121,6 +142,22 @@ export default async function StorefrontHomePage({
       </StorefrontShell>
     );
   }
+
+  if (!accessResult.data) notFound();
+
+  const visibilityDecision = resolveStorefrontVisibilityDecision({
+    isPubliclyAvailable: accessResult.data.is_publicly_available,
+    searchParams: {},
+    storeSlug: store.store_slug,
+    visibility: accessResult.data.storefront_visibility,
+    websiteUrl: accessResult.data.website_url,
+  });
+
+  if (visibilityDecision.action === "redirect") {
+    redirect(visibilityDecision.url);
+  }
+
+  if (visibilityDecision.action === "deny") notFound();
 
   return (
     <StorefrontHomeContent
