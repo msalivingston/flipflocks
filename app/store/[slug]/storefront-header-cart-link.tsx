@@ -28,11 +28,9 @@ export function StorefrontHeaderCartLink({ storeSlug }: { storeSlug: string }) {
 
 export function StorefrontFocusedOrderActions({
   cartHref,
-  checkoutHref,
   storeSlug,
 }: {
   cartHref: string;
-  checkoutHref: string;
   storeSlug: string;
 }) {
   const count = useStorefrontCartCount(storeSlug);
@@ -52,12 +50,6 @@ export function StorefrontFocusedOrderActions({
         <span className="storefront-primary-bg inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[0.68rem] font-bold leading-none text-white">
           {count}
         </span>
-      </Link>
-      <Link
-        className="storefront-primary-button inline-flex min-h-10 items-center justify-center rounded-md px-2.5 text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:px-3 sm:text-sm"
-        href={checkoutHref}
-      >
-        Checkout
       </Link>
     </nav>
   );

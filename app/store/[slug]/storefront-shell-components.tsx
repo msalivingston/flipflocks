@@ -87,11 +87,6 @@ function StorefrontFocusedOrderHeader({
     `/store/${store.store_slug}/cart`,
     orderMode,
   );
-  const checkoutHref = buildEmbeddedOrderModeHref(
-    `/store/${store.store_slug}/checkout`,
-    orderMode,
-  );
-
   return (
     <header className="storefront-top-menu border-b border-[#e7e0d2] bg-white">
       <div className="mx-auto flex min-h-[4.5rem] max-w-[70rem] flex-wrap items-center justify-between gap-3 px-4 py-2.5 sm:px-7">
@@ -107,7 +102,6 @@ function StorefrontFocusedOrderHeader({
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-2.5 sm:gap-3">
           <StorefrontFocusedOrderActions
             cartHref={cartHref}
-            checkoutHref={checkoutHref}
             storeSlug={store.store_slug}
           />
           <div

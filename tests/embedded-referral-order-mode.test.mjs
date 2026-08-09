@@ -236,7 +236,6 @@ test("focused chrome is compact and omits ordinary navigation and footer", async
   assert.match(source, /buildEmbeddedOrderModeHref\([\s\S]*?\/checkout/);
   assert.match(cartLink, /StorefrontFocusedOrderActions/);
   assert.match(cartLink, /aria-label=\{`Cart, \$\{count\} item/);
-  assert.match(cartLink, />\s*Checkout\s*</);
   assert.match(cartLink, /storefrontCartChangedEvent/);
   assert.doesNotMatch(focusedBranch, /StorefrontFooter|StorefrontHeaderCartLink|StorefrontMobileMenu/);
 });
