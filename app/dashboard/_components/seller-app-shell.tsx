@@ -47,6 +47,12 @@ const sellerAccountNavItem = {
   glyph: "/glyphs/person.png",
 };
 
+const sellerHelpNavItem = {
+  label: "Help",
+  href: "/dashboard/help",
+  glyph: "/glyphs/open-book.png",
+};
+
 const sellerAddInventoryNavItem = {
   label: "Add Inventory",
   href: ADD_INVENTORY_HREF,
@@ -125,19 +131,19 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
 
   return (
     <SellerBillingStatusProvider>
-    <div className="min-h-screen overflow-x-clip bg-[#fbfaf6] text-stone-950 lg:grid lg:grid-cols-[224px_minmax(0,1fr)]">
+    <div className="min-h-screen overflow-x-clip bg-[#fbfaf6] text-stone-950 lg:grid lg:grid-cols-[216px_minmax(0,1fr)]">
       <aside className="hidden border-r border-stone-200/80 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
-        <div className="px-3.5 pb-2 pt-3">
+        <div className="px-3 pb-1.5 pt-2.5">
           <Link className="block w-fit" href="/">
             <Image
               src="/branding/flockfront-logo-final-cropped.png"
               alt="FlockFront"
-              width={162}
+              width={154}
               height={25}
               priority
             />
           </Link>
-          <div className="mt-3">
+          <div className="mt-2.5">
             <p className="truncate text-base font-bold text-stone-950">
               {seller.store_name}
             </p>
@@ -148,7 +154,7 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        <div className="px-3.5 pb-3 pt-2">
+        <div className="px-3 pb-2.5 pt-1.5">
           <Link
             className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-emerald-800 px-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
             href={ADD_INVENTORY_HREF}
@@ -160,13 +166,14 @@ function SellerShellContent({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
 
-        <nav className="shrink-0 space-y-1 px-2.5 pt-1.5">
+        <nav className="shrink-0 space-y-0.5 px-2 pt-1">
           <SellerNavLinks />
         </nav>
 
         <div className="min-h-[5rem] flex-1" />
 
         <div className="sticky bottom-0 shrink-0 space-y-0.5 border-t border-stone-200 bg-white px-3 py-2">
+          <SellerUtilityLink item={sellerHelpNavItem} />
           <a
             className="flex min-h-8 items-center gap-2 rounded-xl px-1 text-sm font-medium text-stone-950 transition hover:text-emerald-800"
             href={`mailto:${SUPPORT_EMAIL}`}
@@ -376,6 +383,7 @@ function MobileSellerMenu({
         <MobileMenuLink item={sellerAccountNavItem} onClose={onClose} />
       </nav>
       <div className="mt-2 border-t border-stone-200 pt-2">
+        <MobileMenuLink item={sellerHelpNavItem} onClose={onClose} />
         <a
           className="flex min-h-11 items-center gap-3 rounded-lg px-2 text-sm font-semibold text-stone-800 transition hover:bg-[#f7faf3] hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-1"
           href={`mailto:${SUPPORT_EMAIL}`}

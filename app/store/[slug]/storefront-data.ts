@@ -475,6 +475,54 @@ export async function loadStorefrontProfileImages(
   };
 }
 
+export async function loadPublicStorefrontListingData(slug: string) {
+  const [inventoryResult, equipmentResult, hatchingEggResult, processedResult] =
+    await Promise.all([
+      loadStorefrontInventory(slug),
+      loadStorefrontEquipment(slug),
+      loadStorefrontHatchingEggInventory(slug),
+      loadStorefrontProcessedPoultry(slug),
+    ]);
+  const error =
+    inventoryResult.error ??
+    equipmentResult.error ??
+    hatchingEggResult.error ??
+    processedResult.error;
+
+  if (error) {
+    return {
+      data: {
+        equipment: equipmentResult.data,
+        hatchingEggs: hatchingEggResult.data,
+        inventory: inventoryResult.data,
+        livePoultryProfileImages: {} as StorefrontProfileImageMap,
+        processedPoultry: processedResult.data,
+      },
+      error,
+    };
+  }
+
+  const profileImagesResult = await loadStorefrontProfileImages(
+    slug,
+    inventoryResult.data
+      .filter(isLivePoultryStorefrontItem)
+      .map((item) => item.seller_breed_profile_id),
+  );
+
+  return {
+    data: {
+      equipment: equipmentResult.data,
+      hatchingEggs: hatchingEggResult.data,
+      inventory: inventoryResult.data,
+      livePoultryProfileImages: profileImagesResult.error
+        ? ({} as StorefrontProfileImageMap)
+        : profileImagesResult.data,
+      processedPoultry: processedResult.data,
+    },
+    error: null,
+  };
+}
+
 export function groupInventoryByProduct(
   items: StorefrontInventoryItem[],
   profileImages: StorefrontProfileImageMap = {},

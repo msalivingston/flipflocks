@@ -124,15 +124,51 @@ test("global noindex response header is removed only after production launch", a
   });
   assert.deepEqual(await blocked.default.headers(), [
     {
-      headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      headers: [
+        {
+          key: "Content-Security-Policy",
+          value: "frame-ancestors 'self'",
+        },
+        { key: "X-Robots-Tag", value: "noindex, nofollow" },
+      ],
       source: "/:path*",
+    },
+    {
+      headers: [
+        {
+          key: "Content-Security-Policy",
+          value: "frame-ancestors https:",
+        },
+        { key: "X-Robots-Tag", value: "noindex, nofollow" },
+      ],
+      source: "/embed/store/:slug",
     },
   ]);
 
   const launched = await loadTypeScriptModule("next.config.ts", {
     "./lib/seo-config": { INDEXING_ENABLED: true },
   });
-  assert.deepEqual(await launched.default.headers(), []);
+  assert.deepEqual(await launched.default.headers(), [
+    {
+      headers: [
+        {
+          key: "Content-Security-Policy",
+          value: "frame-ancestors 'self'",
+        },
+      ],
+      source: "/:path*",
+    },
+    {
+      headers: [
+        {
+          key: "Content-Security-Policy",
+          value: "frame-ancestors https:",
+        },
+        { key: "X-Robots-Tag", value: "noindex, nofollow" },
+      ],
+      source: "/embed/store/:slug",
+    },
+  ]);
 });
 
 test("homepage graph contains only the approved linked nodes", async () => {

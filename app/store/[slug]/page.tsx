@@ -6,12 +6,8 @@ import {
   toPublicImageUrl,
 } from "./storefront-ui";
 import {
-  loadStorefrontEquipment,
-  loadStorefrontHatchingEggInventory,
   loadStorefrontHome,
-  loadStorefrontInventory,
-  loadStorefrontProfileImages,
-  loadStorefrontProcessedPoultry,
+  loadPublicStorefrontListingData,
 } from "./storefront-data";
 import { StorefrontHomeContent } from "./storefront-home-content";
 import { StorefrontPreviewClient } from "./storefront-preview-client";
@@ -92,25 +88,11 @@ export default async function StorefrontHomePage({
     );
   }
 
-  const [
-    homeResult,
-    inventoryResult,
-    equipmentResult,
-    hatchingEggResult,
-    processedPoultryResult,
-  ] = await Promise.all([
+  const [homeResult, listingResult] = await Promise.all([
     loadStorefrontHomeCached(slug),
-    loadStorefrontInventory(slug),
-    loadStorefrontEquipment(slug),
-    loadStorefrontHatchingEggInventory(slug),
-    loadStorefrontProcessedPoultry(slug),
+    loadPublicStorefrontListingData(slug),
   ]);
-  const error =
-    homeResult.error ??
-    inventoryResult.error ??
-    equipmentResult.error ??
-    hatchingEggResult.error ??
-    processedPoultryResult.error;
+  const error = homeResult.error ?? listingResult.error;
 
   if (error) {
     return (
@@ -140,39 +122,14 @@ export default async function StorefrontHomePage({
     );
   }
 
-  const livePoultryProfileImagesResult = await loadStorefrontProfileImages(
-    slug,
-    inventoryResult.data
-      .filter(isLivePoultryItem)
-      .map((item) => item.seller_breed_profile_id),
-  );
-
   return (
     <StorefrontHomeContent
-      equipment={equipmentResult.data}
-      hatchingEggs={hatchingEggResult.data}
-      inventory={inventoryResult.data}
-      livePoultryProfileImages={
-        livePoultryProfileImagesResult.error
-          ? {}
-          : livePoultryProfileImagesResult.data
-      }
-      processedPoultry={processedPoultryResult.data}
+      equipment={listingResult.data.equipment}
+      hatchingEggs={listingResult.data.hatchingEggs}
+      inventory={listingResult.data.inventory}
+      livePoultryProfileImages={listingResult.data.livePoultryProfileImages}
+      processedPoultry={listingResult.data.processedPoultry}
       store={store}
     />
   );
-}
-
-function isHatchingEggItem(item: {
-  batch_type: string | null;
-  inventory_type: string;
-}) {
-  return item.batch_type === "hatching_eggs" || item.inventory_type === "hatching_eggs";
-}
-
-function isLivePoultryItem(item: {
-  batch_type: string | null;
-  inventory_type: string;
-}) {
-  return !isHatchingEggItem(item);
 }

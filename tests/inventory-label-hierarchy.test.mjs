@@ -102,7 +102,7 @@ test("Poultry Products put product type before species metadata", () => {
 
 test("storefront cards use canonical eyebrows and preserve secondary metadata", () => {
   const mapperSource = readFileSync(
-    resolve(root, "app/store/[slug]/storefront-home-content.tsx"),
+    resolve(root, "app/store/[slug]/storefront-listing-cards.ts"),
     "utf8",
   );
   const cardSource = readFileSync(
