@@ -372,8 +372,9 @@ test("the embed reuses storefront controls while omitting storefront chrome and 
     gallery,
     /<StorefrontListingTabs[\s\S]*orderMode=\{orderMode\}[\s\S]*sections=\{sections\}[\s\S]*variant="embed"/,
   );
-  assert.match(listingTabs, /target=\{isEmbed \? "_blank" : undefined\}/);
-  assert.match(listingTabs, /rel=\{isEmbed \? "noopener noreferrer" : undefined\}/);
+  assert.match(listingTabs, /target=\{isEmbed \? "_top" : undefined\}/);
+  assert.doesNotMatch(listingTabs, /target=\{isEmbed \? "_blank" : undefined\}/);
+  assert.doesNotMatch(listingTabs, /rel=\{isEmbed \? "noopener noreferrer" : undefined\}/);
   assert.match(listingTabs, /const actionLabel = "View"/);
   assert.match(route, /Powered by FlockFront/);
   assert.doesNotMatch(gallery, /[a-z]+_(?:id|at)\b/);
