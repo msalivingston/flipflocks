@@ -935,16 +935,19 @@ function BreedLibraryHelper() {
   );
   const rows = [
     {
-      glyph: "/glyphs/clipboard.png",
-      text: "The Breed Library is a big list of common breeds.",
+      text: "FlockFront’s Breed Library includes common breeds with ready-to-use photos and descriptions. Chicken breeds also include basic characteristics.",
     },
     {
-      glyph: "/glyphs/storefront.png",
-      text: "Your Breed Catalog is the list you use in your store.",
+      text: "Your Breed Catalog holds the breeds you sell. You can use FlockFront’s information as-is or replace it with your own photos, descriptions, and characteristics.",
     },
     {
-      glyph: "/glyphs/pencil.png",
-      text: "You can add breeds from the library or create your own, then give them a name and description.",
+      text: "Your breed information is reused automatically whenever you list birds of that breed. Update it in a listing, and your Breed Catalog updates too.",
+    },
+    {
+      text: "Any breed you list is automatically added to your Breed Catalog. You do not need to add it here first.",
+    },
+    {
+      text: "If you change a default breed, you can restore FlockFront’s original information at any time.",
     },
   ];
 
@@ -1022,30 +1025,20 @@ function BreedLibraryHelper() {
             <h2 className="text-base font-bold text-emerald-950">
               What is your Breed Library?
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-950">
-              Your Breed Library is where you can choose common breeds to add to
-              your store.
+            <p className="mt-2 max-w-2xl text-[15px] leading-5 text-stone-950">
+              Your Breed Library saves you from entering the same photos and
+              breed information every time you list birds. It also keeps birds
+              of the same breed organized together on your storefront.
             </p>
-            <div className="mt-3 space-y-2">
+            <ul className="mt-3 list-disc space-y-2 pl-5">
               {rows.map((row) => (
-                <div key={row.text} className="flex gap-3">
-                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-emerald-100">
-                    <Image src={row.glyph} alt="" width={15} height={15} />
-                  </span>
-                  <p className="text-sm leading-5 text-stone-800">{row.text}</p>
-                </div>
+                <li key={row.text} className="pl-1 text-[15px] leading-5 text-stone-800">
+                  {row.text}
+                </li>
               ))}
-            </div>
-            <p className="mt-3 flex gap-2 text-sm font-bold leading-5 text-emerald-900">
-              <Image
-                src="/glyphs/heart.png"
-                alt=""
-                width={15}
-                height={15}
-                className="mt-0.5 size-4 shrink-0"
-              />
-              This helps keep your listings clear and easy for buyers to
-              understand.
+            </ul>
+            <p className="mt-3 text-base font-bold leading-6 text-emerald-900">
+              Set it up once, then reuse it every time you sell that breed.
             </p>
           </div>
         </div>
