@@ -401,7 +401,7 @@ function BillingChoice({
 function normalizeBillingCadence(
   value: string | null | undefined,
 ): BillingCadence {
-  return value === "yearly" ? "yearly" : "monthly";
+  return value === "monthly" ? "monthly" : "yearly";
 }
 
 function getAnnualSavings(plan: (typeof PLAN_CAPABILITIES)[PlanId]) {

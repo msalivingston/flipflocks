@@ -10,6 +10,14 @@ import {
 const ATTEMPT_ID = "d5000000-0000-4000-8000-000000000001";
 const STORE_ID = "d5000000-0000-4000-9000-000000000001";
 const SESSION_ID = "cs_test_Batch5Session";
+const CONFIGURED_ORIGIN = "https://flockfront.test";
+const ALLOWED_BROWSER_ORIGINS = [
+  "https://www.flockfront.com",
+  "https://flockfront.com",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  CONFIGURED_ORIGIN,
+];
 
 function attempt(overrides = {}) {
   return {
@@ -62,15 +70,25 @@ function checkoutRequest(body = {
 }
 
 function harness(overrides = {}) {
-  const calls = { begin: [], create: [], retrieve: [], record: [], failed: [] };
+  const calls = {
+    authenticate: [],
+    begin: [],
+    create: [],
+    retrieve: [],
+    record: [],
+    failed: [],
+  };
   const dependencies = {
-    allowedOrigin: "https://flockfront.test",
+    allowedOrigin: CONFIGURED_ORIGIN,
     stripeLivemode: false,
     stripeAccountId: "acct_Batch5Platform",
-    authenticate: async () => ({
-      id: "d5000000-0000-4000-8000-000000000001",
-      email: "owner@example.test",
-    }),
+    authenticate: async (...args) => {
+      calls.authenticate.push(args);
+      return {
+        id: "d5000000-0000-4000-8000-000000000001",
+        email: "owner@example.test",
+      };
+    },
     beginCheckout: async (...args) => {
       calls.begin.push(args);
       return attempt();
@@ -94,24 +112,64 @@ function harness(overrides = {}) {
   return { handler: createStripeSaasCheckoutHandler(dependencies), calls };
 }
 
-test("approved-origin Checkout preflight returns 204 without starting Checkout", async () => {
-  const fixture = harness();
-  const response = await fixture.handler(new Request(
-    "https://functions.test/stripe-saas-checkout",
-    {
-      method: "OPTIONS",
-      headers: {
-        Origin: "https://flockfront.test",
-        "Access-Control-Request-Method": "POST",
-        "Access-Control-Request-Headers": "authorization, content-type",
+test("approved-origin Checkout preflights echo every exact browser origin", async () => {
+  for (const origin of ALLOWED_BROWSER_ORIGINS) {
+    const fixture = harness();
+    const response = await fixture.handler(new Request(
+      "https://functions.test/stripe-saas-checkout",
+      {
+        method: "OPTIONS",
+        headers: {
+          Origin: origin,
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "authorization, content-type",
+        },
       },
-    },
-  ));
+    ));
 
-  assert.equal(response.status, 204);
-  assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://flockfront.test");
-  assert.equal(fixture.calls.begin.length, 0);
-  assert.equal(fixture.calls.create.length, 0);
+    assert.equal(response.status, 204);
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), origin);
+    assert.equal(response.headers.get("Vary"), "Origin");
+    assert.equal(response.headers.get("Access-Control-Allow-Methods"), "POST, OPTIONS");
+    assert.equal(
+      response.headers.get("Access-Control-Allow-Headers"),
+      "authorization, x-client-info, apikey, content-type",
+    );
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+    assert.equal(response.headers.get("Content-Type"), "application/json");
+    for (const operations of Object.values(fixture.calls)) {
+      assert.equal(operations.length, 0);
+    }
+  }
+});
+
+test("rejected Checkout preflights omit CORS approval and perform no work", async () => {
+  for (const origin of [
+    "https://attacker.test",
+    "https://www.flockfront.com.evil.example",
+    "*",
+    "http://localhost:3001",
+  ]) {
+    const fixture = harness();
+    const response = await fixture.handler(new Request(
+      "https://functions.test/stripe-saas-checkout",
+      {
+        method: "OPTIONS",
+        headers: {
+          Origin: origin,
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "authorization, content-type",
+        },
+      },
+    ));
+
+    assert.equal(response.status, 403);
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), null);
+    assert.equal(response.headers.get("Vary"), "Origin");
+    for (const operations of Object.values(fixture.calls)) {
+      assert.equal(operations.length, 0);
+    }
+  }
 });
 
 test("new Checkout uses authenticated email while an existing Customer binding is reused", () => {
@@ -138,6 +196,8 @@ test("verified user intent creates and records one trusted Checkout Session", as
   const body = await response.json();
 
   assert.equal(response.status, 200);
+  assert.equal(response.headers.get("Access-Control-Allow-Origin"), CONFIGURED_ORIGIN);
+  assert.equal(response.headers.get("Vary"), "Origin");
   assert.deepEqual(body, {
     status: "redirect",
     checkout_url: "https://checkout.stripe.com/c/pay/batch5",
@@ -178,8 +238,29 @@ test("authentication, ownership contract failure, and foreign origins fail close
       "Content-Type": "application/json",
     },
   });
-  assert.equal((await foreign.handler(foreignRequest)).status, 403);
+  const foreignResponse = await foreign.handler(foreignRequest);
+  assert.equal(foreignResponse.status, 403);
+  assert.equal(foreignResponse.headers.get("Access-Control-Allow-Origin"), null);
+  assert.equal(foreign.calls.authenticate.length, 0);
   assert.equal(foreign.calls.begin.length, 0);
+});
+
+test("authenticated requests without Origin remain supported without CORS approval", async () => {
+  const testHarness = harness();
+  const response = await testHarness.handler(checkoutRequest(undefined, {
+    headers: {
+      Authorization: "Bearer verified-user-token",
+      "Content-Type": "application/json",
+    },
+  }));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("Access-Control-Allow-Origin"), null);
+  assert.equal(response.headers.get("Vary"), "Origin");
+  assert.equal(testHarness.calls.authenticate.length, 1);
+  assert.equal(testHarness.calls.begin.length, 1);
+  assert.equal(testHarness.calls.create.length, 1);
+  assert.equal(testHarness.calls.record.length, 1);
 });
 
 test("request accepts only canonical plan and cadence intent", async () => {

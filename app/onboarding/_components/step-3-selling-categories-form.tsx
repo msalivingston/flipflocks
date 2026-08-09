@@ -10,14 +10,18 @@ import {
 import type { LockedPlanFeature } from "@/lib/plan-capabilities";
 
 type Step3SellingCategoriesFormProps = {
+  categoriesComplete?: boolean;
   initialValues?: {
     equipmentSuppliesEnabled?: boolean | null;
     hatchingEggsEnabled?: boolean | null;
     processedPoultryEnabled?: boolean | null;
   };
-  onChooseFullFlock: () => void;
   onBack: () => void;
-  onComplete: () => void;
+  onComplete: (values: {
+    equipmentSuppliesEnabled: boolean;
+    hatchingEggsEnabled: boolean;
+    processedPoultryEnabled: boolean;
+  }) => void;
   planKey?: string | null;
 };
 
@@ -44,20 +48,20 @@ const categoryOptions: CategoryOption[] = [
     glyph: "/glyphs/chicken-leg.png",
     key: "poultryProducts",
     lockedFeature: "processed_poultry",
-    title: "Poultry products",
+    title: "Processed poultry",
   },
   {
     description: "Coops, feeders, brooders, farm extras, and more.",
     glyph: "/glyphs/incubator.png",
     key: "equipmentSupplies",
     lockedFeature: "equipment_supplies",
-    title: "Equipment or supplies",
+    title: "Equipment/supplies",
   },
 ];
 
 export function Step3SellingCategoriesForm({
+  categoriesComplete = false,
   initialValues,
-  onChooseFullFlock,
   onBack,
   onComplete,
   planKey,
@@ -67,10 +71,16 @@ export function Step3SellingCategoriesForm({
     Record<CategoryKey, boolean>
   >({
     equipmentSupplies:
-      !isSmallFlock && Boolean(initialValues?.equipmentSuppliesEnabled),
-    hatchingEggs: !isSmallFlock && Boolean(initialValues?.hatchingEggsEnabled),
+      !isSmallFlock && (categoriesComplete
+        ? Boolean(initialValues?.equipmentSuppliesEnabled)
+        : true),
+    hatchingEggs: !isSmallFlock && (categoriesComplete
+      ? Boolean(initialValues?.hatchingEggsEnabled)
+      : true),
     poultryProducts:
-      !isSmallFlock && Boolean(initialValues?.processedPoultryEnabled),
+      !isSmallFlock && (categoriesComplete
+        ? Boolean(initialValues?.processedPoultryEnabled)
+        : true),
   });
   const [error, setError] = useState<string | null>(null);
   const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
@@ -117,7 +127,17 @@ export function Step3SellingCategoriesForm({
       return;
     }
 
-    onComplete();
+    onComplete({
+      equipmentSuppliesEnabled: isSmallFlock
+        ? false
+        : selectedCategories.equipmentSupplies,
+      hatchingEggsEnabled: isSmallFlock
+        ? false
+        : selectedCategories.hatchingEggs,
+      processedPoultryEnabled: isSmallFlock
+        ? false
+        : selectedCategories.poultryProducts,
+    });
   }
 
   return (
@@ -153,14 +173,11 @@ export function Step3SellingCategoriesForm({
             <p className="text-sm font-semibold leading-6 text-stone-700">
               {upgradeMessage}
             </p>
+            <p className="mt-2 text-xs font-medium leading-5 text-stone-600">
+              Your paid plan is already established. You can review plan changes
+              from Billing after onboarding.
+            </p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-              <button
-                className="min-h-9 rounded-md bg-[#246f38] px-3 text-sm font-bold text-white transition hover:bg-[#1c5c2d] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2"
-                onClick={onChooseFullFlock}
-                type="button"
-              >
-                Choose Market
-              </button>
               <button
                 className="min-h-9 rounded-md border border-stone-300 bg-white px-3 text-sm font-bold text-stone-700 transition hover:border-[#246f38] hover:text-[#246f38] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2"
                 onClick={() => setUpgradeMessage(null)}

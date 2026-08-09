@@ -4,12 +4,13 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SellerTermsAcceptance } from "@/app/_components/seller-terms-acceptance";
-import { supabase } from "@/lib/supabase";
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
+import { supabase } from "@/lib/supabase";
 import { storeSetupSuccessSoundKey } from "@/lib/success-sound";
 
 type Step6ReviewSetupProps = {
   onBack: () => void;
+  onEditStep: (step: 2 | 4 | 5 | 6) => void;
   storeId: string;
 };
 
@@ -24,10 +25,18 @@ type StoreReview = {
   buyer_contact_text_enabled: boolean | null;
   equipment_supplies_enabled: boolean | null;
   hatching_eggs_enabled: boolean | null;
+  hero_subheading: string | null;
+  store_tagline: string | null;
   location_display_preference: string | null;
+  pickup_address_line1: string | null;
+  pickup_address_line2: string | null;
+  pickup_city: string | null;
   pickup_policy: string | null;
+  pickup_postal_code: string | null;
+  pickup_state: string | null;
   processed_poultry_enabled: boolean | null;
   public_city: string | null;
+  public_phone: string | null;
   public_state: string | null;
   store_name: string | null;
 };
@@ -50,7 +59,11 @@ type ReviewData = {
   termsAccepted: boolean;
 };
 
-export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
+export function Step6ReviewSetup({
+  onBack,
+  onEditStep,
+  storeId,
+}: Step6ReviewSetupProps) {
   const router = useRouter();
   const [reviewData, setReviewData] = useState<ReviewData>({
     billing: null,
@@ -61,8 +74,7 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFullDescription, setShowFullDescription] = useState(false);
-  const [showFullPickupPolicy, setShowFullPickupPolicy] =
-    useState(false);
+  const [showFullPickupPolicy, setShowFullPickupPolicy] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -77,7 +89,7 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
             supabase
               .from("stores")
               .select(
-                "store_name, about_text, public_city, public_state, billing_address_line1, billing_city, billing_state, billing_postal_code, location_display_preference, hatching_eggs_enabled, processed_poultry_enabled, equipment_supplies_enabled, pickup_policy, buyer_contact_email_enabled, buyer_contact_text_enabled, buyer_contact_phone_enabled",
+                "store_name, public_phone, store_tagline, hero_subheading, about_text, public_city, public_state, billing_address_line1, billing_city, billing_state, billing_postal_code, location_display_preference, hatching_eggs_enabled, processed_poultry_enabled, equipment_supplies_enabled, pickup_address_line1, pickup_address_line2, pickup_city, pickup_state, pickup_postal_code, pickup_policy, buyer_contact_email_enabled, buyer_contact_text_enabled, buyer_contact_phone_enabled",
               )
               .eq("id", storeId)
               .maybeSingle<StoreReview>(),
@@ -121,9 +133,7 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
             : "We could not load your saved setup.";
         setError(friendlyReviewError(message));
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        if (isMounted) setIsLoading(false);
       }
     }
 
@@ -172,15 +182,14 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
   }
 
   const store = reviewData.store;
-  const billing = reviewData.billing;
   const description = store?.about_text?.trim() ?? "";
+  const pickupPolicy = store?.pickup_policy?.trim() ?? "";
   const descriptionIsLong = description.length > 260;
+  const pickupPolicyIsLong = pickupPolicy.length > 260;
   const displayedDescription =
     descriptionIsLong && !showFullDescription
       ? `${description.slice(0, 260).trim()}...`
       : description;
-  const pickupPolicy = store?.pickup_policy?.trim() ?? "";
-  const pickupPolicyIsLong = pickupPolicy.length > 260;
   const displayedPickupPolicy =
     pickupPolicyIsLong && !showFullPickupPolicy
       ? `${pickupPolicy.slice(0, 260).trim()}...`
@@ -193,8 +202,43 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
       </h2>
 
       <div className="mt-4 space-y-3">
-        <ReviewSection title="Store">
-          <ReviewRow label="Farm/store name" value={store?.store_name} />
+        <ReviewSection
+          onEdit={() => onEditStep(2)}
+          title="Farm basics"
+        >
+          <ReviewRow label="Farm or seller name" value={store?.store_name} />
+          <ReviewRow label="Phone" value={store?.public_phone} />
+          <ReviewRow
+            label="Private billing address"
+            value={formatBillingAddress(store)}
+          />
+        </ReviewSection>
+
+        <ReviewSection title="Plan and payment">
+          <ReviewRow
+            label="Requested plan"
+            value={formatRequestedPlanName(reviewData.billing)}
+          />
+          <ReviewRow
+            label="Requested billing"
+            value={formatRequestedBillingPlan(reviewData.billing)}
+          />
+          <ReviewRow
+            label="Effective plan"
+            value={formatEffectivePlanName(reviewData.billing)}
+          />
+          <ReviewRow
+            label="Access"
+            value={formatPlanAccess(reviewData.billing)}
+          />
+        </ReviewSection>
+
+        <ReviewSection
+          onEdit={() => onEditStep(4)}
+          title="Storefront details"
+        >
+          <ReviewRow label="Hero tagline" value={store?.store_tagline} />
+          <ReviewRow label="Hero subline" value={store?.hero_subheading} />
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-stone-500">
               Farm description
@@ -213,33 +257,36 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
             ) : null}
           </div>
           <ReviewRow
-            label="Location shown to buyers"
+            label="Location shown publicly"
             value={formatBuyerLocation(store)}
           />
         </ReviewSection>
 
-        <ReviewSection title="What you'll sell">
-          {categories.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {categories.map((category) => (
-                <span
-                  className="inline-flex items-center gap-2 rounded-full bg-[#eff8ed] px-3 py-1 text-sm font-bold text-[#246f38] ring-1 ring-[#dbe8d8]"
-                  key={category.label}
-                >
-                  <Image src={category.glyph} alt="" width={20} height={20} />
-                  {category.label}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm font-medium leading-6 text-stone-700">
-              No selling categories selected yet. You can enable them later from
-              Store Admin.
-            </p>
-          )}
+        <ReviewSection
+          onEdit={() => onEditStep(5)}
+          title="Selling categories"
+        >
+          <div className="flex flex-wrap gap-2">
+            {categories.map((category) => (
+              <span
+                className="inline-flex items-center gap-2 rounded-full bg-[#eff8ed] px-3 py-1 text-sm font-bold text-[#246f38] ring-1 ring-[#dbe8d8]"
+                key={category.label}
+              >
+                <Image src={category.glyph} alt="" width={20} height={20} />
+                {category.label}
+              </span>
+            ))}
+          </div>
         </ReviewSection>
 
-        <ReviewSection title="Pickup">
+        <ReviewSection
+          onEdit={() => onEditStep(6)}
+          title="Pickup details"
+        >
+          <ReviewRow
+            label="Private pickup address"
+            value={formatPickupAddress(store)}
+          />
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-stone-500">
               Pickup policy
@@ -267,22 +314,6 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
           />
         </ReviewSection>
 
-        <ReviewSection title="Plan access">
-          <ReviewRow
-            label="Requested plan"
-            value={formatRequestedPlanName(billing)}
-          />
-          <ReviewRow
-            label="Requested billing"
-            value={formatRequestedBillingPlan(billing)}
-          />
-          <ReviewRow
-            label="Effective plan"
-            value={formatEffectivePlanName(billing)}
-          />
-          <ReviewRow label="Access" value={formatPlanAccess(billing)} />
-        </ReviewSection>
-
         <ReviewSection title="Seller Terms">
           <SellerTermsAcceptance
             initiallyAccepted={reviewData.termsAccepted}
@@ -298,9 +329,8 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
 
         <div className="rounded-lg border border-[#dbe8d8] bg-[#eff8ed] px-4 py-3">
           <p className="text-sm font-medium leading-6 text-stone-700">
-            You can edit your store details, pickup windows, biosecurity
-            details, payment instructions, refund policies, and other store
-            policies from Store Admin on your dashboard.
+            Your full billing and pickup street addresses remain private. You
+            can update store and pickup settings later from Store Admin.
           </p>
         </div>
 
@@ -342,16 +372,29 @@ export function Step6ReviewSetup({ onBack, storeId }: Step6ReviewSetupProps) {
 
 function ReviewSection({
   children,
+  onEdit,
   title,
 }: {
   children: React.ReactNode;
+  onEdit?: () => void;
   title: string;
 }) {
   return (
     <section className="rounded-lg border border-stone-200 bg-[#fffaf1] px-4 py-3">
-      <h3 className="font-serif text-lg font-semibold text-stone-950">
-        {title}
-      </h3>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="font-serif text-lg font-semibold text-stone-950">
+          {title}
+        </h3>
+        {onEdit ? (
+          <button
+            className="text-sm font-bold text-[#246f38] underline-offset-4 hover:underline"
+            onClick={onEdit}
+            type="button"
+          >
+            Edit
+          </button>
+        ) : null}
+      </div>
       <div className="mt-2 space-y-2">{children}</div>
     </section>
   );
@@ -377,28 +420,24 @@ function ReviewRow({
 }
 
 function getSelectedCategories(store: StoreReview | null) {
-  if (!store) return [];
-
   const categories = [{ glyph: "/glyphs/hen.png", label: "Live birds" }];
 
-  if (store.hatching_eggs_enabled) {
+  if (store?.hatching_eggs_enabled) {
     categories.push({
       glyph: "/glyphs/egg-carton.png",
       label: "Hatching eggs",
     });
   }
-
-  if (store.processed_poultry_enabled) {
-    categories.push({
-      glyph: "/glyphs/chicken-leg.png",
-      label: "Poultry products",
-    });
-  }
-
-  if (store.equipment_supplies_enabled) {
+  if (store?.equipment_supplies_enabled) {
     categories.push({
       glyph: "/glyphs/incubator.png",
-      label: "Equipment or supplies",
+      label: "Equipment/supplies",
+    });
+  }
+  if (store?.processed_poultry_enabled) {
+    categories.push({
+      glyph: "/glyphs/chicken-leg.png",
+      label: "Processed poultry",
     });
   }
 
@@ -407,35 +446,51 @@ function getSelectedCategories(store: StoreReview | null) {
 
 function getContactMethods(store: StoreReview | null) {
   if (!store) return [];
-
   const methods: string[] = [];
-
   if (store.buyer_contact_email_enabled) methods.push("Email");
   if (store.buyer_contact_text_enabled) methods.push("Text message");
   if (store.buyer_contact_phone_enabled) methods.push("Phone call");
-
   return methods;
+}
+
+function formatBillingAddress(store: StoreReview | null) {
+  if (!store) return "Not saved";
+  return [
+    store.billing_address_line1,
+    store.billing_city,
+    store.billing_state,
+    store.billing_postal_code,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function formatPickupAddress(store: StoreReview | null) {
+  if (!store) return "Not saved";
+  return [
+    store.pickup_address_line1,
+    store.pickup_address_line2,
+    store.pickup_city,
+    store.pickup_state,
+    store.pickup_postal_code,
+  ]
+    .filter(Boolean)
+    .join(", ");
 }
 
 function formatBuyerLocation(store: StoreReview | null) {
   if (!store) return "Not saved";
+  const publicLocation = [store.public_city, store.public_state]
+    .filter(Boolean)
+    .join(", ");
 
   if (store.location_display_preference === "manual") {
-    return "You'll add pickup location details manually";
+    return `${publicLocation || "City and state"} (manual preference saved)`;
   }
-
   if (store.location_display_preference === "full_address") {
-    return [
-      store.billing_address_line1,
-      store.billing_city,
-      store.billing_state,
-      store.billing_postal_code,
-    ]
-      .filter(Boolean)
-      .join(", ");
+    return `${publicLocation || "City and state"} (street address remains private)`;
   }
-
-  return [store.public_city, store.public_state].filter(Boolean).join(", ");
+  return publicLocation;
 }
 
 function formatPlanAccess(billing: BillingReview | null) {
@@ -482,21 +537,16 @@ function friendlyReviewError(message: string) {
   if (message.toLowerCase().includes("timed out")) {
     return "We could not load your saved setup. Please refresh and try again.";
   }
-
   if (message.toLowerCase().includes("function")) {
     return "We could not load the latest onboarding tools. Please make sure the latest Supabase migrations have been applied.";
   }
-
   return message || "We could not finish onboarding. Please try again.";
 }
 
 async function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number) {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
   const timeout = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => {
-      reject(new Error("Request timed out."));
-    }, timeoutMs);
+    timeoutId = setTimeout(() => reject(new Error("Request timed out.")), timeoutMs);
   });
 
   try {

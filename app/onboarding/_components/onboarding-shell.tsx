@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
-const totalSteps = 6;
+const totalSteps = 7;
 
 type OnboardingShellProps = {
   children: React.ReactNode;

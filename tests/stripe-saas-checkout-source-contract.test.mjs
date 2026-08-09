@@ -27,6 +27,24 @@ test("Checkout endpoint is JWT-authenticated, feature-gated, and service bounded
   assert.match(handler, /allowedBodyKeys = new Set\(\["plan_key", "billing_cadence"\]\)/);
 });
 
+test("Checkout uses the shared exact-origin CORS policy", async () => {
+  const [index, handler] = await Promise.all([
+    readFile(indexPath, "utf8"),
+    readFile(handlerPath, "utf8"),
+  ]);
+
+  assert.match(handler, /import \{ resolveFlockFrontCors \} from "\.\.\/_shared\/cors\.ts";/);
+  assert.match(
+    handler,
+    /resolveFlockFrontCors\(origin, \{\s*configuredOrigin: dependencies\.allowedOrigin,\s*\}\)/,
+  );
+  assert.match(handler, /if \(!corsPolicy\.originAllowed\)/);
+  assert.match(handler, /\.\.\.corsPolicy\.headers/);
+  assert.doesNotMatch(handler, /"Access-Control-Allow-Origin"\s*:/);
+  assert.match(index, /const allowedOrigin = configuredOrigin\("FLIPFLOCKS_PUBLIC_API_ORIGIN"\)/);
+  assert.match(index, /createStripeSaasCheckoutHandler\(\{\s*allowedOrigin,/);
+});
+
 test("all SaaS function entrypoints use the shared production runtime safeguard", async () => {
   const entrypoints = await Promise.all([
     "stripe-saas-checkout",

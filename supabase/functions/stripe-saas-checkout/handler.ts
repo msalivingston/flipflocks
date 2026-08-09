@@ -1,3 +1,5 @@
+import { resolveFlockFrontCors } from "../_shared/cors.ts";
+
 export type SaasCheckoutAttempt = {
   checkout_state: "created" | "resumable" | "selection_conflict" | "rate_limited";
   attempt_id: string | null;
@@ -90,24 +92,6 @@ export type StripeSaasCheckoutDependencies = {
 const allowedBodyKeys = new Set(["plan_key", "billing_cadence"]);
 const checkoutSessionPattern = /^cs_(test|live)_[A-Za-z0-9]+$/;
 
-function responseHeaders(
-  dependencies: StripeSaasCheckoutDependencies,
-  request: Request,
-): Record<string, string> {
-  const origin = request.headers.get("Origin");
-  return {
-    "Access-Control-Allow-Origin": origin === dependencies.allowedOrigin
-      ? dependencies.allowedOrigin
-      : dependencies.allowedOrigin,
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Cache-Control": "no-store",
-    "Content-Type": "application/json",
-    "Vary": "Origin",
-  };
-}
-
 function jsonResponse(
   status: number,
   body: Record<string, unknown>,
@@ -193,10 +177,17 @@ export function createStripeSaasCheckoutHandler(
   dependencies: StripeSaasCheckoutDependencies,
 ): (request: Request) => Promise<Response> {
   return async (request: Request) => {
-    const headers = responseHeaders(dependencies, request);
     const origin = request.headers.get("Origin");
+    const corsPolicy = resolveFlockFrontCors(origin, {
+      configuredOrigin: dependencies.allowedOrigin,
+    });
+    const headers = {
+      ...corsPolicy.headers,
+      "Cache-Control": "no-store",
+      "Content-Type": "application/json",
+    };
 
-    if (origin && origin !== dependencies.allowedOrigin) {
+    if (!corsPolicy.originAllowed) {
       return jsonResponse(403, { error: "origin_not_allowed" }, headers);
     }
     if (request.method === "OPTIONS") {

@@ -68,7 +68,7 @@ test("completed existing sellers remain routed to the dashboard", async () => {
 
   assert.match(
     flow,
-    /if \(onboardingProgress\?\.onboarding_complete\) \{[\s\S]*router\.replace\("\/dashboard"\)/,
+    /if \(progress\?\.onboarding_complete\) \{[\s\S]*router\.replace\("\/dashboard"\)/,
   );
 });
 
@@ -113,15 +113,14 @@ test("onboarding completion has a server-side authoritative Terms gate", async (
 
 test("Step 2 edits preserve established onboarding progress", async () => {
   const migration = await read(
-    "supabase/migrations/20260808160000_seller_terms_acceptance.sql",
+    "supabase/migrations/20260809140000_simplify_onboarding_steps.sql",
   );
   const tests = await read("supabase/tests/onboarding_storefront_information_test.sql");
 
   assert.match(
     migration,
-    /v_new text := \$new\$[\s\S]*profile_complete = true,[\s\S]*updated_at = now\(\)/,
+    /on conflict on constraint seller_onboarding_state_store_id_key do update\s+set profile_complete = true,[\s\S]*updated_at = statement_timestamp\(\)/,
   );
-  assert.match(tests, /editing existing Farm Information preserves all later onboarding progress/);
-  assert.match(tests, /a new onboarding row still initializes later progress flags as incomplete/);
+  assert.match(tests, /Farm Basics is idempotent for an existing partial account/);
+  assert.match(tests, /Storefront Details records its own completion without resetting progress/);
 });
-

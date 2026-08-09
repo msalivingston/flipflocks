@@ -43,12 +43,12 @@ values
   );
 
 insert into public.seller_onboarding_state (
-  store_id, profile_complete, billing_complete, categories_complete,
-  pickup_complete
+  store_id, profile_complete, billing_complete, storefront_details_complete,
+  categories_complete, pickup_complete
 )
 values
-  ('ec000000-0000-4000-8000-000000000010', true, true, true, true),
-  ('ec000000-0000-4000-8000-000000000020', true, true, true, true);
+  ('ec000000-0000-4000-8000-000000000010', true, true, true, true, true),
+  ('ec000000-0000-4000-8000-000000000020', true, true, true, true, true);
 
 insert into public.seller_terms_acceptances (
   store_id, terms_version, accepted_by_user_id, accepted_at
