@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isCurrentUserPlatformAdmin } from "@/app/admin/_lib/admin-auth";
 import type { SellerContext } from "@/app/dashboard/_lib/seller-types";
+import {
+  hasBrowserAuthRecoverySignal,
+  waitForBrowserAuthSession,
+} from "@/lib/auth-email-verification";
 import { supabase } from "@/lib/supabase";
 import { OnboardingShell } from "./onboarding-shell";
 import { Step2FarmBasicsForm } from "./step-2-farm-basics-form";
@@ -75,18 +79,11 @@ export function OnboardingFlow({ checkoutCanceled = false }: { checkoutCanceled?
     async function loadOnboardingState() {
       setError(null);
       try {
-        if (!hasPersistedSupabaseSession()) {
-          setView("redirecting");
-          router.replace("/login");
-          return;
-        }
-
-        const { data: sessionData, error: sessionError } = await withTimeout(
-          supabase.auth.getSession(),
-          8000,
-        );
+        const sessionResult = await waitForBrowserAuthSession(supabase.auth, {
+          hasRecoverySignal: hasBrowserAuthRecoverySignal(window.location),
+        });
         if (!isMounted) return;
-        if (sessionError || !sessionData.session) {
+        if (sessionResult.error || !sessionResult.session) {
           setView("redirecting");
           router.replace("/login");
           return;
@@ -516,17 +513,6 @@ function friendlyOnboardingError(message: string) {
     return "We could not load the latest onboarding tools. Please make sure the latest Supabase migrations have been applied.";
   }
   return message || "We could not load your onboarding setup. Please try again.";
-}
-
-function hasPersistedSupabaseSession() {
-  if (typeof window === "undefined") return true;
-  try {
-    return Object.keys(window.localStorage).some(
-      (key) => key.startsWith("sb-") && key.endsWith("-auth-token"),
-    );
-  } catch {
-    return true;
-  }
 }
 
 async function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number) {

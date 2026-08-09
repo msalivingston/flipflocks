@@ -6,14 +6,21 @@ export const metadata = {
   description: "Start setting up your FlockFront seller storefront.",
 };
 
-export default function SignupPage() {
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const resend = Array.isArray(params.resend) ? params.resend[0] : params.resend;
+
   return (
     <OnboardingShell
       currentStep={1}
       compactOnMobile
       reassurance="Only takes a few minutes."
     >
-      <SignupForm />
+      <SignupForm initialResendMode={resend === "1"} />
     </OnboardingShell>
   );
 }

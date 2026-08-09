@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  authCallbackUrl,
+  friendlyVerificationResendError,
+} from "@/lib/auth-email-verification";
 import { legalRoutes } from "@/lib/legal";
 import { supabase } from "@/lib/supabase";
 
@@ -11,20 +15,56 @@ type SignupErrors = {
   lastName?: string;
   email?: string;
   password?: string;
+  confirmPassword?: string;
   form?: string;
 };
 
+type SignupView = "form" | "check-email" | "resend-only";
+
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function SignupForm() {
+export function SignupForm({
+  initialResendMode = false,
+}: {
+  initialResendMode?: boolean;
+}) {
   const router = useRouter();
+  const [view, setView] = useState<SignupView>(
+    initialResendMode ? "resend-only" : "form",
+  );
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
   const [errors, setErrors] = useState<SignupErrors>({});
-  const [successMessage, setSuccessMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [resendError, setResendError] = useState<string | null>(null);
+  const [resendAvailableAt, setResendAvailableAt] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  const resendLock = useRef(false);
+
+  useEffect(() => {
+    if (!resendAvailableAt) return;
+
+    const timer = window.setInterval(() => {
+      const nextNow = Date.now();
+      setNow(nextNow);
+      if (nextNow >= resendAvailableAt) {
+        setResendAvailableAt(0);
+        window.clearInterval(timer);
+      }
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [resendAvailableAt]);
+
+  const resendSecondsRemaining = resendAvailableAt
+    ? Math.max(0, Math.ceil((resendAvailableAt - now) / 1000))
+    : 0;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,6 +74,7 @@ export function SignupForm() {
       lastName,
       email,
       password,
+      confirmPassword,
     });
 
     if (Object.keys(nextErrors).length > 0) {
@@ -41,16 +82,19 @@ export function SignupForm() {
       return;
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+    const callbackUrl = authCallbackUrl(window.location.origin);
+
     setErrors({});
-    setSuccessMessage("");
     setIsSubmitting(true);
 
     try {
       const { data, error } = await withTimeout(
         supabase.auth.signUp({
-          email: email.trim().toLowerCase(),
+          email: normalizedEmail,
           password,
           options: {
+            emailRedirectTo: callbackUrl,
             data: {
               first_name: firstName.trim(),
               last_name: lastName.trim(),
@@ -73,15 +117,17 @@ export function SignupForm() {
       }
 
       if (data.user && !data.session) {
-        setSuccessMessage(
-          "Account created. Please check your email to confirm your account, then sign in to continue setup.",
-        );
+        setPendingEmail(normalizedEmail);
+        setEmail(normalizedEmail);
+        setResendMessage(null);
+        setResendError(null);
+        setView("check-email");
         setIsSubmitting(false);
         return;
       }
 
       setErrors({
-        form: "We could not confirm that your account was created. Please try again.",
+        form: "We could not complete signup. Please try again or sign in if you already have an account.",
       });
       setIsSubmitting(false);
     } catch {
@@ -90,6 +136,122 @@ export function SignupForm() {
       });
       setIsSubmitting(false);
     }
+  }
+
+  async function handleResendVerification() {
+    if (resendLock.current || isResending || resendSecondsRemaining > 0) return;
+
+    const normalizedEmail = (pendingEmail || email).trim().toLowerCase();
+    if (!emailPattern.test(normalizedEmail)) {
+      setResendMessage(null);
+      setResendError("Enter a valid email address.");
+      return;
+    }
+
+    resendLock.current = true;
+    setIsResending(true);
+    setResendMessage(null);
+    setResendError(null);
+
+    try {
+      const callbackUrl = authCallbackUrl(window.location.origin);
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: normalizedEmail,
+        options: {
+          emailRedirectTo: callbackUrl,
+        },
+      });
+
+      if (error) {
+        const friendlyError = friendlyVerificationResendError(error.message);
+        const isRateLimited = friendlyError.startsWith("Please wait");
+        setResendError(friendlyError);
+        setResendAvailableAt(Date.now() + (isRateLimited ? 60000 : 10000));
+        setNow(Date.now());
+        return;
+      }
+
+      setPendingEmail(normalizedEmail);
+      setEmail(normalizedEmail);
+      setResendMessage("Verification email sent. Check your inbox and spam folder.");
+      setResendAvailableAt(Date.now() + 30000);
+      setNow(Date.now());
+      if (view === "resend-only") setView("check-email");
+    } catch {
+      setResendError("We could not resend the verification email. Please try again.");
+      setResendAvailableAt(Date.now() + 10000);
+      setNow(Date.now());
+    } finally {
+      resendLock.current = false;
+      setIsResending(false);
+    }
+  }
+
+  function useDifferentEmail() {
+    setView("form");
+    setEmail(pendingEmail || email.trim().toLowerCase());
+    setPassword("");
+    setConfirmPassword("");
+    setErrors({});
+    setResendMessage(null);
+    setResendError(null);
+  }
+
+  if (view === "check-email") {
+    return (
+      <CheckEmailState
+        email={pendingEmail}
+        isResending={isResending}
+        onResend={() => void handleResendVerification()}
+        onUseDifferentEmail={useDifferentEmail}
+        resendError={resendError}
+        resendMessage={resendMessage}
+        resendSecondsRemaining={resendSecondsRemaining}
+      />
+    );
+  }
+
+  if (view === "resend-only") {
+    return (
+      <section className="rounded-[0.95rem] bg-white px-4 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-8 lg:py-6">
+        <h2 className="font-serif text-[1.55rem] font-semibold leading-tight text-stone-950 sm:text-[1.8rem]">
+          Resend verification email
+        </h2>
+        <p className="mt-2 text-sm font-medium leading-6 text-stone-600">
+          Enter the email address you used to sign up. For privacy, we will not
+          confirm whether an account exists.
+        </p>
+        <div className="mt-4 space-y-3">
+          <Field
+            autoComplete="email"
+            id="resend-email"
+            inputMode="email"
+            label="Email address"
+            onChange={setEmail}
+            type="email"
+            value={email}
+          />
+          <ResendFeedback error={resendError} message={resendMessage} />
+          <button
+            className="flex min-h-12 w-full items-center justify-center rounded-md bg-[#246f38] px-4 text-base font-bold text-white shadow-sm transition hover:bg-[#1c5c2d] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-10 sm:text-[15px]"
+            disabled={isResending || resendSecondsRemaining > 0}
+            onClick={() => void handleResendVerification()}
+            type="button"
+          >
+            {resendButtonLabel(isResending, resendSecondsRemaining)}
+          </button>
+          <div className="flex flex-col gap-2 border-t border-stone-200 pt-3 text-sm font-semibold sm:flex-row sm:items-center sm:justify-between">
+            <Link className="text-[#1f6f38] underline underline-offset-2" href="/signup">
+              Return to signup
+            </Link>
+            <Link className="text-[#1f6f38] underline underline-offset-2" href="/login">
+              Sign in
+            </Link>
+          </div>
+        </div>
+      </section>
+    );
   }
 
   return (
@@ -129,19 +291,30 @@ export function SignupForm() {
           value={email}
         />
 
-        <div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Field
+              autoComplete="new-password"
+              error={errors.password}
+              id="password"
+              label="Password *"
+              onChange={setPassword}
+              type="password"
+              value={password}
+            />
+            <p className="mt-1 text-sm font-normal text-stone-600 sm:text-[13px] sm:text-stone-500">
+              Use at least 8 characters.
+            </p>
+          </div>
           <Field
             autoComplete="new-password"
-            error={errors.password}
-            id="password"
-            label="Password *"
-            onChange={setPassword}
+            error={errors.confirmPassword}
+            id="confirm-password"
+            label="Confirm password *"
+            onChange={setConfirmPassword}
             type="password"
-            value={password}
+            value={confirmPassword}
           />
-          <p className="mt-1 text-sm font-normal text-stone-600 sm:text-[13px] sm:text-stone-500">
-            Use at least 8 characters.
-          </p>
         </div>
 
         {errors.form ? (
@@ -151,21 +324,6 @@ export function SignupForm() {
           >
             {errors.form}
           </p>
-        ) : null}
-
-        {successMessage ? (
-          <div
-            className="rounded-lg border border-[#b7d7b9] bg-[#eff8ed] px-3 py-2 text-sm font-semibold leading-6 text-[#16572a]"
-            role="status"
-          >
-            <p>{successMessage}</p>
-            <Link
-              className="mt-1 inline-block font-bold underline underline-offset-2"
-              href="/login"
-            >
-              Sign in
-            </Link>
-          </div>
         ) : null}
 
         <p className="rounded-lg border border-[#dbe8d8] bg-[#fffaf1] px-3 py-2 text-sm font-semibold leading-5 text-stone-600 sm:text-[13px]">
@@ -212,6 +370,94 @@ export function SignupForm() {
       </form>
     </section>
   );
+}
+
+function CheckEmailState({
+  email,
+  isResending,
+  onResend,
+  onUseDifferentEmail,
+  resendError,
+  resendMessage,
+  resendSecondsRemaining,
+}: {
+  email: string;
+  isResending: boolean;
+  onResend: () => void;
+  onUseDifferentEmail: () => void;
+  resendError: string | null;
+  resendMessage: string | null;
+  resendSecondsRemaining: number;
+}) {
+  return (
+    <section className="rounded-[0.95rem] bg-white px-4 py-5 shadow-[0_8px_24px_rgba(45,35,20,0.09)] ring-1 ring-stone-200/80 sm:px-6 sm:py-6 lg:px-8 lg:py-6">
+      <h2 className="font-serif text-[1.65rem] font-semibold leading-tight text-stone-950 sm:text-[1.9rem]">
+        Check your email
+      </h2>
+      <p className="mt-3 text-base font-medium leading-7 text-stone-700">
+        We sent a verification link to{" "}
+        <strong className="break-all text-stone-950">{email}</strong>. Click the
+        link to verify your email and continue setting up your FlockFront account.
+      </p>
+      <p className="mt-3 rounded-lg border border-[#dbe8d8] bg-[#fffaf1] px-3 py-2 text-sm font-semibold leading-6 text-stone-600">
+        Don&apos;t see it? Check your spam folder or resend the email.
+      </p>
+
+      <div className="mt-4 space-y-3">
+        <ResendFeedback error={resendError} message={resendMessage} />
+        <button
+          className="flex min-h-12 w-full items-center justify-center rounded-md bg-[#246f38] px-4 text-base font-bold text-white shadow-sm transition hover:bg-[#1c5c2d] focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-10 sm:text-[15px]"
+          disabled={isResending || resendSecondsRemaining > 0}
+          onClick={onResend}
+          type="button"
+        >
+          {resendButtonLabel(isResending, resendSecondsRemaining)}
+        </button>
+        <button
+          className="flex min-h-12 w-full items-center justify-center rounded-md border border-stone-300 bg-white px-4 text-base font-bold text-[#1f6f38] shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#246f38] focus:ring-offset-2 sm:min-h-10 sm:text-[15px]"
+          onClick={onUseDifferentEmail}
+          type="button"
+        >
+          Use a different email
+        </button>
+      </div>
+
+      <p className="mt-4 border-t border-stone-200 pt-3 text-center text-sm font-medium text-stone-600">
+        Already have an account?{" "}
+        <Link className="font-bold text-[#1f6f38] underline underline-offset-2" href="/login">
+          Sign in
+        </Link>
+      </p>
+    </section>
+  );
+}
+
+function ResendFeedback({
+  error,
+  message,
+}: {
+  error: string | null;
+  message: string | null;
+}) {
+  if (error) {
+    return (
+      <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold leading-6 text-red-800" role="alert">
+        {error}
+      </p>
+    );
+  }
+
+  return message ? (
+    <p className="rounded-lg border border-[#b7d7b9] bg-[#eff8ed] px-3 py-2 text-sm font-semibold leading-6 text-[#16572a]" role="status">
+      {message}
+    </p>
+  ) : null;
+}
+
+function resendButtonLabel(isResending: boolean, secondsRemaining: number) {
+  if (isResending) return "Resending verification email...";
+  if (secondsRemaining > 0) return `Resend available in ${secondsRemaining}s`;
+  return "Resend verification email";
 }
 
 type FieldProps = {
@@ -271,21 +517,18 @@ function validateSignup({
   lastName,
   email,
   password,
+  confirmPassword,
 }: {
   firstName: string;
   lastName: string;
   email: string;
   password: string;
+  confirmPassword: string;
 }) {
   const nextErrors: SignupErrors = {};
 
-  if (!firstName.trim()) {
-    nextErrors.firstName = "Enter your first name.";
-  }
-
-  if (!lastName.trim()) {
-    nextErrors.lastName = "Enter your last name.";
-  }
+  if (!firstName.trim()) nextErrors.firstName = "Enter your first name.";
+  if (!lastName.trim()) nextErrors.lastName = "Enter your last name.";
 
   if (!email.trim()) {
     nextErrors.email = "Enter your email address.";
@@ -299,12 +542,18 @@ function validateSignup({
     nextErrors.password = "Use at least 8 characters.";
   }
 
+  if (!confirmPassword) {
+    nextErrors.confirmPassword = "Confirm your password.";
+  } else if (password !== confirmPassword) {
+    nextErrors.confirmPassword = "Passwords do not match.";
+  }
+
   return nextErrors;
 }
 
 function friendlyAuthError(message: string) {
   if (message.toLowerCase().includes("already")) {
-    return "An account may already exist for this email. Try signing in instead.";
+    return "We could not complete signup. Try signing in, resetting your password, or using a different email.";
   }
 
   return message || "We could not create your account. Please try again.";
