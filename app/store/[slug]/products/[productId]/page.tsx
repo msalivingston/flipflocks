@@ -37,6 +37,10 @@ import {
   buildPublicMetadata,
   withFlockFrontBrand,
 } from "@/lib/public-metadata";
+import {
+  resolveEmbeddedOrderModeContext,
+  type EmbeddedOrderModeSearchParams,
+} from "@/lib/embedded-order-mode";
 
 type StorefrontProductPageParams = Promise<{ productId: string; slug: string }>;
 
@@ -85,10 +89,15 @@ export async function generateMetadata({
 
 export default async function StorefrontProductPage({
   params,
+  searchParams,
 }: {
   params: StorefrontProductPageParams;
+  searchParams: Promise<EmbeddedOrderModeSearchParams>;
 }) {
-  const { productId, slug } = await params;
+  const [{ productId, slug }, query] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const {
     categories,
     error,
@@ -124,9 +133,19 @@ export default async function StorefrontProductPage({
     );
   }
 
+  const orderMode = resolveEmbeddedOrderModeContext({
+    searchParams: query,
+    storeSlug: store.store_slug,
+    websiteUrl: store.website_url,
+  });
+
   if (!product) {
     return (
-      <StorefrontChrome categories={categories} store={store}>
+      <StorefrontChrome
+        categories={categories}
+        orderMode={orderMode}
+        store={store}
+      >
         <StorefrontPage size="narrow" className="py-12">
           <EmptyStorefront
             title="Product not found"
@@ -140,29 +159,37 @@ export default async function StorefrontProductPage({
   const gallery = buildProductGallery(product, linkedGallery);
 
   return (
-    <StorefrontChrome categories={categories} store={store}>
+    <StorefrontChrome
+      categories={categories}
+      orderMode={orderMode}
+      store={store}
+    >
       <StorefrontPage className="!gap-1.5 !pb-1 !pt-3.5 lg:!gap-7 lg:!py-8">
-        <Link
-          className="storefront-primary-color mb-2.5 inline-flex min-h-6 w-fit items-center rounded-md pr-3 pt-1 text-sm font-bold leading-none text-[#073f1e] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 lg:hidden"
-          href={`/store/${store.store_slug}#shop-listings`}
-        >
-          <span aria-hidden="true" className="mr-1 text-lg leading-none">
-            ‹
-          </span>
-          {isHatchingEggProduct ? "Hatching Eggs" : "Live Birds"}
-        </Link>
+        {!orderMode ? (
+          <>
+            <Link
+              className="storefront-primary-color mb-2.5 inline-flex min-h-6 w-fit items-center rounded-md pr-3 pt-1 text-sm font-bold leading-none text-[#073f1e] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 lg:hidden"
+              href={`/store/${store.store_slug}#shop-listings`}
+            >
+              <span aria-hidden="true" className="mr-1 text-lg leading-none">
+                ‹
+              </span>
+              {isHatchingEggProduct ? "Hatching Eggs" : "Live Birds"}
+            </Link>
 
-        <nav className="hidden flex-wrap items-center gap-2 text-sm text-stone-700 lg:flex">
-          <Link href={`/store/${store.store_slug}`}>Shop</Link>
-          <span>/</span>
-          <Link href={`/store/${store.store_slug}#shop-listings`}>
-            {isHatchingEggProduct ? "Hatching Eggs" : "Live Birds"}
-          </Link>
-          <span>/</span>
-          <span>{product.speciesName}</span>
-          <span>/</span>
-          <span className="text-stone-950">{product.name}</span>
-        </nav>
+            <nav className="hidden flex-wrap items-center gap-2 text-sm text-stone-700 lg:flex">
+              <Link href={`/store/${store.store_slug}`}>Shop</Link>
+              <span>/</span>
+              <Link href={`/store/${store.store_slug}#shop-listings`}>
+                {isHatchingEggProduct ? "Hatching Eggs" : "Live Birds"}
+              </Link>
+              <span>/</span>
+              <span>{product.speciesName}</span>
+              <span>/</span>
+              <span className="text-stone-950">{product.name}</span>
+            </nav>
+          </>
+        ) : null}
 
         <section className="grid gap-2 lg:grid-cols-[minmax(18rem,0.85fr)_minmax(0,1.15fr)] lg:items-start lg:gap-8">
           <div className="grid max-w-[28rem] gap-2.5 justify-self-center lg:max-w-none lg:gap-3 lg:justify-self-auto">
@@ -222,7 +249,7 @@ export default async function StorefrontProductPage({
           </section>
         </section>
 
-        <ProductOrderOptions product={product} />
+        <ProductOrderOptions orderMode={orderMode} product={product} />
       </StorefrontPage>
     </StorefrontChrome>
   );

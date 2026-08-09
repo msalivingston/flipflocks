@@ -47,6 +47,10 @@ import type {
 import {
   validateCheckout,
 } from "./checkout-validation";
+import {
+  buildEmbeddedOrderModeHref,
+  type EmbeddedOrderModeContext,
+} from "@/lib/embedded-order-mode";
 
 type BuyerForm = {
   buyerEmail: string;
@@ -127,7 +131,13 @@ const initialForm: BuyerForm = {
 
 const emptyCartItems: StorefrontCart["items"] = [];
 
-export function CheckoutPage({ store }: { store: StorefrontHome }) {
+export function CheckoutPage({
+  orderMode,
+  store,
+}: {
+  orderMode: EmbeddedOrderModeContext | null;
+  store: StorefrontHome;
+}) {
   const router = useRouter();
   const [cart, setCart] = useState<StorefrontCart | null>(null);
   const [form, setForm] = useState<BuyerForm>(initialForm);
@@ -160,6 +170,14 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
   const contactStepRef = useRef<HTMLElement | null>(null);
   const fulfillmentStepRef = useRef<HTMLElement | null>(null);
   const reviewStepRef = useRef<HTMLElement | null>(null);
+  const cartHref = buildEmbeddedOrderModeHref(
+    `/store/${store.store_slug}/cart`,
+    orderMode,
+  );
+  const continueHref = orderMode?.returnUrl ?? `/store/${store.store_slug}`;
+  const continueLabel = orderMode
+    ? `Return to ${store.store_name}`
+    : "Continue shopping";
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -553,8 +571,8 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
             ) : null}
             <SummaryRow label="Estimated total" value={success.totalText} />
           </dl>
-          <StorefrontButton className="mt-6" href={`/store/${store.store_slug}`}>
-            Continue shopping
+          <StorefrontButton className="mt-6" href={continueHref}>
+            {continueLabel}
           </StorefrontButton>
         </StorefrontCard>
       </StorefrontPage>
@@ -587,8 +605,8 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
           <p className="mt-1.5 text-sm leading-5 text-stone-600">
             Add available options before checkout.
           </p>
-          <StorefrontButton className="mt-3 min-h-10" href={`/store/${store.store_slug}`}>
-            Continue shopping
+          <StorefrontButton className="mt-3 min-h-10" href={continueHref}>
+            {continueLabel}
           </StorefrontButton>
         </CheckoutPanel>
       ) : (
@@ -614,7 +632,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
             onToggle={() =>
               setIsMobileOrderSummaryOpen((current) => !current)
             }
-            storeSlug={store.store_slug}
+            cartHref={cartHref}
             totalQuantity={cartSummary.totalQuantity}
           />
 
@@ -1247,7 +1265,7 @@ export function CheckoutPage({ store }: { store: StorefrontHome }) {
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <StorefrontButton
                   className="min-h-10 w-full px-3 text-sm"
-                  href={`/store/${store.store_slug}/cart`}
+                  href={cartHref}
                   variant="secondary"
                 >
                   View cart
@@ -1356,18 +1374,18 @@ function CheckoutProgress({
 }
 
 function MobileOrderSummary({
+  cartHref,
   cartItems,
   estimatedTotal,
   isOpen,
   onToggle,
-  storeSlug,
   totalQuantity,
 }: {
+  cartHref: string;
   cartItems: StorefrontCartItem[];
   estimatedTotal: number;
   isOpen: boolean;
   onToggle: () => void;
-  storeSlug: string;
   totalQuantity: number;
 }) {
   const firstItem = cartItems[0] ?? null;
@@ -1423,7 +1441,7 @@ function MobileOrderSummary({
           ))}
           <Link
             className="storefront-primary-color mt-1 w-fit rounded-md text-sm font-bold text-[#073f1e] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-            href={`/store/${storeSlug}/cart`}
+            href={cartHref}
           >
             Edit cart
           </Link>

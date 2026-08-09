@@ -5,13 +5,19 @@ import {
 import { loadStorefrontChrome } from "../storefront-chrome-data";
 import { StorefrontChrome } from "../storefront-shell-components";
 import { CartPage } from "./cart-page";
+import {
+  resolveEmbeddedOrderModeContext,
+  type EmbeddedOrderModeSearchParams,
+} from "@/lib/embedded-order-mode";
 
 export default async function StorefrontCartRoute({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<EmbeddedOrderModeSearchParams>;
 }) {
-  const { slug } = await params;
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
   const { categories, error, store } = await loadStorefrontChrome(slug);
 
   if (error) {
@@ -40,9 +46,19 @@ export default async function StorefrontCartRoute({
     );
   }
 
+  const orderMode = resolveEmbeddedOrderModeContext({
+    searchParams: query,
+    storeSlug: store.store_slug,
+    websiteUrl: store.website_url,
+  });
+
   return (
-    <StorefrontChrome categories={categories} store={store}>
-      <CartPage store={store} />
+    <StorefrontChrome
+      categories={categories}
+      orderMode={orderMode}
+      store={store}
+    >
+      <CartPage orderMode={orderMode} store={store} />
     </StorefrontChrome>
   );
 }

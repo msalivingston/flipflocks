@@ -11,6 +11,7 @@ import {
 } from "./storefront-ui";
 import type { StorefrontHome } from "./storefront-data";
 import { storefrontSerifClass } from "./storefront-fonts";
+import type { EmbeddedOrderModeContext } from "@/lib/embedded-order-mode";
 
 export type StorefrontCategoryAvailability = {
   equipment: boolean;
@@ -29,12 +30,14 @@ export function StorefrontChrome({
   children,
   checkoutMode = false,
   footerVariant = "default",
+  orderMode = null,
   store,
 }: {
   categories: StorefrontCategoryAvailability;
   children: React.ReactNode;
   checkoutMode?: boolean;
   footerVariant?: "default" | "about";
+  orderMode?: EmbeddedOrderModeContext | null;
   store: StorefrontHome;
 }) {
   const theme = {
@@ -43,6 +46,15 @@ export function StorefrontChrome({
     textColor: store.storefront_text_color,
     topMenuColor: store.storefront_top_menu_color,
   };
+
+  if (orderMode) {
+    return (
+      <StorefrontShell theme={theme}>
+        <StorefrontFocusedOrderHeader orderMode={orderMode} store={store} />
+        {children}
+      </StorefrontShell>
+    );
+  }
 
   return (
     <StorefrontShell theme={theme}>
@@ -55,6 +67,41 @@ export function StorefrontChrome({
         store={store}
       />
     </StorefrontShell>
+  );
+}
+
+function StorefrontFocusedOrderHeader({
+  orderMode,
+  store,
+}: {
+  orderMode: EmbeddedOrderModeContext;
+  store: StorefrontHome;
+}) {
+  return (
+    <header className="storefront-top-menu border-b border-[#e7e0d2] bg-white">
+      <div className="mx-auto flex min-h-[4.5rem] max-w-[70rem] flex-wrap items-center justify-between gap-3 px-4 py-2.5 sm:px-7">
+        <a
+          className="storefront-primary-color inline-flex min-h-10 items-center rounded-md pr-3 text-sm font-bold text-[#073f1e] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+          href={orderMode.returnUrl}
+        >
+          <span aria-hidden="true" className="mr-1.5 text-xl leading-none">
+            ←
+          </span>
+          Back to {store.store_name}
+        </a>
+        <div className="flex min-w-0 items-center gap-2.5" aria-label={store.store_name}>
+          <StoreLogo store={store} />
+          <span
+            className={cx(
+              storefrontSerifClass,
+              "storefront-heading-color max-w-[16rem] truncate text-lg font-normal leading-tight text-[#073f1e] sm:text-xl",
+            )}
+          >
+            {store.store_name}
+          </span>
+        </div>
+      </div>
+    </header>
   );
 }
 

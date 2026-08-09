@@ -18,6 +18,10 @@ import {
 } from "@/lib/plan-capabilities";
 import { supabase } from "@/lib/supabase";
 import { buildStorefrontPreviewHref } from "@/lib/storefront-preview-routing";
+import {
+  embeddedOrderModeWebsiteUrlMaxLength,
+  validateSellerWebsiteUrl,
+} from "@/lib/embedded-order-mode";
 import { PlanUpgradeDialog } from "../_components/plan-upgrade-prompt";
 import { useSellerContext } from "../_components/seller-context";
 import {
@@ -1589,11 +1593,20 @@ export function StoreAdmin() {
     const nextDeliveryValidationMessage = validateDeliveryOptions(
       deliveryOptions,
     );
+    const websiteUrlResult = validateSellerWebsiteUrl(form.website_url);
 
-    if (validationMessage || nextDeliveryValidationMessage) {
+    if (
+      validationMessage ||
+      nextDeliveryValidationMessage ||
+      !websiteUrlResult.ok
+    ) {
       setSaveState("error");
       setDeliveryValidationMessage(nextDeliveryValidationMessage);
-      setSaveMessage(validationMessage ?? nextDeliveryValidationMessage);
+      setSaveMessage(
+        validationMessage ??
+          nextDeliveryValidationMessage ??
+          (websiteUrlResult.ok ? null : websiteUrlResult.error),
+      );
       return;
     }
 
@@ -1738,7 +1751,7 @@ export function StoreAdmin() {
       public_state: form.public_state,
       public_country: form.public_country,
       about_text: form.about_text,
-      website_url: form.website_url,
+      website_url: websiteUrlResult.value,
       npip_number: form.npip_number,
       show_npip: form.show_npip,
       public_email: form.public_email,
@@ -1842,7 +1855,7 @@ export function StoreAdmin() {
       public_state: form.public_state.trim(),
       public_country: form.public_country.trim().toUpperCase() || "US",
       about_text: form.about_text.trim(),
-      website_url: form.website_url.trim(),
+      website_url: websiteUrlResult.value ?? "",
       npip_number: form.npip_number.trim(),
       public_email: form.public_email.trim().toLowerCase(),
       public_phone: form.public_phone.trim(),
@@ -2770,6 +2783,16 @@ function StorefrontTab({
             </StorefrontNote>
           </div>
           <div className="grid gap-3 content-start">
+            <TextField
+              helper="Used to securely return customers to your website from embedded ordering."
+              label="Website URL"
+              maxLength={embeddedOrderModeWebsiteUrlMaxLength}
+              onChange={(value) => onUpdateField("website_url", value)}
+              optional
+              placeholder="https://www.example.com"
+              type="url"
+              value={form.website_url}
+            />
             <ReadOnlyField label="Contact email" value={contactEmail} />
             <StorefrontNote>
               This email is managed from your Account page.
@@ -4732,7 +4755,7 @@ function TextField({
   placeholder?: string;
   required?: boolean;
   showCounter?: boolean;
-  type?: "text" | "number";
+  type?: "text" | "number" | "url";
   value: string;
 }) {
   return (
@@ -5326,6 +5349,8 @@ function validateForm(
   if (form.about_text.trim().length > farmStoryMaxLength) {
     return `Farm story must be ${farmStoryMaxLength} characters or fewer.`;
   }
+  const websiteUrlResult = validateSellerWebsiteUrl(form.website_url);
+  if (!websiteUrlResult.ok) return websiteUrlResult.error;
   if (activeTab === "pickup") {
     if (!form.pickup_address_line1.trim()) {
       return "Pickup address needs a street address.";

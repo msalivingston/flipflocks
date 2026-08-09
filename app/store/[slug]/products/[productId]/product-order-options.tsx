@@ -16,12 +16,20 @@ import {
   cx,
   formatCurrency,
 } from "../../storefront-ui";
+import {
+  buildEmbeddedOrderModeHref,
+  type EmbeddedOrderModeContext,
+} from "@/lib/embedded-order-mode";
 
 type ProductOrderOptionsProps = {
+  orderMode: EmbeddedOrderModeContext | null;
   product: StorefrontProduct;
 };
 
-export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
+export function ProductOrderOptions({
+  orderMode,
+  product,
+}: ProductOrderOptionsProps) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addedItems, setAddedItems] = useState<StorefrontCartItem[] | null>(null);
   const isHatchingEggProduct = product.options.every(
@@ -404,12 +412,20 @@ export function ProductOrderOptions({ product }: ProductOrderOptionsProps) {
               </button>
               <StorefrontButton
                 className="min-h-10 hover:bg-white"
-                href={`/store/${product.storeSlug}/cart`}
+                href={buildEmbeddedOrderModeHref(
+                  `/store/${product.storeSlug}/cart`,
+                  orderMode,
+                )}
                 variant="secondary"
               >
                 View cart
               </StorefrontButton>
-              <StorefrontButton href={`/store/${product.storeSlug}/checkout`}>
+              <StorefrontButton
+                href={buildEmbeddedOrderModeHref(
+                  `/store/${product.storeSlug}/checkout`,
+                  orderMode,
+                )}
+              >
                 Checkout
               </StorefrontButton>
             </div>

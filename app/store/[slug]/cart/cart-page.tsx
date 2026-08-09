@@ -22,10 +22,20 @@ import {
   formatCurrency,
   formatDate,
 } from "../storefront-ui";
+import {
+  buildEmbeddedOrderModeHref,
+  type EmbeddedOrderModeContext,
+} from "@/lib/embedded-order-mode";
 
 const emptyItems: StorefrontCart["items"] = [];
 
-export function CartPage({ store }: { store: StorefrontHome }) {
+export function CartPage({
+  orderMode,
+  store,
+}: {
+  orderMode: EmbeddedOrderModeContext | null;
+  store: StorefrontHome;
+}) {
   const [cart, setCart] = useState<StorefrontCart | null>(null);
   const [isClearCartConfirmOpen, setIsClearCartConfirmOpen] = useState(false);
 
@@ -39,6 +49,14 @@ export function CartPage({ store }: { store: StorefrontHome }) {
 
   const items = cart?.items ?? emptyItems;
   const summary = useMemo(() => summarizeStorefrontCart(items), [items]);
+  const continueHref = orderMode?.returnUrl ?? `/store/${store.store_slug}`;
+  const continueLabel = orderMode
+    ? `Return to ${store.store_name}`
+    : "Continue shopping";
+  const checkoutHref = buildEmbeddedOrderModeHref(
+    `/store/${store.store_slug}/checkout`,
+    orderMode,
+  );
 
   function updateQuantity(itemKey: string, rawValue: string) {
     const parsed = Number.parseInt(rawValue, 10);
@@ -98,8 +116,8 @@ export function CartPage({ store }: { store: StorefrontHome }) {
           <p className="mt-1.5 text-sm leading-5 text-stone-600">
             Add available options from the storefront to start an order.
           </p>
-          <StorefrontButton className="mt-3 min-h-10" href={`/store/${store.store_slug}`}>
-            Continue shopping
+          <StorefrontButton className="mt-3 min-h-10" href={continueHref}>
+            {continueLabel}
           </StorefrontButton>
         </CartPanel>
       ) : (
@@ -192,17 +210,17 @@ export function CartPage({ store }: { store: StorefrontHome }) {
             <div className="mt-3 grid gap-2">
               <StorefrontButton
                 className="min-h-10"
-                href={`/store/${store.store_slug}/checkout`}
+                href={checkoutHref}
               >
                 Checkout
               </StorefrontButton>
               <div className="grid gap-2 min-[375px]:grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)]">
                 <StorefrontButton
                   className="min-h-10 whitespace-nowrap px-1.5 text-[0.8125rem] min-[390px]:text-sm"
-                  href={`/store/${store.store_slug}`}
+                  href={continueHref}
                   variant="secondary"
                 >
-                  Continue shopping
+                  {continueLabel}
                 </StorefrontButton>
                 <StorefrontButton
                   className="min-h-10 whitespace-nowrap px-1.5 text-[0.8125rem] min-[390px]:text-sm"

@@ -14,11 +14,17 @@ import {
   cx,
   formatCurrency,
 } from "../../storefront-ui";
+import {
+  buildEmbeddedOrderModeHref,
+  type EmbeddedOrderModeContext,
+} from "@/lib/embedded-order-mode";
 
 export function ProcessedPoultryOrderOptions({
   item,
+  orderMode,
 }: {
   item: StorefrontProcessedPoultryItem;
+  orderMode: EmbeddedOrderModeContext | null;
 }) {
   const [quantity, setQuantity] = useState(0);
   const [addedItem, setAddedItem] = useState<StorefrontCartItem | null>(null);
@@ -247,12 +253,20 @@ export function ProcessedPoultryOrderOptions({
               </button>
               <StorefrontButton
                 className="min-h-10 hover:bg-white"
-                href={`/store/${item.store_slug}/cart`}
+                href={buildEmbeddedOrderModeHref(
+                  `/store/${item.store_slug}/cart`,
+                  orderMode,
+                )}
                 variant="secondary"
               >
                 View cart
               </StorefrontButton>
-              <StorefrontButton href={`/store/${item.store_slug}/checkout`}>
+              <StorefrontButton
+                href={buildEmbeddedOrderModeHref(
+                  `/store/${item.store_slug}/checkout`,
+                  orderMode,
+                )}
+              >
                 Checkout
               </StorefrontButton>
             </div>

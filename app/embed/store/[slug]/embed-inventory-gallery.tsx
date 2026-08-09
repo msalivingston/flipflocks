@@ -2,10 +2,13 @@ import {
   StorefrontListingTabs,
   type StorefrontListingSection,
 } from "@/app/store/[slug]/storefront-listing-tabs";
+import type { EmbeddedOrderModeContext } from "@/lib/embedded-order-mode";
 
 export function EmbedInventoryGallery({
+  orderMode,
   sections,
 }: {
+  orderMode: EmbeddedOrderModeContext | null;
   sections: StorefrontListingSection[];
 }) {
   if (sections.length === 0) {
@@ -18,5 +21,11 @@ export function EmbedInventoryGallery({
     );
   }
 
-  return <StorefrontListingTabs sections={sections} variant="embed" />;
+  return (
+    <StorefrontListingTabs
+      orderMode={orderMode}
+      sections={sections}
+      variant="embed"
+    />
+  );
 }

@@ -14,6 +14,10 @@ import {
   StorefrontCategorySymbol,
   type StorefrontCategorySymbolName,
 } from "./storefront-category-symbols";
+import {
+  buildEmbeddedOrderModeHref,
+  type EmbeddedOrderModeContext,
+} from "@/lib/embedded-order-mode";
 
 export type StorefrontListingCard = {
   ageFilterDays?: number[];
@@ -50,9 +54,11 @@ export type StorefrontListingSection = {
 };
 
 export function StorefrontListingTabs({
+  orderMode = null,
   sections,
   variant = "storefront",
 }: {
+  orderMode?: EmbeddedOrderModeContext | null;
   sections: StorefrontListingSection[];
   variant?: "embed" | "storefront";
 }) {
@@ -406,7 +412,12 @@ export function StorefrontListingTabs({
                 )}
               >
                 {filteredCards.map((card) => (
-                  <ListingCard card={card} key={card.href} variant={variant} />
+                  <ListingCard
+                    card={card}
+                    key={card.href}
+                    orderMode={orderMode}
+                    variant={variant}
+                  />
                 ))}
               </div>
             ) : (
@@ -831,19 +842,22 @@ function FilterSelect({
 
 function ListingCard({
   card,
+  orderMode,
   variant,
 }: {
   card: StorefrontListingCard;
+  orderMode: EmbeddedOrderModeContext | null;
   variant: "embed" | "storefront";
 }) {
   const isEmbed = variant === "embed";
   const actionLabel = isEmbed ? "View & order" : "View";
+  const href = buildEmbeddedOrderModeHref(card.href, orderMode);
 
   return (
     <article className="group overflow-hidden rounded-lg border border-[#e3dccf] bg-white shadow-[0_2px_10px_rgba(41,37,36,0.08)] transition hover:border-[#bfcfb6] hover:shadow-md lg:flex lg:flex-col lg:border-[#ded7c8] lg:shadow-none lg:hover:shadow-sm">
       <Link
         className="grid min-w-0 grid-cols-[42%_minmax(0,1fr)] gap-2 p-2 focus:outline-none focus:ring-2 focus:ring-emerald-700 lg:hidden"
-        href={card.href}
+        href={href}
         rel={isEmbed ? "noopener noreferrer" : undefined}
         target={isEmbed ? "_blank" : undefined}
       >
@@ -883,7 +897,7 @@ function ListingCard({
 
       <Link
         className="hidden flex-col focus:outline-none focus:ring-2 focus:ring-emerald-700 lg:flex"
-        href={card.href}
+        href={href}
         rel={isEmbed ? "noopener noreferrer" : undefined}
         target={isEmbed ? "_blank" : undefined}
       >

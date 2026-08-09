@@ -36,6 +36,10 @@ import {
   buildPublicMetadata,
   withFlockFrontBrand,
 } from "@/lib/public-metadata";
+import {
+  resolveEmbeddedOrderModeContext,
+  type EmbeddedOrderModeSearchParams,
+} from "@/lib/embedded-order-mode";
 
 type StorefrontProcessedPoultryPageParams = Promise<{
   processedPoultryItemId: string;
@@ -110,10 +114,15 @@ export async function generateMetadata({
 
 export default async function StorefrontProcessedPoultryPage({
   params,
+  searchParams,
 }: {
   params: StorefrontProcessedPoultryPageParams;
+  searchParams: Promise<EmbeddedOrderModeSearchParams>;
 }) {
-  const { processedPoultryItemId, slug } = await params;
+  const [{ processedPoultryItemId, slug }, query] = await Promise.all([
+    params,
+    searchParams,
+  ]);
 
   const [
     homeResult,
@@ -166,6 +175,12 @@ export default async function StorefrontProcessedPoultryPage({
     );
   }
 
+  const orderMode = resolveEmbeddedOrderModeContext({
+    searchParams: query,
+    storeSlug: store.store_slug,
+    websiteUrl: store.website_url,
+  });
+
   const item = itemResult.data;
   const categories = getStorefrontCategoryAvailability({
     equipmentCount: equipmentResult.data.length,
@@ -180,7 +195,11 @@ export default async function StorefrontProcessedPoultryPage({
 
   if (!item) {
     return (
-      <StorefrontChrome categories={categories} store={store}>
+      <StorefrontChrome
+        categories={categories}
+        orderMode={orderMode}
+        store={store}
+      >
         <StorefrontPage size="narrow" className="py-12">
           <EmptyStorefront
             title="Item not found"
@@ -194,27 +213,35 @@ export default async function StorefrontProcessedPoultryPage({
   const gallery = buildProcessedPoultryGallery(item, galleryResult.data);
 
   return (
-    <StorefrontChrome categories={categories} store={store}>
+    <StorefrontChrome
+      categories={categories}
+      orderMode={orderMode}
+      store={store}
+    >
       <StorefrontPage className="!gap-1.5 !pb-1 !pt-3.5 lg:!gap-7 lg:!py-8">
-        <Link
-          className="storefront-primary-color mb-2.5 inline-flex min-h-6 w-fit items-center rounded-md pr-3 pt-1 text-sm font-bold leading-none text-[#073f1e] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 lg:hidden"
-          href={`/store/${store.store_slug}#shop-listings`}
-        >
-          <span aria-hidden="true" className="mr-1 text-lg leading-none">
-            ‹
-          </span>
-          Poultry Products
-        </Link>
+        {!orderMode ? (
+          <>
+            <Link
+              className="storefront-primary-color mb-2.5 inline-flex min-h-6 w-fit items-center rounded-md pr-3 pt-1 text-sm font-bold leading-none text-[#073f1e] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 lg:hidden"
+              href={`/store/${store.store_slug}#shop-listings`}
+            >
+              <span aria-hidden="true" className="mr-1 text-lg leading-none">
+                ‹
+              </span>
+              Poultry Products
+            </Link>
 
-        <nav className="hidden flex-wrap items-center gap-2 text-sm text-stone-700 lg:flex">
-          <Link href={`/store/${store.store_slug}`}>Shop</Link>
-          <span>/</span>
-          <Link href={`/store/${store.store_slug}#shop-listings`}>
-            Poultry Products
-          </Link>
-          <span>/</span>
-          <span className="text-stone-950">{item.product_name}</span>
-        </nav>
+            <nav className="hidden flex-wrap items-center gap-2 text-sm text-stone-700 lg:flex">
+              <Link href={`/store/${store.store_slug}`}>Shop</Link>
+              <span>/</span>
+              <Link href={`/store/${store.store_slug}#shop-listings`}>
+                Poultry Products
+              </Link>
+              <span>/</span>
+              <span className="text-stone-950">{item.product_name}</span>
+            </nav>
+          </>
+        ) : null}
 
         <section className="grid gap-2 lg:grid-cols-[minmax(18rem,0.85fr)_minmax(0,1.15fr)] lg:items-start lg:gap-8">
           <div className="grid max-w-[28rem] gap-2.5 justify-self-center lg:max-w-none lg:gap-3 lg:justify-self-auto">
@@ -271,7 +298,7 @@ export default async function StorefrontProcessedPoultryPage({
           </section>
         </section>
 
-        <ProcessedPoultryOrderOptions item={item} />
+        <ProcessedPoultryOrderOptions item={item} orderMode={orderMode} />
       </StorefrontPage>
     </StorefrontChrome>
   );

@@ -35,6 +35,9 @@ test("the embed route loads a valid public store through the shared public data 
       getNonEmptyStorefrontListingSections: () => [],
     },
     "@/lib/seo-config": { NOINDEX_ROBOTS: { index: false } },
+    "@/lib/embedded-order-mode": {
+      resolveEmbeddedOrderModeContext: () => null,
+    },
     "./embed-inventory-gallery": {
       EmbedInventoryGallery: function EmbedInventoryGallery() {},
     },
@@ -44,6 +47,7 @@ test("the embed route loads a valid public store through the shared public data 
 
   const rendered = await page.default({
     params: Promise.resolve({ slug: "sunshine-mesa-farm" }),
+    searchParams: Promise.resolve({}),
   });
 
   assert.ok(rendered);
@@ -69,6 +73,9 @@ test("an invalid or unavailable public store slug terminates with a safe 404", a
       getNonEmptyStorefrontListingSections: () => [],
     },
     "@/lib/seo-config": { NOINDEX_ROBOTS: { index: false } },
+    "@/lib/embedded-order-mode": {
+      resolveEmbeddedOrderModeContext: () => null,
+    },
     "./embed-inventory-gallery": {
       EmbedInventoryGallery: function EmbedInventoryGallery() {},
     },
@@ -81,7 +88,10 @@ test("an invalid or unavailable public store slug terminates with a safe 404", a
   });
 
   await assert.rejects(
-    page.default({ params: Promise.resolve({ slug: "not-a-public-store" }) }),
+    page.default({
+      params: Promise.resolve({ slug: "not-a-public-store" }),
+      searchParams: Promise.resolve({}),
+    }),
     (error) => error === notFoundError,
   );
 });
@@ -269,7 +279,10 @@ test("the embed reuses storefront controls while omitting storefront chrome and 
   ]) {
     assert.doesNotMatch(source, new RegExp(forbidden, "i"), forbidden);
   }
-  assert.match(gallery, /<StorefrontListingTabs sections=\{sections\} variant="embed"/);
+  assert.match(
+    gallery,
+    /<StorefrontListingTabs[\s\S]*orderMode=\{orderMode\}[\s\S]*sections=\{sections\}[\s\S]*variant="embed"/,
+  );
   assert.match(listingTabs, /target=\{isEmbed \? "_blank" : undefined\}/);
   assert.match(listingTabs, /rel=\{isEmbed \? "noopener noreferrer" : undefined\}/);
   assert.match(listingTabs, /isEmbed \? "View & order" : "View"/);
@@ -382,6 +395,9 @@ async function loadListingTabsModule() {
     "./storefront-category-symbols": {},
     "./storefront-fonts": {},
     "./storefront-ui": {},
+    "@/lib/embedded-order-mode": {
+      buildEmbeddedOrderModeHref: (href) => href,
+    },
     "lucide-react": {},
     "next/link": {},
     react: {},

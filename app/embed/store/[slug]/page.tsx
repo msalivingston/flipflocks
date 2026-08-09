@@ -10,6 +10,10 @@ import {
   getNonEmptyStorefrontListingSections,
 } from "@/app/store/[slug]/storefront-listing-cards";
 import { EmbedInventoryGallery } from "./embed-inventory-gallery";
+import {
+  resolveEmbeddedOrderModeContext,
+  type EmbeddedOrderModeSearchParams,
+} from "@/lib/embedded-order-mode";
 
 export const metadata: Metadata = {
   title: "Inventory | FlockFront",
@@ -18,10 +22,12 @@ export const metadata: Metadata = {
 
 export default async function EmbeddedStoreInventoryPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<EmbeddedOrderModeSearchParams>;
 }) {
-  const { slug } = await params;
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
   const [storeResult, listingResult] = await Promise.all([
     loadStorefrontHome(slug),
     loadPublicStorefrontListingData(slug),
@@ -45,10 +51,15 @@ export default async function EmbeddedStoreInventoryPage({
     listingResult.data,
   );
   const visibleSections = getNonEmptyStorefrontListingSections(sections);
+  const orderMode = resolveEmbeddedOrderModeContext({
+    searchParams: query,
+    storeSlug: storeResult.data.store_slug,
+    websiteUrl: storeResult.data.website_url,
+  });
 
   return (
     <EmbedFrame>
-      <EmbedInventoryGallery sections={visibleSections} />
+      <EmbedInventoryGallery orderMode={orderMode} sections={visibleSections} />
     </EmbedFrame>
   );
 }
