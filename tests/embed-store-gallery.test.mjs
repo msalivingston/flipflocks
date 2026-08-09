@@ -11,6 +11,8 @@ const galleryPath =
   "app/embed/store/[slug]/embed-inventory-gallery.tsx";
 const listingCardsPath =
   "app/store/[slug]/storefront-listing-cards.ts";
+const listingTabsPath =
+  "app/store/[slug]/storefront-listing-tabs.tsx";
 
 test("the embed route loads a valid public store through the shared public data path", async () => {
   const calls = [];
@@ -30,7 +32,7 @@ test("the embed route loads a valid public store through the shared public data 
     },
     "@/app/store/[slug]/storefront-listing-cards": {
       buildStorefrontListingSectionsFromPublicData: () => [],
-      flattenStorefrontListingSections: () => [],
+      getNonEmptyStorefrontListingSections: () => [],
     },
     "@/lib/seo-config": { NOINDEX_ROBOTS: { index: false } },
     "./embed-inventory-gallery": {
@@ -64,7 +66,7 @@ test("an invalid or unavailable public store slug terminates with a safe 404", a
     },
     "@/app/store/[slug]/storefront-listing-cards": {
       buildStorefrontListingSectionsFromPublicData: () => [],
-      flattenStorefrontListingSections: () => [],
+      getNonEmptyStorefrontListingSections: () => [],
     },
     "@/lib/seo-config": { NOINDEX_ROBOTS: { index: false } },
     "./embed-inventory-gallery": {
@@ -122,49 +124,8 @@ test("draft, archived, moderated, and otherwise non-public inventory stays behin
 });
 
 test("embed cards use the exact canonical hosted listing paths for every public listing type", async () => {
-  const listingCards = await loadTypeScriptModule(listingCardsPath, {
-    "@/lib/public-listing-url": { buildPublicListingPath },
-    "./storefront-data": {
-      formatCurrency: (value) => `$${Number(value).toFixed(2)}`,
-      groupHatchingEggInventoryByProduct: (items) => items,
-      groupInventoryByProduct: (items) => items,
-    },
-  });
-  const sections = listingCards.buildStorefrontListingSections({
-    equipment: [
-      {
-        buyer_availability_code: "ready_now",
-        category: "Coops",
-        condition: "Used",
-        description: null,
-        equipment_inventory_item_id: "equipment-1",
-        featured_image_alt_text: null,
-        featured_image_url: null,
-        item_name: "Small coop",
-        quantity_available: 1,
-        store_slug: "sunshine-mesa-farm",
-        unit_price: 125,
-      },
-    ],
-    hatchingEggProducts: [product("eggs-1", "hatching_egg_inventory")],
-    livePoultryProducts: [product("breed-1", "listing_inventory")],
-    processedPoultry: [
-      {
-        buyer_availability_code: "ready_now",
-        description: null,
-        featured_image_alt_text: null,
-        featured_image_url: null,
-        package_size: "Whole bird",
-        poultry_type: "Chicken",
-        processed_poultry_inventory_item_id: "processed-1",
-        product_name: "Whole chicken",
-        product_type: "Whole",
-        quantity_available: 2,
-        store_slug: "sunshine-mesa-farm",
-        unit_price: 30,
-      },
-    ],
-  });
+  const listingCards = await loadListingCardsModule();
+  const sections = buildListingFixture(listingCards);
   const cards = listingCards.flattenStorefrontListingSections(sections);
 
   assert.deepEqual(
@@ -178,14 +139,123 @@ test("embed cards use the exact canonical hosted listing paths for every public 
   );
 });
 
-test("the embed omits ordinary storefront chrome and private seller fields", async () => {
-  const [route, gallery] = await Promise.all([read(routePath), read(galleryPath)]);
+test("the embed category list keeps storefront ordering and removes empty public categories", async () => {
+  const listingCards = await loadListingCardsModule();
+  const sections = buildListingFixture(listingCards, {
+    hatchingEggProducts: [],
+    processedPoultry: [],
+  });
+  const visibleSections =
+    listingCards.getNonEmptyStorefrontListingSections(sections);
+
+  assert.deepEqual(
+    visibleSections.map((section) => [section.id, section.label]),
+    [
+      ["live-poultry", "Live Birds"],
+      ["equipment-supplies", "Equipment & Supplies"],
+    ],
+  );
+  assert.ok(visibleSections.every((section) => section.cards.length > 0));
+});
+
+test("category selection and the existing search and filters limit embed listings", async () => {
+  const listingCards = await loadListingCardsModule();
+  const listingTabs = await loadListingTabsModule();
+  const liveCards = [
+    filterCard({
+      ageFilterDays: [56],
+      batchFilters: [{ ageFilterDays: 56, availabilityCode: "ready_now" }],
+      breedFilter: "Production Red",
+      href: "/store/sunshine-mesa-farm/products/red",
+      price: "From $21.00",
+      title: "Production Red",
+    }),
+    filterCard({
+      ageFilterDays: [140],
+      availabilityCode: "reserve_now",
+      batchFilters: [{ ageFilterDays: 140, availabilityCode: "reserve_now" }],
+      breedFilter: "Barred Rock",
+      href: "/store/sunshine-mesa-farm/products/rock",
+      price: "$15.00",
+      title: "Barred Rock",
+    }),
+  ];
+  const sections = [
+    storefrontSection("live-poultry", "Live Birds", liveCards),
+    storefrontSection("equipment-supplies", "Equipment & Supplies", [
+      filterCard({
+        categoryFilter: "Feeders",
+        conditionFilter: "Used",
+        href: "/store/sunshine-mesa-farm/equipment/feeder",
+        meta: "Feeders - Used",
+        price: "$5.00",
+        speciesFilter: null,
+        title: "Feeder",
+      }),
+    ]),
+  ];
+  const visibleSections =
+    listingCards.getNonEmptyStorefrontListingSections(sections);
+  const equipmentSection = visibleSections.find(
+    (section) => section.id === "equipment-supplies",
+  );
+  const allFilters = clearedFilters();
+
+  assert.deepEqual(
+    listingTabs
+      .filterStorefrontListingCards(equipmentSection.cards, allFilters)
+      .map((card) => card.title),
+    ["Feeder"],
+  );
+  assert.deepEqual(
+    listingTabs
+      .filterStorefrontListingCards(liveCards, {
+        ...allFilters,
+        age: "2-12-weeks",
+        availability: "ready_now",
+        breed: "Production Red",
+        price: "10-25",
+        query: "red",
+        species: "Chicken",
+      })
+      .map((card) => card.title),
+    ["Production Red"],
+  );
+});
+
+test("clearing embed filters restores every listing in the selected category", async () => {
+  const listingTabs = await loadListingTabsModule();
+  const cards = [
+    filterCard({ href: "/store/example/products/one", title: "One" }),
+    filterCard({ href: "/store/example/products/two", title: "Two" }),
+  ];
+
+  assert.equal(
+    listingTabs.filterStorefrontListingCards(cards, {
+      ...clearedFilters(),
+      query: "one",
+    }).length,
+    1,
+  );
+  assert.deepEqual(
+    listingTabs
+      .filterStorefrontListingCards(cards, clearedFilters())
+      .map((card) => card.title),
+    ["One", "Two"],
+  );
+});
+
+test("the embed reuses storefront controls while omitting storefront chrome and private seller fields", async () => {
+  const [route, gallery, listingTabs] = await Promise.all([
+    read(routePath),
+    read(galleryPath),
+    read(listingTabsPath),
+  ]);
   const source = `${route}\n${gallery}`;
 
   for (const forbidden of [
     "StorefrontChrome",
     "StorefrontHero",
-    "StorefrontListingTabs",
     "public_email",
     "public_phone",
     "pickup_policy",
@@ -199,21 +269,30 @@ test("the embed omits ordinary storefront chrome and private seller fields", asy
   ]) {
     assert.doesNotMatch(source, new RegExp(forbidden, "i"), forbidden);
   }
-  assert.match(gallery, /target="_blank"/);
-  assert.match(gallery, /rel="noopener noreferrer"/);
-  assert.match(gallery, /View &amp; order/);
+  assert.match(gallery, /<StorefrontListingTabs sections=\{sections\} variant="embed"/);
+  assert.match(listingTabs, /target=\{isEmbed \? "_blank" : undefined\}/);
+  assert.match(listingTabs, /rel=\{isEmbed \? "noopener noreferrer" : undefined\}/);
+  assert.match(listingTabs, /isEmbed \? "View & order" : "View"/);
   assert.match(route, /Powered by FlockFront/);
   assert.doesNotMatch(gallery, /[a-z]+_(?:id|at)\b/);
 });
 
-test("the gallery uses fluid breakpoints and explicitly contains horizontal overflow", async () => {
-  const [route, gallery] = await Promise.all([read(routePath), read(galleryPath)]);
+test("mobile category and filter controls stay compact and contain horizontal overflow", async () => {
+  const [route, gallery, listingTabs] = await Promise.all([
+    read(routePath),
+    read(galleryPath),
+    read(listingTabsPath),
+  ]);
 
   assert.match(route, /w-full max-w-full overflow-x-hidden/);
-  assert.match(gallery, /grid-cols-1/);
-  assert.match(gallery, /min-\[440px\]:grid-cols-2/);
-  assert.match(gallery, /min-\[820px\]:grid-cols-3/);
-  assert.match(gallery, /min-w-0/);
+  assert.match(gallery, /variant="embed"/);
+  assert.match(listingTabs, /isEmbed[\s\S]*?lg:flex lg:flex-wrap/);
+  assert.match(listingTabs, /className="lg:hidden"/);
+  assert.match(listingTabs, /<MobileSheet[\s\S]*label="Choose department"/);
+  assert.match(listingTabs, /<MobileSheet[\s\S]*label="Filter listings"/);
+  assert.match(listingTabs, /max-h-\[82vh\]/);
+  assert.match(listingTabs, /overflow-y-auto/);
+  assert.match(listingTabs, /min-w-0/);
   assert.doesNotMatch(gallery, /(?:^|\s)w-\[\d+(?:px|rem)\]/);
 });
 
@@ -257,6 +336,7 @@ test("the ordinary storefront consumes the same listing data and card builder", 
   );
   assert.match(homeContent, /<StorefrontChrome/);
   assert.match(homeContent, /<StorefrontListingTabs sections=\{listingSections\}/);
+  assert.doesNotMatch(homeContent, /variant="embed"/);
 });
 
 function product(productId, productSource) {
@@ -283,6 +363,118 @@ function product(productId, productSource) {
     speciesName: "Chicken",
     storeSlug: "sunshine-mesa-farm",
     totalQuantityAvailable: 2,
+  };
+}
+
+async function loadListingCardsModule() {
+  return loadTypeScriptModule(listingCardsPath, {
+    "@/lib/public-listing-url": { buildPublicListingPath },
+    "./storefront-data": {
+      formatCurrency: (value) => `$${Number(value).toFixed(2)}`,
+      groupHatchingEggInventoryByProduct: (items) => items,
+      groupInventoryByProduct: (items) => items,
+    },
+  });
+}
+
+async function loadListingTabsModule() {
+  return loadTypeScriptModule(listingTabsPath, {
+    "./storefront-category-symbols": {},
+    "./storefront-fonts": {},
+    "./storefront-ui": {},
+    "lucide-react": {},
+    "next/link": {},
+    react: {},
+    "react/jsx-runtime": jsxRuntime,
+  });
+}
+
+function buildListingFixture(
+  listingCards,
+  overrides = {},
+) {
+  return listingCards.buildStorefrontListingSections({
+    equipment: [
+      {
+        buyer_availability_code: "ready_now",
+        category: "Coops",
+        condition: "Used",
+        description: null,
+        equipment_inventory_item_id: "equipment-1",
+        featured_image_alt_text: null,
+        featured_image_url: null,
+        item_name: "Small coop",
+        quantity_available: 1,
+        store_slug: "sunshine-mesa-farm",
+        unit_price: 125,
+      },
+    ],
+    hatchingEggProducts: [product("eggs-1", "hatching_egg_inventory")],
+    livePoultryProducts: [product("breed-1", "listing_inventory")],
+    processedPoultry: [
+      {
+        buyer_availability_code: "ready_now",
+        description: null,
+        featured_image_alt_text: null,
+        featured_image_url: null,
+        package_size: "Whole bird",
+        poultry_type: "Chicken",
+        processed_poultry_inventory_item_id: "processed-1",
+        product_name: "Whole chicken",
+        product_type: "Whole",
+        quantity_available: 2,
+        store_slug: "sunshine-mesa-farm",
+        unit_price: 30,
+      },
+    ],
+    ...overrides,
+  });
+}
+
+function storefrontSection(id, label, cards) {
+  return {
+    cards,
+    description: "",
+    emptyDescription: "",
+    emptyTitle: "",
+    id,
+    label,
+  };
+}
+
+function filterCard(overrides) {
+  return {
+    ageFilterDays: [56],
+    availabilityCode: "ready_now",
+    availabilityLabel: "Available",
+    batchFilters: undefined,
+    breedFilter: "Example Breed",
+    categoryFilter: null,
+    conditionFilter: null,
+    description: "Public listing",
+    detail: "1 available",
+    href: "/store/example/products/example",
+    imageAlt: "Example",
+    imageUrl: null,
+    meta: "Chicken",
+    price: "$12.00",
+    speciesFilter: "Chicken",
+    title: "Example",
+    typeLabel: "Live Birds",
+    ...overrides,
+  };
+}
+
+function clearedFilters() {
+  return {
+    age: "all",
+    availability: "all",
+    breed: "all",
+    category: "all",
+    condition: "all",
+    price: "all",
+    query: "",
+    species: "all",
   };
 }
 
