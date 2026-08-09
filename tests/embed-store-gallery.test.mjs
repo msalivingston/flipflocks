@@ -383,14 +383,14 @@ test("embed mobile category and filter controls use anchored, overflow-safe pane
   const anchoredPresentation = listingTabs.slice(
     listingTabs.indexOf('if (presentation === "anchored")'),
     listingTabs.indexOf(
-      'className="fixed inset-0 z-50 lg:hidden"',
+      'className={cx("fixed inset-0 z-50", visibilityClass)}',
       listingTabs.indexOf('if (presentation === "anchored")'),
     ),
   );
 
   assert.match(route, /w-full max-w-full overflow-x-hidden/);
   assert.match(gallery, /variant="embed"/);
-  assert.match(listingTabs, /isEmbed[\s\S]*?lg:flex lg:flex-wrap/);
+  assert.match(listingTabs, /isEmbed[\s\S]*?sm:flex sm:flex-wrap/);
   assert.match(listingTabs, /className="lg:hidden"/);
   assert.match(listingTabs, /<MobilePanel[\s\S]*label="Choose department"/);
   assert.match(listingTabs, /<MobilePanel[\s\S]*label="Filter listings"/);
@@ -409,6 +409,44 @@ test("embed mobile category and filter controls use anchored, overflow-safe pane
   assert.doesNotMatch(gallery, /(?:^|\s)w-\[\d+(?:px|rem)\]/);
 });
 
+test("embed mobile toolbar stacks below 640px and shows full category labels", async () => {
+  const listingTabs = await read(listingTabsPath);
+
+  assert.match(listingTabs, />\s*Shop by category\s*</);
+  assert.match(
+    listingTabs,
+    /isEmbed \? "relative grid min-w-0 gap-1 sm:hidden" : "contents"/,
+  );
+  assert.match(listingTabs, /isEmbed \? "w-full text-left" : "h-\[2\.625rem\] flex-1"/);
+  assert.match(
+    listingTabs,
+    /isEmbed[\s\S]*?"whitespace-normal break-words text-left leading-tight"[\s\S]*?: "truncate"/,
+  );
+  assert.match(listingTabs, /h-2 w-2 shrink-0 rotate-45/);
+  assert.match(
+    listingTabs,
+    /relative flex min-w-0 items-center justify-between gap-2/,
+  );
+  assert.match(listingTabs, /ml-auto shrink-0 self-center text-right/);
+  assert.match(listingTabs, /visibilityClass=\{isEmbed \? "sm:hidden" : "lg:hidden"\}/);
+  assert.match(listingTabs, /visibilityClass="lg:hidden"/);
+});
+
+test("embedded View and order actions are green with white text on both card layouts", async () => {
+  const listingTabs = await read(listingTabsPath);
+
+  assert.match(listingTabs, /const actionLabel = isEmbed \? "View & order" : "View"/);
+  assert.match(
+    listingTabs,
+    /const actionButtonClass = isEmbed[\s\S]*?bg-\[#24512f\] text-white hover:bg-\[#183b22\]/,
+  );
+  assert.equal(
+    listingTabs.match(/actionButtonClass,/g)?.length,
+    2,
+    "mobile and desktop action treatments",
+  );
+});
+
 test("ordinary storefront keeps its fixed bottom sheet presentation", async () => {
   const listingTabs = await read(listingTabsPath);
   const sheetPresentation = listingTabs.slice(
@@ -416,9 +454,16 @@ test("ordinary storefront keeps its fixed bottom sheet presentation", async () =
     listingTabs.indexOf("function buildActiveFilterLabels"),
   );
 
-  assert.match(sheetPresentation, /fixed inset-0 z-50 lg:hidden/);
+  assert.match(
+    sheetPresentation,
+    /className=\{cx\("fixed inset-0 z-50", visibilityClass\)\}/,
+  );
   assert.match(listingTabs, /absolute inset-x-0 bottom-0 max-h-\[82vh\]/);
   assert.match(listingTabs, /aria-modal=\{presentation === "sheet" \? "true" : undefined\}/);
+  assert.match(
+    listingTabs,
+    /isEmbed \? "grid gap-2" : "flex items-center gap-1\.5"/,
+  );
 });
 
 test("mobile panels close accessibly and restore focus to their triggers", async () => {

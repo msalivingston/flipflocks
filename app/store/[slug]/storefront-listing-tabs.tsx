@@ -351,7 +351,7 @@ export function StorefrontListingTabs({
           className={cx(
             "hidden gap-2",
             isEmbed
-              ? "lg:flex lg:flex-wrap"
+              ? "sm:flex sm:flex-wrap"
               : "border-b border-[#ddd5c7] lg:grid lg:grid-cols-4",
           )}
           role="tablist"
@@ -387,145 +387,183 @@ export function StorefrontListingTabs({
       </div>
 
       <div className="lg:hidden">
-        <div className="relative flex min-w-0 items-center gap-1.5">
-          <button
-            aria-controls="mobile-storefront-category-panel"
-            aria-expanded={isCategoryMenuOpen}
-            aria-haspopup="dialog"
-            className="storefront-primary-border storefront-primary-color inline-flex h-[2.625rem] min-w-0 flex-1 items-center justify-between gap-2 rounded-md border bg-white px-2.5 text-[0.88rem] font-bold shadow-[0_1px_2px_rgba(41,37,36,0.05)] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-            onClick={() => {
-              setIsFilterPanelOpen(false);
-              setIsCategoryMenuOpen(true);
-            }}
-            ref={categoryTriggerRef}
-            type="button"
-          >
-            <span className="inline-flex min-w-0 items-center gap-2">
-              <ListingTabIcon name={tabIconName(activeSection.label)} />
-              <span className="truncate">{activeSection.label}</span>
-            </span>
-            <span
-              aria-hidden="true"
-              className="h-2 w-2 rotate-45 border-b-2 border-r-2 border-current"
-            />
-          </button>
-          <button
-            aria-controls="mobile-storefront-filter-panel"
-            aria-expanded={isFilterPanelOpen}
-            aria-haspopup="dialog"
+        <div
+          className={cx(
+            "relative min-w-0",
+            isEmbed ? "grid gap-2" : "flex items-center gap-1.5",
+          )}
+        >
+          <div
             className={cx(
-              "inline-flex h-[2.625rem] shrink-0 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[0.88rem] font-bold shadow-[0_1px_2px_rgba(41,37,36,0.05)] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2",
-              activeFilterCount > 0
-                ? "storefront-primary-button storefront-primary-border"
-                : "border-[#ddd5c7] bg-white text-stone-800",
+              isEmbed ? "relative grid min-w-0 gap-1 sm:hidden" : "contents",
             )}
-            onClick={() => {
-              setIsCategoryMenuOpen(false);
-              setIsFilterPanelOpen(true);
-            }}
-            ref={filterTriggerRef}
-            type="button"
           >
-            <Funnel aria-hidden="true" className="size-4" strokeWidth={2.25} />
-            Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
-          </button>
-          <p className="shrink-0 self-center text-right text-[0.78rem] font-semibold leading-tight text-stone-500">
-            {filteredCards.length}{" "}
-            {filteredCards.length === 1 ? "listing" : "listings"}
-          </p>
-
-          {isCategoryMenuOpen ? (
-            <MobilePanel
-              id="mobile-storefront-category-panel"
-              label="Choose department"
-              onClose={closeCategoryMenu}
-              presentation={isEmbed ? "anchored" : "sheet"}
-              title="Shop department"
+            {isEmbed ? (
+              <p className="text-sm font-semibold text-stone-700">
+                Shop by category
+              </p>
+            ) : null}
+            <button
+              aria-controls="mobile-storefront-category-panel"
+              aria-expanded={isCategoryMenuOpen}
+              aria-haspopup="dialog"
+              className={cx(
+                "storefront-primary-border storefront-primary-color inline-flex min-h-[2.625rem] min-w-0 items-center justify-between gap-2 rounded-md border bg-white px-2.5 text-[0.88rem] font-bold shadow-[0_1px_2px_rgba(41,37,36,0.05)] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2",
+                isEmbed ? "w-full text-left" : "h-[2.625rem] flex-1",
+              )}
+              onClick={() => {
+                setIsFilterPanelOpen(false);
+                setIsCategoryMenuOpen(true);
+              }}
+              ref={categoryTriggerRef}
+              type="button"
             >
-              <div className="grid gap-2">
-                {sections.map((section) => {
-                  const active = section.id === activeSection.id;
-
-                  return (
-                    <button
-                      aria-current={active ? "true" : undefined}
-                      className={cx(
-                        "flex min-h-12 items-center justify-between gap-3 rounded-md border px-3 text-left text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2",
-                        active
-                          ? "storefront-primary-border storefront-primary-color bg-[#f8f3ea]"
-                          : "border-[#e5decf] bg-white text-stone-800",
-                      )}
-                      key={section.id}
-                      onClick={() => changeCategory(section.id)}
-                      type="button"
-                    >
-                      <span className="inline-flex min-w-0 items-center gap-2">
-                        <ListingTabIcon name={tabIconName(section.label)} />
-                        <span>{section.label}</span>
-                      </span>
-                      {active ? <span className="text-xs">Selected</span> : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </MobilePanel>
-          ) : null}
-
-          {isFilterPanelOpen ? (
-            <MobilePanel
-              id="mobile-storefront-filter-panel"
-              label="Filter listings"
-              onClose={closeFilterPanel}
-              presentation={isEmbed ? "anchored" : "sheet"}
-              title="Filter listings"
-            >
-              <ListingFilters
-                age={ageFilter}
-                showAgeFilter={showAgeFilter}
-                showAvailabilityFilter={showAvailabilityFilter}
-                showBreedFilter={showBreedFilter}
-                showCategoryFilter={showCategoryFilter}
-                showConditionFilter={showConditionFilter}
-                showSpeciesFilter={showSpeciesFilter}
-                availability={availabilityFilter}
-                breed={breedFilter}
-                breedOptions={breedOptions}
-                category={speciesFilter}
-                categoryOptions={categoryOptions}
-                condition={breedFilter}
-                conditionOptions={conditionOptions}
-                hasActiveFilters={hasActiveFilters}
-                price={priceFilter}
-                query={query}
-                species={speciesFilter}
-                speciesOptions={speciesOptions}
-                onAgeChange={changeAgeFilter}
-                onAvailabilityChange={changeAvailabilityFilter}
-                onBreedChange={changeBreedFilter}
-                onPriceChange={changePriceFilter}
-                onQueryChange={changeQuery}
-                onReset={resetFilters}
-                onSpeciesChange={changeSpeciesFilter}
-                className="border-0 p-0 shadow-none"
+              <span className="inline-flex min-w-0 items-center gap-2">
+                <ListingTabIcon name={tabIconName(activeSection.label)} />
+                <span
+                  className={cx(
+                    isEmbed
+                      ? "whitespace-normal break-words text-left leading-tight"
+                      : "truncate",
+                  )}
+                >
+                  {activeSection.label}
+                </span>
+              </span>
+              <span
+                aria-hidden="true"
+                className="h-2 w-2 shrink-0 rotate-45 border-b-2 border-r-2 border-current"
               />
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <button
-                  className="min-h-11 rounded-md border border-[#ddd5c7] bg-white px-3 text-sm font-bold text-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-                  onClick={resetFilters}
-                  type="button"
-                >
-                  Reset
-                </button>
-                <button
-                  className="storefront-primary-button min-h-11 rounded-md px-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-                  onClick={closeFilterPanel}
-                  type="button"
-                >
-                  View Results
-                </button>
-              </div>
-            </MobilePanel>
-          ) : null}
+            </button>
+
+            {isCategoryMenuOpen ? (
+              <MobilePanel
+                id="mobile-storefront-category-panel"
+                label="Choose department"
+                onClose={closeCategoryMenu}
+                presentation={isEmbed ? "anchored" : "sheet"}
+                title="Shop department"
+                visibilityClass={isEmbed ? "sm:hidden" : "lg:hidden"}
+              >
+                <div className="grid gap-2">
+                  {sections.map((section) => {
+                    const active = section.id === activeSection.id;
+
+                    return (
+                      <button
+                        aria-current={active ? "true" : undefined}
+                        className={cx(
+                          "flex min-h-12 items-center justify-between gap-3 rounded-md border px-3 text-left text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2",
+                          active
+                            ? "storefront-primary-border storefront-primary-color bg-[#f8f3ea]"
+                            : "border-[#e5decf] bg-white text-stone-800",
+                        )}
+                        key={section.id}
+                        onClick={() => changeCategory(section.id)}
+                        type="button"
+                      >
+                        <span className="inline-flex min-w-0 items-center gap-2">
+                          <ListingTabIcon name={tabIconName(section.label)} />
+                          <span>{section.label}</span>
+                        </span>
+                        {active ? <span className="text-xs">Selected</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </MobilePanel>
+            ) : null}
+          </div>
+
+          <div
+            className={cx(
+              isEmbed
+                ? "relative flex min-w-0 items-center justify-between gap-2"
+                : "contents",
+            )}
+          >
+            <button
+              aria-controls="mobile-storefront-filter-panel"
+              aria-expanded={isFilterPanelOpen}
+              aria-haspopup="dialog"
+              className={cx(
+                "inline-flex h-[2.625rem] shrink-0 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[0.88rem] font-bold shadow-[0_1px_2px_rgba(41,37,36,0.05)] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2",
+                activeFilterCount > 0
+                  ? "storefront-primary-button storefront-primary-border"
+                  : "border-[#ddd5c7] bg-white text-stone-800",
+              )}
+              onClick={() => {
+                setIsCategoryMenuOpen(false);
+                setIsFilterPanelOpen(true);
+              }}
+              ref={filterTriggerRef}
+              type="button"
+            >
+              <Funnel aria-hidden="true" className="size-4" strokeWidth={2.25} />
+              Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+            </button>
+            <p className="ml-auto shrink-0 self-center text-right text-[0.78rem] font-semibold leading-tight text-stone-500">
+              {filteredCards.length}{" "}
+              {filteredCards.length === 1 ? "listing" : "listings"}
+            </p>
+
+            {isFilterPanelOpen ? (
+              <MobilePanel
+                id="mobile-storefront-filter-panel"
+                label="Filter listings"
+                onClose={closeFilterPanel}
+                presentation={isEmbed ? "anchored" : "sheet"}
+                title="Filter listings"
+                visibilityClass="lg:hidden"
+              >
+                <ListingFilters
+                  age={ageFilter}
+                  showAgeFilter={showAgeFilter}
+                  showAvailabilityFilter={showAvailabilityFilter}
+                  showBreedFilter={showBreedFilter}
+                  showCategoryFilter={showCategoryFilter}
+                  showConditionFilter={showConditionFilter}
+                  showSpeciesFilter={showSpeciesFilter}
+                  availability={availabilityFilter}
+                  breed={breedFilter}
+                  breedOptions={breedOptions}
+                  category={speciesFilter}
+                  categoryOptions={categoryOptions}
+                  condition={breedFilter}
+                  conditionOptions={conditionOptions}
+                  hasActiveFilters={hasActiveFilters}
+                  price={priceFilter}
+                  query={query}
+                  species={speciesFilter}
+                  speciesOptions={speciesOptions}
+                  onAgeChange={changeAgeFilter}
+                  onAvailabilityChange={changeAvailabilityFilter}
+                  onBreedChange={changeBreedFilter}
+                  onPriceChange={changePriceFilter}
+                  onQueryChange={changeQuery}
+                  onReset={resetFilters}
+                  onSpeciesChange={changeSpeciesFilter}
+                  className="border-0 p-0 shadow-none"
+                />
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <button
+                    className="min-h-11 rounded-md border border-[#ddd5c7] bg-white px-3 text-sm font-bold text-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+                    onClick={resetFilters}
+                    type="button"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    className="storefront-primary-button min-h-11 rounded-md px-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+                    onClick={closeFilterPanel}
+                    type="button"
+                  >
+                    View Results
+                  </button>
+                </div>
+              </MobilePanel>
+            ) : null}
+          </div>
         </div>
         {activeFilterLabels.length > 0 ? (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -732,6 +770,7 @@ function MobilePanel({
   onClose,
   presentation,
   title,
+  visibilityClass,
 }: {
   children: React.ReactNode;
   id: string;
@@ -739,6 +778,7 @@ function MobilePanel({
   onClose: () => void;
   presentation: "anchored" | "sheet";
   title: string;
+  visibilityClass: "lg:hidden" | "sm:hidden";
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -824,7 +864,10 @@ function MobilePanel({
   if (presentation === "anchored") {
     return (
       <div
-        className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-40 min-w-0 max-w-full lg:hidden"
+        className={cx(
+          "absolute inset-x-0 top-[calc(100%+0.5rem)] z-40 min-w-0 max-w-full",
+          visibilityClass,
+        )}
         data-mobile-panel-presentation="anchored"
       >
         {panel}
@@ -834,7 +877,7 @@ function MobilePanel({
 
   return (
     <div
-      className="fixed inset-0 z-50 lg:hidden"
+      className={cx("fixed inset-0 z-50", visibilityClass)}
       data-mobile-panel-presentation="sheet"
     >
       <button
@@ -1124,6 +1167,9 @@ function ListingCard({
 }) {
   const isEmbed = variant === "embed";
   const actionLabel = isEmbed ? "View & order" : "View";
+  const actionButtonClass = isEmbed
+    ? "bg-[#24512f] text-white hover:bg-[#183b22]"
+    : "storefront-primary-button";
   const href = buildEmbeddedOrderModeHref(card.href, orderMode);
 
   return (
@@ -1161,7 +1207,12 @@ function ListingCard({
             <p className="mt-px truncate text-[0.78rem] font-semibold text-stone-600">
               {card.detail}
             </p>
-            <span className="storefront-primary-button mt-1 inline-flex min-h-8 w-full items-center justify-center rounded-md px-3 text-[0.88rem] font-semibold transition">
+            <span
+              className={cx(
+                "mt-1 inline-flex min-h-8 w-full items-center justify-center rounded-md px-3 text-[0.88rem] font-semibold transition",
+                actionButtonClass,
+              )}
+            >
               {actionLabel}
             </span>
           </div>
@@ -1203,7 +1254,12 @@ function ListingCard({
                 {card.price}
               </p>
             </div>
-            <span className="storefront-primary-button inline-flex min-h-10 shrink-0 items-center justify-center rounded-md px-3 text-sm font-semibold transition lg:min-h-11 lg:px-4 lg:text-base">
+            <span
+              className={cx(
+                "inline-flex min-h-10 shrink-0 items-center justify-center rounded-md px-3 text-sm font-semibold transition lg:min-h-11 lg:px-4 lg:text-base",
+                actionButtonClass,
+              )}
+            >
               {actionLabel}
             </span>
           </div>
