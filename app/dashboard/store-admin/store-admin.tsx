@@ -2563,9 +2563,10 @@ function StorefrontTab({
   const contactEmail = getStorefrontContactEmail(form);
   const currentWebsite = validateSellerWebsiteUrl(form.website_url);
   const savedWebsite = validateSellerWebsiteUrl(initialWebsiteUrl);
+  const hasValidSavedWebsite =
+    savedWebsite.ok && Boolean(savedWebsite.value);
   const hasSavedWebsite =
-    savedWebsite.ok &&
-    Boolean(savedWebsite.value) &&
+    hasValidSavedWebsite &&
     currentWebsite.ok &&
     currentWebsite.value === savedWebsite.value;
   const embedLink = hasSavedWebsite
@@ -2687,21 +2688,26 @@ function StorefrontTab({
               }
             />
           </div>
-          {!hasSavedWebsite ? (
+          {form.storefront_visibility === "embed_only" &&
+          !hasValidSavedWebsite ? (
             <StoreSetupAlert tone="warning">
-              Save a valid HTTPS Website URL before selecting Hidden. This
-              requirement fails closed if the saved URL is later missing or
-              invalid.
+              Add and save your Website URL before hiding your public
+              FlockFront storefront. This gives customers a safe way to return
+              to your website after ordering.
             </StoreSetupAlert>
           ) : null}
         </fieldset>
 
         <TextField
-          helper="This is the page customers return to after ordering through your embedded store."
-          label="Website URL"
+          helper="Enter the full address of the page where your embedded store appears, including https://. Customers will return to this page after ordering."
+          label={
+            form.storefront_visibility === "embed_only"
+              ? "Website URL (required)"
+              : "Website URL"
+          }
           maxLength={embeddedOrderModeWebsiteUrlMaxLength}
           onChange={(value) => onUpdateField("website_url", value)}
-          optional
+          optional={form.storefront_visibility === "public"}
           placeholder="https://www.example.com"
           type="url"
           value={form.website_url}
@@ -2711,7 +2717,7 @@ function StorefrontTab({
           <div className="grid gap-3">
             <ReadOnlyCopyField
               buttonLabel="Copy embed link"
-              helper="Use this order-and-return link when embedding your store on your website."
+              helper="Add this link to your website using an ‘Embed a Site,’ iframe, or custom embed tool. Your inventory will update automatically whenever you make changes in FlockFront."
               label="Embed link"
               value={embedLink}
             />
@@ -2724,12 +2730,7 @@ function StorefrontTab({
               Preview embedded store
             </a>
           </div>
-        ) : (
-          <StorefrontNote>
-            Save a valid HTTPS Website URL before the order-and-return embed
-            link can be generated.
-          </StorefrontNote>
-        )}
+        ) : null}
       </StoreSetupAccordionSection>
 
       <StoreSetupAccordionSection

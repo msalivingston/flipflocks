@@ -158,10 +158,10 @@ test("validated context is appended to every embedded listing route family", () 
 test("Store Admin renders and validates the existing Website URL field", async () => {
   const source = await read("app/dashboard/store-admin/store-admin.tsx");
 
-  assert.match(source, /label="Website URL"/);
+  assert.match(source, /\? "Website URL \(required\)"[\s\S]*: "Website URL"/);
   assert.match(
     source,
-    /This is the page customers return to after ordering through your embedded store\./,
+    /Enter the full address of the page where your embedded store appears, including https:\/\/\. Customers will return to this page after ordering\./,
   );
   assert.match(source, /onUpdateField\("website_url", value\)/);
   assert.match(source, /type="url"/);

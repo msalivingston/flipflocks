@@ -259,15 +259,33 @@ test("database and route contracts cover fail-closed configuration, status, disc
   assert.match(checkout, /visibilityDecision\.orderMode/);
 });
 
-test("Store Admin moves the authoritative Website URL and exposes accessible visibility choices", async () => {
+test("Store Admin presents conditional Website URL guidance without changing visibility behavior", async () => {
   const source = await readFile(
     new URL("../app/dashboard/store-admin/store-admin.tsx", import.meta.url),
     "utf8",
   );
-  assert.equal((source.match(/label="Website URL"/g) ?? []).length, 1);
   assert.match(source, /Store Visibility and Embed Links/);
   assert.match(source, /Public FlockFront storefront/);
   assert.match(source, /type="radio"/);
+  assert.match(
+    source,
+    /form\.storefront_visibility === "embed_only" &&[\s\S]*!hasValidSavedWebsite \? \([\s\S]*Add and save your Website URL before hiding your public[\s\S]*FlockFront storefront\. This gives customers a safe way to return[\s\S]*to your website after ordering\./,
+  );
+  assert.match(
+    source,
+    /form\.storefront_visibility === "embed_only"[\s\S]*\? "Website URL \(required\)"[\s\S]*: "Website URL"/,
+  );
+  assert.match(source, /optional=\{form\.storefront_visibility === "public"\}/);
+  assert.match(
+    source,
+    /Enter the full address of the page where your embedded store appears, including https:\/\/\. Customers will return to this page after ordering\./,
+  );
+  assert.match(
+    source,
+    /Add this link to your website using an ‘Embed a Site,’ iframe, or custom embed tool\. Your inventory will update automatically whenever you make changes in FlockFront\./,
+  );
+  assert.doesNotMatch(source, /This requirement fails closed/);
+  assert.doesNotMatch(source, /order-and-return embed link can be generated/);
   assert.match(source, /seller_update_store_visibility/);
   assert.doesNotMatch(source, /getPlanCapabilities[\s\S]{0,500}storefront_visibility/);
 });
