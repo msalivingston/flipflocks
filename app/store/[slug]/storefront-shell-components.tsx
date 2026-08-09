@@ -1,6 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
-import { StorefrontHeaderCartLink } from "./storefront-header-cart-link";
+import {
+  StorefrontFocusedOrderActions,
+  StorefrontHeaderCartLink,
+} from "./storefront-header-cart-link";
 import { StorefrontMobileMenu } from "./storefront-mobile-menu";
 import {
   StoreLogo,
@@ -11,7 +14,10 @@ import {
 } from "./storefront-ui";
 import type { StorefrontHome } from "./storefront-data";
 import { storefrontSerifClass } from "./storefront-fonts";
-import type { EmbeddedOrderModeContext } from "@/lib/embedded-order-mode";
+import {
+  buildEmbeddedOrderModeHref,
+  type EmbeddedOrderModeContext,
+} from "@/lib/embedded-order-mode";
 
 export type StorefrontCategoryAvailability = {
   equipment: boolean;
@@ -77,6 +83,15 @@ function StorefrontFocusedOrderHeader({
   orderMode: EmbeddedOrderModeContext;
   store: StorefrontHome;
 }) {
+  const cartHref = buildEmbeddedOrderModeHref(
+    `/store/${store.store_slug}/cart`,
+    orderMode,
+  );
+  const checkoutHref = buildEmbeddedOrderModeHref(
+    `/store/${store.store_slug}/checkout`,
+    orderMode,
+  );
+
   return (
     <header className="storefront-top-menu border-b border-[#e7e0d2] bg-white">
       <div className="mx-auto flex min-h-[4.5rem] max-w-[70rem] flex-wrap items-center justify-between gap-3 px-4 py-2.5 sm:px-7">
@@ -89,16 +104,26 @@ function StorefrontFocusedOrderHeader({
           </span>
           Back to {store.store_name}
         </a>
-        <div className="flex min-w-0 items-center gap-2.5" aria-label={store.store_name}>
-          <StoreLogo store={store} />
-          <span
-            className={cx(
-              storefrontSerifClass,
-              "storefront-heading-color max-w-[16rem] truncate text-lg font-normal leading-tight text-[#073f1e] sm:text-xl",
-            )}
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2.5 sm:gap-3">
+          <StorefrontFocusedOrderActions
+            cartHref={cartHref}
+            checkoutHref={checkoutHref}
+            storeSlug={store.store_slug}
+          />
+          <div
+            className="flex min-w-0 items-center gap-2.5"
+            aria-label={store.store_name}
           >
-            {store.store_name}
-          </span>
+            <StoreLogo store={store} />
+            <span
+              className={cx(
+                storefrontSerifClass,
+                "storefront-heading-color max-w-[16rem] truncate text-lg font-normal leading-tight text-[#073f1e] sm:text-xl",
+              )}
+            >
+              {store.store_name}
+            </span>
+          </div>
         </div>
       </div>
     </header>

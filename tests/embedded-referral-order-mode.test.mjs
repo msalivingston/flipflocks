@@ -219,7 +219,10 @@ test("focused detail routes cover all listing families while ordinary chrome rem
 });
 
 test("focused chrome is compact and omits ordinary navigation and footer", async () => {
-  const source = await read("app/store/[slug]/storefront-shell-components.tsx");
+  const [source, cartLink] = await Promise.all([
+    read("app/store/[slug]/storefront-shell-components.tsx"),
+    read("app/store/[slug]/storefront-header-cart-link.tsx"),
+  ]);
   const focusedBranch = source.slice(
     source.indexOf("if (orderMode)"),
     source.indexOf("return (", source.indexOf("if (orderMode)") + 20),
@@ -228,6 +231,13 @@ test("focused chrome is compact and omits ordinary navigation and footer", async
   assert.match(source, /if \(orderMode\)[\s\S]*StorefrontFocusedOrderHeader/);
   assert.match(source, /Back to \{store\.store_name\}/);
   assert.match(source, /href=\{orderMode\.returnUrl\}/);
+  assert.match(source, /<StorefrontFocusedOrderActions/);
+  assert.match(source, /buildEmbeddedOrderModeHref\([\s\S]*?\/cart/);
+  assert.match(source, /buildEmbeddedOrderModeHref\([\s\S]*?\/checkout/);
+  assert.match(cartLink, /StorefrontFocusedOrderActions/);
+  assert.match(cartLink, /aria-label=\{`Cart, \$\{count\} item/);
+  assert.match(cartLink, />\s*Checkout\s*</);
+  assert.match(cartLink, /storefrontCartChangedEvent/);
   assert.doesNotMatch(focusedBranch, /StorefrontFooter|StorefrontHeaderCartLink|StorefrontMobileMenu/);
 });
 

@@ -105,6 +105,7 @@ export function StorefrontListingTabs({
   const [query, setQuery] = useState("");
   const [requestedPage, setRequestedPage] = useState(1);
   const [speciesFilter, setSpeciesFilter] = useState("all");
+  const galleryRef = useRef<HTMLDivElement>(null);
   const activeSection =
     sections.find((section) => section.id === activeId) ?? sections[0];
   const showAgeFilter = useMemo(
@@ -202,6 +203,12 @@ export function StorefrontListingTabs({
   const closeFilterPanel = useCallback(() => {
     setIsFilterPanelOpen(false);
     window.requestAnimationFrame(() => filterTriggerRef.current?.focus());
+  }, []);
+  const changePage = useCallback((page: number) => {
+    setRequestedPage(page);
+    window.requestAnimationFrame(() => {
+      galleryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }, []);
 
   useEffect(() => {
@@ -386,7 +393,7 @@ export function StorefrontListingTabs({
         </div>
       </div>
 
-      <div className="lg:hidden">
+      <div className={isEmbed ? "min-[975px]:hidden" : "lg:hidden"}>
         <div
           className={cx(
             "relative min-w-0",
@@ -514,7 +521,9 @@ export function StorefrontListingTabs({
                 onClose={closeFilterPanel}
                 presentation={isEmbed ? "anchored" : "sheet"}
                 title="Filter listings"
-                visibilityClass="lg:hidden"
+                visibilityClass={
+                  isEmbed ? "min-[975px]:hidden" : "lg:hidden"
+                }
               >
                 <ListingFilters
                   age={ageFilter}
@@ -598,7 +607,14 @@ export function StorefrontListingTabs({
         role="tabpanel"
       >
         {activeSection.cards.length > 0 ? (
-          <div className="grid min-w-0 gap-3 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-5">
+          <div
+            className={cx(
+              "grid min-w-0 gap-3",
+              isEmbed
+                ? "min-[975px]:grid-cols-[14rem_minmax(0,1fr)] min-[975px]:gap-5"
+                : "lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-5",
+            )}
+          >
             <ListingFilters
               age={ageFilter}
               showAgeFilter={showAgeFilter}
@@ -626,10 +642,10 @@ export function StorefrontListingTabs({
               onQueryChange={changeQuery}
               onReset={resetFilters}
               onSpeciesChange={changeSpeciesFilter}
-              className="hidden lg:block"
+              className={isEmbed ? "hidden min-[975px]:block" : "hidden lg:block"}
             />
             {filteredCards.length > 0 ? (
-              <div className="min-w-0">
+    <div className="min-w-0" ref={galleryRef}>
                 <div
                   aria-label="Available inventory"
                   className={cx(
@@ -649,7 +665,7 @@ export function StorefrontListingTabs({
                 {isEmbed ? (
                   <StorefrontListingPagination
                     endResult={pagination.endResult}
-                    onPageChange={setRequestedPage}
+                    onPageChange={changePage}
                     page={pagination.page}
                     pageCount={pagination.pageCount}
                     startResult={pagination.startResult}
@@ -778,7 +794,7 @@ function MobilePanel({
   onClose: () => void;
   presentation: "anchored" | "sheet";
   title: string;
-  visibilityClass: "lg:hidden" | "sm:hidden";
+  visibilityClass: "lg:hidden" | "min-[975px]:hidden" | "sm:hidden";
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);

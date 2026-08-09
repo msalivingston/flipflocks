@@ -320,6 +320,11 @@ test("pagination controls are compact and filters reset page membership", async 
   assert.match(listingTabs, />\s*Next\s*</);
   assert.match(listingTabs, /aria-current=\{active \? "page" : undefined\}/);
   assert.match(listingTabs, /className="flex min-w-0 flex-wrap/);
+  assert.match(listingTabs, /onPageChange=\{changePage\}/);
+  assert.match(
+    listingTabs,
+    /galleryRef\.current\?\.scrollIntoView\(\{ behavior: "smooth", block: "start" \}\)/,
+  );
 
   for (const handler of [
     "changeCategory",
@@ -391,7 +396,10 @@ test("embed mobile category and filter controls use anchored, overflow-safe pane
   assert.match(route, /w-full max-w-full overflow-x-hidden/);
   assert.match(gallery, /variant="embed"/);
   assert.match(listingTabs, /isEmbed[\s\S]*?sm:flex sm:flex-wrap/);
-  assert.match(listingTabs, /className="lg:hidden"/);
+  assert.match(
+    listingTabs,
+    /className=\{isEmbed \? "min-\[975px\]:hidden" : "lg:hidden"\}/,
+  );
   assert.match(listingTabs, /<MobilePanel[\s\S]*label="Choose department"/);
   assert.match(listingTabs, /<MobilePanel[\s\S]*label="Filter listings"/);
   assert.match(
@@ -429,7 +437,27 @@ test("embed mobile toolbar stacks below 640px and shows full category labels", a
   );
   assert.match(listingTabs, /ml-auto shrink-0 self-center text-right/);
   assert.match(listingTabs, /visibilityClass=\{isEmbed \? "sm:hidden" : "lg:hidden"\}/);
-  assert.match(listingTabs, /visibilityClass="lg:hidden"/);
+  assert.match(
+    listingTabs,
+    /isEmbed \? "min-\[975px\]:hidden" : "lg:hidden"/,
+  );
+});
+
+test("embed keeps left-side filters through the 975px breakpoint", async () => {
+  const listingTabs = await read(listingTabsPath);
+
+  assert.match(
+    listingTabs,
+    /isEmbed \? "min-\[975px\]:hidden" : "lg:hidden"/,
+  );
+  assert.match(
+    listingTabs,
+    /min-\[975px\]:grid-cols-\[14rem_minmax\(0,1fr\)\] min-\[975px\]:gap-5/,
+  );
+  assert.match(
+    listingTabs,
+    /isEmbed \? "hidden min-\[975px\]:block" : "hidden lg:block"/,
+  );
 });
 
 test("embedded View and order actions are green with white text on both card layouts", async () => {
