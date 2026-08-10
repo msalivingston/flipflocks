@@ -55,6 +55,12 @@ begin
     $remote$
       set "request.jwt.claim.role" = 'service_role';
 
+      delete from public.email_notification_delivery_attempts as attempts
+      using public.email_notifications as notifications
+      where attempts.notification_id = notifications.id
+        and notifications.store_id = 'b3000000-0000-4000-8000-000000000010';
+      delete from public.email_notifications
+      where store_id = 'b3000000-0000-4000-8000-000000000010';
       delete from public.billing_subscription_invoices
       where store_id = 'b3000000-0000-4000-8000-000000000010';
       update public.seller_billing_status set current_subscription_enrollment_id = null
@@ -377,6 +383,12 @@ begin
       drop function if exists public.__saas_race_success(text,timestamptz,text,timestamptz,timestamptz,bigint);
       drop function if exists public.__saas_race_failure(text,timestamptz,text,timestamptz,timestamptz,bigint);
       drop function if exists public.__saas_rollback_after_success();
+      delete from public.email_notification_delivery_attempts as attempts
+      using public.email_notifications as notifications
+      where attempts.notification_id = notifications.id
+        and notifications.store_id = 'b3000000-0000-4000-8000-000000000010';
+      delete from public.email_notifications
+      where store_id = 'b3000000-0000-4000-8000-000000000010';
       delete from public.billing_subscription_invoices
       where store_id = 'b3000000-0000-4000-8000-000000000010';
       update public.seller_billing_status set current_subscription_enrollment_id = null

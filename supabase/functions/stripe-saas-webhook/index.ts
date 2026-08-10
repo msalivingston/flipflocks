@@ -104,6 +104,48 @@ async function kickSellerWelcomeWorker(
   }
 }
 
+async function kickSellerPaymentFailedWorker(
+  subscriptionInvoiceId: string,
+): Promise<void> {
+  const workerSecret = Deno.env.get("POSTMARK_WORKER_SECRET")?.trim();
+  if (!workerSecret) {
+    console.info(JSON.stringify({
+      event: "seller_payment_failed_worker_kick_skipped",
+      reason: "worker_not_configured",
+    }));
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${supabaseUrl.replace(/\/$/, "")}/functions/v1/postmark-email-worker`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-flockfront-worker-secret": workerSecret,
+        },
+        body: JSON.stringify({
+          subscription_invoice_id: subscriptionInvoiceId,
+        }),
+        signal: AbortSignal.timeout(5_000),
+      },
+    );
+
+    if (!response.ok) {
+      console.info(JSON.stringify({
+        event: "seller_payment_failed_worker_kick_failed",
+        reason: "worker_rejected",
+      }));
+    }
+  } catch {
+    console.info(JSON.stringify({
+      event: "seller_payment_failed_worker_kick_failed",
+      reason: "worker_unavailable",
+    }));
+  }
+}
+
 function firstRow<T>(data: unknown): T {
   if (!Array.isArray(data) || !data[0]) {
     throw new Error("Trusted database contract returned no row.");
@@ -610,6 +652,21 @@ const handler = createStripeSaasWebhookHandler({
         "invoice.payment_action_required": "payment_action_required",
       }[identity.eventType];
       if (!outcome) throw new SaasWebhookDomainError("invoice_event_type_invalid", false);
+      if (identity.eventType === "invoice.payment_failed") {
+        const { error: bindingError } = await serviceClient.rpc(
+          "bind_verified_saas_payment_failed_plan_change_event",
+          {
+            p_provider_event_id: identity.providerEventId,
+            p_processing_lease_token: processingLeaseToken,
+            p_stripe_account_id: identity.stripeAccountId,
+            p_stripe_livemode: identity.stripeLivemode,
+            p_stripe_subscription_id: invoice.subscriptionId,
+            p_stripe_invoice_id: invoice.id,
+            p_target_stripe_price_id: line.priceId,
+          },
+        );
+        if (bindingError) throw lifecycleRpcError(bindingError, "invoice");
+      }
       const { data, error } = await serviceClient.rpc(
         "apply_verified_saas_plan_change_invoice_event",
         {
@@ -662,7 +719,11 @@ const handler = createStripeSaasWebhookHandler({
         },
       );
       if (error) throw lifecycleRpcError(error, "invoice");
-      return firstRow<SaasInvoiceApplicationResult>(data);
+      const result = firstRow<SaasInvoiceApplicationResult>(data);
+      if (identity.eventType === "invoice.payment_failed") {
+        await kickSellerPaymentFailedWorker(result.invoice_id);
+      }
+      return result;
     }
     const rpcName = {
       "invoice.payment_succeeded":
@@ -728,7 +789,11 @@ const handler = createStripeSaasWebhookHandler({
       p_product_tax_code: line.productTaxCode,
     });
     if (error) throw lifecycleRpcError(error, "invoice");
-    return firstRow<SaasInvoiceApplicationResult>(data);
+    const result = firstRow<SaasInvoiceApplicationResult>(data);
+    if (identity.eventType === "invoice.payment_failed") {
+      await kickSellerPaymentFailedWorker(result.invoice_id);
+    }
+    return result;
   },
   retrieveSubscriptionLifecycleEvidence,
   async applySubscriptionLifecycle(

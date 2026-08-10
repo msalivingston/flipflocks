@@ -6,6 +6,9 @@ export const sellerWelcomeActiveSubject =
 export const sellerWelcomeFromEmail = "welcome@flockfront.com";
 export const sellerWelcomeSetupUrl = "https://www.flockfront.com/onboarding";
 
+const sellerWelcomeLogoUrl =
+  "https://www.flockfront.com/branding/flockfront-logo-final-cropped.png";
+
 export type SellerWelcomePayload = {
   schema_version: "seller_subscription_welcome_v1";
   subscription_enrollment_id: string;
@@ -175,34 +178,37 @@ export function renderSellerWelcomeEmail(
   const html = `<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(subject)}</title></head>
-<body style="margin:0;background:#f5f3ee;color:#29251f;font-family:Arial,Helvetica,sans-serif;">
+<body style="margin:0;background:#fbf7ef;color:#10281c;font-family:Arial,Helvetica,sans-serif;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(opening)}</div>
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5f3ee;padding:28px 12px;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#fbf7ef" style="width:100%;background:#fbf7ef;padding:24px 12px;">
     <tr><td align="center">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border:1px solid #ded8cc;border-radius:12px;overflow:hidden;">
-        <tr><td style="padding:24px 32px;background:#294b3a;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:.2px;">FlockFront</td></tr>
-        <tr><td style="padding:32px;">
-          <p style="margin:0 0 18px;font-size:16px;line-height:1.6;">Hi ${firstName},</p>
-          <p style="margin:0 0 24px;font-size:16px;line-height:1.6;">${escapeHtml(opening)}</p>
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 24px;background:#f8f6f1;border:1px solid #e4dfd5;border-radius:8px;">
-            <tr><td style="padding:20px 22px;">
-              <p style="margin:0 0 10px;color:#665f54;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Your plan</p>
-              <p style="margin:0 0 8px;font-size:19px;font-weight:700;">${planName} — ${cadence}</p>
-              <p style="margin:0;font-size:15px;line-height:1.5;">Your first charge: <strong>${price}</strong> on <strong>${date}</strong></p>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#ffffff" style="width:100%;max-width:620px;background:#ffffff;border:1px solid #ded6c7;border-radius:12px;overflow:hidden;">
+        <tr><td height="4" bgcolor="#246f38" style="height:4px;background:#246f38;font-size:0;line-height:0;">&nbsp;</td></tr>
+        <tr><td bgcolor="#fffaf1" style="padding:20px 30px;background:#fffaf1;border-bottom:1px solid #e8deca;">
+          <img src="${sellerWelcomeLogoUrl}" width="205" alt="FlockFront" style="display:block;width:205px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;">
+        </td></tr>
+        <tr><td style="padding:30px;">
+          <p style="margin:0 0 16px;color:#10281c;font-size:16px;line-height:1.55;">Hi ${firstName},</p>
+          <p style="margin:0 0 22px;color:#394137;font-size:16px;line-height:1.6;">${escapeHtml(opening)}</p>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#f7faf4" style="width:100%;margin:0 0 22px;background:#f7faf4;border:1px solid #dbe8d8;border-radius:8px;">
+            <tr><td style="padding:18px 20px;">
+              <p style="margin:0 0 8px;color:#246f38;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Your plan</p>
+              <p style="margin:0 0 7px;color:#10281c;font-size:19px;font-weight:700;line-height:1.35;">${planName} — ${cadence}</p>
+              <p style="margin:0;color:#394137;font-size:15px;line-height:1.5;">Your first charge: <strong style="color:#10281c;">${price}</strong> on <strong style="color:#10281c;">${date}</strong></p>
             </td></tr>
           </table>
-          <p style="margin:0 0 24px;font-size:15px;line-height:1.6;">${escapeHtml(billingDisclosure)}</p>
-          <p style="margin:0 0 12px;font-size:16px;line-height:1.6;font-weight:700;">Now let’s get your store ready:</p>
-          <ol style="margin:0 0 26px;padding-left:22px;font-size:15px;line-height:1.75;">
+          <p style="margin:0 0 22px;color:#394137;font-size:15px;line-height:1.6;">${escapeHtml(billingDisclosure)}</p>
+          <p style="margin:0 0 10px;color:#10281c;font-size:16px;line-height:1.55;font-weight:700;">Now let’s get your store ready:</p>
+          <ol style="margin:0 0 24px;padding-left:22px;color:#394137;font-size:15px;line-height:1.7;">
             <li>Finish your storefront details</li>
             <li>Choose what you sell</li>
             <li>Add your first listings</li>
             <li>Preview your store and start sharing it with buyers</li>
           </ol>
-          <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 28px;"><tr><td style="border-radius:7px;background:#b75d32;"><a href="${sellerWelcomeSetupUrl}" style="display:inline-block;padding:13px 20px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;">Continue setting up my store</a></td></tr></table>
-          <p style="margin:0 0 18px;font-size:14px;line-height:1.65;color:#514b42;">You can review your plan, update your payment method, or cancel from Account → Manage billing &amp; invoices. ${escapeHtml(cancellationDisclosure)}</p>
-          <p style="margin:0 0 24px;font-size:14px;line-height:1.65;color:#514b42;">Need help? Reply to this email or contact <a href="mailto:support@flockfront.com" style="color:#294b3a;">support@flockfront.com</a>.</p>
-          <p style="margin:0;font-size:15px;line-height:1.6;">Welcome aboard,<br><br>Michelle<br>FlockFront<br><span style="color:#665f54;">A better way to sell poultry.</span></p>
+          <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 26px;"><tr><td bgcolor="#246f38" style="border-radius:7px;background:#246f38;"><a href="${sellerWelcomeSetupUrl}" style="display:inline-block;padding:13px 20px;color:#ffffff;font-size:15px;font-weight:700;line-height:1.2;text-decoration:none;">Continue setting up my store</a></td></tr></table>
+          <p style="margin:0 0 16px;color:#514b42;font-size:14px;line-height:1.65;">You can review your plan, update your payment method, or cancel from Account → Manage billing &amp; invoices. ${escapeHtml(cancellationDisclosure)}</p>
+          <p style="margin:0 0 22px;color:#514b42;font-size:14px;line-height:1.65;">Need help? Reply to this email or contact <a href="mailto:support@flockfront.com" style="color:#17613a;text-decoration:underline;">support@flockfront.com</a>.</p>
+          <p style="margin:0;color:#10281c;font-size:15px;line-height:1.6;">Welcome aboard,<br><br>Michelle<br>FlockFront<br><span style="color:#5f665f;">A better way to sell poultry.</span></p>
         </td></tr>
       </table>
     </td></tr>

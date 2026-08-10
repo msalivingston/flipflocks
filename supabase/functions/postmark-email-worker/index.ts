@@ -12,6 +12,14 @@ import {
   sellerWelcomeNotificationType,
   sellerWelcomeTrialSubject,
 } from "./seller-welcome.ts";
+import {
+  parseSellerPaymentFailedContext,
+  parseSellerPaymentFailedPayload,
+  renderSellerPaymentFailedEmail,
+  sellerPaymentFailedFromEmail,
+  sellerPaymentFailedNotificationType,
+  sellerPaymentFailedSubject,
+} from "./seller-payment-failed.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("FLIPFLOCKS_PUBLIC_API_ORIGIN") ??
@@ -34,6 +42,7 @@ type ClaimedNotification = {
   processing_token: string;
   store_id: string;
   order_id: string | null;
+  subscription_invoice_id?: string | null;
   dedupe_key: string;
   recipient_type: "buyer" | "seller" | string;
   recipient_email: string;
@@ -270,6 +279,20 @@ function parseEnrollmentScope(body: unknown): string | null {
 
   if (typeof value !== "string" || !uuidPattern.test(value.trim())) {
     throw new Error("subscription_enrollment_id must be a valid UUID.");
+  }
+
+  return value.trim().toLowerCase();
+}
+
+function parseInvoiceScope(body: unknown): string | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+
+  const value = (body as Record<string, unknown>).subscription_invoice_id;
+
+  if (value === undefined || value === null || value === "") return null;
+
+  if (typeof value !== "string" || !uuidPattern.test(value.trim())) {
+    throw new Error("subscription_invoice_id must be a valid UUID.");
   }
 
   return value.trim().toLowerCase();
@@ -523,6 +546,56 @@ async function renderSellerWelcomeNotification(
     html: document.html,
     text: document.text,
     tag: "flockfront-seller-welcome",
+  };
+}
+
+async function renderSellerPaymentFailedNotification(
+  supabase: SupabaseClient,
+  notification: ClaimedNotification,
+): Promise<RenderedEmail> {
+  if (
+    notification.notification_type !== sellerPaymentFailedNotificationType ||
+    notification.recipient_type !== "seller_account" ||
+    notification.order_id !== null ||
+    !notification.subscription_invoice_id
+  ) {
+    throw new Error("Seller payment-failed notification envelope is invalid.");
+  }
+
+  const payload = parseSellerPaymentFailedPayload(notification.payload);
+  if (payload.subscription_invoice_id !== notification.subscription_invoice_id) {
+    throw new Error("Seller payment-failed invoice context does not match its payload.");
+  }
+
+  const { data, error } = await supabase.rpc(
+    "get_seller_subscription_payment_failed_context",
+    { p_subscription_invoice_id: payload.subscription_invoice_id },
+  );
+  const rows = Array.isArray(data) ? data : [];
+
+  if (error) {
+    throw new Error(
+      error.message || "Seller payment-failed billing context could not be resolved.",
+    );
+  }
+  if (rows.length !== 1) {
+    throw new Error("Seller payment-failed billing context was not found.");
+  }
+
+  const context = parseSellerPaymentFailedContext(rows[0]);
+  const document = renderSellerPaymentFailedEmail(context);
+  if (notification.subject_snapshot !== sellerPaymentFailedSubject) {
+    throw new Error("Seller payment-failed subject is invalid.");
+  }
+
+  return {
+    to: context.recipientEmail,
+    fromName: "FlockFront",
+    fromEmail: sellerPaymentFailedFromEmail,
+    subject: document.subject,
+    html: document.html,
+    text: document.text,
+    tag: "flockfront-seller-payment-failed",
   };
 }
 
@@ -811,6 +884,9 @@ async function sendPostmarkEmail({
         notification_id: notification.notification_id,
         dispatch_attempt_id: dispatchAttemptId,
         ...(notification.order_id ? { order_id: notification.order_id } : {}),
+        ...(notification.subscription_invoice_id
+          ? { subscription_invoice_id: notification.subscription_invoice_id }
+          : {}),
         email_type: notification.notification_type,
       },
     },
@@ -1458,11 +1534,13 @@ Deno.serve(async (request: Request) => {
   const batchSize = parseBatchSize(body);
   let orderScope: string | null;
   let enrollmentScope: string | null;
+  let invoiceScope: string | null;
 
   try {
     orderScope = parseOrderScope(body);
     enrollmentScope = parseEnrollmentScope(body);
-    if (orderScope && enrollmentScope) {
+    invoiceScope = parseInvoiceScope(body);
+    if ([orderScope, enrollmentScope, invoiceScope].filter(Boolean).length > 1) {
       throw new Error("Only one worker scope may be supplied.");
     }
   } catch {
@@ -1488,13 +1566,17 @@ Deno.serve(async (request: Request) => {
   while (claimedCount < maxNotificationsPerInvocation) {
     const remainingCapacity = maxNotificationsPerInvocation - claimedCount;
     const claimSize = Math.min(batchSize, remainingCapacity);
-    const claimFunction = enrollmentScope
+    const claimFunction = invoiceScope
+      ? "claim_seller_subscription_payment_failed_email"
+      : enrollmentScope
       ? "claim_seller_subscription_welcome_email"
       : orderScope
       ? "claim_phase_1_postmark_email_notifications_for_order"
       : "claim_phase_1_postmark_email_notifications";
     const claimArguments: Record<string, unknown> = {
-      ...(enrollmentScope
+      ...(invoiceScope
+        ? { p_subscription_invoice_id: invoiceScope }
+        : enrollmentScope
         ? { p_subscription_enrollment_id: enrollmentScope }
         : orderScope
         ? { p_order_id: orderScope }
@@ -1517,6 +1599,7 @@ Deno.serve(async (request: Request) => {
         delivery_unknown: deliveryUnknownCount,
         order_scope: orderScope,
         enrollment_scope: enrollmentScope,
+        invoice_scope: invoiceScope,
       });
     }
 
@@ -1547,7 +1630,8 @@ Deno.serve(async (request: Request) => {
       try {
         if (
           !isV1OrderEmailType(notification.notification_type) &&
-          notification.notification_type !== sellerWelcomeNotificationType
+          notification.notification_type !== sellerWelcomeNotificationType &&
+          notification.notification_type !== sellerPaymentFailedNotificationType
         ) {
           throw new Error(
             `Unsupported Phase 1 notification type: ${notification.notification_type}`,
@@ -1557,6 +1641,8 @@ Deno.serve(async (request: Request) => {
         const email = notification.notification_type ===
             sellerWelcomeNotificationType
           ? await renderSellerWelcomeNotification(supabase, notification)
+          : notification.notification_type === sellerPaymentFailedNotificationType
+          ? await renderSellerPaymentFailedNotification(supabase, notification)
           : renderEmail(
             notification,
             await fetchEmailContext(supabase, supabaseUrl, notification),
@@ -1656,5 +1742,6 @@ Deno.serve(async (request: Request) => {
     delivery_unknown: deliveryUnknownCount,
     order_scope: orderScope,
     enrollment_scope: enrollmentScope,
+    invoice_scope: invoiceScope,
   });
 });

@@ -439,5 +439,82 @@ select is(
   'an immediate upgrade never resets inventory'
 );
 
+insert into public.billing_subscription_plan_changes (
+  id, store_id, subscription_enrollment_id, requested_by_user_id,
+  source_stripe_price_id, target_stripe_price_id, change_timing,
+  status, stripe_schedule_id, stripe_invoice_id, effective_at
+) values (
+  'ab000000-0000-4001-a000-000000000003',
+  'ab000000-0000-4000-9000-000000000001',
+  'ab000000-0000-4000-b000-000000000001',
+  'ab000000-0000-4000-8000-000000000001',
+  'price_PlanChangeMarket', 'price_PlanChangeCoop', 'period_end',
+  'scheduled', 'sub_sched_PlanChangeFailure', 'in_PlanChangeFailure',
+  '2026-10-01 00:00:00+00'
+);
+create temporary table plan_change_failure_claim as
+select * from public.claim_saas_billing_provider_event(
+  'evt_PlanChangeFailure', 'invoice.payment_failed',
+  '2026-09-20 00:00:00+00', repeat('d', 64),
+  'acct_1CTOghL1R5g4hhXt', false, 'local',
+  'invoice', 'in_PlanChangeFailure'
+);
+update public.billing_provider_events
+set deferred_at = statement_timestamp(),
+    deferred_reason = 'awaiting_immutable_enrollment_binding'
+where provider_event_id = 'evt_PlanChangeFailure'
+  and stripe_account_id = 'acct_1CTOghL1R5g4hhXt'
+  and not stripe_livemode;
+select is(
+  public.bind_verified_saas_payment_failed_plan_change_event(
+    'evt_PlanChangeFailure',
+    (select processing_lease_token from plan_change_failure_claim),
+    'acct_1CTOghL1R5g4hhXt', false, 'sub_PlanChange',
+    'in_PlanChangeFailure', 'price_PlanChangeCoop'
+  ),
+  'ab000000-0000-4000-9000-000000000001'::uuid,
+  'verified plan-change failure binds through the narrow service-only path'
+);
+create temporary table plan_change_failure_result as
+select * from public.apply_verified_saas_plan_change_invoice_event(
+  'payment_failed', 'evt_PlanChangeFailure', repeat('d', 64),
+  (select processing_lease_token from plan_change_failure_claim),
+  'acct_1CTOghL1R5g4hhXt', false, 'local',
+  '2026-09-20 00:00:00+00', 'in_PlanChangeFailure', false,
+  'cus_PlanChange', 'sub_PlanChange', 'price_PlanChangeCoop',
+  'prod_PlanChangeCoop', 'price_PlanChangeMarket', 1,
+  '2026-09-10 00:00:00+00', '2026-10-01 00:00:00+00',
+  'subscription_cycle', 'charge_automatically', 'open', 'usd',
+  500, 0, 500, 500,
+  '2026-10-01 00:00:00+00', '2026-11-01 00:00:00+00',
+  '2026-09-20 00:00:00+00', '2026-09-21 00:00:00+00',
+  1, false, false, true, true, 500, 'usd', 'month', 1,
+  'recurring', 'per_unit', 'licensed', 'exclusive', 'txcd_10103001'
+);
+select is(
+  (select application_state from plan_change_failure_result),
+  'nonpayment_recorded',
+  'verified plan-change invoice failure is applied through its existing path'
+);
+select is(
+  (select count(*)::integer
+   from public.email_notifications as notification
+   join public.billing_subscription_invoices as invoice
+     on invoice.id = notification.subscription_invoice_id
+   where invoice.stripe_invoice_id = 'in_PlanChangeFailure'
+     and notification.notification_type =
+       'seller_subscription_payment_failed'),
+  1,
+  'verified plan-change invoice failure enqueues the same payment email type'
+);
+select is(
+  (select public_plan_name
+   from public.get_seller_subscription_payment_failed_context(
+     (select id from public.billing_subscription_invoices
+      where stripe_invoice_id = 'in_PlanChangeFailure'))),
+  'Coop',
+  'plan-change payment email resolves the failed invoice target plan'
+);
+
 select * from finish();
 rollback;

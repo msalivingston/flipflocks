@@ -685,6 +685,125 @@ select is(
   'payment_grace',
   'expired verified trial enters invoice-backed grace'
 );
+select is(
+  (select count(*)::integer
+   from public.email_notifications as notification
+   join public.billing_subscription_invoices as invoice
+     on invoice.id = notification.subscription_invoice_id
+   where invoice.stripe_invoice_id = 'in_Batch8Conversion'
+     and notification.notification_type =
+       'seller_subscription_payment_failed'),
+  1,
+  'first verified invoice failure enqueues exactly one seller notification'
+);
+select results_eq(
+  $$select notification.dedupe_key, notification.recipient_email,
+      notification.subject_snapshot,
+      notification.payload ->> 'schema_version'
+    from public.email_notifications as notification
+    join public.billing_subscription_invoices as invoice
+      on invoice.id = notification.subscription_invoice_id
+    where invoice.stripe_invoice_id = 'in_Batch8Conversion'
+      and notification.notification_type =
+        'seller_subscription_payment_failed'$$,
+  $$select
+      'seller_subscription_payment_failed:invoice:' || invoice.id::text,
+      'batch8-owner@example.test'::text,
+      'We couldn’t process your FlockFront payment'::text,
+      'seller_subscription_payment_failed_v1'::text
+    from public.billing_subscription_invoices as invoice
+    where invoice.stripe_invoice_id = 'in_Batch8Conversion'$$,
+  'payment-failed outbox identity and recipient are server-derived'
+);
+select is(
+  (select first_name
+   from public.get_seller_subscription_payment_failed_context(
+     (select id from public.billing_subscription_invoices
+      where stripe_invoice_id = 'in_Batch8Conversion'))),
+  null::text,
+  'missing required seller name remains visibly missing instead of guessed'
+);
+
+create temporary table batch8_payment_email_claim as
+select *
+from public.claim_seller_subscription_payment_failed_email(
+  (select id from public.billing_subscription_invoices
+   where stripe_invoice_id = 'in_Batch8Conversion')
+);
+select is(
+  (select count(*)::integer from batch8_payment_email_claim),
+  1,
+  'invoice-scoped worker claim claims exactly the matching payment email'
+);
+select public.mark_email_notification_failed(
+  (select notification_id from batch8_payment_email_claim),
+  (select processing_token from batch8_payment_email_claim),
+  'Seller payment-failed seller first name is missing.',
+  interval '5 minutes',
+  5
+);
+select results_eq(
+  $$select notification_status, attempt_count, last_error,
+      next_attempt_at > statement_timestamp()
+    from public.email_notifications
+    where id = (select notification_id from batch8_payment_email_claim)$$,
+  $$values ('failed'::text, 1,
+      'Seller payment-failed seller first name is missing.'::text, true)$$,
+  'missing required context is a visible retryable outbox failure'
+);
+update auth.users
+set raw_user_meta_data = jsonb_build_object('first_name', 'Avery')
+where id = 'f8000000-0000-4000-8000-000000000001';
+select public.retry_email_notification(
+  (select notification_id from batch8_payment_email_claim),
+  now(),
+  false
+);
+create temporary table batch8_payment_email_retry_claim as
+select *
+from public.claim_seller_subscription_payment_failed_email(
+  (select id from public.billing_subscription_invoices
+   where stripe_invoice_id = 'in_Batch8Conversion')
+);
+select is(
+  (select attempt_count from batch8_payment_email_retry_claim),
+  2,
+  'payment email is reclaimed after its required account context is repaired'
+);
+create temporary table batch8_payment_email_dispatch as
+select * from public.begin_email_notification_dispatch(
+  (select notification_id from batch8_payment_email_retry_claim),
+  (select processing_token from batch8_payment_email_retry_claim)
+);
+select is(
+  (public.mark_email_notification_sent(
+    (select notification_id from batch8_payment_email_retry_claim),
+    (select processing_token from batch8_payment_email_retry_claim),
+    'postmark-test-payment-failed-message'
+  )).notification_status,
+  'sent',
+  'successful provider retry records the payment email as sent'
+);
+select is(
+  (select count(*)::integer
+   from public.claim_seller_subscription_payment_failed_email(
+     (select id from public.billing_subscription_invoices
+      where stripe_invoice_id = 'in_Batch8Conversion'))),
+  0,
+  'successfully delivered payment email cannot be claimed again'
+);
+select results_eq(
+  $$select count(*)::integer,
+      max(attempt_status),
+      max(provider_message_id),
+      bool_and(subscription_invoice_id is not null)
+    from public.email_notification_delivery_attempts
+    where notification_id =
+      (select notification_id from batch8_payment_email_retry_claim)$$,
+  $$values (1, 'succeeded'::text,
+      'postmark-test-payment-failed-message'::text, true)$$,
+  'one successful Postmark dispatch is durably associated with the invoice'
+);
 
 create temporary table batch8_success_claim as
 select pg_temp.batch8_claim_invoice(
@@ -946,6 +1065,17 @@ select is(
    where store_id = 'f8000000-0000-4000-9000-000000000001'),
   (select second_paid_end from batch8_times),
   'stale failure cannot regress paid-through'
+);
+select is(
+  (select count(*)::integer
+   from public.email_notifications as notification
+   join public.billing_subscription_invoices as invoice
+     on invoice.id = notification.subscription_invoice_id
+   where invoice.stripe_invoice_id = 'in_Batch8Conversion'
+     and notification.notification_type =
+       'seller_subscription_payment_failed'),
+  1,
+  'later failed collection evidence for the same invoice cannot duplicate the email'
 );
 select is(
   (select processing_status from public.billing_provider_events
