@@ -114,16 +114,16 @@ export function renderSellerFirstSaleEmail(context: SellerFirstSaleContext) {
   const orderUrl = `https://www.flockfront.com/dashboard/orders/${context.orderId}`;
   const firstName = escapeHtml(context.firstName);
   const orderNumber = escapeHtml(context.orderNumber);
-  const buyerLine = context.buyerFirstName
-    ? ` from ${escapeHtml(context.buyerFirstName)}`
-    : "";
+  const buyerFirstName = context.buyerFirstName
+    ? escapeHtml(context.buyerFirstName)
+    : null;
   const total = formatUsd(context.orderTotalCents);
 
   const html = `<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${sellerFirstSaleSubject}</title></head>
 <body style="margin:0;background:#fbf7ef;color:#10281c;font-family:Arial,Helvetica,sans-serif;">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your storefront just received its first FlockFront order.</div>
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Congratulations, you made your first sale!</div>
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#fbf7ef" style="width:100%;background:#fbf7ef;padding:24px 12px;">
     <tr><td align="center">
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#ffffff" style="width:100%;max-width:620px;background:#ffffff;border:1px solid #ded6c7;border-radius:12px;overflow:hidden;">
@@ -133,15 +133,26 @@ export function renderSellerFirstSaleEmail(context: SellerFirstSaleContext) {
         </td></tr>
         <tr><td style="padding:30px;">
           <p style="margin:0 0 16px;color:#10281c;font-size:16px;line-height:1.55;">Hi ${firstName},</p>
-          <h1 style="margin:0 0 14px;color:#10281c;font-size:25px;line-height:1.25;">You made your first FlockFront sale!</h1>
-          <p style="margin:0 0 22px;color:#394137;font-size:16px;line-height:1.6;">Congratulations—your storefront just received its first order on FlockFront.</p>
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#f7faf4" style="width:100%;margin:0 0 24px;background:#f7faf4;border:1px solid #dbe8d8;border-radius:8px;">
+          <h1 style="margin:0 0 16px;color:#10281c;font-size:25px;line-height:1.25;">Congratulations, you made your first sale!</h1>
+          <p style="margin:0 0 22px;color:#394137;font-size:16px;line-height:1.6;">Your buyer has already received an order confirmation, so the first step is taken care of.</p>
+          <p style="margin:0 0 10px;color:#10281c;font-size:16px;font-weight:700;line-height:1.55;">Here&rsquo;s what to do next:</p>
+          <ol style="margin:0 0 24px;padding-left:22px;color:#394137;font-size:15px;line-height:1.65;">
+            <li style="margin:0 0 7px;">Review the order and buyer information.</li>
+            <li style="margin:0 0 7px;">Contact the buyer to finalize pickup or delivery details.</li>
+            <li style="margin:0 0 7px;">Confirm the date, time, location, and anything else they need to know.</li>
+            <li style="margin:0;">Once the order has been picked up or delivered, mark it as Fulfilled. This clears those birds from your Reserved count so your dashboard stays accurate.</li>
+          </ol>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#f7faf4" style="width:100%;margin:0 0 22px;background:#f7faf4;border:1px solid #dbe8d8;border-radius:8px;">
             <tr><td style="padding:18px 20px;">
-              <p style="margin:0 0 7px;color:#10281c;font-size:18px;font-weight:700;line-height:1.35;">Order #${orderNumber}${buyerLine}</p>
+              <p style="margin:0 0 10px;color:#246f38;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Order summary</p>
+              <p style="margin:0 0 5px;color:#394137;font-size:15px;line-height:1.5;">Order number: <strong style="color:#10281c;">#${orderNumber}</strong></p>
+              ${buyerFirstName ? `<p style="margin:0 0 5px;color:#394137;font-size:15px;line-height:1.5;">Buyer: <strong style="color:#10281c;">${buyerFirstName}</strong></p>` : ""}
               <p style="margin:0;color:#394137;font-size:15px;line-height:1.5;">Order total: <strong style="color:#10281c;">${total}</strong></p>
             </td></tr>
           </table>
-          <table role="presentation" cellspacing="0" cellpadding="0"><tr><td bgcolor="#246f38" style="border-radius:7px;background:#246f38;"><a href="${orderUrl}" style="display:inline-block;padding:13px 20px;color:#ffffff;font-size:15px;font-weight:700;line-height:1.2;text-decoration:none;">View my first order</a></td></tr></table>
+          <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 22px;"><tr><td bgcolor="#246f38" style="border-radius:7px;background:#246f38;"><a href="${orderUrl}" style="display:inline-block;padding:13px 20px;color:#ffffff;font-size:15px;font-weight:700;line-height:1.2;text-decoration:none;">View order &amp; contact buyer</a></td></tr></table>
+          <p style="margin:0 0 24px;color:#514b42;font-size:14px;line-height:1.65;">A quick response goes a long way. Buyers have a much better experience when they know exactly what to expect for pickup or delivery.</p>
+          <p style="margin:0;color:#10281c;font-size:15px;line-height:1.6;">The FlockFront Team</p>
         </td></tr>
       </table>
     </td></tr>
@@ -149,19 +160,31 @@ export function renderSellerFirstSaleEmail(context: SellerFirstSaleContext) {
 </body>
 </html>`;
 
-  const buyerText = context.buyerFirstName ? ` from ${context.buyerFirstName}` : "";
   const text = [
     `Hi ${context.firstName},`,
     "",
-    sellerFirstSaleSubject,
+    "Congratulations, you made your first sale!",
     "",
-    "Congratulations—your storefront just received its first order on FlockFront.",
+    "Your buyer has already received an order confirmation, so the first step is taken care of.",
     "",
-    `Order #${context.orderNumber}${buyerText}`,
+    "Here’s what to do next:",
+    "",
+    "1. Review the order and buyer information.",
+    "2. Contact the buyer to finalize pickup or delivery details.",
+    "3. Confirm the date, time, location, and anything else they need to know.",
+    "4. Once the order has been picked up or delivered, mark it as Fulfilled. This clears those birds from your Reserved count so your dashboard stays accurate.",
+    "",
+    "Order summary",
+    `Order number: #${context.orderNumber}`,
+    ...(context.buyerFirstName ? [`Buyer: ${context.buyerFirstName}`] : []),
     `Order total: ${total}`,
     "",
-    "View my first order:",
+    "View order & contact buyer:",
     orderUrl,
+    "",
+    "A quick response goes a long way. Buyers have a much better experience when they know exactly what to expect for pickup or delivery.",
+    "",
+    "The FlockFront Team",
   ].join("\n");
 
   return { subject: sellerFirstSaleSubject, html, text };

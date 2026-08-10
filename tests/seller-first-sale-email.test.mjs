@@ -61,7 +61,7 @@ test("first-sale payload is narrow and accepts only its order association", () =
   }
 });
 
-test("first-sale email renders owner greeting, safe order summary, branding, and dashboard CTA", () => {
+test("first-sale email renders the approved guidance, summary, branding, and dashboard CTA", () => {
   const email = renderSellerFirstSaleEmail(context());
 
   assert.equal(sellerFirstSaleNotificationType, "seller_first_sale");
@@ -69,12 +69,29 @@ test("first-sale email renders owner greeting, safe order summary, branding, and
   assert.equal(email.subject, sellerFirstSaleSubject);
   assert.match(email.html, /flockfront-logo-final-cropped\.png/);
   assert.match(email.text, /Hi Avery,/);
-  assert.match(email.text, /Order #1042 from Jamie/);
+  assert.match(email.text, /Congratulations, you made your first sale!/);
+  assert.match(email.text,
+    /Your buyer has already received an order confirmation, so the first step is taken care of\./);
+  assert.match(email.text, /Here’s what to do next:/);
+  assert.match(email.text, /1\. Review the order and buyer information\./);
+  assert.match(email.text,
+    /2\. Contact the buyer to finalize pickup or delivery details\./);
+  assert.match(email.text,
+    /3\. Confirm the date, time, location, and anything else they need to know\./);
+  assert.match(email.text,
+    /4\. Once the order has been picked up or delivered, mark it as Fulfilled\. This clears those birds from your Reserved count so your dashboard stays accurate\./);
+  assert.match(email.text, /Order number: #1042/);
+  assert.match(email.text, /Buyer: Jamie/);
   assert.match(email.text, /Order total: \$127\.50/);
+  assert.match(email.text, /View order & contact buyer:/);
+  assert.match(email.text,
+    /A quick response goes a long way\. Buyers have a much better experience when they know exactly what to expect for pickup or delivery\./);
+  assert.match(email.text, /The FlockFront Team$/);
   assert.match(email.html,
     /https:\/\/www\.flockfront\.com\/dashboard\/orders\/f1300000-0000-4000-8000-000000000001/);
   assert.doesNotMatch(`${email.html}\n${email.text}`,
     /buyer@example|phone|subscription|upgrade|unsubscribe/i);
+  assert.equal((email.text.match(/Congratulations/g) ?? []).length, 1);
 });
 
 test("buyer first name is optional and all dynamic HTML is escaped", () => {
@@ -86,8 +103,8 @@ test("buyer first name is optional and all dynamic HTML is escaped", () => {
 
   assert.doesNotMatch(email.html, /<img src=x/);
   assert.match(email.html, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
-  assert.match(email.html, /Order #&lt;1042&gt;/);
-  assert.doesNotMatch(email.text, / from /);
+  assert.match(email.html, /Order number:[\s\S]*#&lt;1042&gt;/);
+  assert.doesNotMatch(email.text, /^Buyer:/m);
 });
 
 test("missing owner or authoritative order context fails visibly", () => {
