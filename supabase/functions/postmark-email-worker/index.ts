@@ -39,8 +39,9 @@ import {
 import {
   parseSellerNewOrderContext,
   parseSellerNewOrderRecipient,
-  renderSellerNewOrderEmail,
+  sellerNewOrderLogoUrl,
   sellerNewOrderNotificationType,
+  sellerNewOrderSubject,
 } from "./seller-new-order.ts";
 
 const corsHeaders = {
@@ -682,7 +683,27 @@ async function renderSellerNewOrderNotification(
     fulfillment_method: context.order.fulfillment_method ?? "pickup",
     dashboard_url: `${siteOrigin.replace(/\/$/, "")}/dashboard/orders/${context.order.id}`,
   });
-  const document = renderSellerNewOrderEmail(emailContext);
+  const document = renderOrderDocumentEmail(context, {
+    eventType: sellerNewOrderNotificationType,
+    recipientType: "seller",
+    subject: sellerNewOrderSubject(emailContext),
+    introduction:
+      `${emailContext.buyerFirstName} placed an order through your FlockFront store.`,
+    preheader:
+      `${emailContext.buyerFirstName} placed order ${formatOrderNumber(emailContext.orderNumber)}.`,
+    includeDashboardLink: true,
+    dashboardUrl: emailContext.dashboardUrl,
+    headline: "You have a new order",
+    headerLogo: {
+      url: sellerNewOrderLogoUrl,
+      altText: "FlockFront",
+      width: 205,
+    },
+    omitBuyerFacingSections: true,
+    prominentDashboardLink: true,
+    replyGuidance:
+      `Reply to this email to contact ${emailContext.buyerFirstName} directly.`,
+  });
 
   return {
     to: emailContext.recipientEmail,
@@ -816,6 +837,11 @@ type OrderEmailOptions = {
   statusLabel?: string;
   includeDashboardLink?: boolean;
   dashboardUrl?: string | null;
+  headline?: string;
+  headerLogo?: EmailContext["logo"];
+  omitBuyerFacingSections?: boolean;
+  prominentDashboardLink?: boolean;
+  replyGuidance?: string;
 };
 
 function isV1OrderEmailType(value: string): value is NotificationType {
@@ -922,6 +948,7 @@ function renderOrderDocumentEmail(
     joinCompact([order.buyer_city_snapshot, order.buyer_state_snapshot, order.buyer_postal_code_snapshot], ", "),
     order.buyer_country_snapshot,
   ]);
+  const pickupAddress = formatPickupAddress(store);
   const buyerRows = [
     fact("Name", buyerName),
     fact("Phone", order.buyer_phone_snapshot),
@@ -954,6 +981,12 @@ function renderOrderDocumentEmail(
     : [
       fact("Method", "Pickup"),
       fact("Pickup option", order.pickup_option_label_snapshot || order.pickup_note),
+      options.recipientType === "seller"
+        ? fact("Pickup details", context.pickupOption?.description)
+        : null,
+      options.recipientType === "seller"
+        ? fact("Pickup address", pickupAddress)
+        : null,
       fact("Pickup directions", store.pickup_location_text),
     ];
   const cancellationRows = isCanceledEmail(options.eventType)
@@ -964,7 +997,6 @@ function renderOrderDocumentEmail(
     ]
     : [];
   const sellerContactEmail = sellerOrderContactEmail(store);
-  const pickupAddress = formatPickupAddress(store);
   const farmContactLines = [
     store.store_name,
     sellerContactEmail,
@@ -972,16 +1004,22 @@ function renderOrderDocumentEmail(
     store.show_public_phone ? store.public_phone : null,
   ].map((value) => value?.trim()).filter(Boolean);
   const dashboardLink = options.includeDashboardLink && options.dashboardUrl
-    ? `<p style="margin:0.14in 0 0;color:#000000;font-size:10.5pt;line-height:1.22;"><a href="${escapeAttribute(options.dashboardUrl)}" style="color:#000000;text-decoration:underline;font-weight:700;">View order</a></p>`
+    ? options.prominentDashboardLink
+      ? `<table role="presentation" cellspacing="0" cellpadding="0" style="margin:0.18in 0 0.14in;"><tr><td bgcolor="#246f38" style="border-radius:7px;background:#246f38;"><a href="${escapeAttribute(options.dashboardUrl)}" style="display:inline-block;padding:13px 20px;color:#ffffff;font-size:11pt;font-weight:700;line-height:1.2;text-decoration:none;">View order</a></td></tr></table>`
+      : `<p style="margin:0.14in 0 0;color:#000000;font-size:10.5pt;line-height:1.22;"><a href="${escapeAttribute(options.dashboardUrl)}" style="color:#000000;text-decoration:underline;font-weight:700;">View order</a></p>`
     : "";
-  const closing = options.recipientType === "buyer"
+  const closing = options.replyGuidance ?? (options.recipientType === "buyer"
     ? "If you have questions about your order, please contact the farm directly."
-    : "Reply to this email to contact the customer directly.";
+    : "Reply to this email to contact the customer directly.");
+  const headline = options.headline
+    ? `<h1 style="margin:0 0 0.1in;color:#10281c;font-size:22pt;line-height:1.12;font-weight:700;">${escapeHtml(options.headline)}</h1>`
+    : "";
 
   const html = buyerPrintOrderEmailShell({
     preheader: options.preheader,
     body: [
-      buyerPrintHeader(order, store, logo),
+      buyerPrintHeader(order, store, options.headerLogo ?? logo),
+      headline,
       buyerPrintMessage(options.introduction),
       buyerPrintOrderTitle(order, options.statusLabel),
       buyerPrintOptionalSection("Cancellation", buyerPrintFieldRows(cancellationRows)),
@@ -990,15 +1028,19 @@ function renderOrderDocumentEmail(
       buyerPrintTotalsTable(totalRows),
       buyerPrintFulfillmentSection(fulfillmentRows),
       buyerPrintOptionalSection("Notes", buyerPrintParagraph(order.buyer_notes ?? "")),
-      buyerPrintOptionalSection("Pickup policy", buyerPrintParagraph(store.pickup_policy ?? "")),
-      buyerPrintOptionalSection("Farm contact information", buyerPrintLineList(farmContactLines)),
+      options.omitBuyerFacingSections
+        ? ""
+        : buyerPrintOptionalSection("Pickup policy", buyerPrintParagraph(store.pickup_policy ?? "")),
+      options.omitBuyerFacingSections
+        ? ""
+        : buyerPrintOptionalSection("Farm contact information", buyerPrintLineList(farmContactLines)),
       dashboardLink,
       buyerPrintClosing(closing),
     ].join(""),
   });
 
   const text = [
-    options.preheader,
+    options.headline ?? options.preheader,
     "",
     options.introduction,
     "",
@@ -1022,8 +1064,12 @@ function renderOrderDocumentEmail(
     "",
     ...textSection("Pickup / Delivery", fulfillmentRows),
     ...textSection("Notes", order.buyer_notes ? [order.buyer_notes] : []),
-    ...textSection("Pickup policy", store.pickup_policy ? [store.pickup_policy] : []),
-    ...textSection("Farm contact information", farmContactLines),
+    ...(options.omitBuyerFacingSections
+      ? []
+      : textSection("Pickup policy", store.pickup_policy ? [store.pickup_policy] : [])),
+    ...(options.omitBuyerFacingSections
+      ? []
+      : textSection("Farm contact information", farmContactLines)),
     ...(options.dashboardUrl ? [`View order: ${options.dashboardUrl}`, ""] : []),
     closing,
   ].join("\n");

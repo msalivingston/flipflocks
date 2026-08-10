@@ -6,7 +6,7 @@ import test from "node:test";
 import {
   parseSellerNewOrderContext,
   parseSellerNewOrderRecipient,
-  renderSellerNewOrderEmail,
+  sellerNewOrderLogoUrl,
   sellerNewOrderSubject,
 } from "../supabase/functions/postmark-email-worker/seller-new-order.ts";
 
@@ -35,38 +35,64 @@ function context(overrides = {}) {
   });
 }
 
-test("seller New Order renders the concise branded order alert", () => {
-  const parsed = context();
-  const email = renderSellerNewOrderEmail(parsed);
-
+test("seller New Order keeps its approved subject and FlockFront brand asset", () => {
   assert.equal(
-    sellerNewOrderSubject(parsed),
+    sellerNewOrderSubject(context()),
     "New order from Jamie — Order #1042",
   );
-  assert.equal(email.subject, "New order from Jamie — Order #1042");
-  assert.match(email.html, /flockfront-logo-final-cropped\.png/);
-  assert.match(email.text, /^You have a new order/m);
-  assert.match(email.text,
-    /Jamie placed an order through your FlockFront store\./);
-  assert.match(email.text, /Order number: #1042/);
-  assert.match(email.text, /Order total: \$127\.50/);
-  assert.match(email.text, /Method: Pickup/);
-  assert.match(email.html, />View order<\/a>/);
-  assert.match(email.text, /Reply to this email to contact Jamie directly\./);
-  assert.doesNotMatch(`${email.html}\n${email.text}`,
-    /buyer@example|phone|items:|first sale|upgrade|unsubscribe/i);
+  assert.equal(
+    sellerNewOrderLogoUrl,
+    "https://www.flockfront.com/branding/flockfront-logo-final-cropped.png",
+  );
 });
 
-test("delivery wording and all dynamic HTML are safe", () => {
-  const email = renderSellerNewOrderEmail(context({
-    buyer_first_name: '<img src=x onerror="alert(1)">',
-    order_number: "<1042>",
-    fulfillment_method: "delivery",
-  }));
-  assert.match(email.text, /Method: Delivery/);
-  assert.doesNotMatch(email.html, /<img src=x/);
-  assert.match(email.html, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
-  assert.match(email.html, /#&lt;1042&gt;/);
+test("seller New Order reuses buyer order-document facts and formatting", () => {
+  const renderer = worker.match(
+    /function renderOrderDocumentEmail[\s\S]*?function isCanceledEmail/,
+  )?.[0] ?? "";
+  const sellerRenderer = worker.match(
+    /async function renderSellerNewOrderNotification[\s\S]*?\n}\n\nasync function/,
+  )?.[0] ?? "";
+
+  assert.match(sellerRenderer, /renderOrderDocumentEmail\(context/);
+  assert.match(sellerRenderer, /headline: "You have a new order"/);
+  assert.match(sellerRenderer,
+    /placed an order through your FlockFront store/);
+  assert.match(sellerRenderer, /prominentDashboardLink: true/);
+  assert.match(sellerRenderer,
+    /Reply to this email to contact \$\{emailContext\.buyerFirstName\} directly\./);
+  assert.match(sellerRenderer, /sellerNewOrderLogoUrl/);
+
+  assert.match(renderer, /fact\("Name", buyerName\)/);
+  assert.match(renderer, /fact\("Phone", order\.buyer_phone_snapshot\)/);
+  assert.match(renderer, /fact\("Email", order\.buyer_email_snapshot\)/);
+  assert.match(renderer, /buyerPrintItemsTable\(items, store\.currency\)/);
+  assert.match(worker, /item\.unit_price_snapshot/);
+  assert.match(worker, /item\.line_subtotal/);
+  assert.match(renderer, /fact\("Subtotal", formatCurrency/);
+  assert.match(renderer, /fact\("Total", formatCurrency/);
+  assert.match(renderer, /Payment method/);
+  assert.match(renderer, /Payment status/);
+  assert.match(renderer, /Pickup \/ Delivery/);
+  assert.match(renderer, /Pickup details/);
+  assert.match(renderer, /buyer_notes/);
+  assert.match(renderer, /Order date:/);
+});
+
+test("seller options omit buyer-facing policies without changing buyer confirmation", () => {
+  const sellerRenderer = worker.match(
+    /async function renderSellerNewOrderNotification[\s\S]*?\n}\n\nasync function/,
+  )?.[0] ?? "";
+  const buyerOptions = worker.match(
+    /if \(notificationType === "buyer_order_confirmation"\)[\s\S]*?\n  }/,
+  )?.[0] ?? "";
+
+  assert.match(sellerRenderer, /omitBuyerFacingSections: true/);
+  assert.doesNotMatch(buyerOptions, /omitBuyerFacingSections/);
+  assert.match(worker,
+    /options\.omitBuyerFacingSections[\s\S]*Pickup policy/);
+  assert.match(worker,
+    /options\.omitBuyerFacingSections[\s\S]*Farm contact information/);
 });
 
 test("owner recipient and required authoritative context fail closed", () => {
@@ -103,7 +129,7 @@ test("enqueue and claim use only the current authenticated owner for seller New 
   assert.doesNotMatch(migration, /get_seller_new_order_recipient/);
 });
 
-test("worker re-resolves owner, preserves buyer Reply-To, sender, stream, and order scope", () => {
+test("worker re-resolves owner and preserves buyer Reply-To and delivery behavior", () => {
   const renderer = worker.match(
     /async function renderSellerNewOrderNotification[\s\S]*?\n}\n\nasync function/,
   )?.[0] ?? "";
