@@ -50,7 +50,8 @@ insert into auth.users (
   'e7000000-0000-4000-8000-000000000001',
   '00000000-0000-0000-0000-000000000000',
   'authenticated', 'authenticated', 'batch7-owner@example.test', '', now(),
-  '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  '{"first_name":"Avery"}'::jsonb,
   now(), now(), '', '', '', ''
 );
 
@@ -451,6 +452,104 @@ select is(
   'one immutable Subscription enrollment is created'
 );
 select is(
+  (select count(*)::integer from public.email_notifications
+   where store_id = 'e7000000-0000-4000-9000-000000000001'
+     and notification_type = 'seller_subscription_welcome'),
+  1,
+  'initial verified enrollment enqueues exactly one seller welcome'
+);
+select is(
+  (select recipient_email from public.email_notifications
+   where store_id = 'e7000000-0000-4000-9000-000000000001'
+     and notification_type = 'seller_subscription_welcome'),
+  'batch7-owner@example.test',
+  'seller welcome recipient is resolved from the authenticated store owner'
+);
+select is(
+  (select payload ->> 'schema_version' from public.email_notifications
+   where store_id = 'e7000000-0000-4000-9000-000000000001'
+     and notification_type = 'seller_subscription_welcome'),
+  'seller_subscription_welcome_v1',
+  'seller welcome stores only the narrow worker payload schema'
+);
+select is(
+  (select public_plan_name || ':' || billing_cadence_label || ':' ||
+      first_charge_amount_cents::text || ':' || first_name
+   from public.get_seller_subscription_welcome_context(
+     (select subscription_enrollment_id from batch7_application))),
+  'Coop:Monthly:500:Avery',
+  'welcome context uses verified public plan, cadence, price, and account name'
+);
+select is(
+  (select first_charge_at
+   from public.get_seller_subscription_welcome_context(
+     (select subscription_enrollment_id from batch7_application))),
+  (select trial_ends_at from public.billing_subscription_enrollments
+   where id = (select subscription_enrollment_id from batch7_application)),
+  'trial end is the exact first-charge date'
+);
+create temporary table batch7_welcome_first_claim as
+select * from public.claim_seller_subscription_welcome_email(
+  (select subscription_enrollment_id from batch7_application),
+  5,
+  interval '15 minutes'
+);
+select is(
+  (select count(*)::integer from batch7_welcome_first_claim),
+  1,
+  'verified enrollment scope claims its welcome exactly once'
+);
+create temporary table batch7_welcome_first_dispatch as
+select * from public.begin_email_notification_dispatch(
+  (select notification_id from batch7_welcome_first_claim),
+  (select processing_token from batch7_welcome_first_claim)
+);
+select is(
+  (public.mark_email_notification_failed(
+    (select notification_id from batch7_welcome_first_claim),
+    (select processing_token from batch7_welcome_first_claim),
+    'Temporary Postmark rejection',
+    interval '0 seconds',
+    5
+  )).notification_status,
+  'failed',
+  'temporary provider rejection leaves the welcome retryable'
+);
+create temporary table batch7_welcome_retry_claim as
+select * from public.claim_seller_subscription_welcome_email(
+  (select subscription_enrollment_id from batch7_application),
+  5,
+  interval '15 minutes'
+);
+select is(
+  (select attempt_count from batch7_welcome_retry_claim),
+  2,
+  'welcome is reclaimed for a second provider attempt'
+);
+create temporary table batch7_welcome_retry_dispatch as
+select * from public.begin_email_notification_dispatch(
+  (select notification_id from batch7_welcome_retry_claim),
+  (select processing_token from batch7_welcome_retry_claim)
+);
+select is(
+  (public.mark_email_notification_sent(
+    (select notification_id from batch7_welcome_retry_claim),
+    (select processing_token from batch7_welcome_retry_claim),
+    'postmark-test-welcome-message'
+  )).notification_status,
+  'sent',
+  'successful retry records one delivered welcome'
+);
+select is(
+  (select count(*)::integer
+   from public.claim_seller_subscription_welcome_email(
+     (select subscription_enrollment_id from batch7_application),
+     5,
+     interval '15 minutes')),
+  0,
+  'successfully delivered welcome cannot be claimed again'
+);
+select is(
   (select count(*)::integer from public.billing_trial_claims
    where store_id = 'e7000000-0000-4000-9000-000000000001'),
   1,
@@ -524,6 +623,47 @@ select is(
      'cs_test_Batch7Trial')),
   'already_processed',
   'exact duplicate completion is idempotent and cannot be reapplied'
+);
+
+update public.billing_subscription_enrollments
+set provider_status = 'canceled',
+    cancel_at_period_end = true
+where id = (select subscription_enrollment_id from batch7_application);
+update public.billing_subscription_enrollments
+set provider_status = 'active',
+    cancel_at_period_end = false
+where id = (select subscription_enrollment_id from batch7_application);
+select is(
+  (select count(*)::integer from public.email_notifications
+   where store_id = 'e7000000-0000-4000-9000-000000000001'
+     and notification_type = 'seller_subscription_welcome'),
+  1,
+  'subscription updates, cancellation, and reactivation do not enqueue welcome'
+);
+
+update public.billing_subscription_enrollments
+set is_current = false,
+    ended_at = statement_timestamp()
+where id = (select subscription_enrollment_id from batch7_application);
+insert into public.billing_subscription_enrollments (
+  store_id, customer_binding_id, checkout_attempt_id,
+  stripe_subscription_id, initial_stripe_price_id, stripe_livemode,
+  stripe_account_id, provider_status, cancel_at_period_end, is_current,
+  provider_created_at, bound_by_event_id
+)
+select
+  store_id, customer_binding_id, null,
+  'sub_Batch7Replacement', initial_stripe_price_id, stripe_livemode,
+  stripe_account_id, 'active', false, true,
+  statement_timestamp(), 'evt_Batch7Trial'
+from public.billing_subscription_enrollments
+where id = (select subscription_enrollment_id from batch7_application);
+select is(
+  (select count(*)::integer from public.email_notifications
+   where store_id = 'e7000000-0000-4000-9000-000000000001'
+     and notification_type = 'seller_subscription_welcome'),
+  1,
+  'later replacement subscription enrollment does not enqueue a second welcome'
 );
 
 insert into public.stores (
@@ -680,6 +820,21 @@ select is((select trial_claimed from batch7_paid_application), false,
   'trial-used completion creates no second trial claim');
 select is((select billing_complete from batch7_paid_application), false,
   'trial-used enrollment remains onboarding-incomplete until invoice authority');
+select is(
+  (select subject_snapshot from public.email_notifications
+   where store_id = 'e7000000-0000-4000-9000-000000000002'
+     and notification_type = 'seller_subscription_welcome'),
+  'Welcome to FlockFront — your subscription is active',
+  'verified no-trial enrollment queues accurate active-subscription wording'
+);
+select is(
+  (select first_charge_at
+   from public.get_seller_subscription_welcome_context(
+     (select subscription_enrollment_id from batch7_paid_application))),
+  (select current_period_start from public.seller_billing_status
+   where store_id = 'e7000000-0000-4000-9000-000000000002'),
+  'no-trial welcome uses the verified current-period start as charge date'
+);
 select is(
   (select count(*)::integer from public.billing_trial_claims
    where store_id = 'e7000000-0000-4000-9000-000000000002'),

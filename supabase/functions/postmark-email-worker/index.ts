@@ -3,6 +3,15 @@ import {
   deliverPostmarkMessage,
   PostmarkDeliveryError,
 } from "./delivery-state.ts";
+import {
+  parseSellerWelcomeContext,
+  parseSellerWelcomePayload,
+  renderSellerWelcomeEmail,
+  sellerWelcomeActiveSubject,
+  sellerWelcomeFromEmail,
+  sellerWelcomeNotificationType,
+  sellerWelcomeTrialSubject,
+} from "./seller-welcome.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("FLIPFLOCKS_PUBLIC_API_ORIGIN") ??
@@ -24,7 +33,7 @@ type ClaimedNotification = {
   notification_id: string;
   processing_token: string;
   store_id: string;
-  order_id: string;
+  order_id: string | null;
   dedupe_key: string;
   recipient_type: "buyer" | "seller" | string;
   recipient_email: string;
@@ -144,10 +153,12 @@ type EmailContext = {
 type RenderedEmail = {
   to: string;
   fromName: string;
+  fromEmail: string;
   replyTo?: string;
   subject: string;
   html: string;
   text: string;
+  tag: string;
 };
 
 type SupabaseClient = ReturnType<typeof createClient>;
@@ -245,6 +256,20 @@ function parseOrderScope(body: unknown): string | null {
 
   if (typeof value !== "string" || !uuidPattern.test(value.trim())) {
     throw new Error("order_id must be a valid UUID.");
+  }
+
+  return value.trim().toLowerCase();
+}
+
+function parseEnrollmentScope(body: unknown): string | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+
+  const value = (body as Record<string, unknown>).subscription_enrollment_id;
+
+  if (value === undefined || value === null || value === "") return null;
+
+  if (typeof value !== "string" || !uuidPattern.test(value.trim())) {
+    throw new Error("subscription_enrollment_id must be a valid UUID.");
   }
 
   return value.trim().toLowerCase();
@@ -442,10 +467,62 @@ function renderEmail(
   return {
     to: canonicalRecipient,
     fromName: sanitizeHeaderValue(context.store.store_name) || "FlockFront",
+    fromEmail,
     replyTo: replyTo ?? undefined,
     subject: sanitizeHeaderValue(options.subject),
     html: document.html,
     text: document.text,
+    tag: "flockfront-order-notification",
+  };
+}
+
+async function renderSellerWelcomeNotification(
+  supabase: SupabaseClient,
+  notification: ClaimedNotification,
+): Promise<RenderedEmail> {
+  if (
+    notification.notification_type !== sellerWelcomeNotificationType ||
+    notification.recipient_type !== "seller_account" ||
+    notification.order_id !== null
+  ) {
+    throw new Error("Seller welcome notification envelope is invalid.");
+  }
+
+  const payload = parseSellerWelcomePayload(notification.payload);
+  const { data, error } = await supabase.rpc(
+    "get_seller_subscription_welcome_context",
+    { p_subscription_enrollment_id: payload.subscription_enrollment_id },
+  );
+  const rows = Array.isArray(data) ? data : [];
+
+  if (error) {
+    throw new Error(
+      error.message || "Seller welcome billing context could not be resolved.",
+    );
+  }
+
+  if (rows.length !== 1) {
+    throw new Error("Seller welcome billing context was not found.");
+  }
+
+  const context = parseSellerWelcomeContext(rows[0]);
+  const document = renderSellerWelcomeEmail(context);
+  const expectedSubject = context.hasTrial
+    ? sellerWelcomeTrialSubject
+    : sellerWelcomeActiveSubject;
+
+  if (notification.subject_snapshot !== expectedSubject) {
+    throw new Error("Seller welcome subject does not match verified trial state.");
+  }
+
+  return {
+    to: context.recipientEmail,
+    fromName: "FlockFront",
+    fromEmail: sellerWelcomeFromEmail,
+    subject: document.subject,
+    html: document.html,
+    text: document.text,
+    tag: "flockfront-seller-welcome",
   };
 }
 
@@ -691,21 +768,19 @@ function sellerOrderContactEmail(store: StoreRow): string | null {
 async function sendPostmarkEmail({
   dispatchAttemptId,
   email,
-  fromEmail,
   messageStream,
   notification,
   token,
 }: {
   dispatchAttemptId: string;
   email: RenderedEmail;
-  fromEmail: string;
   messageStream: string;
   notification: ClaimedNotification;
   token: string;
 }): Promise<string> {
   const recipient = validEmailOrNull(email.to);
   const replyTo = email.replyTo ? validEmailOrNull(email.replyTo) : null;
-  const sender = validEmailOrNull(fromEmail);
+  const sender = validEmailOrNull(email.fromEmail);
 
   if (!recipient) {
     throw new Error("Recipient email address is invalid.");
@@ -731,11 +806,12 @@ async function sendPostmarkEmail({
       HtmlBody: email.html,
       TextBody: sanitizePlainText(email.text),
       MessageStream: messageStream,
-      Tag: "flockfront-order-notification",
+      Tag: email.tag,
       Metadata: {
         notification_id: notification.notification_id,
         dispatch_attempt_id: dispatchAttemptId,
-        order_id: notification.order_id,
+        ...(notification.order_id ? { order_id: notification.order_id } : {}),
+        email_type: notification.notification_type,
       },
     },
   });
@@ -1381,13 +1457,18 @@ Deno.serve(async (request: Request) => {
   const body = await readJsonBody(request);
   const batchSize = parseBatchSize(body);
   let orderScope: string | null;
+  let enrollmentScope: string | null;
 
   try {
     orderScope = parseOrderScope(body);
+    enrollmentScope = parseEnrollmentScope(body);
+    if (orderScope && enrollmentScope) {
+      throw new Error("Only one worker scope may be supplied.");
+    }
   } catch {
     return jsonResponse(400, {
       error: "invalid_request",
-      message: "order_id must be a valid UUID.",
+      message: "Worker scope must contain one valid UUID.",
     });
   }
 
@@ -1407,14 +1488,19 @@ Deno.serve(async (request: Request) => {
   while (claimedCount < maxNotificationsPerInvocation) {
     const remainingCapacity = maxNotificationsPerInvocation - claimedCount;
     const claimSize = Math.min(batchSize, remainingCapacity);
-    const claimFunction = orderScope
+    const claimFunction = enrollmentScope
+      ? "claim_seller_subscription_welcome_email"
+      : orderScope
       ? "claim_phase_1_postmark_email_notifications_for_order"
       : "claim_phase_1_postmark_email_notifications";
     const claimArguments: Record<string, unknown> = {
-      ...(orderScope ? { p_order_id: orderScope } : {}),
-        p_batch_size: claimSize,
-        p_max_attempts: 5,
-        p_stale_after: "15 minutes",
+      ...(enrollmentScope
+        ? { p_subscription_enrollment_id: enrollmentScope }
+        : orderScope
+        ? { p_order_id: orderScope }
+        : { p_batch_size: claimSize }),
+      p_max_attempts: 5,
+      p_stale_after: "15 minutes",
     };
     const { data, error } = await supabase.rpc(
       claimFunction,
@@ -1430,6 +1516,7 @@ Deno.serve(async (request: Request) => {
         failed: failedCount,
         delivery_unknown: deliveryUnknownCount,
         order_scope: orderScope,
+        enrollment_scope: enrollmentScope,
       });
     }
 
@@ -1459,15 +1546,23 @@ Deno.serve(async (request: Request) => {
 
       try {
         if (
-          !isV1OrderEmailType(notification.notification_type)
+          !isV1OrderEmailType(notification.notification_type) &&
+          notification.notification_type !== sellerWelcomeNotificationType
         ) {
           throw new Error(
             `Unsupported Phase 1 notification type: ${notification.notification_type}`,
           );
         }
 
-        const context = await fetchEmailContext(supabase, supabaseUrl, notification);
-        const email = renderEmail(notification, context, fromEmail, siteOrigin);
+        const email = notification.notification_type ===
+            sellerWelcomeNotificationType
+          ? await renderSellerWelcomeNotification(supabase, notification)
+          : renderEmail(
+            notification,
+            await fetchEmailContext(supabase, supabaseUrl, notification),
+            fromEmail,
+            siteOrigin,
+          );
         const dispatchAttemptId = await beginNotificationDispatch(
           supabase,
           notification,
@@ -1476,7 +1571,6 @@ Deno.serve(async (request: Request) => {
         providerMessageId = await sendPostmarkEmail({
           dispatchAttemptId,
           email,
-          fromEmail,
           messageStream,
           notification,
           token: postmarkToken,
@@ -1561,5 +1655,6 @@ Deno.serve(async (request: Request) => {
     failed: failedCount,
     delivery_unknown: deliveryUnknownCount,
     order_scope: orderScope,
+    enrollment_scope: enrollmentScope,
   });
 });

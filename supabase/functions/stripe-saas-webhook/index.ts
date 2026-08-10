@@ -53,13 +53,56 @@ const operationalConfig = parseStripeSaasConfig({
 assertStripeSaasRuntimeEnvironment(stripeConfig);
 assertStripeSaasRuntimeEnvironment(operationalConfig);
 
+const supabaseUrl = requiredEnvironment("SUPABASE_URL");
 const serviceClient = createClient(
-  requiredEnvironment("SUPABASE_URL"),
+  supabaseUrl,
   requiredEnvironment("SUPABASE_SERVICE_ROLE_KEY"),
   { auth: { persistSession: false, autoRefreshToken: false } },
 );
 const verifySignature = createStripeSaasWebhookVerifier(stripeConfig, 300);
 const stripe = createStripeSaasClient(operationalConfig);
+
+async function kickSellerWelcomeWorker(
+  subscriptionEnrollmentId: string,
+): Promise<void> {
+  const workerSecret = Deno.env.get("POSTMARK_WORKER_SECRET")?.trim();
+  if (!workerSecret) {
+    console.info(JSON.stringify({
+      event: "seller_welcome_worker_kick_skipped",
+      reason: "worker_not_configured",
+    }));
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${supabaseUrl.replace(/\/$/, "")}/functions/v1/postmark-email-worker`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-flockfront-worker-secret": workerSecret,
+        },
+        body: JSON.stringify({
+          subscription_enrollment_id: subscriptionEnrollmentId,
+        }),
+        signal: AbortSignal.timeout(5_000),
+      },
+    );
+
+    if (!response.ok) {
+      console.info(JSON.stringify({
+        event: "seller_welcome_worker_kick_failed",
+        reason: "worker_rejected",
+      }));
+    }
+  } catch {
+    console.info(JSON.stringify({
+      event: "seller_welcome_worker_kick_failed",
+      reason: "worker_unavailable",
+    }));
+  }
+}
 
 function firstRow<T>(data: unknown): T {
   if (!Array.isArray(data) || !data[0]) {
@@ -537,7 +580,9 @@ const handler = createStripeSaasWebhookHandler({
     if (error) {
       throw enrollmentRpcError(error);
     }
-    return firstRow<SaasCheckoutApplicationResult>(data);
+    const result = firstRow<SaasCheckoutApplicationResult>(data);
+    await kickSellerWelcomeWorker(result.subscription_enrollment_id);
+    return result;
   },
   retrieveInvoiceLifecycleEvidence,
   async applyInvoiceLifecycle(
