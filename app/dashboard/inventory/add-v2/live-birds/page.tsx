@@ -19,6 +19,7 @@ import {
 } from "../../../_lib/live-poultry-share-products";
 import {
   breedLibrarySelect,
+  getCatalogBreedSnapshotRpcArgs,
   pickFeaturedMedia,
   restoreCatalogDefaultPhotoBestEffort,
   sellerBreedProfileSelect,
@@ -4440,11 +4441,11 @@ function getBreedOptionForProfile({
 
   return {
     id: profile.id,
-    label: profile.display_name || catalogBreed?.breed_name || "Breed",
+    label: profile.display_name,
     speciesId: profile.species_id,
     breedId: profile.breed_id,
     catalogImageUrl: catalogBreed?.image_url ?? null,
-    catalogDescription: catalogBreed?.description ?? null,
+    catalogDescription: null,
     sellerPhotoUrl,
     sellerDescription: profile.seller_description,
     source: "seller_profile",
@@ -4580,14 +4581,8 @@ async function createSellerBreedProfileFromCatalogBreed({
   }
 
   const upsertResult = await supabase.rpc("seller_upsert_breed_profile", {
-    p_breed_id: catalogBreed.id,
-    p_custom_breed_name: null,
-    p_display_name: catalogBreed.breed_name,
-    p_annual_egg_production: catalogBreed.annual_egg_production,
-    p_bird_type: catalogBreed.bird_type,
-    p_egg_color: catalogBreed.egg_color,
+    ...getCatalogBreedSnapshotRpcArgs(catalogBreed),
     p_seller_breed_profile_id: null,
-    p_seller_description: catalogBreed.description,
     p_seller_notes: null,
     p_species_id: catalogBreed.species_id,
     p_store_id: storeId,

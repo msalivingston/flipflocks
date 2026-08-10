@@ -75,17 +75,20 @@ export function buildLibraryByBreedId(breeds: BreedLibraryItem[]) {
   return new Map(breeds.map((item) => [item.id, item]));
 }
 
-export function getProfileDescription(
-  profile: SellerBreedProfile,
-  libraryByBreedId: Map<string, BreedLibraryItem>,
-) {
-  return (
-    profile.seller_description?.trim() ||
-    (profile.breed_id
-      ? libraryByBreedId.get(profile.breed_id)?.description?.trim()
-      : "") ||
-    ""
-  );
+export function getProfileDescription(profile: SellerBreedProfile) {
+  return profile.seller_description?.trim() ?? "";
+}
+
+export function getCatalogBreedSnapshotRpcArgs(breed: BreedLibraryItem) {
+  return {
+    p_annual_egg_production: breed.annual_egg_production,
+    p_bird_type: breed.bird_type,
+    p_breed_id: breed.id,
+    p_custom_breed_name: null,
+    p_display_name: breed.breed_name,
+    p_egg_color: breed.egg_color,
+    p_seller_description: breed.description,
+  };
 }
 
 export function groupProfilesBySpecies(

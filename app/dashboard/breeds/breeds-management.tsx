@@ -33,6 +33,7 @@ import {
   buildLibraryByBreedId,
   buildSpeciesNameById,
   getBreedInitials,
+  getCatalogBreedSnapshotRpcArgs,
   getProfileDescription,
   groupProfilesBySpecies,
   pickFeaturedMedia,
@@ -310,11 +311,8 @@ export function BreedsManagement() {
 
   async function addLibraryBreed(breed: BreedLibraryItem): Promise<AddBreedResult> {
     const { data, error } = await supabase.rpc("seller_upsert_breed_profile", {
-      p_breed_id: breed.id,
-      p_custom_breed_name: null,
-      p_display_name: breed.breed_name,
+      ...getCatalogBreedSnapshotRpcArgs(breed),
       p_seller_breed_profile_id: null,
-      p_seller_description: breed.description,
       p_seller_notes: null,
       p_species_id: breed.species_id,
       p_store_id: storeId,
@@ -1349,10 +1347,7 @@ function BreedCatalogPanel({
                   group.profiles.map((profile) => (
                     <BreedCatalogRow
                       key={profile.id}
-                      description={getProfileDescription(
-                        profile,
-                        libraryByBreedId,
-                      )}
+                      description={getProfileDescription(profile)}
                       imageUrls={getBreedProfileImageUrls(
                         profile,
                         libraryByBreedId,

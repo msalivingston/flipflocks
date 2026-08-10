@@ -165,7 +165,7 @@ export function MobileBreedsLibrary({
     ? profiles.find((profile) => profile.id === expandedProfileId) ?? null
     : null;
   const savedExpandedDescription = expandedProfile
-    ? getProfileDescription(expandedProfile, libraryByBreedId)
+    ? getProfileDescription(expandedProfile)
     : "";
   const hasUnsavedChanges =
     Boolean(expandedProfile) &&
@@ -199,7 +199,7 @@ export function MobileBreedsLibrary({
     let secondScrollFrameId: number | null = null;
     let openFrameId: number | null = window.requestAnimationFrame(() => {
       lastAutoExpandedProfileIdRef.current = autoExpandProfileId;
-      setDescriptionDraft(getProfileDescription(profile, libraryByBreedId));
+      setDescriptionDraft(getProfileDescription(profile));
       setDescriptionError(null);
       setSavedDescriptionProfileId(null);
       setExpandedProfileId(profile.id);
@@ -527,7 +527,7 @@ export function MobileBreedsLibrary({
       ) : (
         <div className="space-y-2">
           {visibleProfiles.map((profile) => {
-            const description = getProfileDescription(profile, libraryByBreedId);
+            const description = getProfileDescription(profile);
             const imageUrls = getMobileBreedImageUrls(
               profile,
               libraryByBreedId,
