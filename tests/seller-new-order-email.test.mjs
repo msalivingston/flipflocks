@@ -137,6 +137,9 @@ test("worker re-resolves owner and preserves buyer Reply-To and delivery behavio
     /supabase\.auth\.admin[\s\S]*getUserById\(context\.store\.owner_user_id\)/);
   assert.match(renderer, /context\.order\.buyer_email_snapshot/);
   assert.match(renderer, /replyTo: buyerEmail/);
+  assert.match(renderer, /const subject = sellerNewOrderSubject\(emailContext\)/);
+  assert.match(renderer, /subject: sanitizeHeaderValue\(subject\)/);
+  assert.doesNotMatch(renderer, /document\.subject/);
   assert.match(renderer, /fromEmail/);
   assert.match(renderer, /tag: "flockfront-order-notification"/);
   assert.match(worker, /claim_phase_1_postmark_email_notifications_for_order/);

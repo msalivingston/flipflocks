@@ -683,10 +683,11 @@ async function renderSellerNewOrderNotification(
     fulfillment_method: context.order.fulfillment_method ?? "pickup",
     dashboard_url: `${siteOrigin.replace(/\/$/, "")}/dashboard/orders/${context.order.id}`,
   });
+  const subject = sellerNewOrderSubject(emailContext);
   const document = renderOrderDocumentEmail(context, {
     eventType: sellerNewOrderNotificationType,
     recipientType: "seller",
-    subject: sellerNewOrderSubject(emailContext),
+    subject,
     introduction:
       `${emailContext.buyerFirstName} placed an order through your FlockFront store.`,
     preheader:
@@ -710,7 +711,7 @@ async function renderSellerNewOrderNotification(
     fromName: sanitizeHeaderValue(context.store.store_name) || "FlockFront",
     fromEmail,
     replyTo: buyerEmail,
-    subject: sanitizeHeaderValue(document.subject),
+    subject: sanitizeHeaderValue(subject),
     html: document.html,
     text: document.text,
     tag: "flockfront-order-notification",
