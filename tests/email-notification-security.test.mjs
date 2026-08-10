@@ -7,6 +7,9 @@ const root = resolve(import.meta.dirname, "..");
 const queueMigration = read(
   "supabase/migrations/20260730170000_secure_email_queue_and_delivery.sql",
 );
+const sellerOwnerMigration = read(
+  "supabase/migrations/20260814100000_seller_new_order_owner_email.sql",
+);
 const actionMigration = read(
   "supabase/migrations/20260730171000_secure_seller_order_email_actions.sql",
 );
@@ -109,6 +112,21 @@ test("the generic enqueue primitive derives canonical identity and content", () 
     ),
     /p_subject_snapshot|p_payload/,
   );
+});
+
+test("seller New Order recipient is the authenticated owner account", () => {
+  const recipientBlock = sellerOwnerMigration.slice(
+    sellerOwnerMigration.indexOf("v_recipient_email := case"),
+    sellerOwnerMigration.indexOf("if v_recipient_email is null"),
+  );
+  assert.match(recipientBlock,
+    /v_notification_type = 'seller_new_order'[\s\S]*from auth\.users as users[\s\S]*users\.id = v_store\.owner_user_id/);
+  assert.doesNotMatch(
+    recipientBlock.match(/when v_notification_type = 'seller_new_order'[\s\S]*?\n\s*else/)?.[0] ?? "",
+    /order_notification_email|communication_email|public_email/,
+  );
+  assert.match(sellerOwnerMigration,
+    /notification_type = 'seller_new_order'[\s\S]*owners\.email/);
 });
 
 test("seller actions use auth identity, server events, locks, and server IDs", () => {

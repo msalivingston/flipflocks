@@ -874,6 +874,42 @@ set local role service_role;
 select lives_ok(
   $call$
     select public.enqueue_email_notification(
+      'b6000000-0000-4000-8000-000000000012',
+      'b6000000-0000-4000-8000-000000000032',
+      'seller_new_order_received',
+      'seller',
+      null,
+      null,
+      '{}'::jsonb
+    )
+  $call$,
+  'seller New Order enqueues from owner identity without store contact fields'
+);
+
+reset role;
+
+select results_eq(
+  $test$
+    select notification_type, recipient_type, recipient_email
+    from public.email_notifications
+    where order_id = 'b6000000-0000-4000-8000-000000000032'
+  $test$,
+  $expected$
+    values (
+      'seller_new_order'::text,
+      'seller'::text,
+      'email-owner@example.test'::text
+    )
+  $expected$,
+  'missing operational emails do not suppress the owner New Order notification'
+);
+
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+
+select lives_ok(
+  $call$
+    select public.enqueue_email_notification(
       'b6000000-0000-4000-8000-000000000010',
       'b6000000-0000-4000-8000-000000000033',
       'buyer_order_received',
@@ -899,6 +935,21 @@ select lives_ok(
     )
   $call$,
   'trusted checkout/manual primitive enqueues the seller order-created row'
+);
+
+select lives_ok(
+  $call$
+    select public.enqueue_email_notification(
+      'b6000000-0000-4000-8000-000000000010',
+      'b6000000-0000-4000-8000-000000000033',
+      'seller_new_order_received',
+      'seller',
+      'different@example.test',
+      'Different subject',
+      '{"recipient":"different@example.test"}'::jsonb
+    )
+  $call$,
+  'seller order-created retry is idempotent'
 );
 
 select lives_ok(
@@ -946,7 +997,7 @@ select results_eq(
     values
       ('buyer_order_confirmation'::text, 'canonical-buyer@example.test'::text),
       ('seller_first_sale'::text, 'email-owner@example.test'::text),
-      ('seller_new_order'::text, 'seller-orders@example.test'::text)
+      ('seller_new_order'::text, 'email-owner@example.test'::text)
   $expected$,
   'one order-created event preserves the canonical pair and adds the owner milestone'
 );

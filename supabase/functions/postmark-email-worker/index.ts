@@ -36,6 +36,12 @@ import {
   sellerFirstSaleNotificationType,
   sellerFirstSaleSubject,
 } from "./seller-first-sale.ts";
+import {
+  parseSellerNewOrderContext,
+  parseSellerNewOrderRecipient,
+  renderSellerNewOrderEmail,
+  sellerNewOrderNotificationType,
+} from "./seller-new-order.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("FLIPFLOCKS_PUBLIC_API_ORIGIN") ??
@@ -106,6 +112,7 @@ type OrderRow = {
 
 type StoreRow = {
   id: string;
+  owner_user_id: string;
   store_name: string;
   store_slug: string;
   public_email: string | null;
@@ -363,7 +370,7 @@ async function fetchEmailContext(
       supabase
         .from("stores")
         .select(
-          "id, store_name, store_slug, public_email, public_phone, show_public_phone, communication_email, order_notification_email, pickup_policy, pickup_location_text, pickup_address_line1, pickup_address_line2, pickup_city, pickup_state, pickup_postal_code, pickup_country, website_url, currency",
+          "id, owner_user_id, store_name, store_slug, public_email, public_phone, show_public_phone, communication_email, order_notification_email, pickup_policy, pickup_location_text, pickup_address_line1, pickup_address_line2, pickup_city, pickup_state, pickup_postal_code, pickup_country, website_url, currency",
         )
         .eq("id", order.store_id)
         .maybeSingle<StoreRow>(),
@@ -630,6 +637,62 @@ async function renderSellerFirstSaleNotification(
     html: document.html,
     text: document.text,
     tag: "flockfront-seller-first-sale",
+  };
+}
+
+async function renderSellerNewOrderNotification(
+  supabase: SupabaseClient,
+  notification: ClaimedNotification,
+  context: EmailContext,
+  fromEmail: string,
+  siteOrigin: string,
+): Promise<RenderedEmail> {
+  if (
+    notification.notification_type !== sellerNewOrderNotificationType ||
+    notification.recipient_type !== "seller" ||
+    !notification.order_id ||
+    notification.order_id !== context.order.id
+  ) {
+    throw new Error("Seller New Order notification envelope is invalid.");
+  }
+
+  const { data: ownerData, error: ownerError } = await supabase.auth.admin
+    .getUserById(context.store.owner_user_id);
+  if (ownerError || !ownerData.user) {
+    throw new Error(
+      ownerError?.message || "Seller New Order owner could not be resolved.",
+    );
+  }
+
+  const recipientEmail = parseSellerNewOrderRecipient({
+    recipient_email: ownerData.user.email,
+  });
+  const buyerEmail = validEmailOrNull(context.order.buyer_email_snapshot);
+  if (!buyerEmail) {
+    throw new Error("Seller New Order buyer Reply-To is unavailable.");
+  }
+
+  const emailContext = parseSellerNewOrderContext({
+    recipient_email: recipientEmail,
+    buyer_first_name: context.order.buyer_first_name_snapshot,
+    order_id: context.order.id,
+    order_number: context.order.order_number,
+    order_total: context.order.total_amount,
+    currency: context.store.currency ?? "USD",
+    fulfillment_method: context.order.fulfillment_method ?? "pickup",
+    dashboard_url: `${siteOrigin.replace(/\/$/, "")}/dashboard/orders/${context.order.id}`,
+  });
+  const document = renderSellerNewOrderEmail(emailContext);
+
+  return {
+    to: emailContext.recipientEmail,
+    fromName: sanitizeHeaderValue(context.store.store_name) || "FlockFront",
+    fromEmail,
+    replyTo: buyerEmail,
+    subject: sanitizeHeaderValue(document.subject),
+    html: document.html,
+    text: document.text,
+    tag: "flockfront-order-notification",
   };
 }
 
@@ -1811,6 +1874,14 @@ Deno.serve(async (request: Request) => {
           ? await renderSellerWelcomeNotification(supabase, notification)
           : notification.notification_type === sellerFirstSaleNotificationType
           ? await renderSellerFirstSaleNotification(supabase, notification)
+          : notification.notification_type === sellerNewOrderNotificationType
+          ? await renderSellerNewOrderNotification(
+            supabase,
+            notification,
+            await fetchEmailContext(supabase, supabaseUrl, notification),
+            fromEmail,
+            siteOrigin,
+          )
           : notification.notification_type === sellerPaymentFailedNotificationType
           ? await renderSellerPaymentFailedNotification(supabase, notification)
           : notification.notification_type ===
