@@ -60,10 +60,10 @@ test("development seeds no longer write either removed column", () => {
   }
 });
 
-test("only the public-email visibility preference remains in Store Admin", () => {
+test("Store Admin retains canonical email visibility without an editable email", () => {
   assert.doesNotMatch(storeAdmin, /public_email: string/);
   assert.match(storeAdmin, /show_public_email: boolean/);
   assert.match(storeAdmin, /show_public_email: form\.show_public_email/);
-  assert.match(storeAdmin, /Show my account email on my storefront/);
+  assert.match(storeAdmin, /label="Show email"/);
   assert.match(storeAdmin, /href="\/dashboard\/account"/);
 });

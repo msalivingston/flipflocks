@@ -327,12 +327,24 @@ export function StorefrontFooter({
                 <a href={`tel:${store.public_phone}`}>{store.public_phone}</a>
               </FooterContactLine>
             ) : null}
-            {!store.public_phone && store.public_email ? (
+            {store.public_email ? (
               <FooterContactLine glyph="/glyphs/envelope.png">
                 <a href={`mailto:${store.public_email}`}>{store.public_email}</a>
               </FooterContactLine>
             ) : null}
-            {!store.public_phone && !store.public_email ? (
+            {store.website_url ? (
+              <FooterContactLine glyph="/glyphs/storefront.png">
+                <a
+                  className="break-all"
+                  href={store.website_url}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  {store.website_url}
+                </a>
+              </FooterContactLine>
+            ) : null}
+            {!store.public_phone && !store.public_email && !store.website_url ? (
               <p className="leading-7">Seller contact follows after checkout.</p>
             ) : null}
           </FooterColumn>
@@ -399,7 +411,17 @@ function CompactAboutFooter({
           {store.public_phone ? (
             <a href={`tel:${store.public_phone}`}>{store.public_phone}</a>
           ) : null}
-          {!store.public_phone && !store.public_email ? (
+          {store.website_url ? (
+            <a
+              className="break-all"
+              href={store.website_url}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              {store.website_url}
+            </a>
+          ) : null}
+          {!store.public_phone && !store.public_email && !store.website_url ? (
             <p>Seller contact follows after checkout.</p>
           ) : null}
         </div>

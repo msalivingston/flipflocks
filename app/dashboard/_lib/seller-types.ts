@@ -26,6 +26,7 @@ export type SellerContext = {
   public_phone: string | null;
   show_public_email: boolean;
   show_public_phone: boolean;
+  show_public_website: boolean;
   website_url: string | null;
   social_url: string | null;
   npip_number: string | null;

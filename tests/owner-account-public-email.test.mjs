@@ -31,8 +31,8 @@ test("seller contracts and Store Admin carry visibility but no editable public a
   }
 
   assert.match(storeAdmin, /show_public_email: boolean/);
-  assert.match(storeAdmin, /Show my account email on my storefront/);
-  assert.match(storeAdmin, /email address itself is managed from the/);
+  assert.match(storeAdmin, /label="Show email"/);
+  assert.match(storeAdmin, /store owner&apos;s current account email/);
   assert.match(storeAdmin, /href="\/dashboard\/account"/);
   assert.doesNotMatch(storeAdmin, /public_email: form\.public_email/);
   assert.doesNotMatch(storeAdmin, /public-email/);

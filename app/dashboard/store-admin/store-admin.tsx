@@ -107,6 +107,7 @@ type StoreAdminForm = {
   show_public_email: boolean;
   public_phone: string;
   show_public_phone: boolean;
+  show_public_website: boolean;
   pickup_method: "notes" | "manual_options";
   pickup_location_text: string;
   pickup_address_line1: string;
@@ -379,6 +380,7 @@ const blankForm: StoreAdminForm = {
   show_public_email: false,
   public_phone: "",
   show_public_phone: false,
+  show_public_website: false,
   pickup_method: "notes",
   pickup_location_text: "",
   pickup_address_line1: "",
@@ -1772,6 +1774,7 @@ export function StoreAdmin() {
       public_phone: form.public_phone,
       show_public_email: form.show_public_email,
       show_public_phone: form.show_public_phone,
+      show_public_website: form.show_public_website,
       pickup_policy: form.pickup_policy,
       cancellation_policy: form.cancellation_policy,
       other_policies: form.other_policies,
@@ -2760,6 +2763,38 @@ function StorefrontTab({
           Your store URL is created automatically from your store name.
         </StorefrontNote>
 
+        <fieldset className="grid gap-3 rounded-md border border-stone-200 bg-stone-50/70 p-3">
+          <legend className="px-1 text-sm font-bold text-stone-900">
+            Public contact information
+          </legend>
+          <div className="grid gap-3 md:grid-cols-3">
+            <ToggleField
+              checked={form.show_public_email}
+              label="Show email"
+              onChange={(value) => onUpdateField("show_public_email", value)}
+            />
+            <ToggleField
+              checked={form.show_public_phone}
+              label="Show phone"
+              onChange={(value) => onUpdateField("show_public_phone", value)}
+            />
+            <ToggleField
+              checked={form.show_public_website}
+              label="Show website"
+              onChange={(value) => onUpdateField("show_public_website", value)}
+            />
+          </div>
+          <StorefrontNote>
+            Email uses the store owner&apos;s current account email and is managed
+            from the{" "}
+            <Link className="font-bold text-emerald-900" href="/dashboard/account">
+              Account page
+            </Link>
+            . Phone and website appear only when a value is saved and their
+            visibility option is enabled.
+          </StorefrontNote>
+        </fieldset>
+
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
             <TextField
@@ -2897,19 +2932,6 @@ function StorefrontTab({
           <StorefrontNote>
             NPIP is optional. Add your number if you participate in the NPIP
             program.
-          </StorefrontNote>
-          <ToggleField
-            checked={form.show_public_email}
-            label="Show my account email on my storefront"
-            onChange={(value) => onUpdateField("show_public_email", value)}
-          />
-          <StorefrontNote>
-            FlockFront displays the store owner&apos;s current account email. The
-            email address itself is managed from the{" "}
-            <Link className="font-bold text-emerald-900" href="/dashboard/account">
-              Account page
-            </Link>
-            .
           </StorefrontNote>
         </div>
       </StoreSetupAccordionSection>
@@ -5103,6 +5125,7 @@ function buildInitialForm(
     show_public_email: seller.show_public_email,
     public_phone: seller.public_phone ?? "",
     show_public_phone: seller.show_public_phone,
+    show_public_website: seller.show_public_website,
     pickup_method:
       defaults?.pickup_method === "manual_options" ? "manual_options" : "notes",
     pickup_location_text: defaults?.pickup_location_text ?? "",

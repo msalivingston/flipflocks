@@ -43,20 +43,20 @@ values
 insert into public.stores (
   id, owner_user_id, store_name, store_slug, store_status, storefront_mode,
   storefront_enabled, storefront_visibility, show_public_email,
-  public_phone, show_public_phone, website_url
+  public_phone, show_public_phone, website_url, show_public_website
 )
 values
   (
     'ac000000-0000-4000-8000-000000000010',
     'ac000000-0000-4000-8000-000000000001',
     'Owner Email Visible', 'owner-email-visible', 'live', 'hosted', true,
-    'public', true, '555-0100', true, 'https://visible.example.test'
+    'public', true, '555-0100', true, 'https://visible.example.test', true
   ),
   (
     'ac000000-0000-4000-8000-000000000011',
     'ac000000-0000-4000-8000-000000000001',
     'Owner Email Hidden', 'owner-email-hidden', 'live', 'hosted', true,
-    'public', false, '555-0101', true, 'https://hidden.example.test'
+    'public', false, '555-0101', true, 'https://hidden.example.test', true
   );
 
 insert into public.seller_billing_status (

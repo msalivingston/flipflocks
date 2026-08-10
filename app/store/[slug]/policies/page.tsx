@@ -133,7 +133,9 @@ export default async function StorefrontPoliciesPage({
     otherPolicies: store.other_policies,
     pickupPolicy: store.pickup_policy,
   });
-  const hasContact = Boolean(store.public_email || store.public_phone);
+  const hasContact = Boolean(
+    store.public_email || store.public_phone || store.website_url,
+  );
   const location = formatLocation(store);
 
   return (
@@ -215,6 +217,19 @@ export default async function StorefrontPoliciesPage({
                     href={`tel:${store.public_phone}`}
                   >
                     {store.public_phone}
+                  </a>
+                </p>
+              ) : null}
+              {store.website_url ? (
+                <p>
+                  Website:{" "}
+                  <a
+                    className="storefront-primary-color break-all font-medium text-[#073f1e]"
+                    href={store.website_url}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    {store.website_url}
                   </a>
                 </p>
               ) : null}
