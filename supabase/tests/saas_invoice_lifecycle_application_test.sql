@@ -599,7 +599,8 @@ $function$;
 create temporary table batch8_times as
 select trial_ends_at as trial_end,
   trial_ends_at + interval '1 month' as first_paid_end,
-  trial_ends_at + interval '2 months' as second_paid_end
+  trial_ends_at + interval '2 months' as second_paid_end,
+  trial_ends_at + interval '3 months' as third_paid_end
 from public.billing_subscription_enrollments
 where id = 'f8000000-0000-4000-b000-000000000001';
 
@@ -986,6 +987,9 @@ select pg_temp.batch8_claim_subscription(
   'evt_Batch8Canceling', 'customer.subscription.updated',
   statement_timestamp() - interval '4 minutes'
 ) as token;
+update auth.users
+set raw_user_meta_data = '{}'::jsonb
+where id = 'f8000000-0000-4000-8000-000000000001';
 select * from pg_temp.batch8_apply_subscription(
   'evt_Batch8Canceling', 'customer.subscription.updated',
   (select token from batch8_cancel_claim), 'active', true,
@@ -1010,6 +1014,206 @@ select is(
   null::timestamptz,
   'cancellation snapshot creates no grace'
 );
+select results_eq(
+  $$select episode.cancellation_kind, episode.access_ends_at,
+      episode.access_boundary_source
+    from public.billing_subscription_cancellation_episodes as episode
+    where episode.subscription_enrollment_id =
+      'f8000000-0000-4000-b000-000000000001'$$,
+  $$values ('scheduled'::text,
+      (select second_paid_end from batch8_times),
+      'entitlement_resolver'::text)$$,
+  'scheduled cancellation records the exact FlockFront entitlement boundary'
+);
+select results_eq(
+  $$select notification.recipient_email, notification.dedupe_key,
+      notification.subject_snapshot
+    from public.email_notifications as notification
+    where notification.notification_type = 'seller_subscription_canceled'$$,
+  $$select 'batch8-owner@example.test'::text,
+      'seller_subscription_canceled:episode:' || episode.id::text,
+      'Your FlockFront subscription has been canceled'::text
+    from public.billing_subscription_cancellation_episodes as episode
+    where episode.subscription_enrollment_id =
+      'f8000000-0000-4000-b000-000000000001'$$,
+  'scheduled cancellation enqueues one server-addressed confirmation'
+);
+
+-- An exact webhook replay returns from the processed event without touching
+-- billing state or creating another episode.
+select is(
+  (select application_state from pg_temp.batch8_apply_subscription(
+    'evt_Batch8Canceling', 'customer.subscription.updated',
+    (select token from batch8_cancel_claim), 'active', true,
+    (select first_paid_end from batch8_times),
+    (select second_paid_end from batch8_times))),
+  'already_processed',
+  'scheduled cancellation webhook replay is terminally idempotent'
+);
+select is(
+  (select count(*)::integer
+   from public.email_notifications
+   where notification_type = 'seller_subscription_canceled'),
+  1,
+  'webhook replay does not duplicate the cancellation confirmation'
+);
+
+-- A later verified snapshot with the same state repairs a missing outbox row
+-- if necessary, but the open episode and notification remain unique.
+create temporary table batch8_repeat_cancel_claim as
+select pg_temp.batch8_claim_subscription(
+  'evt_Batch8RepeatCanceling', 'customer.subscription.updated',
+  statement_timestamp() - interval '3 minutes 50 seconds'
+) as token;
+select * from pg_temp.batch8_apply_subscription(
+  'evt_Batch8RepeatCanceling', 'customer.subscription.updated',
+  (select token from batch8_repeat_cancel_claim), 'active', true,
+  (select first_paid_end from batch8_times),
+  (select second_paid_end from batch8_times)
+);
+select results_eq(
+  $$select count(*)::integer,
+      count(distinct subscription_cancellation_episode_id)::integer
+    from public.email_notifications
+    where notification_type = 'seller_subscription_canceled'$$,
+  $$values (1, 1)$$,
+  'repeated verified cancellation snapshots do not duplicate an episode'
+);
+
+create temporary table batch8_canceled_email_claim as
+select * from public.claim_seller_subscription_canceled_email(
+  (select id from public.billing_subscription_cancellation_episodes
+   where subscription_enrollment_id =
+     'f8000000-0000-4000-b000-000000000001'
+     and resumed_at is null)
+);
+select is(
+  (select first_name
+   from public.get_seller_subscription_canceled_context(
+     (select subscription_cancellation_episode_id
+      from batch8_canceled_email_claim))),
+  null::text,
+  'missing seller name remains missing instead of being guessed'
+);
+select public.mark_email_notification_failed(
+  (select notification_id from batch8_canceled_email_claim),
+  (select processing_token from batch8_canceled_email_claim),
+  'Seller subscription-canceled seller first name is missing.',
+  interval '5 minutes', 5
+);
+select results_eq(
+  $$select notification_status, attempt_count, last_error,
+      next_attempt_at > statement_timestamp()
+    from public.email_notifications
+    where id = (select notification_id from batch8_canceled_email_claim)$$,
+  $$values ('failed'::text, 1,
+      'Seller subscription-canceled seller first name is missing.'::text,
+      true)$$,
+  'missing cancellation context is a visible retryable outbox failure'
+);
+update auth.users
+set raw_user_meta_data = jsonb_build_object('first_name', 'Avery')
+where id = 'f8000000-0000-4000-8000-000000000001';
+select public.retry_email_notification(
+  (select notification_id from batch8_canceled_email_claim), now(), false
+);
+create temporary table batch8_canceled_email_retry_claim as
+select * from public.claim_seller_subscription_canceled_email(
+  (select subscription_cancellation_episode_id
+   from batch8_canceled_email_claim)
+);
+create temporary table batch8_canceled_email_dispatch as
+select * from public.begin_email_notification_dispatch(
+  (select notification_id from batch8_canceled_email_retry_claim),
+  (select processing_token from batch8_canceled_email_retry_claim)
+);
+select is(
+  (public.mark_email_notification_sent(
+    (select notification_id from batch8_canceled_email_retry_claim),
+    (select processing_token from batch8_canceled_email_retry_claim),
+    'postmark-test-subscription-canceled-message'
+  )).notification_status,
+  'sent',
+  'successful cancellation-email retry records Postmark acceptance'
+);
+select is(
+  (select count(*)::integer
+   from public.claim_seller_subscription_canceled_email(
+     (select subscription_cancellation_episode_id
+      from batch8_canceled_email_claim))),
+  0,
+  'successfully sent cancellation confirmation cannot be claimed again'
+);
+select results_eq(
+  $$select count(*)::integer, max(attempt_status),
+      max(provider_message_id),
+      bool_and(subscription_cancellation_episode_id is not null)
+    from public.email_notification_delivery_attempts
+    where notification_id =
+      (select notification_id from batch8_canceled_email_retry_claim)$$,
+  $$values (1, 'succeeded'::text,
+      'postmark-test-subscription-canceled-message'::text, true)$$,
+  'one accepted provider dispatch is durably bound to the episode'
+);
+
+-- A verified resume closes the episode. A later paid boundary proves a new
+-- cancellation episode instead of reusing the prior confirmation.
+create temporary table batch8_resume_claim as
+select pg_temp.batch8_claim_subscription(
+  'evt_Batch8Resume', 'customer.subscription.updated',
+  statement_timestamp() - interval '3 minutes 40 seconds'
+) as token;
+select * from pg_temp.batch8_apply_subscription(
+  'evt_Batch8Resume', 'customer.subscription.updated',
+  (select token from batch8_resume_claim), 'active', false,
+  (select first_paid_end from batch8_times),
+  (select second_paid_end from batch8_times)
+);
+select ok(
+  (select resumed_at is not null
+   from public.billing_subscription_cancellation_episodes
+   where subscription_enrollment_id =
+     'f8000000-0000-4000-b000-000000000001'),
+  'verified resume closes the first cancellation episode'
+);
+
+create temporary table batch8_third_renewal_claim as
+select pg_temp.batch8_claim_invoice(
+  'evt_Batch8ThirdRenewal', 'invoice.payment_succeeded',
+  'in_Batch8ThirdRenewal',
+  statement_timestamp() - interval '3 minutes 30 seconds'
+) as token;
+select * from pg_temp.batch8_apply_invoice(
+  'evt_Batch8ThirdRenewal', 'invoice.payment_succeeded',
+  'in_Batch8ThirdRenewal', (select token from batch8_third_renewal_claim),
+  (select second_paid_end from batch8_times),
+  (select third_paid_end from batch8_times)
+);
+create temporary table batch8_second_cancel_claim as
+select pg_temp.batch8_claim_subscription(
+  'evt_Batch8SecondCanceling', 'customer.subscription.updated',
+  statement_timestamp() - interval '3 minutes 20 seconds'
+) as token;
+select * from pg_temp.batch8_apply_subscription(
+  'evt_Batch8SecondCanceling', 'customer.subscription.updated',
+  (select token from batch8_second_cancel_claim), 'active', true,
+  (select second_paid_end from batch8_times),
+  (select third_paid_end from batch8_times)
+);
+select results_eq(
+  $$select count(*)::integer, count(distinct access_ends_at)::integer
+    from public.billing_subscription_cancellation_episodes
+    where subscription_enrollment_id =
+      'f8000000-0000-4000-b000-000000000001'$$,
+  $$values (2, 2)$$,
+  'cancel, resume, and cancel at a genuinely new boundary creates a new episode'
+);
+select is(
+  (select count(*)::integer from public.email_notifications
+   where notification_type = 'seller_subscription_canceled'),
+  2,
+  'the genuinely new cancellation episode receives one new confirmation'
+);
 
 create temporary table batch8_deleted_claim as
 select pg_temp.batch8_claim_subscription(
@@ -1019,8 +1223,8 @@ select pg_temp.batch8_claim_subscription(
 select * from pg_temp.batch8_apply_subscription(
   'evt_Batch8Deleted', 'customer.subscription.deleted',
   (select token from batch8_deleted_claim), 'canceled', true,
-  (select first_paid_end from batch8_times),
   (select second_paid_end from batch8_times),
+  (select third_paid_end from batch8_times),
   statement_timestamp() - interval '3 minutes',
   statement_timestamp() - interval '3 minutes'
 );
@@ -1033,7 +1237,7 @@ select is(
 select is(
   (select paid_through_at from public.seller_billing_status
    where store_id = 'f8000000-0000-4000-9000-000000000001'),
-  (select second_paid_end from batch8_times),
+  (select third_paid_end from batch8_times),
   'terminal Subscription snapshot cannot shorten proven paid-through'
 );
 select is(
@@ -1041,6 +1245,12 @@ select is(
     'f8000000-0000-4000-9000-000000000001')),
   'paid_canceling',
   'terminal enrollment history retains paid access until paid-through'
+);
+select is(
+  (select count(*)::integer from public.email_notifications
+   where notification_type = 'seller_subscription_canceled'),
+  2,
+  'later terminal event does not duplicate the open scheduled episode'
 );
 
 create temporary table batch8_stale_failure_claim as
@@ -1063,7 +1273,7 @@ select is(
 select is(
   (select paid_through_at from public.seller_billing_status
    where store_id = 'f8000000-0000-4000-9000-000000000001'),
-  (select second_paid_end from batch8_times),
+  (select third_paid_end from batch8_times),
   'stale failure cannot regress paid-through'
 );
 select is(
@@ -1128,6 +1338,147 @@ select is(
    where store_id = 'f8000000-0000-4000-9000-000000000002'),
   0,
   'paid trial-used enrollment creates no new trial claim'
+);
+
+create temporary table batch8_immediate_receipt as
+select * from public.claim_saas_billing_provider_event(
+  'evt_Batch8ImmediateCancel', 'customer.subscription.deleted',
+  statement_timestamp() - interval '30 seconds', repeat('e', 64),
+  'acct_1CTOghL1R5g4hhXt', false, 'local',
+  'subscription', 'sub_Batch8Paid'
+);
+select public.mark_saas_billing_provider_event_deferred(
+  'evt_Batch8ImmediateCancel', repeat('e', 64),
+  'acct_1CTOghL1R5g4hhXt', false,
+  (select processing_lease_token from batch8_immediate_receipt),
+  'awaiting_verified_enrollment_batch'
+);
+create temporary table batch8_immediate_claim as
+select * from public.claim_deferred_saas_billing_provider_event(
+  'evt_Batch8ImmediateCancel', repeat('e', 64),
+  'acct_1CTOghL1R5g4hhXt', false, 'local',
+  'customer.subscription.deleted', 'subscription', 'sub_Batch8Paid'
+);
+create temporary table batch8_immediate_result as
+select * from public.apply_verified_stripe_subscription_event(
+  p_provider_event_id => 'evt_Batch8ImmediateCancel',
+  p_payload_hash => repeat('e', 64),
+  p_processing_lease_token =>
+    (select processing_lease_token from batch8_immediate_claim),
+  p_stripe_account_id => 'acct_1CTOghL1R5g4hhXt',
+  p_stripe_livemode => false,
+  p_environment_id => 'local',
+  p_provider_event_created_at =>
+    (select provider_event_created_at from public.billing_provider_events
+     where provider_event_id = 'evt_Batch8ImmediateCancel'),
+  p_event_type => 'customer.subscription.deleted',
+  p_stripe_subscription_id => 'sub_Batch8Paid',
+  p_subscription_livemode => false,
+  p_stripe_customer_id => 'cus_Batch8Paid',
+  p_stripe_price_id => 'price_Batch8CoopMonthly',
+  p_stripe_product_id => 'prod_Batch8Coop',
+  p_subscription_status => 'canceled',
+  p_current_period_start =>
+    (select current_period_start from public.seller_billing_status
+     where store_id = 'f8000000-0000-4000-9000-000000000002'),
+  p_current_period_end =>
+    (select current_period_end from public.seller_billing_status
+     where store_id = 'f8000000-0000-4000-9000-000000000002'),
+  p_cancel_at_period_end => false,
+  p_subscription_cancel_at => null,
+  p_subscription_created_at =>
+    (select provider_created_at from public.billing_subscription_enrollments
+     where id = 'f8000000-0000-4000-b000-000000000002'),
+  p_subscription_canceled_at => statement_timestamp() - interval '30 seconds',
+  p_subscription_ended_at => statement_timestamp() - interval '30 seconds',
+  p_line_quantity => 1,
+  p_price_livemode => false,
+  p_product_livemode => false,
+  p_price_active => true,
+  p_product_active => true,
+  p_unit_amount_cents => 500,
+  p_currency => 'usd',
+  p_recurring_interval => 'month',
+  p_recurring_interval_count => 1,
+  p_price_type => 'recurring',
+  p_billing_scheme => 'per_unit',
+  p_recurring_usage_type => 'licensed',
+  p_tax_behavior => 'exclusive',
+  p_product_tax_code => 'txcd_10103001'
+);
+select is(
+  (select application_state from batch8_immediate_result),
+  'terminal_snapshot_applied',
+  'verified unscheduled terminal Subscription applies successfully'
+);
+select results_eq(
+  $$select episode.cancellation_kind, episode.access_ends_at,
+      episode.access_boundary_source
+    from public.billing_subscription_cancellation_episodes as episode
+    where episode.store_id =
+      'f8000000-0000-4000-9000-000000000002'$$,
+  $$select 'immediate'::text, status.paid_through_at,
+      'entitlement_resolver'::text
+    from public.seller_billing_status as status
+    where status.store_id =
+      'f8000000-0000-4000-9000-000000000002'$$,
+  'immediate cancellation uses continuing invoice-proven access boundary'
+);
+select is(
+  (select count(*)::integer from public.email_notifications
+   where store_id = 'f8000000-0000-4000-9000-000000000002'
+     and notification_type = 'seller_subscription_canceled'),
+  1,
+  'immediate cancellation enqueues exactly one confirmation'
+);
+select is(
+  (select application_state
+   from public.apply_verified_stripe_subscription_event(
+    p_provider_event_id => 'evt_Batch8ImmediateCancel',
+    p_payload_hash => repeat('e', 64),
+    p_processing_lease_token =>
+      (select processing_lease_token from batch8_immediate_claim),
+    p_stripe_account_id => 'acct_1CTOghL1R5g4hhXt',
+    p_stripe_livemode => false, p_environment_id => 'local',
+    p_provider_event_created_at =>
+      (select provider_event_created_at from public.billing_provider_events
+       where provider_event_id = 'evt_Batch8ImmediateCancel'),
+    p_event_type => 'customer.subscription.deleted',
+    p_stripe_subscription_id => 'sub_Batch8Paid',
+    p_subscription_livemode => false,
+    p_stripe_customer_id => 'cus_Batch8Paid',
+    p_stripe_price_id => 'price_Batch8CoopMonthly',
+    p_stripe_product_id => 'prod_Batch8Coop',
+    p_subscription_status => 'canceled',
+    p_current_period_start =>
+      (select current_period_start from public.seller_billing_status
+       where store_id = 'f8000000-0000-4000-9000-000000000002'),
+    p_current_period_end =>
+      (select current_period_end from public.seller_billing_status
+       where store_id = 'f8000000-0000-4000-9000-000000000002'),
+    p_cancel_at_period_end => false, p_subscription_cancel_at => null,
+    p_subscription_created_at =>
+      (select provider_created_at from public.billing_subscription_enrollments
+       where id = 'f8000000-0000-4000-b000-000000000002'),
+    p_subscription_canceled_at => statement_timestamp() - interval '30 seconds',
+    p_subscription_ended_at => statement_timestamp() - interval '30 seconds',
+    p_line_quantity => 1, p_price_livemode => false,
+    p_product_livemode => false, p_price_active => true,
+    p_product_active => true, p_unit_amount_cents => 500,
+    p_currency => 'usd', p_recurring_interval => 'month',
+    p_recurring_interval_count => 1, p_price_type => 'recurring',
+    p_billing_scheme => 'per_unit', p_recurring_usage_type => 'licensed',
+    p_tax_behavior => 'exclusive', p_product_tax_code => 'txcd_10103001'
+  )),
+  'already_processed',
+  'immediate cancellation webhook replay is idempotent'
+);
+select is(
+  (select count(*)::integer from public.email_notifications
+   where store_id = 'f8000000-0000-4000-9000-000000000002'
+     and notification_type = 'seller_subscription_canceled'),
+  1,
+  'immediate cancellation replay cannot duplicate the confirmation'
 );
 select is(
   (select boolean_value from public.platform_settings

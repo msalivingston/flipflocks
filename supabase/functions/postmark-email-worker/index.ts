@@ -20,6 +20,14 @@ import {
   sellerPaymentFailedNotificationType,
   sellerPaymentFailedSubject,
 } from "./seller-payment-failed.ts";
+import {
+  parseSellerSubscriptionCanceledContext,
+  parseSellerSubscriptionCanceledPayload,
+  renderSellerSubscriptionCanceledEmail,
+  sellerSubscriptionCanceledFromEmail,
+  sellerSubscriptionCanceledNotificationType,
+  sellerSubscriptionCanceledSubject,
+} from "./seller-subscription-canceled.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("FLIPFLOCKS_PUBLIC_API_ORIGIN") ??
@@ -43,6 +51,7 @@ type ClaimedNotification = {
   store_id: string;
   order_id: string | null;
   subscription_invoice_id?: string | null;
+  subscription_cancellation_episode_id?: string | null;
   dedupe_key: string;
   recipient_type: "buyer" | "seller" | string;
   recipient_email: string;
@@ -293,6 +302,23 @@ function parseInvoiceScope(body: unknown): string | null {
 
   if (typeof value !== "string" || !uuidPattern.test(value.trim())) {
     throw new Error("subscription_invoice_id must be a valid UUID.");
+  }
+
+  return value.trim().toLowerCase();
+}
+
+function parseCancellationEpisodeScope(body: unknown): string | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+
+  const value = (body as Record<string, unknown>)
+    .subscription_cancellation_episode_id;
+
+  if (value === undefined || value === null || value === "") return null;
+
+  if (typeof value !== "string" || !uuidPattern.test(value.trim())) {
+    throw new Error(
+      "subscription_cancellation_episode_id must be a valid UUID.",
+    );
   }
 
   return value.trim().toLowerCase();
@@ -599,6 +625,65 @@ async function renderSellerPaymentFailedNotification(
   };
 }
 
+async function renderSellerSubscriptionCanceledNotification(
+  supabase: SupabaseClient,
+  notification: ClaimedNotification,
+): Promise<RenderedEmail> {
+  if (
+    notification.notification_type !==
+      sellerSubscriptionCanceledNotificationType ||
+    notification.recipient_type !== "seller_account" ||
+    notification.order_id !== null ||
+    !notification.subscription_cancellation_episode_id
+  ) {
+    throw new Error("Seller subscription-canceled envelope is invalid.");
+  }
+
+  const payload = parseSellerSubscriptionCanceledPayload(notification.payload);
+  if (
+    payload.subscription_cancellation_episode_id !==
+      notification.subscription_cancellation_episode_id
+  ) {
+    throw new Error(
+      "Seller subscription-canceled episode context does not match its payload.",
+    );
+  }
+
+  const { data, error } = await supabase.rpc(
+    "get_seller_subscription_canceled_context",
+    {
+      p_subscription_cancellation_episode_id:
+        payload.subscription_cancellation_episode_id,
+    },
+  );
+  const rows = Array.isArray(data) ? data : [];
+
+  if (error) {
+    throw new Error(
+      error.message || "Seller subscription-canceled context could not be resolved.",
+    );
+  }
+  if (rows.length !== 1) {
+    throw new Error("Seller subscription-canceled context was not found.");
+  }
+
+  const context = parseSellerSubscriptionCanceledContext(rows[0]);
+  const document = renderSellerSubscriptionCanceledEmail(context);
+  if (notification.subject_snapshot !== sellerSubscriptionCanceledSubject) {
+    throw new Error("Seller subscription-canceled subject is invalid.");
+  }
+
+  return {
+    to: context.recipientEmail,
+    fromName: "FlockFront",
+    fromEmail: sellerSubscriptionCanceledFromEmail,
+    subject: document.subject,
+    html: document.html,
+    text: document.text,
+    tag: "flockfront-seller-subscription-canceled",
+  };
+}
+
 type OrderEmailRecipientType = "buyer" | "seller";
 
 type OrderEmailOptions = {
@@ -886,6 +971,12 @@ async function sendPostmarkEmail({
         ...(notification.order_id ? { order_id: notification.order_id } : {}),
         ...(notification.subscription_invoice_id
           ? { subscription_invoice_id: notification.subscription_invoice_id }
+          : {}),
+        ...(notification.subscription_cancellation_episode_id
+          ? {
+            subscription_cancellation_episode_id:
+              notification.subscription_cancellation_episode_id,
+          }
           : {}),
         email_type: notification.notification_type,
       },
@@ -1535,12 +1626,21 @@ Deno.serve(async (request: Request) => {
   let orderScope: string | null;
   let enrollmentScope: string | null;
   let invoiceScope: string | null;
+  let cancellationEpisodeScope: string | null;
 
   try {
     orderScope = parseOrderScope(body);
     enrollmentScope = parseEnrollmentScope(body);
     invoiceScope = parseInvoiceScope(body);
-    if ([orderScope, enrollmentScope, invoiceScope].filter(Boolean).length > 1) {
+    cancellationEpisodeScope = parseCancellationEpisodeScope(body);
+    if (
+      [
+        orderScope,
+        enrollmentScope,
+        invoiceScope,
+        cancellationEpisodeScope,
+      ].filter(Boolean).length > 1
+    ) {
       throw new Error("Only one worker scope may be supplied.");
     }
   } catch {
@@ -1566,7 +1666,9 @@ Deno.serve(async (request: Request) => {
   while (claimedCount < maxNotificationsPerInvocation) {
     const remainingCapacity = maxNotificationsPerInvocation - claimedCount;
     const claimSize = Math.min(batchSize, remainingCapacity);
-    const claimFunction = invoiceScope
+    const claimFunction = cancellationEpisodeScope
+      ? "claim_seller_subscription_canceled_email"
+      : invoiceScope
       ? "claim_seller_subscription_payment_failed_email"
       : enrollmentScope
       ? "claim_seller_subscription_welcome_email"
@@ -1574,7 +1676,11 @@ Deno.serve(async (request: Request) => {
       ? "claim_phase_1_postmark_email_notifications_for_order"
       : "claim_phase_1_postmark_email_notifications";
     const claimArguments: Record<string, unknown> = {
-      ...(invoiceScope
+      ...(cancellationEpisodeScope
+        ? {
+          p_subscription_cancellation_episode_id: cancellationEpisodeScope,
+        }
+        : invoiceScope
         ? { p_subscription_invoice_id: invoiceScope }
         : enrollmentScope
         ? { p_subscription_enrollment_id: enrollmentScope }
@@ -1600,6 +1706,7 @@ Deno.serve(async (request: Request) => {
         order_scope: orderScope,
         enrollment_scope: enrollmentScope,
         invoice_scope: invoiceScope,
+        cancellation_episode_scope: cancellationEpisodeScope,
       });
     }
 
@@ -1631,7 +1738,9 @@ Deno.serve(async (request: Request) => {
         if (
           !isV1OrderEmailType(notification.notification_type) &&
           notification.notification_type !== sellerWelcomeNotificationType &&
-          notification.notification_type !== sellerPaymentFailedNotificationType
+          notification.notification_type !== sellerPaymentFailedNotificationType &&
+          notification.notification_type !==
+            sellerSubscriptionCanceledNotificationType
         ) {
           throw new Error(
             `Unsupported Phase 1 notification type: ${notification.notification_type}`,
@@ -1643,6 +1752,12 @@ Deno.serve(async (request: Request) => {
           ? await renderSellerWelcomeNotification(supabase, notification)
           : notification.notification_type === sellerPaymentFailedNotificationType
           ? await renderSellerPaymentFailedNotification(supabase, notification)
+          : notification.notification_type ===
+              sellerSubscriptionCanceledNotificationType
+          ? await renderSellerSubscriptionCanceledNotification(
+            supabase,
+            notification,
+          )
           : renderEmail(
             notification,
             await fetchEmailContext(supabase, supabaseUrl, notification),
@@ -1743,5 +1858,6 @@ Deno.serve(async (request: Request) => {
     order_scope: orderScope,
     enrollment_scope: enrollmentScope,
     invoice_scope: invoiceScope,
+    cancellation_episode_scope: cancellationEpisodeScope,
   });
 });

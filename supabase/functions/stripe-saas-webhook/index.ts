@@ -146,6 +146,62 @@ async function kickSellerPaymentFailedWorker(
   }
 }
 
+async function kickSellerSubscriptionCanceledWorker(
+  providerEventId: string,
+): Promise<void> {
+  const workerSecret = Deno.env.get("POSTMARK_WORKER_SECRET")?.trim();
+  if (!workerSecret) {
+    console.info(JSON.stringify({
+      event: "seller_subscription_canceled_worker_kick_skipped",
+      reason: "worker_not_configured",
+    }));
+    return;
+  }
+
+  try {
+    const { data, error } = await serviceClient.rpc(
+      "get_seller_subscription_cancellation_episode_for_event",
+      { p_provider_event_id: providerEventId },
+    );
+    if (error || typeof data !== "string" || !data) {
+      if (error) {
+        console.info(JSON.stringify({
+          event: "seller_subscription_canceled_worker_kick_failed",
+          reason: "episode_lookup_failed",
+        }));
+      }
+      return;
+    }
+
+    const response = await fetch(
+      `${supabaseUrl.replace(/\/$/, "")}/functions/v1/postmark-email-worker`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-flockfront-worker-secret": workerSecret,
+        },
+        body: JSON.stringify({
+          subscription_cancellation_episode_id: data,
+        }),
+        signal: AbortSignal.timeout(5_000),
+      },
+    );
+
+    if (!response.ok) {
+      console.info(JSON.stringify({
+        event: "seller_subscription_canceled_worker_kick_failed",
+        reason: "worker_rejected",
+      }));
+    }
+  } catch {
+    console.info(JSON.stringify({
+      event: "seller_subscription_canceled_worker_kick_failed",
+      reason: "worker_unavailable",
+    }));
+  }
+}
+
 function firstRow<T>(data: unknown): T {
   if (!Array.isArray(data) || !data[0]) {
     throw new Error("Trusted database contract returned no row.");
@@ -897,7 +953,9 @@ const handler = createStripeSaasWebhookHandler({
       },
     );
     if (error) throw lifecycleRpcError(error, "subscription");
-    return firstRow<SaasSubscriptionApplicationResult>(data);
+    const result = firstRow<SaasSubscriptionApplicationResult>(data);
+    await kickSellerSubscriptionCanceledWorker(identity.providerEventId);
+    return result;
   },
   async deferSubscriptionUntilEnrollment(
     identity,

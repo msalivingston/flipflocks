@@ -188,8 +188,8 @@ test("current SaaS billing batch changes no Pay at Pickup, refund, or Connect ap
   assert.ok(changed.every((file) => batch9Ui.test(file)
     || /^app\/admin\/[^/]+\/(?:page|[^/]+-form)\.tsx$/.test(file)
     || /^app\/admin\/stripe-subscription-resync\/(?:page|stripe-subscription-resync-form)\.tsx$/.test(file)
-    || /^supabase\/functions\/postmark-email-worker\/(?:index|seller-(?:welcome|payment-failed))\.ts$/.test(file)
-    || /^supabase\/migrations\/20260811100000_seller_subscription_payment_failed_email\.sql$/.test(file)
-    || /^tests\/seller-subscription-payment-failed-email\.test\.mjs$/.test(file)
+    || /^supabase\/functions\/postmark-email-worker\/(?:index|seller-(?:welcome|payment-failed|subscription-canceled))\.ts$/.test(file)
+    || /^supabase\/migrations\/2026081[12]100000_seller_subscription_(?:payment_failed|canceled)_email\.sql$/.test(file)
+    || /^tests\/seller-subscription-(?:payment-failed|canceled)-email\.test\.mjs$/.test(file)
     || /^(?:package\.json|scripts\/stripe\/[^/]+\.mjs|lib\/saas-billing-(?:status|management)\.ts|docs\/stripe-saas-|supabase\/(?:config\.toml|functions\/(?:_shared\/stripe-saas-|stripe-saas-)|migrations\/(?:20260802|2026080310(?:0000|1000|2000|3000|4000|5000|6000|7000)_saas_|20260805120000_saas_|20260806100000_saas_)|tests\/(?:seller_saas_|verified_saas_|saas_))|tests\/(?:authoritative-entitlements|seller-saas-|stripe-saas-))/.test(file)));
 });
