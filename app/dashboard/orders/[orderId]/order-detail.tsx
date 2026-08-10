@@ -42,6 +42,7 @@ import {
   classifyOrderItemCategory,
   formatOrderItemCategoryLabel,
 } from "../_lib/order-item-category";
+import { getCancellationEmailQueueState } from "./cancellation-email-result";
 
 type SellerOrderDetailRow = {
   order_id: string;
@@ -565,24 +566,22 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     }
 
     const cancelResult = Array.isArray(cancelData) ? cancelData[0] : null;
-    const emailQueued = Boolean(
-      cancelResult?.buyer_notification_queued &&
-        cancelResult?.seller_copy_queued,
-    );
-    const emailProcessingStarted = emailQueued
+    const { buyerEmailQueued, anyEmailQueued } =
+      getCancellationEmailQueueState(cancelResult);
+    const emailProcessingStarted = anyEmailQueued
       ? await kickPostmarkEmailWorker(order.order_id)
       : false;
 
     setActionMessage(
-      shouldEmailCancellation && emailQueued && emailProcessingStarted
+      shouldEmailCancellation && buyerEmailQueued && emailProcessingStarted
         ? "Order canceled and customer email queued for delivery."
         : "Order canceled.",
     );
-    if (shouldEmailCancellation && !emailQueued) {
+    if (shouldEmailCancellation && !buyerEmailQueued) {
       setActionWarning(
         "Order canceled, but the cancellation email could not be queued.",
       );
-    } else if (emailQueued && !emailProcessingStarted) {
+    } else if (anyEmailQueued && !emailProcessingStarted) {
       setActionWarning(
         "Order canceled, but email processing could not be started automatically. The cancellation email may be delayed.",
       );
