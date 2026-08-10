@@ -60,9 +60,10 @@ test("development seeds no longer write either removed column", () => {
   }
 });
 
-test("public storefront contact fields remain in Store Admin", () => {
-  assert.match(storeAdmin, /public_email: string/);
+test("only the public-email visibility preference remains in Store Admin", () => {
+  assert.doesNotMatch(storeAdmin, /public_email: string/);
   assert.match(storeAdmin, /show_public_email: boolean/);
-  assert.match(storeAdmin, /public_email: form\.public_email/);
   assert.match(storeAdmin, /show_public_email: form\.show_public_email/);
+  assert.match(storeAdmin, /Show my account email on my storefront/);
+  assert.match(storeAdmin, /href="\/dashboard\/account"/);
 });

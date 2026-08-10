@@ -152,8 +152,7 @@ insert into public.stores (
   store_name,
   store_slug,
   store_status,
-  storefront_mode,
-  public_email
+  storefront_mode
 )
 values
   (
@@ -162,8 +161,7 @@ values
     'Canonical Email Store',
     'canonical-email-store',
     'live',
-    'hosted',
-    'seller-public@example.test'
+    'hosted'
   ),
   (
     'b6000000-0000-4000-8000-000000000011',
@@ -171,8 +169,7 @@ values
     'Foreign Email Store',
     'foreign-email-store',
     'live',
-    'hosted',
-    null
+    'hosted'
   ),
   (
     'b6000000-0000-4000-8000-000000000012',
@@ -180,8 +177,7 @@ values
     'Missing Seller Recipient Store',
     'missing-seller-recipient-store',
     'live',
-    'hosted',
-    null
+    'hosted'
   );
 
 insert into public.seller_billing_status (

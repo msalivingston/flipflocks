@@ -18,11 +18,11 @@ select hasnt_column(
   'stores.order_notification_email is removed'
 );
 
-select has_column(
+select hasnt_column(
   'public',
   'stores',
   'public_email',
-  'stores.public_email remains available'
+  'stores.public_email is removed by the public-email cleanup'
 );
 
 select has_column(
@@ -121,16 +121,18 @@ select ok(
   'current order and manual-order functions retain their queue call without a legacy recipient field'
 );
 
-select matches(
-  pg_get_functiondef('public.get_public_storefront_home(text)'::regprocedure),
-  'target_store\.public_email',
-  'public storefront home still reads public_email'
+select ok(
+  position(
+    'target_store.public_email' in
+    pg_get_functiondef('public.get_public_storefront_home(text)'::regprocedure)
+  ) = 0,
+  'public storefront home no longer reads a separate public_email column'
 );
 
 select matches(
   pg_get_functiondef('public.get_public_storefront_home(text)'::regprocedure),
-  'target_store\.show_public_email',
-  'public storefront home still reads show_public_email'
+  'owner_users\.id = target_store\.owner_user_id',
+  'public storefront home exposes the owner account email only when enabled'
 );
 
 select * from finish();

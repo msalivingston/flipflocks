@@ -30,7 +30,6 @@ SELECT
   'CO'::text AS public_state,
   'US'::text AS public_country,
   'Development-only test store for multi-seller behavior.'::text AS about_text,
-  'seller2@example.test'::text AS public_email,
   'Farm pickup by appointment.'::text AS pickup_location_text,
   'Pickup details are confirmed after the order is placed.'::text AS pickup_policy,
   'Please contact the seller if pickup plans need to change.'::text AS cancellation_policy,
@@ -101,7 +100,6 @@ BEGIN
       pickup_policy,
       cancellation_policy,
       pickup_location_text,
-      public_email,
       show_public_email,
       currency
     )
@@ -117,7 +115,6 @@ BEGIN
       v_params.pickup_policy,
       v_params.cancellation_policy,
       v_params.pickup_location_text,
-      v_params.public_email,
       false,
       'usd'
     )
@@ -136,7 +133,6 @@ BEGIN
       pickup_policy = v_params.pickup_policy,
       cancellation_policy = v_params.cancellation_policy,
       pickup_location_text = v_params.pickup_location_text,
-      public_email = v_params.public_email,
       show_public_email = false,
       currency = 'usd'
     WHERE id = v_existing_store_id

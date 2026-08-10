@@ -23,7 +23,6 @@ export type SellerContext = {
   cancellation_policy: string | null;
   other_policies: string | null;
   custom_policies: StoreCustomPolicy[] | null;
-  public_email: string | null;
   public_phone: string | null;
   show_public_email: boolean;
   show_public_phone: boolean;

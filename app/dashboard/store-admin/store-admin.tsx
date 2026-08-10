@@ -104,7 +104,6 @@ type StoreAdminForm = {
   storefront_visibility: StorefrontVisibility;
   npip_number: string;
   show_npip: boolean;
-  public_email: string;
   show_public_email: boolean;
   public_phone: string;
   show_public_phone: boolean;
@@ -377,7 +376,6 @@ const blankForm: StoreAdminForm = {
   storefront_visibility: "public",
   npip_number: "",
   show_npip: false,
-  public_email: "",
   show_public_email: false,
   public_phone: "",
   show_public_phone: false,
@@ -1771,7 +1769,6 @@ export function StoreAdmin() {
       about_text: form.about_text,
       npip_number: form.npip_number,
       show_npip: form.show_npip,
-      public_email: form.public_email,
       public_phone: form.public_phone,
       show_public_email: form.show_public_email,
       show_public_phone: form.show_public_phone,
@@ -1888,7 +1885,6 @@ export function StoreAdmin() {
       about_text: form.about_text.trim(),
       website_url: websiteUrlResult.value ?? "",
       npip_number: form.npip_number.trim(),
-      public_email: form.public_email.trim().toLowerCase(),
       public_phone: form.public_phone.trim(),
       pickup_location_text: form.pickup_location_text.trim(),
       pickup_address_line1: form.pickup_address_line1.trim(),
@@ -2901,6 +2897,19 @@ function StorefrontTab({
           <StorefrontNote>
             NPIP is optional. Add your number if you participate in the NPIP
             program.
+          </StorefrontNote>
+          <ToggleField
+            checked={form.show_public_email}
+            label="Show my account email on my storefront"
+            onChange={(value) => onUpdateField("show_public_email", value)}
+          />
+          <StorefrontNote>
+            FlockFront displays the store owner&apos;s current account email. The
+            email address itself is managed from the{" "}
+            <Link className="font-bold text-emerald-900" href="/dashboard/account">
+              Account page
+            </Link>
+            .
           </StorefrontNote>
         </div>
       </StoreSetupAccordionSection>
@@ -5091,7 +5100,6 @@ function buildInitialForm(
     storefront_visibility: normalizeStorefrontVisibility(storefrontVisibility),
     npip_number: seller.npip_number ?? "",
     show_npip: seller.show_npip,
-    public_email: seller.public_email ?? "",
     show_public_email: seller.show_public_email,
     public_phone: seller.public_phone ?? "",
     show_public_phone: seller.show_public_phone,
@@ -5397,12 +5405,6 @@ function buildLaunchSummary(
       label: "About section",
       passed: isReady("about_text_present"),
       action: "Add an about section.",
-    },
-    {
-      key: "public-email",
-      label: "Public email",
-      passed: isReady("public_email_present"),
-      action: "Add a public email.",
     },
     {
       key: "inventory-quantity",

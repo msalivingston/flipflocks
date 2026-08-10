@@ -33,24 +33,22 @@ insert into auth.users (
   );
 
 insert into public.stores (
-  id, owner_user_id, store_name, store_slug, store_status, storefront_mode,
-  public_email
+  id, owner_user_id, store_name, store_slug, store_status, storefront_mode
 ) values
   (
     'f1300000-0000-4000-9000-000000000001',
     'f1300000-0000-4000-8000-000000000001',
-    'First Sale Store', 'first-sale-store', 'live', 'hosted',
-    'public@example.test'
+    'First Sale Store', 'first-sale-store', 'live', 'hosted'
   ),
   (
     'f1300000-0000-4000-9000-000000000002',
     'f1300000-0000-4000-8000-000000000002',
-    'Offline Store', 'offline-store', 'live', 'hosted', null
+    'Offline Store', 'offline-store', 'live', 'hosted'
   ),
   (
     'f1300000-0000-4000-9000-000000000003',
     'f1300000-0000-4000-8000-000000000003',
-    'Invalid Attempt Store', 'invalid-attempt-store', 'live', 'hosted', null
+    'Invalid Attempt Store', 'invalid-attempt-store', 'live', 'hosted'
   );
 
 insert into public.seller_billing_status (
