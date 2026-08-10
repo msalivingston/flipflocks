@@ -168,6 +168,10 @@ test("worker selects the invoice scope and sender without broadening existing sc
   assert.equal(sellerPaymentFailedFromEmail, "billing@flockfront.com");
   assert.match(worker, /claim_seller_subscription_payment_failed_email/);
   assert.match(worker, /p_subscription_invoice_id: invoiceScope/);
+  assert.match(worker,
+    /billing_invoice_id: notification\.subscription_invoice_id/);
+  assert.doesNotMatch(worker,
+    /\? \{ subscription_invoice_id: notification\.subscription_invoice_id \}/);
   assert.match(worker, /fromEmail: sellerPaymentFailedFromEmail/);
   assert.match(worker, /tag: "flockfront-seller-payment-failed"/);
   assert.match(worker, /claim_seller_subscription_welcome_email/);

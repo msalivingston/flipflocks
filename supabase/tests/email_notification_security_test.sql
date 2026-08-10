@@ -945,9 +945,10 @@ select results_eq(
   $expected$
     values
       ('buyer_order_confirmation'::text, 'canonical-buyer@example.test'::text),
+      ('seller_first_sale'::text, 'email-owner@example.test'::text),
       ('seller_new_order'::text, 'seller-orders@example.test'::text)
   $expected$,
-  'one order-created event creates exactly the fixed canonical pair'
+  'one order-created event preserves the canonical pair and adds the owner milestone'
 );
 
 insert into public.email_notifications (
@@ -999,8 +1000,8 @@ select is(
       interval '15 minutes'
     )
   ),
-  2::bigint,
-  'seller-scoped worker claim returns only the requested order fixed pair'
+  3::bigint,
+  'order-scoped worker claim returns the canonical pair and associated milestone'
 );
 
 select is(

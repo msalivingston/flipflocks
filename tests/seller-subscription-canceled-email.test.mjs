@@ -177,6 +177,10 @@ test("worker selects only the episode scope and billing sender", () => {
   assert.match(worker, /claim_seller_subscription_canceled_email/);
   assert.match(worker,
     /p_subscription_cancellation_episode_id: cancellationEpisodeScope/);
+  assert.match(worker,
+    /cancel_episode_id:\s*notification\.subscription_cancellation_episode_id/);
+  assert.doesNotMatch(worker,
+    /subscription_cancellation_episode_id:\s*notification\.subscription_cancellation_episode_id/);
   assert.match(worker, /fromEmail: sellerSubscriptionCanceledFromEmail/);
   assert.match(worker, /tag: "flockfront-seller-subscription-canceled"/);
   assert.match(worker, /claim_seller_subscription_payment_failed_email/);

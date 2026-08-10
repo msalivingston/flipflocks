@@ -28,6 +28,14 @@ import {
   sellerSubscriptionCanceledNotificationType,
   sellerSubscriptionCanceledSubject,
 } from "./seller-subscription-canceled.ts";
+import {
+  parseSellerFirstSaleContext,
+  parseSellerFirstSalePayload,
+  renderSellerFirstSaleEmail,
+  sellerFirstSaleFromEmail,
+  sellerFirstSaleNotificationType,
+  sellerFirstSaleSubject,
+} from "./seller-first-sale.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("FLIPFLOCKS_PUBLIC_API_ORIGIN") ??
@@ -575,6 +583,56 @@ async function renderSellerWelcomeNotification(
   };
 }
 
+async function renderSellerFirstSaleNotification(
+  supabase: SupabaseClient,
+  notification: ClaimedNotification,
+): Promise<RenderedEmail> {
+  if (
+    notification.notification_type !== sellerFirstSaleNotificationType ||
+    notification.recipient_type !== "seller_account" ||
+    !notification.order_id
+  ) {
+    throw new Error("Seller first-sale notification envelope is invalid.");
+  }
+
+  const payload = parseSellerFirstSalePayload(notification.payload);
+  if (payload.order_id !== notification.order_id.toLowerCase()) {
+    throw new Error("Seller first-sale order context does not match its envelope.");
+  }
+
+  const { data, error } = await supabase.rpc(
+    "get_seller_first_sale_context",
+    { p_order_id: payload.order_id },
+  );
+  const rows = Array.isArray(data) ? data : [];
+
+  if (error) {
+    throw new Error(error.message || "Seller first-sale context could not be resolved.");
+  }
+  if (rows.length !== 1) {
+    throw new Error("Seller first-sale context was not found.");
+  }
+
+  const context = parseSellerFirstSaleContext(rows[0]);
+  if (context.orderId !== payload.order_id) {
+    throw new Error("Seller first-sale order context is invalid.");
+  }
+  if (notification.subject_snapshot !== sellerFirstSaleSubject) {
+    throw new Error("Seller first-sale subject is invalid.");
+  }
+
+  const document = renderSellerFirstSaleEmail(context);
+  return {
+    to: context.recipientEmail,
+    fromName: "FlockFront",
+    fromEmail: sellerFirstSaleFromEmail,
+    subject: document.subject,
+    html: document.html,
+    text: document.text,
+    tag: "flockfront-seller-first-sale",
+  };
+}
+
 async function renderSellerPaymentFailedNotification(
   supabase: SupabaseClient,
   notification: ClaimedNotification,
@@ -970,11 +1028,11 @@ async function sendPostmarkEmail({
         dispatch_attempt_id: dispatchAttemptId,
         ...(notification.order_id ? { order_id: notification.order_id } : {}),
         ...(notification.subscription_invoice_id
-          ? { subscription_invoice_id: notification.subscription_invoice_id }
+          ? { billing_invoice_id: notification.subscription_invoice_id }
           : {}),
         ...(notification.subscription_cancellation_episode_id
           ? {
-            subscription_cancellation_episode_id:
+            cancel_episode_id:
               notification.subscription_cancellation_episode_id,
           }
           : {}),
@@ -1738,6 +1796,7 @@ Deno.serve(async (request: Request) => {
         if (
           !isV1OrderEmailType(notification.notification_type) &&
           notification.notification_type !== sellerWelcomeNotificationType &&
+          notification.notification_type !== sellerFirstSaleNotificationType &&
           notification.notification_type !== sellerPaymentFailedNotificationType &&
           notification.notification_type !==
             sellerSubscriptionCanceledNotificationType
@@ -1750,6 +1809,8 @@ Deno.serve(async (request: Request) => {
         const email = notification.notification_type ===
             sellerWelcomeNotificationType
           ? await renderSellerWelcomeNotification(supabase, notification)
+          : notification.notification_type === sellerFirstSaleNotificationType
+          ? await renderSellerFirstSaleNotification(supabase, notification)
           : notification.notification_type === sellerPaymentFailedNotificationType
           ? await renderSellerPaymentFailedNotification(supabase, notification)
           : notification.notification_type ===
