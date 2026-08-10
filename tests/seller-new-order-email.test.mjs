@@ -17,7 +17,7 @@ const worker = readFileSync(resolve(
 ), "utf8");
 const migration = readFileSync(resolve(
   root,
-  "supabase/migrations/20260814100000_seller_new_order_owner_email.sql",
+  "supabase/migrations/20260815100000_canonical_seller_transactional_email_routing.sql",
 ), "utf8");
 
 function context(overrides = {}) {
@@ -119,11 +119,14 @@ test("owner recipient and required authoritative context fail closed", () => {
 
 test("enqueue and claim use only the current authenticated owner for seller New Order", () => {
   assert.match(migration,
-    /v_notification_type = 'seller_new_order'[\s\S]*from auth\.users as users[\s\S]*users\.id = v_store\.owner_user_id/);
+    /when v_recipient_type = 'buyer' then[\s\S]*else \([\s\S]*from auth\.users as users[\s\S]*users\.id = v_store\.owner_user_id/);
   assert.match(migration,
     /notifications\.notification_type = 'seller_new_order'[\s\S]*owners\.email/);
   assert.doesNotMatch(
-    migration.match(/when v_notification_type = 'seller_new_order'[\s\S]*?\n\s*else/)?.[0] ?? "",
+    migration.slice(
+      migration.indexOf("v_recipient_email := case"),
+      migration.indexOf("if v_recipient_email is null"),
+    ),
     /order_notification_email|communication_email|public_email/,
   );
   assert.doesNotMatch(migration, /get_seller_new_order_recipient/);

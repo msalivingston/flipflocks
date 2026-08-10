@@ -499,28 +499,29 @@ function mediaAssetUrl(
   return url ? { url, altText: "", width: 130 } : null;
 }
 
-function renderEmail(
+async function renderEmail(
+  supabase: SupabaseClient,
   notification: ClaimedNotification,
   context: EmailContext,
   fromEmail: string,
   siteOrigin: string,
-): RenderedEmail {
+): Promise<RenderedEmail> {
   if (!isV1OrderEmailType(notification.notification_type)) {
     throw new Error(`Unsupported notification type: ${notification.notification_type}`);
   }
 
   const options = orderEmailOptions(notification.notification_type, context);
-  const sellerContactEmail = sellerOrderContactEmail(context.store);
+  const ownerEmail = await resolveStoreOwnerEmail(supabase, context.store);
   const buyerEmail = validEmailOrNull(context.order.buyer_email_snapshot);
   const canonicalRecipient = options.recipientType === "buyer"
     ? buyerEmail
-    : sellerContactEmail;
+    : ownerEmail;
 
   if (!canonicalRecipient) {
     throw new Error("Canonical recipient email address is unavailable.");
   }
 
-  const replyTo = options.recipientType === "buyer" ? sellerContactEmail : buyerEmail;
+  const replyTo = options.recipientType === "buyer" ? ownerEmail : buyerEmail;
   const orderUrl = options.includeDashboardLink
     ? `${siteOrigin.replace(/\/$/, "")}/dashboard/orders/${context.order.id}`
     : null;
@@ -539,6 +540,24 @@ function renderEmail(
     text: document.text,
     tag: "flockfront-order-notification",
   };
+}
+
+async function resolveStoreOwnerEmail(
+  supabase: SupabaseClient,
+  store: StoreRow,
+): Promise<string> {
+  const { data, error } = await supabase.auth.admin.getUserById(
+    store.owner_user_id,
+  );
+  const ownerEmail = validEmailOrNull(data?.user?.email);
+
+  if (error || !ownerEmail) {
+    throw new Error(
+      error?.message || "Store owner account email is unavailable.",
+    );
+  }
+
+  return ownerEmail;
 }
 
 async function renderSellerWelcomeNotification(
@@ -1937,7 +1956,8 @@ Deno.serve(async (request: Request) => {
             supabase,
             notification,
           )
-          : renderEmail(
+          : await renderEmail(
+            supabase,
             notification,
             await fetchEmailContext(supabase, supabaseUrl, notification),
             fromEmail,

@@ -63,6 +63,12 @@ test("dashboard uses buyer state for messaging and either row for the worker kic
     /const emailProcessingStarted = anyEmailQueued\s*\? await kickPostmarkEmailWorker\(order\.order_id\)/);
   assert.match(source,
     /shouldEmailCancellation && buyerEmailQueued && emailProcessingStarted/);
+  assert.match(source,
+    /Order has been cancelled\. A cancellation email was sent to the buyer\./);
+  assert.match(source,
+    /shouldEmailCancellation && buyerEmailQueued && emailProcessingStarted[\s\S]*\? "Order has been cancelled\. A cancellation email was sent to the buyer\."[\s\S]*: "Order has been cancelled\."/);
+  assert.doesNotMatch(source,
+    /Order canceled and customer email queued for delivery\./);
   assert.match(source, /shouldEmailCancellation && !buyerEmailQueued/);
   assert.match(source, /else if \(anyEmailQueued && !emailProcessingStarted\)/);
   assert.doesNotMatch(source,

@@ -574,8 +574,8 @@ export function OrderDetail({ orderId }: { orderId: string }) {
 
     setActionMessage(
       shouldEmailCancellation && buyerEmailQueued && emailProcessingStarted
-        ? "Order canceled and customer email queued for delivery."
-        : "Order canceled.",
+        ? "Order has been cancelled. A cancellation email was sent to the buyer."
+        : "Order has been cancelled.",
     );
     if (shouldEmailCancellation && !buyerEmailQueued) {
       setActionWarning(

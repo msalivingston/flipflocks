@@ -10,6 +10,9 @@ const queueMigration = read(
 const sellerOwnerMigration = read(
   "supabase/migrations/20260814100000_seller_new_order_owner_email.sql",
 );
+const canonicalSellerRoutingMigration = read(
+  "supabase/migrations/20260815100000_canonical_seller_transactional_email_routing.sql",
+);
 const actionMigration = read(
   "supabase/migrations/20260730171000_secure_seller_order_email_actions.sql",
 );
@@ -84,33 +87,103 @@ test("every generic queue and raw worker overload is service-role-only", () => {
 
 test("the generic enqueue primitive derives canonical identity and content", () => {
   assert.match(
-    queueMigration,
+    canonicalSellerRoutingMigration,
     /select orders\.\*[\s\S]*where orders\.id = p_order_id/,
   );
-  assert.match(queueMigration, /v_order\.store_id <> p_store_id/);
+  assert.match(canonicalSellerRoutingMigration, /v_order\.store_id <> p_store_id/);
   assert.match(
-    queueMigration,
-    /v_order\.buyer_email_snapshot[\s\S]*v_store\.order_notification_email[\s\S]*v_store\.communication_email[\s\S]*v_store\.public_email/,
+    canonicalSellerRoutingMigration,
+    /v_recipient_type = 'buyer'[\s\S]*v_order\.buyer_email_snapshot[\s\S]*from auth\.users as users[\s\S]*users\.id = v_store\.owner_user_id/,
   );
-  assert.match(
-    queueMigration,
-    /coalesce\(\s*nullif\(trim\(v_store\.order_notification_email\), ''\),\s*nullif\(trim\(v_store\.communication_email\), ''\),\s*nullif\(trim\(v_store\.public_email\), ''\)/,
+  const recipientBlock = canonicalSellerRoutingMigration.slice(
+    canonicalSellerRoutingMigration.indexOf("v_recipient_email := case"),
+    canonicalSellerRoutingMigration.indexOf("if v_recipient_email is null"),
   );
-  assert.match(queueMigration, /v_subject_snapshot := case v_notification_type/);
-  assert.match(queueMigration, /v_payload := jsonb_build_object/);
   assert.doesNotMatch(
-    queueMigration.slice(
-      queueMigration.indexOf("v_recipient_email := case"),
-      queueMigration.indexOf("v_subject_snapshot := case"),
-    ),
+    recipientBlock,
+    /order_notification_email|communication_email|public_email/,
+  );
+  assert.match(canonicalSellerRoutingMigration, /v_subject_snapshot := case v_notification_type/);
+  assert.match(canonicalSellerRoutingMigration, /v_payload := jsonb_build_object/);
+  assert.doesNotMatch(
+    recipientBlock,
     /p_recipient_email/,
   );
   assert.doesNotMatch(
-    queueMigration.slice(
-      queueMigration.indexOf("v_subject_snapshot := case"),
-      queueMigration.indexOf("v_dedupe_key :="),
+    canonicalSellerRoutingMigration.slice(
+      canonicalSellerRoutingMigration.indexOf("v_subject_snapshot := case"),
+      canonicalSellerRoutingMigration.indexOf("v_dedupe_key :="),
     ),
     /p_subject_snapshot|p_payload/,
+  );
+});
+
+test("all order seller recipients and claims use the current owner account", () => {
+  assert.match(
+    canonicalSellerRoutingMigration,
+    /when v_recipient_type = 'buyer' then[\s\S]*else \([\s\S]*from auth\.users as users[\s\S]*users\.id = v_store\.owner_user_id/,
+  );
+  assert.match(
+    canonicalSellerRoutingMigration,
+    /notifications\.notification_type = 'seller_new_order'[\s\S]*owners\.email/,
+  );
+  assert.match(
+    canonicalSellerRoutingMigration,
+    /seller_order_updated_copy'[\s\S]*seller_order_canceled_copy'[\s\S]*nullif\(trim\(owners\.email::text\), ''\) is not null/,
+  );
+  assert.match(
+    canonicalSellerRoutingMigration,
+    /recipient_email = claimable\.canonical_recipient_email/,
+  );
+  assert.doesNotMatch(
+    canonicalSellerRoutingMigration.match(
+      /create or replace function public\.claim_email_notifications_internal[\s\S]*?\$function\$;/,
+    )?.[0] ?? "",
+    /stores\.order_notification_email|stores\.communication_email|stores\.public_email/,
+  );
+  assert.doesNotMatch(
+    canonicalSellerRoutingMigration.match(
+      /create or replace function public\.seller_enqueue_updated_order_email[\s\S]*?\$function\$;/,
+    )?.[0] ?? "",
+    /order_notification_email|communication_email|public_email/,
+  );
+});
+
+test("legacy unsent seller copies are rebound in place without changing identity", () => {
+  const rebind = canonicalSellerRoutingMigration.match(
+    /update public\.email_notifications as notifications[\s\S]*?notifications\.recipient_email is distinct from lower\(trim\(owners\.email::text\)\);/,
+  )?.[0] ?? "";
+  assert.match(rebind, /seller_order_updated_copy/);
+  assert.match(rebind, /seller_order_canceled_copy/);
+  assert.match(rebind, /notification_status in \('pending', 'failed', 'processing'\)/);
+  assert.match(rebind, /dispatch_started_at is null/);
+  assert.doesNotMatch(rebind, /dedupe_key\s*=|notification_status\s*=|attempt_count\s*=/);
+});
+
+test("generic order rendering resolves owner at send time for recipient and Reply-To", () => {
+  const renderer = worker.match(
+    /async function renderEmail[\s\S]*?\n}\n\nasync function resolveStoreOwnerEmail/,
+  )?.[0] ?? "";
+  const ownerResolver = worker.match(
+    /async function resolveStoreOwnerEmail[\s\S]*?\n}\n\nasync function renderSellerWelcomeNotification/,
+  )?.[0] ?? "";
+  assert.match(renderer, /await resolveStoreOwnerEmail\(supabase, context\.store\)/);
+  assert.match(renderer, /recipientType === "buyer"[\s\S]*buyerEmail[\s\S]*ownerEmail/);
+  assert.match(renderer, /recipientType === "buyer" \? ownerEmail : buyerEmail/);
+  assert.doesNotMatch(
+    renderer,
+    /sellerOrderContactEmail|order_notification_email|communication_email|public_email/,
+  );
+  assert.match(ownerResolver, /supabase\.auth\.admin\.getUserById/);
+  assert.match(ownerResolver, /store\.owner_user_id/);
+});
+
+test("routing-only migration preserves legacy columns and public storefront email", () => {
+  assert.doesNotMatch(canonicalSellerRoutingMigration, /drop\s+column/i);
+  assert.doesNotMatch(canonicalSellerRoutingMigration, /show_public_email/);
+  assert.match(
+    read("app/store/[slug]/storefront-shell-components.tsx"),
+    /store\.public_email[\s\S]*mailto:\$\{store\.public_email\}/,
   );
 });
 

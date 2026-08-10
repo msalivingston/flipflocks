@@ -583,9 +583,9 @@ select results_eq(
   $expected$
     values
       ('buyer_order_updated'::text, 'canonical-buyer@example.test'::text),
-      ('seller_order_updated_copy'::text, 'seller-orders@example.test'::text)
+      ('seller_order_updated_copy'::text, 'email-owner@example.test'::text)
   $expected$,
-  'updated-order pair uses canonical buyer and seller recipients'
+  'updated-order pair uses the buyer snapshot and current owner account'
 );
 
 set local role authenticated;
@@ -851,9 +851,9 @@ select results_eq(
     )
   $test$,
   $expected$
-    values (false, false)
+    values (true, true)
   $expected$,
-  'missing canonical seller recipient creates no partial update pair'
+  'missing legacy store emails do not suppress the canonical update pair'
 );
 
 reset role;
@@ -864,8 +864,64 @@ select is(
     from public.email_notifications
     where order_id = 'b6000000-0000-4000-8000-000000000032'
   ),
-  0::bigint,
-  'missing canonical recipient leaves no sendable queue row'
+  2::bigint,
+  'missing legacy store emails still leave both update notifications queued'
+);
+
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+
+select lives_ok(
+  $call$
+    select public.enqueue_email_notification(
+      'b6000000-0000-4000-8000-000000000012',
+      'b6000000-0000-4000-8000-000000000032',
+      'buyer_order_canceled',
+      'buyer',
+      null,
+      null,
+      '{}'::jsonb,
+      'test-cancel'
+    )
+  $call$,
+  'buyer cancellation notification keeps the buyer snapshot recipient'
+);
+
+select lives_ok(
+  $call$
+    select public.enqueue_email_notification(
+      'b6000000-0000-4000-8000-000000000012',
+      'b6000000-0000-4000-8000-000000000032',
+      'seller_order_canceled_copy',
+      'seller',
+      null,
+      null,
+      '{}'::jsonb,
+      'test-cancel'
+    )
+  $call$,
+  'seller cancellation copy uses the owner despite missing legacy emails'
+);
+
+reset role;
+
+select results_eq(
+  $test$
+    select notification_type, recipient_email
+    from public.email_notifications
+    where order_id = 'b6000000-0000-4000-8000-000000000032'
+      and notification_type in (
+        'buyer_order_canceled',
+        'seller_order_canceled_copy'
+      )
+    order by notification_type
+  $test$,
+  $expected$
+    values
+      ('buyer_order_canceled'::text, 'missing-recipient-buyer@example.test'::text),
+      ('seller_order_canceled_copy'::text, 'email-owner@example.test'::text)
+  $expected$,
+  'cancellation pair uses buyer snapshot and owner account recipients'
 );
 
 select set_config('request.jwt.claim.role', 'service_role', true);
@@ -893,6 +949,7 @@ select results_eq(
     select notification_type, recipient_type, recipient_email
     from public.email_notifications
     where order_id = 'b6000000-0000-4000-8000-000000000032'
+      and notification_type = 'seller_new_order'
   $test$,
   $expected$
     values (
