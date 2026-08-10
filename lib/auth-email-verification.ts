@@ -28,6 +28,10 @@ export function authCallbackUrl(origin: string) {
   return `${origin.replace(/\/$/, "")}${authCallbackPath}`;
 }
 
+export function signupSuccessNextStep(data: { session: unknown | null }) {
+  return data.session ? "onboarding" : "check-email";
+}
+
 export function hasBrowserAuthRecoverySignal(location: BrowserLocation) {
   const hashParams = new URLSearchParams(location.hash.replace(/^#/, ""));
   const searchParams = new URLSearchParams(location.search);

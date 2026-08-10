@@ -7,6 +7,7 @@ import {
   authCallbackError,
   authCallbackUrl,
   friendlyVerificationResendError,
+  signupSuccessNextStep,
   waitForBrowserAuthSession,
 } from "../lib/auth-email-verification.ts";
 
@@ -139,19 +140,41 @@ test("resend errors distinguish rate limits without exposing account existence",
 
 test("signup supplies callback URL and preserves immediate-session onboarding", async () => {
   const signup = await readFile(signupPath, "utf8");
+  const session = recoveredSession();
 
   assert.match(signup, /authCallbackUrl\(window\.location\.origin\)/);
   assert.match(signup, /supabase\.auth\.signUp\([\s\S]*?emailRedirectTo: callbackUrl/);
+  assert.equal(
+    signupSuccessNextStep({ user: { id: "seller-id" }, session }),
+    "onboarding",
+  );
   assert.match(
     signup,
-    /if \(data\.user && data\.session\)[\s\S]*?router\.push\("\/onboarding"\)/,
+    /if \(signupSuccessNextStep\(data\) === "onboarding"\)[\s\S]*?router\.push\("\/onboarding"\)/,
   );
+});
+
+test("successful signup with the live null-user null-session shape shows check email", async () => {
+  const response = {
+    data: { user: null, session: null },
+    error: null,
+  };
+
+  assert.equal(response.error, null);
+  assert.equal(signupSuccessNextStep(response.data), "check-email");
+
+  const signup = await readFile(signupPath, "utf8");
+  assert.ok(signup.indexOf("if (error)") < signup.indexOf("signupSuccessNextStep(data)"));
+  assert.doesNotMatch(signup, /data\.user && !data\.session/);
 });
 
 test("no-session signup shows the complete mobile-usable check-email state", async () => {
   const signup = await readFile(signupPath, "utf8");
 
-  assert.match(signup, /if \(data\.user && !data\.session\)[\s\S]*?setView\("check-email"\)/);
+  assert.match(
+    signup,
+    /signupSuccessNextStep\(data\) === "onboarding"[\s\S]*?setView\("check-email"\)/,
+  );
   assert.match(signup, />\s*Check your email\s*</);
   assert.match(signup, /We sent a verification link to/);
   assert.match(signup, /continue setting up your FlockFront account/);
@@ -233,6 +256,10 @@ test("password reset behavior remains on the existing current-origin recovery pa
 test("existing-account handling remains deliberately non-disclosing", async () => {
   const signup = await readFile(signupPath, "utf8");
 
+  assert.equal(
+    signupSuccessNextStep({ user: { id: "obfuscated" }, session: null }),
+    "check-email",
+  );
   assert.doesNotMatch(signup, /account may already exist/i);
   assert.doesNotMatch(signup, /user already registered/i);
   assert.match(signup, /For privacy, we will not\s+confirm whether an account exists/);

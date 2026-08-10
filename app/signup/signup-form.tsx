@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   authCallbackUrl,
   friendlyVerificationResendError,
+  signupSuccessNextStep,
 } from "@/lib/auth-email-verification";
 import { legalRoutes } from "@/lib/legal";
 import { supabase } from "@/lib/supabase";
@@ -111,25 +112,18 @@ export function SignupForm({
         return;
       }
 
-      if (data.user && data.session) {
+      if (signupSuccessNextStep(data) === "onboarding") {
         router.push("/onboarding");
         return;
       }
 
-      if (data.user && !data.session) {
-        setPendingEmail(normalizedEmail);
-        setEmail(normalizedEmail);
-        setResendMessage(null);
-        setResendError(null);
-        setView("check-email");
-        setIsSubmitting(false);
-        return;
-      }
-
-      setErrors({
-        form: "We could not complete signup. Please try again or sign in if you already have an account.",
-      });
+      setPendingEmail(normalizedEmail);
+      setEmail(normalizedEmail);
+      setResendMessage(null);
+      setResendError(null);
+      setView("check-email");
       setIsSubmitting(false);
+      return;
     } catch {
       setErrors({
         form: "We could not reach the signup service. Please check your connection and try again.",
