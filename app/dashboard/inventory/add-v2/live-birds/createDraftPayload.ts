@@ -5,7 +5,7 @@ import {
 } from "./payloadPreview";
 import type { BirdOffering, SpeciesOption } from "./types";
 
-export type CreateLiveBirdsDraftPayload = {
+export type CreateLiveBirdsPayload = {
   p_store_id: string;
   p_species_id: string;
   p_batch_type: "live_animals";
@@ -33,9 +33,19 @@ export type CreateLiveBirdsDraftPayload = {
   p_auto_price_increase_enabled: false;
   p_auto_price_increase_amount: null;
   p_auto_price_increase_max_price: null;
-  p_internal_batch_label: typeof liveBirdsV2DraftMarker;
+  p_internal_batch_label: typeof liveBirdsV2DraftMarker | null;
   p_seller_notes: null;
+  p_visibility_status: "active" | "hidden";
+};
+
+export type CreateLiveBirdsDraftPayload = CreateLiveBirdsPayload & {
+  p_internal_batch_label: typeof liveBirdsV2DraftMarker;
   p_visibility_status: "hidden";
+};
+
+export type CreateLiveBirdsPublishPayload = CreateLiveBirdsPayload & {
+  p_internal_batch_label: null;
+  p_visibility_status: "active";
 };
 
 export function buildCreateLiveBirdsDraftPayload({
@@ -51,6 +61,66 @@ export function buildCreateLiveBirdsDraftPayload({
   species: SpeciesOption;
   storeId: string;
 }): CreateLiveBirdsDraftPayload | null {
+  const payload = buildCreateLiveBirdsPayload({
+    availableDate,
+    hatchDate,
+    offerings,
+    species,
+    storeId,
+  });
+
+  return payload
+    ? {
+        ...payload,
+        p_internal_batch_label: liveBirdsV2DraftMarker,
+        p_visibility_status: "hidden",
+      }
+    : null;
+}
+
+export function buildCreateLiveBirdsPublishPayload({
+  availableDate,
+  hatchDate,
+  offerings,
+  species,
+  storeId,
+}: {
+  availableDate: string;
+  hatchDate: string;
+  offerings: BirdOffering[];
+  species: SpeciesOption;
+  storeId: string;
+}): CreateLiveBirdsPublishPayload | null {
+  const payload = buildCreateLiveBirdsPayload({
+    availableDate,
+    hatchDate,
+    offerings,
+    species,
+    storeId,
+  });
+
+  return payload
+    ? {
+        ...payload,
+        p_internal_batch_label: null,
+        p_visibility_status: "active",
+      }
+    : null;
+}
+
+function buildCreateLiveBirdsPayload({
+  availableDate,
+  hatchDate,
+  offerings,
+  species,
+  storeId,
+}: {
+  availableDate: string;
+  hatchDate: string;
+  offerings: BirdOffering[];
+  species: SpeciesOption;
+  storeId: string;
+}): CreateLiveBirdsPayload | null {
   if (!species.id) return null;
 
   const basePrice = getBasePrice(offerings);
@@ -66,9 +136,9 @@ export function buildCreateLiveBirdsDraftPayload({
     p_auto_price_increase_enabled: false,
     p_auto_price_increase_amount: null,
     p_auto_price_increase_max_price: null,
-    p_internal_batch_label: liveBirdsV2DraftMarker,
+    p_internal_batch_label: null,
     p_seller_notes: null,
-    p_visibility_status: "hidden",
+    p_visibility_status: "active",
   };
 }
 
@@ -78,10 +148,10 @@ function getBreedGroups({
 }: {
   basePrice: number;
   offerings: BirdOffering[];
-}): CreateLiveBirdsDraftPayload["p_breed_groups"] {
+}): CreateLiveBirdsPayload["p_breed_groups"] {
   const groupsByBreedProfileId = new Map<
     string,
-    CreateLiveBirdsDraftPayload["p_breed_groups"][number]
+    CreateLiveBirdsPayload["p_breed_groups"][number]
   >();
 
   offerings.forEach((offering) => {

@@ -9,6 +9,7 @@ import {
   type SaleCategory,
 } from "@/lib/plan-capabilities";
 import { useSellerContext } from "../../_components/seller-context";
+import type { LiveBirdListingPublicationState } from "../_lib/live-bird-draft-state";
 import {
   DashboardPageContent,
   SellerPageHeader,
@@ -94,19 +95,26 @@ export default function AddInventoryV2Page() {
       setDraftsLoading(true);
       setDraftsError(null);
 
-      const { data, error } = await supabase
-        .from("seller_inventory_management")
-        .select(
-          "listing_batch_id, listing_batch_breed_id, inventory_item_id, species_name, origin_date, available_date, listing_batch_breed_visibility_status, inventory_visibility_status, listing_batch_updated_at, inventory_updated_at",
-        )
-        .eq("store_id", seller.store_id)
-        .eq("batch_type", "live_animals")
-        .eq("listing_batch_visibility_status", "hidden")
-        .eq("internal_batch_label", liveBirdsV2DraftMarker)
-        .order("listing_batch_updated_at", { ascending: false })
-        .returns<DraftRow[]>();
+      const [draftRowsResult, publicationStateResult] = await Promise.all([
+        supabase
+          .from("seller_inventory_management")
+          .select(
+            "listing_batch_id, listing_batch_breed_id, inventory_item_id, species_name, origin_date, available_date, listing_batch_breed_visibility_status, inventory_visibility_status, listing_batch_updated_at, inventory_updated_at",
+          )
+          .eq("store_id", seller.store_id)
+          .eq("batch_type", "live_animals")
+          .eq("listing_batch_visibility_status", "hidden")
+          .eq("internal_batch_label", liveBirdsV2DraftMarker)
+          .order("listing_batch_updated_at", { ascending: false })
+          .returns<DraftRow[]>(),
+        supabase.rpc("seller_get_live_bird_listing_publication_states", {
+          p_store_id: seller.store_id,
+        }),
+      ]);
 
       if (!isMounted) return;
+
+      const error = draftRowsResult.error ?? publicationStateResult.error;
 
       if (error) {
         setDraftsError(error.message);
@@ -115,7 +123,20 @@ export default function AddInventoryV2Page() {
         return;
       }
 
-      setDraftRows(data ?? []);
+      const unfinishedDraftIds = new Set(
+        (Array.isArray(publicationStateResult.data)
+          ? (publicationStateResult.data as LiveBirdListingPublicationState[])
+          : []
+        )
+          .filter((state) => state.is_unfinished_add_v2_draft)
+          .map((state) => state.listing_batch_id),
+      );
+
+      setDraftRows(
+        (draftRowsResult.data ?? []).filter((row) =>
+          unfinishedDraftIds.has(row.listing_batch_id),
+        ),
+      );
       setDraftsLoading(false);
     }
 

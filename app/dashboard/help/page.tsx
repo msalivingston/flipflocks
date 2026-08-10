@@ -117,7 +117,7 @@ const commonQuestions = [
   {
     question: "Why can't customers see my store?",
     answer:
-      "Open Store Admin and check Store status. Finish every required item, select Launch Store, then select Show Store and Save. Also make sure at least one inventory item is published and has quantity available.",
+      "Open Store Admin and check Store status. Finish every required item, then select Launch Store. Launching makes the storefront live and visible. Also make sure at least one inventory item is published and has quantity available.",
   },
   {
     question: "How does age-based pricing work?",

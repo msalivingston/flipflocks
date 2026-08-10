@@ -1,9 +1,12 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(26);
+select plan(32);
 
 select set_config('request.jwt.claim.role', 'service_role', true);
+
+grant select on public.stores, public.media_assets, public.media_links
+  to authenticated;
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -99,6 +102,39 @@ select is(
   'the bootstrap creates one unpublished private draft store'
 );
 
+select results_eq(
+  $$
+    select media_assets.source_image_url, media_links.is_featured
+    from public.media_links
+    join public.media_assets on media_assets.id = media_links.media_asset_id
+    where media_links.store_id = (
+      select id from public.stores
+      where owner_user_id = 'e5000000-0000-4000-8000-000000000001'::uuid
+    )
+      and media_links.entity_type = 'store'
+      and media_links.display_context = 'hero'
+      and media_links.visibility_status = 'active'
+  $$,
+  $$values ('/storefront-heroes/sunlit-pasture-flock.png'::text, true)$$,
+  'a newly created store receives the persisted stock hero'
+);
+
+select is(
+  (
+    select count(*)
+    from public.media_links
+    where store_id = (
+      select id from public.stores
+      where owner_user_id = 'e5000000-0000-4000-8000-000000000001'::uuid
+    )
+      and entity_type = 'store'
+      and display_context = 'hero'
+      and visibility_status = 'active'
+  ),
+  1::bigint,
+  'new-store initialization creates exactly one active hero link'
+);
+
 select is(
   (
     select count(*)::integer
@@ -134,6 +170,16 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 
 select lives_ok(
+  $$select * from public.seller_select_store_hero_library(
+    (select id from public.stores
+     where owner_user_id = 'e5000000-0000-4000-8000-000000000001'::uuid),
+    '/storefront-heroes/barnyard-golden-hour.png',
+    'Seller selected hero'
+  )$$,
+  'the seller can replace the initialized hero through existing controls'
+);
+
+select lives_ok(
   $call$
     select * from public.seller_bootstrap_store_from_onboarding(
       '{
@@ -166,8 +212,40 @@ select results_eq(
   'editing Farm Basics preserves saved storefront copy and still leaves pickup unset'
 );
 
+select results_eq(
+  $$
+    select media_assets.source_image_url
+    from public.media_links
+    join public.media_assets on media_assets.id = media_links.media_asset_id
+    where media_links.store_id = (
+      select id from public.stores
+      where owner_user_id = 'e5000000-0000-4000-8000-000000000001'::uuid
+    )
+      and media_links.entity_type = 'store'
+      and media_links.display_context = 'hero'
+      and media_links.visibility_status = 'active'
+  $$,
+  $$values ('/storefront-heroes/barnyard-golden-hour.png'::text)$$,
+  'rerunning onboarding preserves the seller custom hero'
+);
+
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
+
+select lives_ok(
+  $$select * from public.seller_archive_media_link(
+    (select id from public.media_links
+     where store_id = (
+       select id from public.stores
+       where owner_user_id = 'e5000000-0000-4000-8000-000000000001'::uuid
+     )
+       and entity_type = 'store'
+       and display_context = 'hero'
+       and visibility_status = 'active'
+     limit 1)
+  )$$,
+  'the seller can remove the selected hero through existing controls'
+);
 
 select throws_ok(
   $$select * from public.seller_save_onboarding_storefront_details(
@@ -215,6 +293,22 @@ select results_eq(
     false, false, false, 'onboarding-simplified-farm-renamed'::text
   )$$,
   'Storefront Details changes only its allocated storefront fields'
+);
+
+select is(
+  (
+    select count(*)
+    from public.media_links
+    where store_id = (
+      select id from public.stores
+      where owner_user_id = 'e5000000-0000-4000-8000-000000000001'::uuid
+    )
+      and entity_type = 'store'
+      and display_context = 'hero'
+      and visibility_status = 'active'
+  ),
+  0::bigint,
+  'later unrelated onboarding saves do not recreate a deliberately removed hero'
 );
 
 select results_eq(

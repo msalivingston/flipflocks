@@ -45,7 +45,11 @@ import {
   liveBirdsV2DraftMarker,
   supportedSpeciesSlugs,
 } from "./constants";
-import { buildCreateLiveBirdsDraftPayload } from "./createDraftPayload";
+import {
+  buildCreateLiveBirdsDraftPayload,
+  buildCreateLiveBirdsPublishPayload,
+  type CreateLiveBirdsPublishPayload,
+} from "./createDraftPayload";
 import {
   areAllReadinessChecksComplete,
   getAgeAtAvailability,
@@ -143,6 +147,17 @@ type EditSaveStatus = "idle" | "saving" | "success" | "error";
 
 type LivePoultryPublishSuccessDialogState = {
   products: LivePoultryShareProduct[];
+};
+
+type LiveBirdPublishAllowance = {
+  effective_plan_key: string;
+  active_bird_limit: number | null;
+  currently_active_bird_units: number;
+  requested_bird_units: number;
+  remaining_bird_units: number | null;
+  can_publish?: boolean;
+  published?: boolean;
+  listing_batch_id?: string;
 };
 
 const showDeveloperSavePreview =
@@ -1385,6 +1400,93 @@ export function LiveBirdsListingForm({
     return { ok: true, listingBatchId: createdDraft.listing_batch_id };
   }
 
+  async function createPublishedListing({
+    offeringsToSave,
+    payload,
+    storeId,
+  }: {
+    offeringsToSave: BirdOffering[];
+    payload: CreateLiveBirdsPublishPayload;
+    storeId: string;
+  }): Promise<{ ok: true; listingBatchId: string } | { ok: false; message: string }> {
+    const descriptionResult = await saveBreedDescriptionsToLibrary({
+      offeringsToSave,
+      storeId,
+    });
+
+    if (!descriptionResult.ok) {
+      return {
+        ok: false,
+        message: `Breed description could not be updated. ${descriptionResult.message}`,
+      };
+    }
+
+    const createResult = await supabase.rpc(
+      "seller_create_listing_batch_with_inventory",
+      payload,
+    );
+
+    if (createResult.error) {
+      return { ok: false, message: createResult.error.message };
+    }
+
+    const createdRows = Array.isArray(createResult.data)
+      ? (createResult.data as CreateDraftResult[])
+      : [];
+    const createdListing = createdRows[0];
+
+    if (!createdListing?.listing_batch_id) {
+      return { ok: false, message: "The listing could not be created." };
+    }
+
+    const priceAdjustmentResult = await savePriceAdjustmentForBatch(
+      createdListing.listing_batch_id,
+    );
+
+    if (!priceAdjustmentResult.ok) {
+      return {
+        ok: false,
+        message: `The listing was published, but age-based price changes could not be saved. ${priceAdjustmentResult.message}`,
+      };
+    }
+
+    return { ok: true, listingBatchId: createdListing.listing_batch_id };
+  }
+
+  async function preflightLiveBirdPublication({
+    draftId,
+    payload,
+    storeId,
+  }: {
+    draftId: string | null;
+    payload: CreateLiveBirdsPublishPayload;
+    storeId: string;
+  }): Promise<
+    | { ok: true; allowance: LiveBirdPublishAllowance }
+    | { ok: false; message: string }
+  > {
+    const result = await supabase.rpc("seller_preflight_live_bird_publication", {
+      p_store_id: storeId,
+      p_breed_groups: payload.p_breed_groups,
+      p_excluded_listing_batch_id: draftId,
+    });
+
+    if (result.error) {
+      return { ok: false, message: result.error.message };
+    }
+
+    const rows = Array.isArray(result.data)
+      ? (result.data as LiveBirdPublishAllowance[])
+      : [];
+    const allowance = rows[0];
+
+    if (!allowance) {
+      return { ok: false, message: "The publication allowance could not be checked." };
+    }
+
+    return { ok: true, allowance };
+  }
+
   async function updateHiddenDraft({
     draftId,
     offeringsToSave = offerings,
@@ -1804,37 +1906,117 @@ export function LiveBirdsListingForm({
     setPublishMessage(null);
     setSaveDraftMessage(null);
 
-    const saveResult = await saveCurrentHiddenDraft({
-      draftId: currentSavedDraftId,
-      offeringsToSave,
+    const publishPayload = buildCreateLiveBirdsPublishPayload({
+      availableDate,
+      hatchDate,
+      offerings: offeringsToSave,
+      species,
       storeId: seller.store_id,
     });
 
-    if (!saveResult.ok) {
+    if (!publishPayload) {
       setPublishStatus("error");
-      setPublishMessage(
-        `Inventory could not be published. ${saveResult.message}`,
-      );
+      setPublishMessage("Inventory could not be published. The listing payload could not be prepared.");
       return;
     }
 
-    const publishResult = await supabase.rpc(
-      "seller_set_listing_batch_visibility",
-      {
-        p_listing_batch_id: saveResult.listingBatchId,
-        p_visibility_status: "active",
-        p_note: "Published from Add Inventory v2.",
-      },
-    );
+    const preflightResult = await preflightLiveBirdPublication({
+      draftId: currentSavedDraftId,
+      payload: publishPayload,
+      storeId: seller.store_id,
+    });
 
-    if (publishResult.error) {
+    if (!preflightResult.ok) {
       setPublishStatus("error");
-      setPublishMessage(`Draft could not be published. ${publishResult.error.message}`);
+      setPublishMessage(`Inventory could not be published. ${preflightResult.message}`);
       return;
+    }
+
+    if (preflightResult.allowance.can_publish === false) {
+      setPublishStatus("error");
+      setPublishMessage(formatCoopAllowanceMessage(preflightResult.allowance));
+      return;
+    }
+
+    let publishedListingBatchId: string;
+
+    if (currentSavedDraftId) {
+      const saveResult = await saveCurrentHiddenDraft({
+        draftId: currentSavedDraftId,
+        offeringsToSave,
+        storeId: seller.store_id,
+      });
+
+      if (!saveResult.ok) {
+        setPublishStatus("error");
+        setPublishMessage(`Draft could not be published. ${saveResult.message}`);
+        return;
+      }
+
+      const publishResult = await supabase.rpc("seller_publish_live_bird_draft", {
+        p_listing_batch_id: saveResult.listingBatchId,
+      });
+
+      if (publishResult.error) {
+        setPublishStatus("error");
+        setPublishMessage(`Draft could not be published. ${publishResult.error.message}`);
+        return;
+      }
+
+      const publishRows = Array.isArray(publishResult.data)
+        ? (publishResult.data as LiveBirdPublishAllowance[])
+        : [];
+      const publication = publishRows[0];
+
+      if (!publication?.published) {
+        setPublishStatus("error");
+        setPublishMessage(
+          publication
+            ? formatCoopAllowanceMessage(publication)
+            : "Draft could not be published. The publication result was unavailable.",
+        );
+        return;
+      }
+
+      publishedListingBatchId =
+        publication.listing_batch_id ?? saveResult.listingBatchId;
+    } else {
+      const createResult = await createPublishedListing({
+        offeringsToSave,
+        payload: publishPayload,
+        storeId: seller.store_id,
+      });
+
+      if (!createResult.ok) {
+        let allowanceMessage: string | null = null;
+
+        if (isCoopAllowanceDatabaseError(createResult.message)) {
+          const refreshedPreflight = await preflightLiveBirdPublication({
+            draftId: null,
+            payload: publishPayload,
+            storeId: seller.store_id,
+          });
+
+          allowanceMessage = formatCoopAllowanceMessage(
+            refreshedPreflight.ok
+              ? refreshedPreflight.allowance
+              : preflightResult.allowance,
+          );
+        }
+
+        setPublishStatus("error");
+        setPublishMessage(
+          allowanceMessage ??
+            `Inventory could not be published. ${createResult.message}`,
+        );
+        return;
+      }
+
+      publishedListingBatchId = createResult.listingBatchId;
     }
 
     const shareProductsResult = await loadLivePoultryShareProducts({
-      listingBatchId: saveResult.listingBatchId,
+      listingBatchId: publishedListingBatchId,
       storeId: seller.store_id,
       storeName: seller.store_name,
       storeSlug: seller.store_slug,
@@ -1845,12 +2027,12 @@ export function LiveBirdsListingForm({
 
     if (!shareProductsResult.ok) {
       console.error("Live poultry share products could not be loaded", {
-        listingBatchId: saveResult.listingBatchId,
+        listingBatchId: publishedListingBatchId,
         message: shareProductsResult.message,
       });
     }
 
-    setPublishedListingBatchId(saveResult.listingBatchId);
+    setPublishedListingBatchId(publishedListingBatchId);
     setPublishStatus("success");
     setPublishMessage("Published to storefront.");
     if (!isEditMode) {
@@ -1862,7 +2044,7 @@ export function LiveBirdsListingForm({
       products:
         shareProducts.length > 0
           ? shareProducts
-          : [buildFallbackLivePoultryShareProduct(saveResult.listingBatchId)],
+          : [buildFallbackLivePoultryShareProduct(publishedListingBatchId)],
     });
   }
 
@@ -4555,4 +4737,18 @@ async function loadBreedMediaItems({
   if (error) return { error: error.message };
 
   return { items: data ?? [] };
+}
+
+function formatCoopAllowanceMessage(allowance: LiveBirdPublishAllowance) {
+  const limit = allowance.active_bird_limit ?? 5;
+  const remaining = allowance.remaining_bird_units ?? 0;
+  const requested = allowance.requested_bird_units;
+  const spotLabel = remaining === 1 ? "spot" : "spots";
+  const birdLabel = requested === 1 ? "bird" : "birds";
+
+  return `Your Coop plan allows up to ${limit} birds for sale at a time. You currently have ${remaining} available ${spotLabel}, but this listing contains ${requested} ${birdLabel}. Reduce the listing to ${remaining} birds or upgrade to Market. You can also click Save Draft to save the full listing without publishing it yet; drafts do not count against your active-bird allowance.`;
+}
+
+function isCoopAllowanceDatabaseError(message: string) {
+  return message.includes("Coop includes up to 5 active birds");
 }

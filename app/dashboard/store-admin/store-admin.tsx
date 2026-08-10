@@ -1960,7 +1960,7 @@ export function StoreAdmin() {
     }
 
     const shouldLaunch = window.confirm(
-      "Launch this store now? This changes the store lifecycle to live, but does not enable the public storefront.",
+      "Launch this store now? Your storefront will become live and visible to customers.",
     );
 
     if (!shouldLaunch) return;
@@ -1991,7 +1991,7 @@ export function StoreAdmin() {
     setIsLaunching(false);
     setSaveState("saved");
     setSaveMessage(
-      "Store launched. Use storefront visibility to decide when customers can see it.",
+      "Store launched. Your storefront is now live and visible to customers.",
     );
     await reloadReadiness();
     reload();

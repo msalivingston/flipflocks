@@ -42,6 +42,11 @@ import {
 import {
   type ProcessedPoultryInventoryRow,
 } from "../_lib/processed-poultry-inventory";
+import {
+  getCoopActivationErrorMessage,
+  getLiveBirdInventoryManageHref,
+  type LiveBirdListingPublicationState,
+} from "./_lib/live-bird-draft-state";
 
 type InventoryRow = {
   store_id: string;
@@ -67,6 +72,9 @@ type InventoryRow = {
   listing_batch_moderation_status: string;
   operational_availability_status: string;
   inventory_seller_notes: string | null;
+  internal_batch_label: string | null;
+  has_published_activity: boolean;
+  is_unfinished_add_v2_draft: boolean;
   archived_at: string | null;
   inventory_updated_at: string | null;
 };
@@ -275,7 +283,7 @@ const ageTooltipText =
 const reservedTooltipText =
   "Reserved inventory has been sold but not picked up or fulfilled yet.";
 const liveBirdInventorySelect =
-  "store_id, listing_batch_id, listing_batch_breed_id, inventory_item_id, species_name, species_slug, breed_display_name, batch_type, origin_date, available_date, quantity_available, inventory_type, custom_inventory_label, effective_unit_price, price_override, inventory_item_sort_order, inventory_visibility_status, inventory_moderation_status, listing_batch_breed_visibility_status, listing_batch_visibility_status, listing_batch_moderation_status, operational_availability_status, inventory_seller_notes, archived_at, inventory_updated_at";
+  "store_id, listing_batch_id, listing_batch_breed_id, inventory_item_id, species_name, species_slug, breed_display_name, batch_type, origin_date, available_date, quantity_available, inventory_type, custom_inventory_label, effective_unit_price, price_override, inventory_item_sort_order, inventory_visibility_status, inventory_moderation_status, listing_batch_breed_visibility_status, listing_batch_visibility_status, listing_batch_moderation_status, operational_availability_status, inventory_seller_notes, internal_batch_label, archived_at, inventory_updated_at";
 
 const ageFilterOptions: { label: string; value: AgeFilter }[] = [
   { label: "All ages", value: "all" },
@@ -441,6 +449,7 @@ export function InventoryManagement() {
 
       const [
         inventoryResult,
+        publicationStateResult,
         reservedResult,
         equipmentResult,
         processedPoultryResult,
@@ -458,6 +467,9 @@ export function InventoryManagement() {
           .order("species_name", { ascending: true })
           .order("breed_display_name", { ascending: true })
           .returns<InventoryRow[]>(),
+        supabase.rpc("seller_get_live_bird_listing_publication_states", {
+          p_store_id: seller.store_id,
+        }),
         supabase
           .from("seller_order_item_detail")
           .select(
@@ -503,6 +515,7 @@ export function InventoryManagement() {
 
       const firstError =
         inventoryResult.error ??
+        publicationStateResult.error ??
         reservedResult.error ??
         equipmentResult.error ??
         processedPoultryResult.error ??
@@ -515,7 +528,14 @@ export function InventoryManagement() {
         return;
       }
 
-      setRows(inventoryResult.data ?? []);
+      setRows(
+        mergeLiveBirdPublicationStates(
+          inventoryResult.data ?? [],
+          Array.isArray(publicationStateResult.data)
+            ? (publicationStateResult.data as LiveBirdListingPublicationState[])
+            : [],
+        ),
+      );
       setEquipmentRows(equipmentResult.data ?? []);
       setProcessedPoultryRows(processedPoultryResult.data ?? []);
       setHatchingEggRows(hatchingEggResult.data ?? []);
@@ -1045,23 +1065,35 @@ export function InventoryManagement() {
   async function refetchLiveBirdInventoryRows() {
     if (!seller) return;
 
-    const result = await supabase
-      .from("seller_inventory_management")
-      .select(liveBirdInventorySelect)
-      .eq("store_id", seller.store_id)
-      .neq("batch_type", "hatching_eggs")
-      .neq("inventory_type", "hatching_eggs")
-      .eq("inventory_moderation_status", "normal")
-      .eq("listing_batch_moderation_status", "normal")
-      .order("species_name", { ascending: true })
-      .order("breed_display_name", { ascending: true })
-      .returns<InventoryRow[]>();
+    const [result, publicationStateResult] = await Promise.all([
+      supabase
+        .from("seller_inventory_management")
+        .select(liveBirdInventorySelect)
+        .eq("store_id", seller.store_id)
+        .neq("batch_type", "hatching_eggs")
+        .neq("inventory_type", "hatching_eggs")
+        .eq("inventory_moderation_status", "normal")
+        .eq("listing_batch_moderation_status", "normal")
+        .order("species_name", { ascending: true })
+        .order("breed_display_name", { ascending: true })
+        .returns<InventoryRow[]>(),
+      supabase.rpc("seller_get_live_bird_listing_publication_states", {
+        p_store_id: seller.store_id,
+      }),
+    ]);
 
-    if (result.error) {
-      throw new Error(result.error.message);
+    if (result.error || publicationStateResult.error) {
+      throw new Error(result.error?.message ?? publicationStateResult.error?.message);
     }
 
-    setRows(result.data ?? []);
+    setRows(
+      mergeLiveBirdPublicationStates(
+        result.data ?? [],
+        Array.isArray(publicationStateResult.data)
+          ? (publicationStateResult.data as LiveBirdListingPublicationState[])
+          : [],
+      ),
+    );
   }
 
   async function refetchHatchingEggInventoryRows() {
@@ -1207,14 +1239,18 @@ export function InventoryManagement() {
           successfulIds.size === 1 ? "item" : "items"
         } ${actionText} store. ${failedMessages.length} failed.`,
       );
-      setSaveError(failedMessages[0] ?? "Some inventory rows could not be updated.");
+        setSaveError(
+          getCoopActivationErrorMessage(
+            failedMessages[0] ?? "Some inventory rows could not be updated.",
+          ),
+        );
     } else {
-      setSaveError(
+      setSaveError(getCoopActivationErrorMessage(
         failedMessages[0] ??
           (nextStatus === "hidden"
             ? "Inventory could not be hidden from store."
             : "Inventory could not be shown on store."),
-      );
+      ));
     }
 
     setUpdatingVisibilityItemIds([]);
@@ -3136,7 +3172,9 @@ function InventoryItemActionsMenu({
           href={item.manageHref}
           onClick={() => setIsOpen(false)}
         >
-          Edit
+          {item.kind === "bird" && item.row.is_unfinished_add_v2_draft
+            ? "Continue draft"
+            : "Edit"}
         </Link>
         {canShare ? (
           <button
@@ -3397,7 +3435,10 @@ function buildFlatInventoryItems({
         availabilityLabel: availability.label,
         availabilityValue: availability.value,
         isArchived: isInventoryItemArchivedByRow(row),
-        manageHref: `/dashboard/inventory/${row.listing_batch_id}/edit`,
+        manageHref: getLiveBirdInventoryManageHref({
+          isUnfinishedDraft: row.is_unfinished_add_v2_draft,
+          listingBatchId: row.listing_batch_id,
+        }),
         primaryPhoto: null,
         row,
         searchText: [
@@ -3559,7 +3600,10 @@ function getBirdAvailability(
   }
 
   if (visibility === "draft" || visibility === "hidden") {
-    return { label: "Hidden", value: "hidden" };
+    return {
+      label: visibility === "draft" ? "Draft" : "Hidden",
+      value: "hidden",
+    };
   }
 
   if (
@@ -4260,7 +4304,9 @@ function getInventoryVisibility(row: InventoryRow): InventoryVisibility {
   }
 
   if (row.inventory_visibility_status === "hidden") return "hidden";
-  if (row.listing_batch_visibility_status === "hidden") return "draft";
+  if (row.listing_batch_visibility_status === "hidden") {
+    return row.is_unfinished_add_v2_draft ? "draft" : "hidden";
+  }
   if (row.listing_batch_breed_visibility_status === "hidden") return "hidden";
   if (row.operational_availability_status === "sold_out") return "sold_out";
   if (row.operational_availability_status === "hidden") return "hidden";
@@ -4509,6 +4555,7 @@ function getStoreVisibilityAction(item: FlatInventoryItem): {
 } | null {
   if (!isStoreVisibilityInventoryItem(item)) return null;
   if (isInventoryItemArchived(item)) return null;
+  if (item.kind === "bird" && item.row.is_unfinished_add_v2_draft) return null;
 
   const visibilityStatus = getStoreVisibilityStatus(item);
 
@@ -4517,6 +4564,26 @@ function getStoreVisibilityAction(item: FlatInventoryItem): {
   }
 
   return { item, label: "Hide from store", nextStatus: "hidden" };
+}
+
+function mergeLiveBirdPublicationStates(
+  rows: InventoryRow[],
+  states: LiveBirdListingPublicationState[],
+) {
+  const statesByBatchId = new Map(
+    states.map((state) => [state.listing_batch_id, state]),
+  );
+
+  return rows.map((row) => {
+    const state = statesByBatchId.get(row.listing_batch_id);
+
+    return {
+      ...row,
+      has_published_activity: state?.has_published_activity ?? false,
+      is_unfinished_add_v2_draft:
+        state?.is_unfinished_add_v2_draft ?? false,
+    };
+  });
 }
 
 function getStoreVisibilityTargetItems(
