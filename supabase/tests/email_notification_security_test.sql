@@ -153,8 +153,6 @@ insert into public.stores (
   store_slug,
   store_status,
   storefront_mode,
-  order_notification_email,
-  communication_email,
   public_email
 )
 values
@@ -165,8 +163,6 @@ values
     'canonical-email-store',
     'live',
     'hosted',
-    'seller-orders@example.test',
-    'seller-communication@example.test',
     'seller-public@example.test'
   ),
   (
@@ -176,8 +172,6 @@ values
     'foreign-email-store',
     'live',
     'hosted',
-    null,
-    'foreign-seller@example.test',
     null
   ),
   (
@@ -187,8 +181,6 @@ values
     'missing-seller-recipient-store',
     'live',
     'hosted',
-    null,
-    null,
     null
   );
 

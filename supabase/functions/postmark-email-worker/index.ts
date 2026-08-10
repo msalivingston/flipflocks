@@ -116,11 +116,8 @@ type StoreRow = {
   owner_user_id: string;
   store_name: string;
   store_slug: string;
-  public_email: string | null;
   public_phone: string | null;
   show_public_phone?: boolean | null;
-  communication_email?: string | null;
-  order_notification_email?: string | null;
   pickup_policy?: string | null;
   pickup_location_text?: string | null;
   pickup_address_line1?: string | null;
@@ -371,7 +368,7 @@ async function fetchEmailContext(
       supabase
         .from("stores")
         .select(
-          "id, owner_user_id, store_name, store_slug, public_email, public_phone, show_public_phone, communication_email, order_notification_email, pickup_policy, pickup_location_text, pickup_address_line1, pickup_address_line2, pickup_city, pickup_state, pickup_postal_code, pickup_country, website_url, currency",
+          "id, owner_user_id, store_name, store_slug, public_phone, show_public_phone, pickup_policy, pickup_location_text, pickup_address_line1, pickup_address_line2, pickup_city, pickup_state, pickup_postal_code, pickup_country, website_url, currency",
         )
         .eq("id", order.store_id)
         .maybeSingle<StoreRow>(),
@@ -528,6 +525,7 @@ async function renderEmail(
   const document = renderOrderDocumentEmail(context, {
     ...options,
     dashboardUrl: orderUrl,
+    sellerContactEmail: ownerEmail,
   });
 
   return {
@@ -723,6 +721,7 @@ async function renderSellerNewOrderNotification(
     prominentDashboardLink: true,
     replyGuidance:
       `Reply to this email to contact ${emailContext.buyerFirstName} directly.`,
+    sellerContactEmail: emailContext.recipientEmail,
   });
 
   return {
@@ -862,6 +861,7 @@ type OrderEmailOptions = {
   omitBuyerFacingSections?: boolean;
   prominentDashboardLink?: boolean;
   replyGuidance?: string;
+  sellerContactEmail?: string;
 };
 
 function isV1OrderEmailType(value: string): value is NotificationType {
@@ -1016,10 +1016,9 @@ function renderOrderDocumentEmail(
       fact("Reason", order.canceled_reason),
     ]
     : [];
-  const sellerContactEmail = sellerOrderContactEmail(store);
   const farmContactLines = [
     store.store_name,
-    sellerContactEmail,
+    options.sellerContactEmail,
     pickupAddress,
     store.show_public_phone ? store.public_phone : null,
   ].map((value) => value?.trim()).filter(Boolean);
@@ -1100,14 +1099,6 @@ function renderOrderDocumentEmail(
 function isCanceledEmail(notificationType: NotificationType): boolean {
   return notificationType === "buyer_order_canceled" ||
     notificationType === "seller_order_canceled_copy";
-}
-
-function sellerOrderContactEmail(store: StoreRow): string | null {
-  return firstValidEmail(
-    store.order_notification_email,
-    store.communication_email,
-    store.public_email,
-  );
 }
 
 async function sendPostmarkEmail({
@@ -1752,15 +1743,6 @@ function validEmailOrNull(value: string | null | undefined) {
   if (!sanitized || !emailPattern.test(sanitized)) return null;
 
   return sanitized;
-}
-
-function firstValidEmail(...values: Array<string | null | undefined>) {
-  for (const value of values) {
-    const valid = validEmailOrNull(value);
-    if (valid) return valid;
-  }
-
-  return null;
 }
 
 function escapeHtml(value: string): string {

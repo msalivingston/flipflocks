@@ -108,7 +108,6 @@ type StoreAdminForm = {
   show_public_email: boolean;
   public_phone: string;
   show_public_phone: boolean;
-  communication_email: string;
   pickup_method: "notes" | "manual_options";
   pickup_location_text: string;
   pickup_address_line1: string;
@@ -123,7 +122,6 @@ type StoreAdminForm = {
   cancellation_policy: string;
   other_policies: string;
   custom_policies: CustomPolicyDraft[];
-  order_notification_email: string;
   storefront_enabled: boolean;
   hatching_eggs_enabled: boolean;
   equipment_supplies_enabled: boolean;
@@ -154,8 +152,6 @@ type StoreDefaults = {
   default_pickup_option_id: string | null;
   default_pickup_option_label: string | null;
   delivery_enabled: boolean | null;
-  communication_email: string | null;
-  order_notification_email: string | null;
   currency: string | null;
 };
 
@@ -385,7 +381,6 @@ const blankForm: StoreAdminForm = {
   show_public_email: false,
   public_phone: "",
   show_public_phone: false,
-  communication_email: "",
   pickup_method: "notes",
   pickup_location_text: "",
   pickup_address_line1: "",
@@ -400,7 +395,6 @@ const blankForm: StoreAdminForm = {
   cancellation_policy: "",
   other_policies: "",
   custom_policies: [],
-  order_notification_email: "",
   storefront_enabled: false,
   hatching_eggs_enabled: false,
   equipment_supplies_enabled: false,
@@ -499,7 +493,7 @@ export function StoreAdmin() {
           supabase
             .from("seller_store_defaults")
             .select(
-              "store_id, pickup_method, pickup_location_text, pickup_address_line1, pickup_address_line2, pickup_city, pickup_state, pickup_postal_code, pickup_country, default_pickup_option_id, default_pickup_option_label, delivery_enabled, communication_email, order_notification_email, currency",
+              "store_id, pickup_method, pickup_location_text, pickup_address_line1, pickup_address_line2, pickup_city, pickup_state, pickup_postal_code, pickup_country, default_pickup_option_id, default_pickup_option_label, delivery_enabled, currency",
             )
             .eq("store_id", seller.store_id)
             .maybeSingle()
@@ -1801,8 +1795,6 @@ export function StoreAdmin() {
       pickup_postal_code: form.pickup_postal_code,
       pickup_country: form.pickup_country,
       default_pickup_option_id: selectedDefaultId || null,
-      communication_email: form.communication_email,
-      order_notification_email: form.order_notification_email,
     };
 
     const visibilityResult = await supabase.rpc(
@@ -1898,7 +1890,6 @@ export function StoreAdmin() {
       npip_number: form.npip_number.trim(),
       public_email: form.public_email.trim().toLowerCase(),
       public_phone: form.public_phone.trim(),
-      communication_email: form.communication_email.trim().toLowerCase(),
       pickup_location_text: form.pickup_location_text.trim(),
       pickup_address_line1: form.pickup_address_line1.trim(),
       pickup_address_line2: form.pickup_address_line2.trim(),
@@ -1915,9 +1906,6 @@ export function StoreAdmin() {
         id: `custom-policy-${crypto.randomUUID()}`,
         ...policy,
       })),
-      order_notification_email: form.order_notification_email
-        .trim()
-        .toLowerCase(),
       hatching_eggs_enabled: form.hatching_eggs_enabled,
       equipment_supplies_enabled: form.equipment_supplies_enabled,
       processed_poultry_enabled: form.processed_poultry_enabled,
@@ -2010,7 +1998,7 @@ export function StoreAdmin() {
       <>
         <SellerPageHeader
           title="Store Setup"
-          description="Manage your store setup, public details, pickup information, policies, notifications, and storefront preview."
+          description="Manage your store setup, public details, pickup information, policies, and storefront preview."
         />
         <div className="mx-auto w-full max-w-7xl px-5 py-5 sm:px-7">
           <LoadingState label="Loading Store Setup" />
@@ -2560,7 +2548,6 @@ function StorefrontTab({
   billingAccessActive: boolean;
   warningItems: SellerLaunchItem[];
 }) {
-  const contactEmail = getStorefrontContactEmail(form);
   const currentWebsite = validateSellerWebsiteUrl(form.website_url);
   const savedWebsite = validateSellerWebsiteUrl(initialWebsiteUrl);
   const hasValidSavedWebsite =
@@ -2894,40 +2881,27 @@ function StorefrontTab({
         onToggle={(id) => setOpenSection(id as StorefrontAccordionId | "none")}
         summary={
           <span className="truncate">
-            NPIP number: {form.npip_number.trim() || "Not provided"} · Contact
-            email: {contactEmail}
+            NPIP number: {form.npip_number.trim() || "Not provided"}
           </span>
         }
         title="Business details"
       >
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="grid gap-3 content-start">
-            <TextField
-              label="NPIP number"
-              onChange={(value) => onUpdateField("npip_number", value)}
-              optional
-              value={form.npip_number}
-            />
-            <ToggleField
-              checked={form.show_npip}
-              label="Show NPIP number on my storefront"
-              onChange={(value) => onUpdateField("show_npip", value)}
-            />
-            <StorefrontNote>
-              NPIP is optional. Add your number if you participate in the NPIP
-              program.
-            </StorefrontNote>
-          </div>
-          <div className="grid gap-3 content-start">
-            <ReadOnlyField label="Contact email" value={contactEmail} />
-            <StorefrontNote>
-              This email is managed from your Account page.
-              <br />
-              <Link className="font-bold text-emerald-900" href="/dashboard/account">
-                Go to Account settings
-              </Link>
-            </StorefrontNote>
-          </div>
+        <div className="grid gap-3 content-start">
+          <TextField
+            label="NPIP number"
+            onChange={(value) => onUpdateField("npip_number", value)}
+            optional
+            value={form.npip_number}
+          />
+          <ToggleField
+            checked={form.show_npip}
+            label="Show NPIP number on my storefront"
+            onChange={(value) => onUpdateField("show_npip", value)}
+          />
+          <StorefrontNote>
+            NPIP is optional. Add your number if you participate in the NPIP
+            program.
+          </StorefrontNote>
         </div>
       </StoreSetupAccordionSection>
     </div>
@@ -4353,15 +4327,6 @@ function previewStoreText(value: string, maxLength = heroSubheadingMaxLength) {
     : trimmed;
 }
 
-function getStorefrontContactEmail(form: StoreAdminForm) {
-  return (
-    form.public_email.trim() ||
-    form.order_notification_email.trim() ||
-    form.communication_email.trim() ||
-    "No contact email set"
-  );
-}
-
 function useIdForUpload(label: string) {
   const id = useId();
   return `${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${id}`;
@@ -4985,34 +4950,6 @@ function TextAreaField({
   );
 }
 
-function ReadOnlyField({
-  helper,
-  label,
-  value,
-}: {
-  helper?: string;
-  label: string;
-  value: string;
-}) {
-  return (
-    <label className="grid gap-1 text-sm font-semibold text-stone-700">
-      {label}
-      <input
-        aria-readonly="true"
-        className="seller-form-field cursor-not-allowed shadow-none"
-        readOnly
-        style={readOnlyFieldStyle}
-        value={value}
-      />
-      {helper ? (
-        <span className="text-xs font-medium leading-5 text-stone-500">
-          {helper}
-        </span>
-      ) : null}
-    </label>
-  );
-}
-
 function ReadOnlyCopyField({
   buttonLabel = "Copy",
   helper,
@@ -5158,7 +5095,6 @@ function buildInitialForm(
     show_public_email: seller.show_public_email,
     public_phone: seller.public_phone ?? "",
     show_public_phone: seller.show_public_phone,
-    communication_email: defaults?.communication_email ?? "",
     pickup_method:
       defaults?.pickup_method === "manual_options" ? "manual_options" : "notes",
     pickup_location_text: defaults?.pickup_location_text ?? "",
@@ -5174,8 +5110,6 @@ function buildInitialForm(
     cancellation_policy: seller.cancellation_policy ?? "",
     other_policies: seller.other_policies ?? "",
     custom_policies: toCustomPolicyDrafts(seller.custom_policies),
-    order_notification_email:
-      defaults?.order_notification_email ?? seller.order_notification_email ?? "",
     storefront_enabled: Boolean(seller.storefront_enabled),
     hatching_eggs_enabled: Boolean(seller.hatching_eggs_enabled),
     equipment_supplies_enabled: Boolean(seller.equipment_supplies_enabled),

@@ -183,7 +183,7 @@ test("first-sale slice does not touch billing, auth delivery, or existing order 
   assert.doesNotMatch(trigger,
     /seller_billing_status|billing_subscription|stripe|order_notification_email/);
   assert.doesNotMatch(trigger, /supabase\.auth\.(?:signUp|resend)|auth\.smtp/);
-  assert.match(worker, /function renderEmail[\s\S]*sellerOrderContactEmail/);
+  assert.match(worker, /function renderEmail[\s\S]*sellerContactEmail: ownerEmail/);
   assert.match(worker,
     /function renderSellerFirstSaleNotification[\s\S]*to: context\.recipientEmail/);
 });

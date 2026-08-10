@@ -31,8 +31,6 @@ SELECT
   'US'::text AS public_country,
   'Development-only test store for multi-seller behavior.'::text AS about_text,
   'seller2@example.test'::text AS public_email,
-  'seller2@example.test'::text AS communication_email,
-  'seller2@example.test'::text AS order_notification_email,
   'Farm pickup by appointment.'::text AS pickup_location_text,
   'Pickup details are confirmed after the order is placed.'::text AS pickup_policy,
   'Please contact the seller if pickup plans need to change.'::text AS cancellation_policy,
@@ -105,8 +103,6 @@ BEGIN
       pickup_location_text,
       public_email,
       show_public_email,
-      communication_email,
-      order_notification_email,
       currency
     )
     VALUES (
@@ -123,8 +119,6 @@ BEGIN
       v_params.pickup_location_text,
       v_params.public_email,
       false,
-      v_params.communication_email,
-      v_params.order_notification_email,
       'usd'
     )
     RETURNING id
@@ -144,8 +138,6 @@ BEGIN
       pickup_location_text = v_params.pickup_location_text,
       public_email = v_params.public_email,
       show_public_email = false,
-      communication_email = v_params.communication_email,
-      order_notification_email = v_params.order_notification_email,
       currency = 'usd'
     WHERE id = v_existing_store_id
       AND owner_user_id = v_auth_user_id

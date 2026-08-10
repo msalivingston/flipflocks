@@ -66,8 +66,7 @@ insert into public.stores (
   store_slug,
   store_status,
   storefront_mode,
-  storefront_enabled,
-  order_notification_email
+  storefront_enabled
 )
 values
   (
@@ -77,8 +76,7 @@ values
     'customer-identity-store-a',
     'live',
     'hosted',
-    true,
-    'seller-a@example.test'
+    true
   ),
   (
     'b7000000-0000-4000-8000-000000000020',
@@ -87,8 +85,7 @@ values
     'customer-identity-store-b',
     'live',
     'hosted',
-    true,
-    'seller-b@example.test'
+    true
   );
 
 insert into public.seller_billing_status (
