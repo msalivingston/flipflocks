@@ -309,7 +309,8 @@ function validatePickupDetails({
   if (!pickupPostalCode.trim()) nextErrors.pickupPostalCode = "Enter your pickup ZIP code.";
   if (!pickupPolicy.trim()) nextErrors.pickupPolicy = "Enter a pickup policy.";
   if (!Object.values(contactPreferences).some(Boolean)) {
-    nextErrors.contactPreferences = "Choose at least one buyer contact method.";
+    nextErrors.contactPreferences =
+      "Choose at least one contact method to display on your storefront.";
   }
   return nextErrors;
 }

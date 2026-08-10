@@ -324,7 +324,9 @@ export function StorefrontFooter({
           <FooterColumn title="Contact">
             {store.public_phone ? (
               <FooterContactLine glyph="/glyphs/phone.png">
-                <a href={`tel:${store.public_phone}`}>{store.public_phone}</a>
+                <a href={`tel:${store.public_phone}`}>
+                  {formatPublicPhoneContact(store)}
+                </a>
               </FooterContactLine>
             ) : null}
             {store.public_email ? (
@@ -332,19 +334,7 @@ export function StorefrontFooter({
                 <a href={`mailto:${store.public_email}`}>{store.public_email}</a>
               </FooterContactLine>
             ) : null}
-            {store.website_url ? (
-              <FooterContactLine glyph="/glyphs/storefront.png">
-                <a
-                  className="break-all"
-                  href={store.website_url}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  {store.website_url}
-                </a>
-              </FooterContactLine>
-            ) : null}
-            {!store.public_phone && !store.public_email && !store.website_url ? (
+            {!store.public_phone && !store.public_email ? (
               <p className="leading-7">Seller contact follows after checkout.</p>
             ) : null}
           </FooterColumn>
@@ -409,19 +399,11 @@ function CompactAboutFooter({
             </a>
           ) : null}
           {store.public_phone ? (
-            <a href={`tel:${store.public_phone}`}>{store.public_phone}</a>
-          ) : null}
-          {store.website_url ? (
-            <a
-              className="break-all"
-              href={store.website_url}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              {store.website_url}
+            <a href={`tel:${store.public_phone}`}>
+              {formatPublicPhoneContact(store)}
             </a>
           ) : null}
-          {!store.public_phone && !store.public_email && !store.website_url ? (
+          {!store.public_phone && !store.public_email ? (
             <p>Seller contact follows after checkout.</p>
           ) : null}
         </div>
@@ -440,6 +422,17 @@ function CompactAboutFooter({
       </div>
     </div>
   );
+}
+
+function formatPublicPhoneContact(store: StorefrontHome) {
+  if (!store.public_phone) return "";
+  if (store.buyer_contact_text_enabled && !store.buyer_contact_phone_enabled) {
+    return `${store.public_phone} (Text Only)`;
+  }
+  if (store.buyer_contact_text_enabled && store.buyer_contact_phone_enabled) {
+    return `${store.public_phone} (Call or Text)`;
+  }
+  return store.public_phone;
 }
 
 function FooterColumn({

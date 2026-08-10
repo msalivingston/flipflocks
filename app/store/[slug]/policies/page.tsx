@@ -16,6 +16,7 @@ import { StorefrontChrome } from "../storefront-shell-components";
 import {
   loadStorefrontAccess,
   type StorefrontCustomPolicy,
+  type StorefrontHome,
 } from "../storefront-data";
 import { NOINDEX_ROBOTS } from "@/lib/seo-config";
 import {
@@ -133,9 +134,7 @@ export default async function StorefrontPoliciesPage({
     otherPolicies: store.other_policies,
     pickupPolicy: store.pickup_policy,
   });
-  const hasContact = Boolean(
-    store.public_email || store.public_phone || store.website_url,
-  );
+  const hasContact = Boolean(store.public_email || store.public_phone);
   const location = formatLocation(store);
 
   return (
@@ -216,20 +215,7 @@ export default async function StorefrontPoliciesPage({
                     className="storefront-primary-color font-medium text-[#073f1e]"
                     href={`tel:${store.public_phone}`}
                   >
-                    {store.public_phone}
-                  </a>
-                </p>
-              ) : null}
-              {store.website_url ? (
-                <p>
-                  Website:{" "}
-                  <a
-                    className="storefront-primary-color break-all font-medium text-[#073f1e]"
-                    href={store.website_url}
-                    rel="noopener noreferrer"
-                    target="_blank"
-                  >
-                    {store.website_url}
+                    {formatPublicPhoneContact(store)}
                   </a>
                 </p>
               ) : null}
@@ -239,6 +225,17 @@ export default async function StorefrontPoliciesPage({
       </StorefrontPage>
     </StorefrontChrome>
   );
+}
+
+function formatPublicPhoneContact(store: StorefrontHome) {
+  if (!store.public_phone) return "";
+  if (store.buyer_contact_text_enabled && !store.buyer_contact_phone_enabled) {
+    return `${store.public_phone} (Text Only)`;
+  }
+  if (store.buyer_contact_text_enabled && store.buyer_contact_phone_enabled) {
+    return `${store.public_phone} (Call or Text)`;
+  }
+  return store.public_phone;
 }
 
 function PolicyCard({ body, title }: { body: string; title: string }) {

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(19);
+select plan(26);
 
 select set_config('request.jwt.claim.role', 'service_role', true);
 
@@ -265,16 +265,80 @@ select results_eq(
   $$
     select billing_address_line1, pickup_address_line1, pickup_address_line2,
       pickup_city, pickup_state, pickup_postal_code, pickup_policy,
-      buyer_contact_email_enabled
+      buyer_contact_email_enabled, show_public_email, show_public_phone
     from public.stores
     where owner_user_id = 'e5000000-0000-4000-8000-000000000001'::uuid
   $$,
   $$values (
     '11 Billing Road'::text, '20 Pickup Lane'::text, 'Barn 2'::text,
     'Pickup Town'::text, 'CO'::text, '81402'::text,
-    'Pickup is by appointment.'::text, true
+    'Pickup is by appointment.'::text, true, true, false
   )$$,
-  'billing and pickup addresses remain distinct'
+  'billing and pickup addresses remain distinct and email maps to public email visibility'
+);
+
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+
+select throws_ok(
+  $$select * from public.seller_save_onboarding_pickup(
+    '{"pickup_address_line1":"20 Pickup Lane","pickup_city":"Pickup Town","pickup_state":"CO","pickup_postal_code":"81402","pickup_country":"US","pickup_policy":"Pickup is by appointment.","email_enabled":false,"text_enabled":false,"phone_enabled":false}'::jsonb
+  )$$,
+  'P0001',
+  'Choose at least one contact method to display on your storefront.',
+  'onboarding blocks progression when all contact methods are disabled'
+);
+
+select lives_ok(
+  $$select * from public.seller_save_onboarding_pickup(
+    '{"pickup_address_line1":"20 Pickup Lane","pickup_city":"Pickup Town","pickup_state":"CO","pickup_postal_code":"81402","pickup_country":"US","pickup_policy":"Pickup is by appointment.","email_enabled":false,"text_enabled":true,"phone_enabled":false}'::jsonb
+  )$$,
+  'onboarding accepts text as a public phone contact method'
+);
+
+reset role;
+select results_eq(
+  $$select buyer_contact_text_enabled, buyer_contact_phone_enabled,
+      show_public_email, show_public_phone from public.stores
+    where owner_user_id = 'e5000000-0000-4000-8000-000000000001'::uuid$$,
+  $$values (true, false, false, true)$$,
+  'Text enables public phone and disables public email when Email is not selected'
+);
+
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select lives_ok(
+  $$select * from public.seller_save_onboarding_pickup(
+    '{"pickup_address_line1":"20 Pickup Lane","pickup_city":"Pickup Town","pickup_state":"CO","pickup_postal_code":"81402","pickup_country":"US","pickup_policy":"Pickup is by appointment.","email_enabled":false,"text_enabled":false,"phone_enabled":true}'::jsonb
+  )$$,
+  'onboarding accepts phone calls as a public phone contact method'
+);
+
+reset role;
+select results_eq(
+  $$select buyer_contact_text_enabled, buyer_contact_phone_enabled,
+      show_public_email, show_public_phone from public.stores
+    where owner_user_id = 'e5000000-0000-4000-8000-000000000001'::uuid$$,
+  $$values (false, true, false, true)$$,
+  'Phone enables public phone without enabling public email'
+);
+
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+select lives_ok(
+  $$select * from public.seller_save_onboarding_pickup(
+    '{"pickup_address_line1":"20 Pickup Lane","pickup_city":"Pickup Town","pickup_state":"CO","pickup_postal_code":"81402","pickup_country":"US","pickup_policy":"Pickup is by appointment.","email_enabled":false,"text_enabled":true,"phone_enabled":true}'::jsonb
+  )$$,
+  'onboarding accepts both phone calls and text messages'
+);
+
+reset role;
+select results_eq(
+  $$select buyer_contact_text_enabled, buyer_contact_phone_enabled,
+      show_public_email, show_public_phone from public.stores
+    where owner_user_id = 'e5000000-0000-4000-8000-000000000001'::uuid$$,
+  $$values (true, true, false, true)$$,
+  'Phone and Text share one public phone visibility flag'
 );
 
 select is(

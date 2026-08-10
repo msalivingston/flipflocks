@@ -471,7 +471,6 @@ export function StorefrontFooter({ store }: { store: StorefrontIdentity }) {
   const contactItems = [
     store.public_email ? { label: "Email", value: store.public_email } : null,
     store.public_phone ? { label: "Phone", value: store.public_phone } : null,
-    store.website_url ? { label: "Website", value: store.website_url } : null,
   ].filter(Boolean) as Array<{ label: string; value: string }>;
 
   return (

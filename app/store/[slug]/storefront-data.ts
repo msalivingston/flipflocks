@@ -31,6 +31,8 @@ export type StorefrontHome = {
   pickup_method: "notes" | "manual_options" | string | null;
   public_email: string | null;
   public_phone: string | null;
+  buyer_contact_phone_enabled: boolean;
+  buyer_contact_text_enabled: boolean;
   website_url: string | null;
   social_url: string | null;
   npip_number: string | null;

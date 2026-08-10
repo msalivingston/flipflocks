@@ -107,7 +107,8 @@ type StoreAdminForm = {
   show_public_email: boolean;
   public_phone: string;
   show_public_phone: boolean;
-  show_public_website: boolean;
+  buyer_contact_phone_enabled: boolean;
+  buyer_contact_text_enabled: boolean;
   pickup_method: "notes" | "manual_options";
   pickup_location_text: string;
   pickup_address_line1: string;
@@ -288,6 +289,8 @@ type SellerLaunchItem = {
 
 const unsavedWarning =
   "You have unsaved Store Admin changes. Save or discard before leaving.";
+const publicContactValidationMessage =
+  "Choose at least one contact method to display on your storefront.";
 
 const STORE_MEDIA_SELECT =
   "media_asset_id, media_link_id, store_id, entity_type, entity_id, display_context, public_url, alt_text, caption, sort_order, is_featured, crop_metadata, hero_layout, hero_presentation, moderation_status, asset_status, visibility_status, original_filename, content_type, file_size_bytes, width_px, height_px, source_type, source_image_url";
@@ -380,7 +383,8 @@ const blankForm: StoreAdminForm = {
   show_public_email: false,
   public_phone: "",
   show_public_phone: false,
-  show_public_website: false,
+  buyer_contact_phone_enabled: false,
+  buyer_contact_text_enabled: false,
   pickup_method: "notes",
   pickup_location_text: "",
   pickup_address_line1: "",
@@ -1774,7 +1778,8 @@ export function StoreAdmin() {
       public_phone: form.public_phone,
       show_public_email: form.show_public_email,
       show_public_phone: form.show_public_phone,
-      show_public_website: form.show_public_website,
+      buyer_contact_phone_enabled: form.buyer_contact_phone_enabled,
+      buyer_contact_text_enabled: form.buyer_contact_text_enabled,
       pickup_policy: form.pickup_policy,
       cancellation_policy: form.cancellation_policy,
       other_policies: form.other_policies,
@@ -2094,7 +2099,7 @@ export function StoreAdmin() {
           hasUnsavedChanges ? "pb-32 sm:pb-28" : ""
         }`}
       >
-        {saveMessage ? (
+        {saveMessage && saveMessage !== publicContactValidationMessage ? (
           <StoreSetupAlert tone={saveState === "error" ? "error" : "success"}>
             {saveMessage}
           </StoreSetupAlert>
@@ -2657,7 +2662,7 @@ function StorefrontTab({
           <legend className="text-sm font-bold text-stone-900">
             Public FlockFront storefront
           </legend>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="flex flex-wrap items-center gap-3">
             <VisibilityChoice
               checked={form.storefront_visibility === "public"}
               description="Customers can shop through your public FlockFront storefront and an embed on your website."
@@ -2767,22 +2772,41 @@ function StorefrontTab({
           <legend className="px-1 text-sm font-bold text-stone-900">
             Public contact information
           </legend>
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="flex flex-wrap items-center gap-3">
             <ToggleField
               checked={form.show_public_email}
               label="Show email"
               onChange={(value) => onUpdateField("show_public_email", value)}
             />
             <ToggleField
-              checked={form.show_public_phone}
+              checked={form.buyer_contact_phone_enabled}
               label="Show phone"
-              onChange={(value) => onUpdateField("show_public_phone", value)}
+              onChange={(value) => {
+                onUpdateField("buyer_contact_phone_enabled", value);
+                onUpdateField(
+                  "show_public_phone",
+                  value || form.buyer_contact_text_enabled,
+                );
+              }}
             />
             <ToggleField
-              checked={form.show_public_website}
-              label="Show website"
-              onChange={(value) => onUpdateField("show_public_website", value)}
+              checked={form.buyer_contact_text_enabled}
+              label="Show text - will display the phone with (Text Only) next to it"
+              onChange={(value) => {
+                onUpdateField("buyer_contact_text_enabled", value);
+                onUpdateField(
+                  "show_public_phone",
+                  value || form.buyer_contact_phone_enabled,
+                );
+              }}
             />
+            {!form.show_public_email &&
+            !form.buyer_contact_phone_enabled &&
+            !form.buyer_contact_text_enabled ? (
+              <p className="text-sm font-semibold text-red-700" role="alert">
+                {publicContactValidationMessage}
+              </p>
+            ) : null}
           </div>
           <StorefrontNote>
             Email uses the store owner&apos;s current account email and is managed
@@ -2790,8 +2814,8 @@ function StorefrontTab({
             <Link className="font-bold text-emerald-900" href="/dashboard/account">
               Account page
             </Link>
-            . Phone and website appear only when a value is saved and their
-            visibility option is enabled.
+            . Phone appears only when a phone number is saved and its visibility
+            option is enabled. Choose at least one contact method.
           </StorefrontNote>
         </fieldset>
 
@@ -5125,7 +5149,8 @@ function buildInitialForm(
     show_public_email: seller.show_public_email,
     public_phone: seller.public_phone ?? "",
     show_public_phone: seller.show_public_phone,
-    show_public_website: seller.show_public_website,
+    buyer_contact_phone_enabled: seller.buyer_contact_phone_enabled,
+    buyer_contact_text_enabled: seller.buyer_contact_text_enabled,
     pickup_method:
       defaults?.pickup_method === "manual_options" ? "manual_options" : "notes",
     pickup_location_text: defaults?.pickup_location_text ?? "",
@@ -5452,6 +5477,13 @@ function validateForm(
   if (!form.store_name.trim()) return "Store name is required.";
   if (!form.public_city.trim()) return "City is required.";
   if (!form.public_state.trim()) return "State is required.";
+  if (
+    !form.show_public_email &&
+    !form.buyer_contact_phone_enabled &&
+    !form.buyer_contact_text_enabled
+  ) {
+    return publicContactValidationMessage;
+  }
   if (!form.store_tagline.trim()) return "Hero headline is required.";
   if (form.store_tagline.trim().length > heroHeadlineMaxLength) {
     return `Hero headline must be ${heroHeadlineMaxLength} characters or fewer.`;
