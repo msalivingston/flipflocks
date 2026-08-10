@@ -529,6 +529,55 @@ revoke all on function public.seller_get_live_bird_listing_publication_states(uu
 grant execute on function public.seller_get_live_bird_listing_publication_states(uuid)
   to authenticated;
 
+-- Internal batch labels do not affect publication, visibility, quantities, or
+-- active bird units. Permit label-only maintenance for stores without current
+-- selling access while retaining the existing entitlement and Coop checks for
+-- every update that can affect active selling state.
+create or replace function public.enforce_listing_batch_plan_trigger()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $function$
+begin
+  if tg_op = 'UPDATE'
+    and (to_jsonb(new) - array[
+      'internal_batch_label', 'age_at_availability_days', 'updated_at'
+    ]) = (to_jsonb(old) - array[
+      'internal_batch_label', 'age_at_availability_days', 'updated_at'
+    ]) then
+    return new;
+  end if;
+
+  if not public.store_has_active_entitlement(new.store_id) then
+    if tg_op = 'UPDATE'
+      and new.visibility_status in ('hidden', 'sold_out', 'archived')
+      and (to_jsonb(new) - array[
+        'visibility_status', 'age_at_availability_days', 'updated_at'
+      ]) = (to_jsonb(old) - array[
+        'visibility_status', 'age_at_availability_days', 'updated_at'
+      ]) then
+      return new;
+    end if;
+    raise exception 'Active selling access is required.';
+  end if;
+
+  if public.get_store_plan_key(new.store_id) = 'small_flock' then
+    if new.batch_type = 'hatching_eggs' then
+      raise exception 'Hatching egg listings are included with Market.';
+    end if;
+    if coalesce(new.auto_price_adjustment_enabled, false) then
+      raise exception 'Age-Based Pricing is included with Market. List growing birds once and let pricing adjust as they age.';
+    end if;
+    if new.visibility_status = 'active'
+      and (tg_op = 'INSERT' or old.visibility_status is distinct from new.visibility_status) then
+      perform public.assert_store_plan_allows_listing_batch_activation(new.id);
+    end if;
+  end if;
+  return new;
+end;
+$function$;
+
 -- Active marked batches and batches with definitive order/publication history
 -- cannot be unfinished drafts. Ambiguous hidden marked batches are preserved.
 update public.listing_batches

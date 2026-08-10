@@ -398,5 +398,53 @@ select is(
 );
 
 reset role;
+
+update public.listing_batches
+set internal_batch_label = '__add_inventory_v2_live_birds__'
+where store_id = 'a1000000-0000-4000-8000-000000000050'
+  and visibility_status = 'active';
+
+delete from public.seller_billing_status
+where store_id = 'a1000000-0000-4000-8000-000000000050';
+
+select lives_ok(
+  $$update public.listing_batches
+    set internal_batch_label = null
+    where store_id = 'a1000000-0000-4000-8000-000000000050'
+      and visibility_status = 'active'$$,
+  'marker-only cleanup does not require current active selling access'
+);
+
+select results_eq(
+  $$select visibility_status, internal_batch_label is null
+    from public.listing_batches
+    where store_id = 'a1000000-0000-4000-8000-000000000050'$$,
+  $$values ('active'::text, true)$$,
+  'marker cleanup changes no listing visibility'
+);
+
+select lives_ok(
+  $$update public.listing_batches
+    set visibility_status = 'hidden'
+    where store_id = 'a1000000-0000-4000-8000-000000000050'$$,
+  'an inactive seller can still reduce publication visibility'
+);
+
+select throws_ok(
+  $$update public.listing_batches
+    set visibility_status = 'active'
+    where store_id = 'a1000000-0000-4000-8000-000000000050'$$,
+  'P0001',
+  'Active selling access is required.',
+  'reactivating inventory still requires authoritative selling access'
+);
+
+select is(
+  (select visibility_status from public.listing_batches
+   where store_id = 'a1000000-0000-4000-8000-000000000050'),
+  'hidden',
+  'failed reactivation leaves the listing hidden'
+);
+
 select * from finish();
 rollback;
