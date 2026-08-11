@@ -632,7 +632,7 @@ function SelectField({
         {label}
       </span>
       {isBreedField ? (
-        <MobileBreedCombobox
+        <BreedCombobox
           disabled={disabled}
           fieldName={fieldName}
           key={selectedValue}
@@ -643,8 +643,8 @@ function SelectField({
           selectedId={selectedId}
           value={value}
         />
-      ) : null}
-      <span className={`relative block ${isBreedField ? "max-sm:hidden" : ""}`}>
+      ) : (
+        <span className="relative block">
         <select
           className={`${inputClass} appearance-none pr-9 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500`}
           data-live-birds-offering-field={fieldName}
@@ -681,7 +681,8 @@ function SelectField({
             disabled ? "border-stone-400" : "border-emerald-800/70"
           }`}
         />
-      </span>
+        </span>
+      )}
       {disabled && label === "Breed" ? (
         <span className="mt-1.5 block text-base font-medium leading-6 text-stone-500">
           Breed changes for existing entries are coming soon.
@@ -691,7 +692,7 @@ function SelectField({
   );
 }
 
-function MobileBreedCombobox({
+function BreedCombobox({
   disabled,
   fieldName,
   onChange,
@@ -738,7 +739,7 @@ function MobileBreedCombobox({
   }, [options, query]);
 
   return (
-    <span className="block sm:hidden">
+    <span className="block">
       <span className="relative block">
       <input
         aria-autocomplete="list"
