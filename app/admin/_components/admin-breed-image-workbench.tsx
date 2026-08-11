@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type {
   AdminBreedImageWorkbenchRow,
@@ -30,6 +30,8 @@ type ReferenceCandidate = {
   token: string;
 };
 
+const MAX_CONCURRENT_GENERATIONS = 5;
+
 const statusLabels: Record<AdminBreedImageWorkbenchStatus, string> = {
   not_generated: "Not generated",
   waiting_for_master: "Waiting for master",
@@ -48,8 +50,12 @@ export function AdminBreedImageWorkbench() {
   const [referenceFiles, setReferenceFiles] = useState<Record<string, File | null>>({});
   const [referenceResults, setReferenceResults] = useState<Record<string, ReferenceCandidate[]>>({});
   const [selectedReferenceIds, setSelectedReferenceIds] = useState<Record<string, string | null>>({});
+  const [activeGenerationIds, setActiveGenerationIds] = useState<Set<string>>(() => new Set());
+  const activeGenerationIdsRef = useRef<Set<string>>(new Set());
   const [busyBreedId, setBusyBreedId] = useState<string | null>(null);
-  const [referenceBusyBreedId, setReferenceBusyBreedId] = useState<string | null>(null);
+  const [activeReferenceIds, setActiveReferenceIds] = useState<Set<string>>(() => new Set());
+  const activeReferenceIdsRef = useRef<Set<string>>(new Set());
+  const [recordErrors, setRecordErrors] = useState<Record<string, string | null>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -90,54 +96,101 @@ export function AdminBreedImageWorkbench() {
   }), [records]);
 
   async function runAction(record: AdminBreedImageWorkbenchRow, action: "generate" | "approve" | "skip") {
-    setBusyBreedId(record.stable_id);
+    if (action === "generate") {
+      const activeIds = activeGenerationIdsRef.current;
+      if (activeIds.has(record.stable_id) || activeIds.size >= MAX_CONCURRENT_GENERATIONS) return;
+      const nextActiveIds = new Set(activeIds).add(record.stable_id);
+      activeGenerationIdsRef.current = nextActiveIds;
+      setActiveGenerationIds(nextActiveIds);
+    } else {
+      setBusyBreedId(record.stable_id);
+    }
     setError(null);
     setMessage(null);
+    setRecordErrors((current) => ({ ...current, [record.stable_id]: null }));
 
     const referenceFile = referenceFiles[record.stable_id] ?? null;
     const selectedReference = (referenceResults[record.stable_id] ?? []).find(
       (candidate) => candidate.id === selectedReferenceIds[record.stable_id],
     );
-    const result = await invokeWorkbench({
-      action,
-      breedId: record.stable_id,
-      referenceFile: action === "generate" ? referenceFile : null,
-      webReferenceToken: action === "generate" && !referenceFile ? selectedReference?.token : undefined,
-    });
+    try {
+      const result = await invokeWorkbench({
+        action,
+        breedId: record.stable_id,
+        referenceFile: action === "generate" ? referenceFile : null,
+        webReferenceToken: action === "generate" && !referenceFile ? selectedReference?.token : undefined,
+      });
 
-    if (result.error) {
-      setError(`${record.breed_name}: ${result.error}`);
-    } else {
-      setRecords(result.records);
-      setReferenceFiles((current) => ({ ...current, [record.stable_id]: null }));
-      setMessage(
-        action === "approve"
-          ? `${record.breed_name} candidate approved.`
-          : action === "skip"
-            ? `${record.breed_name} skipped.`
-            : `${record.breed_name} candidate generated.`,
-      );
+      if (result.error) {
+        const actionError = `${record.breed_name}: ${result.error}`;
+        setError(actionError);
+        setRecordErrors((current) => ({ ...current, [record.stable_id]: result.error }));
+      } else {
+        if (action === "generate") {
+          const updatedRecord = result.records.find((item) => item.stable_id === record.stable_id);
+          if (updatedRecord) {
+            setRecords((current) => current.map((item) => item.stable_id === record.stable_id ? updatedRecord : item));
+          }
+        } else {
+          setRecords(result.records);
+        }
+        setReferenceFiles((current) => ({ ...current, [record.stable_id]: null }));
+        setMessage(
+          action === "approve"
+            ? `${record.breed_name} candidate approved.`
+            : action === "skip"
+              ? `${record.breed_name} skipped.`
+              : `${record.breed_name} candidate generated.`,
+        );
+      }
+    } catch (cause) {
+      const actionError = cause instanceof Error ? cause.message : "The workbench request failed.";
+      setError(`${record.breed_name}: ${actionError}`);
+      setRecordErrors((current) => ({ ...current, [record.stable_id]: actionError }));
+    } finally {
+      if (action === "generate") {
+        const nextActiveIds = new Set(activeGenerationIdsRef.current);
+        nextActiveIds.delete(record.stable_id);
+        activeGenerationIdsRef.current = nextActiveIds;
+        setActiveGenerationIds(nextActiveIds);
+      } else {
+        setBusyBreedId(null);
+      }
     }
-    setBusyBreedId(null);
   }
 
   async function findReferences(record: AdminBreedImageWorkbenchRow) {
-    setReferenceBusyBreedId(record.stable_id);
+    if (activeReferenceIdsRef.current.has(record.stable_id)) return;
+    const nextActiveIds = new Set(activeReferenceIdsRef.current).add(record.stable_id);
+    activeReferenceIdsRef.current = nextActiveIds;
+    setActiveReferenceIds(nextActiveIds);
     setError(null);
     setMessage(null);
-    const result = await invokeWorkbench({ action: "find_references", breedId: record.stable_id });
-    if (result.error) {
-      setError(`${record.breed_name}: ${result.error}`);
-    } else {
-      setReferenceResults((current) => ({ ...current, [record.stable_id]: result.references }));
-      setSelectedReferenceIds((current) => ({ ...current, [record.stable_id]: null }));
-      setMessage(
-        result.references.length > 0
-          ? `${record.breed_name}: choose a reference, then generate.`
-          : `${record.breed_name}: no useful image references were returned. Try again or upload one.`,
-      );
+    setRecordErrors((current) => ({ ...current, [record.stable_id]: null }));
+    try {
+      const result = await invokeWorkbench({ action: "find_references", breedId: record.stable_id });
+      if (result.error) {
+        setError(`${record.breed_name}: ${result.error}`);
+        setRecordErrors((current) => ({ ...current, [record.stable_id]: result.error }));
+      } else {
+        setReferenceResults((current) => ({ ...current, [record.stable_id]: result.references }));
+        setSelectedReferenceIds((current) => ({ ...current, [record.stable_id]: null }));
+        setMessage(
+          result.references.length > 0
+            ? `${record.breed_name}: choose a reference, then generate.`
+            : `${record.breed_name}: no useful image references were returned. Try again or upload one.`,
+        );
+      }
+    } catch (cause) {
+      const actionError = cause instanceof Error ? cause.message : "Reference search failed.";
+      setError(`${record.breed_name}: ${actionError}`);
+      setRecordErrors((current) => ({ ...current, [record.stable_id]: actionError }));
+    } finally {
+      const remainingActiveIds = new Set(activeReferenceIdsRef.current);
+      remainingActiveIds.delete(record.stable_id);
+      activeReferenceIdsRef.current = remainingActiveIds;
+      setActiveReferenceIds(remainingActiveIds);
     }
-    setReferenceBusyBreedId(null);
   }
 
   return (
@@ -154,6 +207,10 @@ export function AdminBreedImageWorkbench() {
           <AdminMetric label="Candidate ready" value={counts.candidate} />
           <AdminMetric label="Waiting for master" value={counts.waiting} />
           <AdminMetric label="Remaining / retry" value={counts.remaining} />
+        </div>
+
+        <div aria-live="polite" className="rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm font-semibold text-stone-700">
+          {activeGenerationIds.size} of {MAX_CONCURRENT_GENERATIONS} generation slots active
         </div>
 
         <AdminCard>
@@ -195,12 +252,14 @@ export function AdminBreedImageWorkbench() {
 
         <div className="grid gap-4">
           {filteredRecords.map((record) => {
-            const isBusy = busyBreedId === record.stable_id;
-            const isReferenceBusy = referenceBusyBreedId === record.stable_id;
+            const isReviewActionBusy = busyBreedId === record.stable_id;
+            const isGenerating = activeGenerationIds.has(record.stable_id);
+            const isReferenceBusy = activeReferenceIds.has(record.stable_id);
             const referenceFile = referenceFiles[record.stable_id];
             const candidates = referenceResults[record.stable_id] ?? [];
             const selectedReferenceId = selectedReferenceIds[record.stable_id] ?? null;
-            const generationBlocked = record.status === "waiting_for_master" || isBusy;
+            const generationCapReached = activeGenerationIds.size >= MAX_CONCURRENT_GENERATIONS;
+            const generationBlocked = record.status === "waiting_for_master" || isGenerating || generationCapReached;
             const generateLabel = record.candidate_image_url || record.approved_image_url ? "Regenerate" : "Generate";
 
             return (
@@ -227,6 +286,7 @@ export function AdminBreedImageWorkbench() {
                     {record.status === "waiting_for_master" ? (
                       <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">Approve the listed master before generating this derivative.</p>
                     ) : null}
+                    {recordErrors[record.stable_id] ? <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{recordErrors[record.stable_id]}</p> : null}
                     {record.last_error ? <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{record.last_error}</p> : null}
 
                     <div className="mt-5 rounded-lg border border-stone-200 bg-stone-50 p-3">
@@ -237,7 +297,7 @@ export function AdminBreedImageWorkbench() {
                         </div>
                         <button
                           className="seller-secondary-button"
-                          disabled={isReferenceBusy || isBusy}
+                          disabled={isReferenceBusy || isGenerating || isReviewActionBusy}
                           onClick={() => void findReferences(record)}
                           type="button"
                         >
@@ -281,7 +341,7 @@ export function AdminBreedImageWorkbench() {
                         <input
                           accept="image/jpeg,image/png,image/webp"
                           className="min-h-11 rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
-                          disabled={generationBlocked}
+                          disabled={isGenerating || isReviewActionBusy}
                           key={`${record.stable_id}-${selectedReferenceId ?? "upload"}`}
                           onChange={(event) => {
                             const file = event.target.files?.[0] ?? null;
@@ -293,9 +353,9 @@ export function AdminBreedImageWorkbench() {
                         <span className="text-xs font-medium text-stone-500">{referenceFile ? referenceFile.name : selectedReferenceId ? "Web reference selected above." : "Used only as a generation input; never published automatically."}</span>
                       </label>
                       <div className="flex flex-wrap gap-2">
-                        <button className="seller-primary-button" disabled={generationBlocked} onClick={() => void runAction(record, "generate")} type="button">{isBusy ? "Working…" : generateLabel}</button>
-                        <button className="seller-secondary-button" disabled={isBusy || record.status !== "candidate_ready"} onClick={() => void runAction(record, "approve")} type="button">Approve</button>
-                        <button className="seller-secondary-button" disabled={isBusy} onClick={() => void runAction(record, "skip")} type="button">Skip</button>
+                        <button className="seller-primary-button" disabled={generationBlocked || isReviewActionBusy} onClick={() => void runAction(record, "generate")} type="button">{isGenerating ? "Generating…" : generateLabel}</button>
+                        <button className="seller-secondary-button" disabled={isGenerating || isReviewActionBusy || record.status !== "candidate_ready"} onClick={() => void runAction(record, "approve")} type="button">Approve</button>
+                        <button className="seller-secondary-button" disabled={isGenerating || isReviewActionBusy} onClick={() => void runAction(record, "skip")} type="button">Skip</button>
                       </div>
                     </div>
                   </div>
@@ -345,10 +405,20 @@ async function invokeWorkbench({
     body,
     headers: { Authorization: `Bearer ${accessToken}` },
   });
+  let responseError: string | null = null;
+  const errorContext = error && typeof error === "object" && "context" in error ? error.context : null;
+  if (errorContext instanceof Response) {
+    try {
+      const errorBody = await errorContext.clone().json() as WorkbenchResponse;
+      responseError = errorBody.error?.message ?? null;
+    } catch {
+      responseError = null;
+    }
+  }
   return {
     records: data?.records ?? [],
     references: data?.references ?? [],
-    error: data?.error?.message ?? error?.message ?? null,
+    error: data?.error?.message ?? responseError ?? error?.message ?? null,
   };
 }
 

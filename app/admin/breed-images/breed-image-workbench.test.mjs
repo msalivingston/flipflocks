@@ -115,3 +115,34 @@ test("review UI exposes reference research, manual fallback, and per-record cont
   assert.match(uiSource, /webReferenceToken: action === "generate"/);
   assert.doesNotMatch(uiSource, /generate all|batch generate/i);
 });
+
+test("generation concurrency is capped at five and guarded per breed", () => {
+  assert.match(uiSource, /const MAX_CONCURRENT_GENERATIONS = 5/);
+  assert.match(uiSource, /activeIds\.has\(record\.stable_id\) \|\| activeIds\.size >= MAX_CONCURRENT_GENERATIONS/);
+  assert.match(uiSource, /new Set\(activeIds\)\.add\(record\.stable_id\)/);
+  assert.match(uiSource, /nextActiveIds\.delete\(record\.stable_id\)/);
+  assert.match(uiSource, /activeGenerationIds\.size >= MAX_CONCURRENT_GENERATIONS/);
+  assert.match(uiSource, /\{activeGenerationIds\.size\} of \{MAX_CONCURRENT_GENERATIONS\} generation slots active/);
+  assert.match(uiSource, /isGenerating \? "Generating…" : generateLabel/);
+  assert.match(uiSource, /setRecordErrors/);
+  assert.match(uiSource, /errorContext instanceof Response/);
+  assert.match(uiSource, /responseError \?\? error\?\.message/);
+});
+
+test("reference searches have independent per-record activity tracking", () => {
+  assert.match(uiSource, /activeReferenceIdsRef\.current\.has\(record\.stable_id\)/);
+  assert.match(uiSource, /new Set\(activeReferenceIdsRef\.current\)\.add\(record\.stable_id\)/);
+  assert.doesNotMatch(uiSource, /activeReferenceIds\.size >= MAX_CONCURRENT_GENERATIONS/);
+});
+
+test("simultaneous different-breed candidates use non-colliding storage paths", () => {
+  assert.match(edgeSource, /crypto\.getRandomValues\(bytes\)/);
+  assert.match(edgeSource, /`candidates\/\$\{breed\.id\}\/\$\{storageSuffix\(\)\}\.webp`/);
+  assert.match(edgeSource, /upsert: false/);
+});
+
+test("OpenAI rate limits fail one breed cleanly without automatic retries", () => {
+  assert.match(edgeSource, /response\.status === 429/);
+  assert.match(edgeSource, /OpenAI image generation is temporarily rate limited\. Wait briefly, then retry this breed\./);
+  assert.doesNotMatch(edgeSource, /retryAfter|setTimeout\([^)]*callOpenAi|while\s*\([^)]*429/);
+});

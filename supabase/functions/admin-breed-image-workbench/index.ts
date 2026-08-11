@@ -508,6 +508,14 @@ async function readOpenAiImage(response: Response) {
     data?: Array<{ b64_json?: string }>;
     error?: { message?: string };
   } | null;
+  if (response.status === 429) {
+    console.error("OpenAI breed image generation rate limited", payload?.error?.message);
+    throw new PublicSafeError(
+      "generation_failed",
+      "OpenAI image generation is temporarily rate limited. Wait briefly, then retry this breed.",
+      429,
+    );
+  }
   if (!response.ok || !payload?.data?.[0]?.b64_json) {
     console.error("OpenAI breed image generation failed", response.status, payload?.error?.message);
     throw new PublicSafeError("generation_failed", "Image generation failed. Review the server logs and try again.", 502);
