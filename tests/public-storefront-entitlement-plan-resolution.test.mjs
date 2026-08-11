@@ -12,11 +12,16 @@ const migrationPath = resolve(
   root,
   "supabase/migrations/20260730213000_fix_public_storefront_plan_resolution.sql",
 );
+const storefrontForwardFixPath = resolve(
+  root,
+  "supabase/migrations/20260818121000_restore_public_storefront_entitlement_predicate.sql",
+);
 const sqlTestPath = resolve(
   root,
   "supabase/tests/public_storefront_entitlement_plan_resolution_test.sql",
 );
 const migration = readFileSync(migrationPath, "utf8");
+const storefrontForwardFix = readFileSync(storefrontForwardFixPath, "utf8");
 const sqlTest = readFileSync(sqlTestPath, "utf8");
 
 const directViews = [
@@ -123,4 +128,40 @@ test("SQL coverage exercises all public views and every reported outage surface"
   }
   assert.match(sqlTest, /inactive store remains absent from public\.%s/);
   assert.match(sqlTest, /permission denied for function get_store_plan_key/);
+});
+
+test("the seller snapshot regression is repaired without changing the view contract", () => {
+  assert.match(storefrontForwardFix, /begin;[\s\S]*commit;/);
+  assert.match(
+    storefrontForwardFix,
+    /v_actual_calls <> 1[\s\S]*get_store_plan_key call/,
+  );
+  assert.match(
+    storefrontForwardFix,
+    /public\.store_has_public_market_entitlement\(stores\.id\)/,
+  );
+  assert.match(
+    storefrontForwardFix,
+    /views\.relowner is distinct from v_owner/,
+  );
+  assert.match(storefrontForwardFix, /views\.relacl is distinct from v_acl/);
+  assert.match(
+    storefrontForwardFix,
+    /obj_description\(views\.oid, 'pg_class'\) is distinct from v_comment/,
+  );
+  assert.match(
+    storefrontForwardFix,
+    /views\.reloptions is distinct from v_options/,
+  );
+  assert.match(storefrontForwardFix, /columns\.attname/);
+  assert.match(storefrontForwardFix, /columns\.atttypid/);
+  assert.match(storefrontForwardFix, /columns\.atttypmod/);
+  assert.match(
+    storefrontForwardFix,
+    /seller_breed_profiles\.bird_type[\s\S]*seller_breed_profiles\.egg_color[\s\S]*seller_breed_profiles\.annual_egg_production/,
+  );
+  assert.doesNotMatch(
+    storefrontForwardFix,
+    /grant execute on function public\.get_store_plan_key/,
+  );
 });

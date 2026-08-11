@@ -236,6 +236,60 @@ select is(
   'no affected public view depends directly on get_store_plan_key'
 );
 
+select columns_are(
+  'public',
+  'public_storefront_inventory',
+  array[
+    'store_id',
+    'store_slug',
+    'species_id',
+    'species_name',
+    'species_slug',
+    'seller_breed_profile_id',
+    'breed_display_name',
+    'breed_description',
+    'listing_batch_id',
+    'listing_batch_breed_id',
+    'inventory_item_id',
+    'inventory_type',
+    'custom_inventory_label',
+    'quantity_available',
+    'buyer_availability_code',
+    'buyer_availability_label',
+    'available_date',
+    'is_available_now',
+    'can_checkout',
+    'unit_price',
+    'featured_image_url',
+    'featured_image_alt_text',
+    'breed_sort_order',
+    'inventory_sort_order',
+    'batch_type',
+    'age_at_availability_days',
+    'origin_date',
+    'breed_bird_type',
+    'breed_egg_color',
+    'breed_annual_egg_production'
+  ],
+  'public storefront inventory preserves its complete ordered column contract'
+);
+
+select ok(
+  strpos(
+    pg_get_viewdef('public.public_storefront_inventory'::regclass, true),
+    'seller_breed_profiles.bird_type'
+  ) > 0
+  and strpos(
+    pg_get_viewdef('public.public_storefront_inventory'::regclass, true),
+    'seller_breed_profiles.egg_color'
+  ) > 0
+  and strpos(
+    pg_get_viewdef('public.public_storefront_inventory'::regclass, true),
+    'seller_breed_profiles.annual_egg_production'
+  ) > 0,
+  'public storefront inventory retains Step 1 seller-owned metadata expressions'
+);
+
 select is(
   (
     select count(distinct views.relname)::integer
