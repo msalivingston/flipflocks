@@ -20,3 +20,6 @@ verify_jwt = true
 
 [functions.stripe-saas-subscription-action]
 verify_jwt = true
+
+[functions.admin-breed-image-workbench]
+verify_jwt = true

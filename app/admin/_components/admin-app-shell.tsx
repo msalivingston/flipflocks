@@ -10,6 +10,7 @@ const adminNavItems = [
   { label: "Stores", href: "/admin/stores" },
   { label: "FAQs", href: "/admin/faqs" },
   { label: "Breeds", href: "/admin/breeds" },
+  { label: "Breed Images", href: "/admin/breed-images" },
   { label: "Settings", href: "/admin/settings" },
 ];
 

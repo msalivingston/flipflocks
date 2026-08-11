@@ -106,6 +106,32 @@ export type AdminCatalogBreedDetailRow = AdminCatalogBreedListRow & {
   description: string | null;
 };
 
+export type AdminBreedImageWorkbenchStatus =
+  | "not_generated"
+  | "waiting_for_master"
+  | "generating"
+  | "candidate_ready"
+  | "approved"
+  | "skipped"
+  | "generation_failed";
+
+export type AdminBreedImageWorkbenchRow = {
+  stable_id: string;
+  slug: string;
+  breed_name: string;
+  base_breed: string;
+  variety: string | null;
+  breed_category: string | null;
+  image_strategy: string;
+  proposed_image_family: string;
+  proposed_master_record: string;
+  approved_image_url: string | null;
+  candidate_image_url: string | null;
+  status: AdminBreedImageWorkbenchStatus;
+  last_error: string | null;
+  master_approved: boolean;
+};
+
 export type AdminSiteFaqRow = {
   id: string;
   question: string;
