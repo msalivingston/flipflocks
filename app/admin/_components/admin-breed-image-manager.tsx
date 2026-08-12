@@ -81,8 +81,6 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [detailsMessage, setDetailsMessage] = useState<string | null>(null);
   const [isSavingDetails, setIsSavingDetails] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -295,7 +293,11 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
   }
 
   async function deleteBreed() {
-    if (!breed || deleteConfirmation !== breed.breed_name) return;
+    if (!breed) return;
+    const confirmed = window.confirm(
+      `Permanently delete ${breed.breed_name}? This cannot be undone.`,
+    );
+    if (!confirmed) return;
 
     setIsDeleting(true);
     setDeleteError(null);
@@ -684,9 +686,8 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
                   className="inline-flex min-h-10 items-center justify-center rounded-md border border-red-300 bg-white px-4 text-sm font-bold text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isDeleting}
                   onClick={() => {
-                    setDeleteConfirmation("");
                     setDeleteError(null);
-                    setShowDeleteDialog(true);
+                    void deleteBreed();
                   }}
                   type="button"
                 >
@@ -695,56 +696,10 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
               </div>
             </AdminCard>
 
-            {showDeleteDialog ? (
-              <div className="fixed inset-0 z-50 grid place-items-center bg-stone-950/50 p-4" role="presentation">
-                <div
-                  aria-labelledby="delete-breed-title"
-                  aria-modal="true"
-                  className="w-full max-w-lg rounded-xl border border-red-200 bg-white p-5 shadow-2xl"
-                  role="dialog"
-                >
-                  <h2 className="text-xl font-bold text-red-950" id="delete-breed-title">
-                    Permanently delete {breed.breed_name}?
-                  </h2>
-                  <p className="mt-3 text-sm leading-6 text-stone-700">
-                    This is a real database deletion and cannot be undone. It is not archive or
-                    deactivate. Type the exact breed name to confirm.
-                  </p>
-                  <label className="mt-4 grid gap-1 text-sm font-semibold text-stone-700">
-                    Type <span className="font-bold text-stone-950">{breed.breed_name}</span>
-                    <input
-                      autoFocus
-                      className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-stone-950"
-                      disabled={isDeleting}
-                      onChange={(event) => setDeleteConfirmation(event.target.value)}
-                      value={deleteConfirmation}
-                    />
-                  </label>
-                  {deleteError ? (
-                    <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
-                      {deleteError}
-                    </p>
-                  ) : null}
-                  <div className="mt-5 flex flex-wrap justify-end gap-2">
-                    <button
-                      className="seller-secondary-button"
-                      disabled={isDeleting}
-                      onClick={() => setShowDeleteDialog(false)}
-                      type="button"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      className="inline-flex min-h-10 items-center justify-center rounded-md bg-red-700 px-4 text-sm font-bold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={isDeleting || deleteConfirmation !== breed.breed_name}
-                      onClick={() => void deleteBreed()}
-                      type="button"
-                    >
-                      {isDeleting ? "Deleting…" : "Permanently Delete Breed"}
-                    </button>
-                  </div>
-                </div>
-              </div>
+            {deleteError ? (
+              <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+                {deleteError}
+              </p>
             ) : null}
           </>
         ) : null}

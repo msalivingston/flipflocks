@@ -116,10 +116,10 @@ export function AdminBreedsList({
   const hasImageCount = breeds.length - missingCount;
 
   async function deleteBreed(breed: AdminCatalogBreedListRow) {
-    const confirmation = window.prompt(
-      `Permanently delete ${breed.breed_name}? This is not archive or deactivate.\n\nType the exact breed name to confirm:`,
+    const confirmed = window.confirm(
+      `Permanently delete ${breed.breed_name}? This cannot be undone.`,
     );
-    if (confirmation !== breed.breed_name) return;
+    if (!confirmed) return;
 
     setDeletingBreedId(breed.breed_id);
     setActionError(null);

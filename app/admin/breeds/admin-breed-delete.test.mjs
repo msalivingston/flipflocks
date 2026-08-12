@@ -59,16 +59,18 @@ test("approved catalog image is deleted only when no current breed shares its st
   assert.doesNotMatch(edgeSource, /seller-media|media_links/);
 });
 
-test("UI requires exact-name confirmation and invokes only the delete Edge Function", () => {
+test("UI requires a simple confirmation and invokes only the delete Edge Function", () => {
   assert.match(uiSource, /Delete Breed/);
-  assert.match(uiSource, /deleteConfirmation !== breed\.breed_name/);
-  assert.match(uiSource, /Permanently Delete Breed/);
+  assert.match(uiSource, /window\.confirm/);
+  assert.match(uiSource, /if \(!confirmed\) return/);
   assert.match(uiSource, /"admin-catalog-breed-delete"/);
   assert.match(uiSource, /body: \{ breed_id: breed\.breed_id \}/);
-  assert.match(listUiSource, /Type the exact breed name to confirm/);
-  assert.match(listUiSource, /confirmation !== breed\.breed_name/);
+  assert.match(listUiSource, /window\.confirm/);
+  assert.match(listUiSource, /if \(!confirmed\) return/);
   assert.match(listUiSource, /"admin-catalog-breed-delete"/);
   assert.match(listUiSource, /body: \{ breed_id: breed\.breed_id \}/);
+  assert.doesNotMatch(uiSource, /deleteConfirmation|Type the exact breed name/);
+  assert.doesNotMatch(listUiSource, /window\.prompt|Type the exact breed name/);
 });
 
 test("stale deleted entries in the static image plan no longer break workbench listing", () => {
