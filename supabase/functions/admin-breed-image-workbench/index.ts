@@ -270,21 +270,22 @@ function isUnsafeReferenceUrl(value: string) {
   return hostname === "localhost" || hostname.endsWith(".local") || hostname.includes(":") || isPrivateIpv4(hostname);
 }
 
-function referenceSearchPrompt(record: PlanRecord) {
+function referenceSearchPrompt(record: PlanRecord, species: string) {
   const exactIdentity = record.variety ? `${record.breed} - ${record.variety}` : record.breed;
   return [
-    `Search for real photographic image references of the exact chicken catalog identity: ${exactIdentity}.`,
+    `Search for real photographic image references of the exact poultry catalog identity: ${exactIdentity}.`,
+    `Species: ${species}.`,
     `Breed: ${record.breed}.`,
     `Variety: ${record.variety || "none"}.`,
-    "Prioritize live adult hens and roosters from established hatcheries, poultry breed clubs, agricultural or university sources, recognized poultry organizations, and credible breeder catalogs.",
-    "Prefer images that clearly show real-world plumage, markings, silhouette, comb, legs, and defining breed traits.",
+    "Prioritize live adult males and females from established hatcheries, poultry breed clubs, agricultural or university sources, recognized poultry organizations, and credible breeder catalogs.",
+    "Prefer images that clearly show real-world plumage, markings, silhouette, legs, and defining breed traits.",
     "Avoid artwork, decorative objects, logos, AI-generated images, recipes, and unrelated similarly named breeds.",
     "For commercial, project, proprietary, or variable populations, do not substitute a vaguely similar heritage breed.",
     "Return several useful candidates for a human to choose; do not select one as authoritative.",
   ].join("\n");
 }
 
-async function findReferenceImages(record: PlanRecord, serviceRoleKey: string) {
+async function findReferenceImages(record: PlanRecord, species: string, serviceRoleKey: string) {
   const apiKey = requiredEnv("OPENAI_API_KEY");
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -298,7 +299,7 @@ async function findReferenceImages(record: PlanRecord, serviceRoleKey: string) {
         image_settings: { max_results: MAX_REFERENCE_RESULTS, caption: true },
       }],
       include: ["web_search_call.results"],
-      input: referenceSearchPrompt(record),
+      input: referenceSearchPrompt(record, species),
     }),
   });
   const payload = await response.json().catch(() => null) as {
@@ -876,8 +877,9 @@ Deno.serve(async (req) => {
     }
     if (!breedId) throw new PublicSafeError("invalid_request", "breed_id is required");
     if (action === "find_references") {
-      const { record } = await loadBreed(serviceClient, breedId);
-      return jsonResponse({ references: await findReferenceImages(record, serviceRoleKey) }, 200, responseHeaders);
+      const { breed, record } = await loadBreed(serviceClient, breedId);
+      const species = breed.species?.common_name ?? breed.species?.slug ?? "Unknown";
+      return jsonResponse({ references: await findReferenceImages(record, species, serviceRoleKey) }, 200, responseHeaders);
     }
     if (action === "generate") {
       await generateCandidate(serviceClient, breedId, referenceImage, webReferenceToken, serviceRoleKey, user.id);

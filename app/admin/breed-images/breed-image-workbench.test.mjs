@@ -67,8 +67,12 @@ test("reference research uses OpenAI image search with the exact finalized ident
   assert.match(edgeSource, /search_content_types: \["image", "text"\]/);
   assert.match(edgeSource, /image_settings: \{ max_results: MAX_REFERENCE_RESULTS, caption: true \}/);
   assert.match(edgeSource, /include: \["web_search_call\.results"\]/);
+  assert.match(edgeSource, /`Species: \$\{species\}\.`[\s\S]*?`Breed: \$\{record\.breed\}\.`[\s\S]*?`Variety: \$\{record\.variety \|\| "none"\}\.`/);
   assert.match(edgeSource, /`Breed: \$\{record\.breed\}\.`/);
   assert.match(edgeSource, /`Variety: \$\{record\.variety \|\| "none"\}\.`/);
+  assert.doesNotMatch(edgeSource, /exact chicken catalog identity|hens and roosters|silhouette, comb, legs/);
+  assert.match(edgeSource, /referenceSearchPrompt\(record, species\)/);
+  assert.match(edgeSource, /findReferenceImages\(record, species, serviceRoleKey\)/);
   assert.match(edgeSource, /established hatcheries, poultry breed clubs, agricultural or university sources/);
   assert.match(edgeSource, /do not substitute a vaguely similar heritage breed/);
 });
