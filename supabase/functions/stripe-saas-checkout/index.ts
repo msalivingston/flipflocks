@@ -145,7 +145,7 @@ const handler = createStripeSaasCheckoutHandler({
           `${publicSiteOrigin}/onboarding?billing=checkout_canceled`,
         client_reference_id: attempt.attempt_id!,
         ...checkoutCustomerParameters(attempt, authenticatedEmail),
-        allow_promotion_codes: false,
+        allow_promotion_codes: true,
         metadata,
         subscription_data: {
           metadata: subscriptionMetadata,
