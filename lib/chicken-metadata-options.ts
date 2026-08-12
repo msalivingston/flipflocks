@@ -9,12 +9,6 @@ export const eggColorOptions = [
   { label: "Olive", value: "olive" },
 ] as const;
 
-export const catalogBirdTypeOptions = [
-  { label: "Layer", value: "layer" },
-  { label: "Meat", value: "meat" },
-  { label: "Dual-Purpose", value: "dual_purpose" },
-] as const;
-
 export { breedCategoryOptions } from "./breed-identity";
 
 export const annualEggProductionOptions = [

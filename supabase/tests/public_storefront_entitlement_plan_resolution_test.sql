@@ -267,7 +267,7 @@ select columns_are(
     'batch_type',
     'age_at_availability_days',
     'origin_date',
-    'breed_bird_type',
+    'breed_category',
     'breed_egg_color',
     'breed_annual_egg_production'
   ],
@@ -277,7 +277,7 @@ select columns_are(
 select ok(
   strpos(
     pg_get_viewdef('public.public_storefront_inventory'::regclass, true),
-    'seller_breed_profiles.bird_type'
+    'seller_breed_profiles.breed_category'
   ) > 0
   and strpos(
     pg_get_viewdef('public.public_storefront_inventory'::regclass, true),

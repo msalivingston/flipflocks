@@ -6,6 +6,70 @@ select no_plan();
 select has_column('public', 'breeds', 'variety', 'default breeds have Variety');
 select has_column('public', 'seller_breed_profiles', 'variety', 'seller profiles have independent Variety');
 select has_column('public', 'seller_breed_profiles', 'breed_category', 'seller profiles have independent Breed Category');
+select hasnt_column('public', 'breeds', 'bird_type', 'default breeds no longer store legacy Bird Type');
+select hasnt_column('public', 'seller_breed_profiles', 'bird_type', 'seller profiles no longer store legacy Bird Type');
+select has_function(
+  'public',
+  'admin_delete_default_catalog_breed',
+  array['uuid'],
+  'hard-delete RPC remains installed after legacy Bird Type removal'
+);
+
+select ok(
+  strpos(
+    lower(pg_get_functiondef('public.admin_delete_default_catalog_breed(uuid)'::regprocedure)),
+    'update public.seller_breed_profiles'
+  ) > 0
+  and strpos(
+    lower(pg_get_functiondef('public.admin_delete_default_catalog_breed(uuid)'::regprocedure)),
+    'breed_id = null'
+  ) > 0,
+  'hard delete still explicitly detaches seller profiles before deleting a default breed'
+);
+
+select ok(
+  strpos(
+    pg_get_functiondef('public.admin_delete_default_catalog_breed(uuid)'::regprocedure),
+    'bird_type'
+  ) = 0,
+  'hard-delete RPC has no legacy Bird Type dependency'
+);
+
+select is(
+  (
+    select columns.column_name::text
+    from information_schema.columns as columns
+    where columns.table_schema = 'public'
+      and columns.table_name = 'public_storefront_inventory'
+      and columns.ordinal_position = 28
+  ),
+  'breed_category',
+  'storefront keeps its ordered metadata slot and exposes seller Breed Category'
+);
+
+select ok(
+  strpos(
+    pg_get_viewdef('public.public_storefront_inventory'::regclass, true),
+    'seller_breed_profiles.breed_category'
+  ) > 0
+  and strpos(
+    pg_get_viewdef('public.public_storefront_inventory'::regclass, true),
+    'seller_breed_profiles.bird_type'
+  ) = 0,
+  'storefront Purpose source is seller-owned Breed Category only'
+);
+
+select ok(
+  strpos(
+    pg_get_functiondef('public.get_seller_storefront_preview_data(text)'::regprocedure),
+    'seller_breed_profiles.breed_category'
+  ) > 0
+  and strpos(
+    pg_get_functiondef('public.get_seller_storefront_preview_data(text)'::regprocedure),
+    'bird_type'
+  ) = 0,
+  'seller preview uses seller-owned Breed Category without Bird Type'
+);
 
 select is(
   (select breed_name from public.breeds where breed_slug = 'ameraucana-black'),
@@ -47,15 +111,6 @@ select ok(
       )
   ),
   'chicken Breed Categories use only the finalized five values'
-);
-
-select ok(
-  not exists (
-    select 1 from public.breeds
-    join public.species on species.id = breeds.species_id
-    where species.slug = 'chicken' and breeds.bird_type = 'bantam'
-  ),
-  'Bantams are never stored as Bird Type'
 );
 
 select throws_ok(

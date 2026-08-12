@@ -10,6 +10,13 @@ const migration = readFileSync(
   ),
   "utf8",
 );
+const birdTypeRemovalMigration = readFileSync(
+  resolve(
+    import.meta.dirname,
+    "../supabase/migrations/20260818132000_remove_legacy_bird_type.sql",
+  ),
+  "utf8",
+);
 const breedData = readFileSync(
   resolve(import.meta.dirname, "../app/dashboard/breeds/breed-data.ts"),
   "utf8",
@@ -29,6 +36,14 @@ const breedDetail = readFileSync(
   resolve(import.meta.dirname, "../app/dashboard/breeds/breed-detail.tsx"),
   "utf8",
 );
+const storefrontData = readFileSync(
+  resolve(import.meta.dirname, "../app/store/[slug]/storefront-data.ts"),
+  "utf8",
+);
+const storefrontProductPage = readFileSync(
+  resolve(import.meta.dirname, "../app/store/[slug]/products/[productId]/page.tsx"),
+  "utf8",
+);
 
 test("migration snapshots only missing platform-derived seller values", () => {
   assert.match(
@@ -38,10 +53,6 @@ test("migration snapshots only missing platform-derived seller values", () => {
   assert.match(
     migration,
     /nullif\(btrim\(seller_profiles\.seller_description\), ''\) is null[\s\S]*then breeds\.description/,
-  );
-  assert.match(
-    migration,
-    /bird_type = coalesce\(seller_profiles\.bird_type, breeds\.bird_type\)/,
   );
   assert.match(
     migration,
@@ -58,42 +69,34 @@ test("migration snapshots only missing platform-derived seller values", () => {
 
 test("platform auto-add snapshots every supported catalog fact centrally", () => {
   assert.match(
-    migration,
-    /v_breed\.breed_name,[\s\S]*v_breed\.description[\s\S]*v_breed\.bird_type,[\s\S]*v_breed\.egg_color,[\s\S]*v_breed\.annual_egg_production/,
+    birdTypeRemovalMigration,
+    /v_breed\.breed_name[\s\S]*v_breed\.variety[\s\S]*v_breed\.category[\s\S]*v_breed\.description[\s\S]*v_breed\.egg_color[\s\S]*v_breed\.annual_egg_production/,
   );
   assert.match(
-    migration,
+    birdTypeRemovalMigration,
     /on conflict do nothing/,
   );
   assert.match(
-    migration,
+    birdTypeRemovalMigration,
     /if v_profile\.visibility_status = 'archived' then[\s\S]*set visibility_status = 'active'/,
   );
 });
 
 test("seller-facing storefront facts no longer coalesce from platform breeds", () => {
-  const viewStart = migration.indexOf(
-    "create or replace view public.public_storefront_inventory",
-  );
-  const previewStart = migration.indexOf("do $preview_patch$");
-  const viewDefinition = migration.slice(viewStart, previewStart);
-
   assert.match(
-    viewDefinition,
-    /seller_breed_profiles\.bird_type as breed_bird_type/,
+    birdTypeRemovalMigration,
+    /rename column breed_bird_type to breed_category/,
   );
   assert.match(
-    viewDefinition,
-    /seller_breed_profiles\.egg_color as breed_egg_color/,
+    birdTypeRemovalMigration,
+    /seller_breed_profiles\.bird_type[\s\S]*seller_breed_profiles\.breed_category/,
   );
   assert.match(
-    viewDefinition,
-    /seller_breed_profiles\.annual_egg_production[\s\S]*as breed_annual_egg_production/,
+    birdTypeRemovalMigration,
+    /pg_get_viewdef[\s\S]*public_storefront_inventory/,
   );
-  assert.doesNotMatch(viewDefinition, /join public\.breeds/);
-  assert.doesNotMatch(viewDefinition, /seller_notes/);
   assert.match(
-    migration,
+    birdTypeRemovalMigration,
     /pg_get_functiondef[\s\S]*get_seller_storefront_preview_data/,
   );
 });
@@ -101,7 +104,7 @@ test("seller-facing storefront facts no longer coalesce from platform breeds", (
 test("Breed Catalog and inventory copy paths share the same complete mapping", () => {
   assert.match(
     breedData,
-    /export function getCatalogBreedSnapshotRpcArgs[\s\S]*p_annual_egg_production:[\s\S]*p_bird_type:[\s\S]*p_breed_id:[\s\S]*p_display_name:[\s\S]*p_egg_color:[\s\S]*p_seller_description:/,
+    /export function getCatalogBreedSnapshotRpcArgs[\s\S]*p_annual_egg_production:[\s\S]*p_breed_id:[\s\S]*p_display_name:[\s\S]*p_egg_color:[\s\S]*p_variety:[\s\S]*p_breed_category:[\s\S]*p_seller_description:/,
   );
   assert.match(
     breedManagement,
@@ -133,10 +136,7 @@ test("Restore Defaults remains the only catalog-to-existing-profile refresh", ()
     breedDetail,
     /restoreCatalogDefaults[\s\S]*catalogBreed\.description/,
   );
-  assert.match(
-    breedDetail,
-    /restoredBirdType[\s\S]*catalogBreed\.bird_type/,
-  );
+  assert.match(breedDetail, /restoredBreedCategory[\s\S]*catalogBreed\.category/);
   assert.match(
     breedDetail,
     /restoredEggColor[\s\S]*catalogBreed\.egg_color/,
@@ -146,4 +146,28 @@ test("Restore Defaults remains the only catalog-to-existing-profile refresh", ()
     /restoredAnnualEggProduction[\s\S]*catalogBreed\.annual_egg_production/,
   );
   assert.match(breedDetail, /restoreCatalogPhoto/);
+});
+
+test("legacy Bird Type is removed from active breed tables and RPC contracts", () => {
+  assert.match(
+    birdTypeRemovalMigration,
+    /alter table public\.breeds[\s\S]*drop column bird_type/,
+  );
+  assert.match(
+    birdTypeRemovalMigration,
+    /alter table public\.seller_breed_profiles[\s\S]*drop column bird_type/,
+  );
+  assert.doesNotMatch(breedData, /bird_type/);
+  assert.doesNotMatch(breedDetail, /bird_type/);
+});
+
+test("buyer-facing Purpose retains its label and reads seller Breed Category", () => {
+  assert.match(storefrontData, /purpose: first\.breed_category/);
+  assert.match(storefrontData, /formatEggColor\(first\.breed_egg_color\)/);
+  assert.match(
+    storefrontData,
+    /formatAnnualEggProduction\([\s\S]*first\.breed_annual_egg_production/,
+  );
+  assert.match(storefrontProductPage, /\["Purpose", product\.purpose \|\| "Not listed"\]/);
+  assert.doesNotMatch(storefrontData, /breed_bird_type|bird_type/);
 });

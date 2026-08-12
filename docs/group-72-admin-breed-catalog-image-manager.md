@@ -22,16 +22,17 @@ manager on `/admin/breeds/[breedId]`.
 
 Editable fields are limited to:
 
+- `breed_name` (Base Breed)
+- `variety`
 - `description`
-- `category`
-- `bird_type`
+- `category` (Breed Category)
 - `egg_color`
 - `annual_egg_production`
+- `temperament`
 - `image_prompt`
 
-Read-only identity fields remain:
+Read-only fields remain:
 
-- `breed_name`
 - `breed_slug`
 - `species`
 
@@ -44,12 +45,10 @@ The `/admin/breeds` list sorts alphabetically by breed name for all image-status
 filters. Missing-image filtering is explicit through the Image status control
 and the Missing images quick button.
 
-The details editor uses controlled dropdowns for catalog `bird_type` and
-`egg_color`. `category` remains editable because it is used separately from
-`bird_type` as a product-facing breed grouping for discovery and filtering.
-`Bantams` currently belongs in `category`; adding `bantam` as a savable
-`bird_type` value would require catalog and seller restore/profile compatibility
-work outside this small UI refinement.
+The details editor uses controlled dropdowns for Breed Category (`category`)
+and `egg_color`. Breed Category is the sole current breed classification; the
+legacy `bird_type` field is not part of the active breed schema or admin RPC
+contract.
 
 ## Security Model
 

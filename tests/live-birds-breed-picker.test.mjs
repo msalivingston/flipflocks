@@ -44,7 +44,7 @@ test("Hatching Eggs retains its searchable reference-breed picker", () => {
   assert.match(hatchingEggPickerSource, /function HatchingEggBreedLookup\(/);
   assert.match(
     hatchingEggPickerSource,
-    /normalizeHatchingEggBreedName\(breed\.breed_name\)\.includes\(normalizedValue\)/,
+    /normalizeHatchingEggBreedName\([\s\S]*formatBreedDisplayName\(breed\.breed_name, breed\.variety\)[\s\S]*\)\.includes\(normalizedValue\)/,
   );
   assert.match(
     hatchingEggPickerSource,

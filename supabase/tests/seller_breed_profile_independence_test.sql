@@ -57,7 +57,6 @@ select
   breeds.variety,
   breeds.category,
   breeds.description,
-  breeds.bird_type,
   breeds.egg_color,
   breeds.annual_egg_production
 from public.breeds as breeds
@@ -81,7 +80,6 @@ from public.seller_upsert_breed_profile(
   null,
   'active',
   null,
-  'meat',
   'white',
   'over_300'
 );
@@ -136,13 +134,13 @@ select is(
 
 select is(
   (
-    select concat_ws('|', bird_type, egg_color, annual_egg_production)
+    select concat_ws('|', egg_color, annual_egg_production)
     from public.seller_breed_profiles
     where store_id = 'b1200000-0000-4000-8000-000000000010'
       and breed_id = (select breed_id from breed_snapshot_catalog_source)
   ),
   (
-    select concat_ws('|', bird_type, egg_color, annual_egg_production)
+    select concat_ws('|', egg_color, annual_egg_production)
     from breed_snapshot_catalog_source
   ),
   'initial platform add snapshots all supported chicken facts'
@@ -188,7 +186,6 @@ values (
 update public.breeds
 set
   description = 'Changed platform description',
-  bird_type = 'layer',
   egg_color = 'blue',
   annual_egg_production = 'over_300'
 where id = (select breed_id from breed_snapshot_catalog_source);
@@ -196,7 +193,7 @@ where id = (select breed_id from breed_snapshot_catalog_source);
 select is(
   (
     select concat_ws(
-      '|', breed_description, breed_bird_type, breed_egg_color,
+      '|', breed_description, breed_category, breed_egg_color,
       breed_annual_egg_production
     )
     from public.public_storefront_inventory
@@ -204,7 +201,7 @@ select is(
   ),
   (
     select concat_ws(
-      '|', description, bird_type, egg_color, annual_egg_production
+      '|', description, category, egg_color, annual_egg_production
     )
     from breed_snapshot_catalog_source
   ),
@@ -215,14 +212,14 @@ select is(
   (
     select concat_ws(
       '|',
-      inventory -> 0 ->> 'breed_bird_type',
+      inventory -> 0 ->> 'breed_category',
       inventory -> 0 ->> 'breed_egg_color',
       inventory -> 0 ->> 'breed_annual_egg_production'
     )
     from public.get_seller_storefront_preview_data('breed-snapshot-farm')
   ),
   (
-    select concat_ws('|', bird_type, egg_color, annual_egg_production)
+    select concat_ws('|', category, egg_color, annual_egg_production)
     from breed_snapshot_catalog_source
   ),
   'seller storefront preview uses the seller snapshot after the catalog changes'
@@ -250,7 +247,6 @@ update public.seller_breed_profiles
 set
   display_name = 'Seller Custom Orpington',
   seller_description = 'Seller custom description',
-  bird_type = 'meat',
   egg_color = 'white',
   annual_egg_production = 'under_150',
   variety = 'Seller Variety',
@@ -269,14 +265,14 @@ from public.seller_upsert_breed_profile(
 select is(
   (
     select concat_ws(
-      '|', display_name, seller_description, bird_type, egg_color,
+      '|', display_name, seller_description, egg_color,
       annual_egg_production, variety, breed_category, visibility_status
     )
     from public.seller_breed_profiles
     where store_id = 'b1200000-0000-4000-8000-000000000010'
       and breed_id = (select breed_id from breed_snapshot_catalog_source)
   ),
-  'Seller Custom Orpington|Seller custom description|meat|white|under_150|Seller Variety|Specialty / Project|active',
+  'Seller Custom Orpington|Seller custom description|white|under_150|Seller Variety|Specialty / Project|active',
   're-adding an archived platform copy preserves customization and reactivates it'
 );
 
@@ -296,7 +292,6 @@ from public.seller_upsert_breed_profile(
     where store_id = 'b1200000-0000-4000-8000-000000000010'
       and breed_id = (select breed_id from breed_snapshot_catalog_source)
   ),
-  'layer',
   'blue',
   'over_300',
   (select variety from breed_snapshot_catalog_source),
@@ -307,14 +302,14 @@ from public.seller_upsert_breed_profile(
 select is(
   (
     select concat_ws(
-      '|', seller_description, bird_type, egg_color, annual_egg_production,
+      '|', seller_description, egg_color, annual_egg_production,
       variety, breed_category
     )
     from public.seller_breed_profiles
     where store_id = 'b1200000-0000-4000-8000-000000000010'
       and breed_id = (select breed_id from breed_snapshot_catalog_source)
   ),
-  'Changed platform description|layer|blue|over_300|Buff|Layers',
+  'Changed platform description|blue|over_300|Buff|Layers',
   'an explicit existing-profile update can restore current catalog values'
 );
 

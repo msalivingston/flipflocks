@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   breedCategoryOptions,
-  catalogBirdTypeOptions,
   eggColorOptions,
 } from "@/lib/chicken-metadata-options";
 import { supabase } from "@/lib/supabase";
@@ -55,7 +54,6 @@ type DeleteResponse = {
 
 type CatalogDetailsForm = {
   annual_egg_production: string;
-  bird_type: string;
   breed_name: string;
   category: string;
   description: string;
@@ -270,7 +268,6 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
       "admin_update_catalog_breed_details",
       {
         p_annual_egg_production: detailsForm.annual_egg_production,
-        p_bird_type: detailsForm.bird_type,
         p_breed_name: detailsForm.breed_name,
         p_breed_id: breed.breed_id,
         p_category: detailsForm.category,
@@ -631,27 +628,6 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
                   </label>
 
                   <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                    Bird Type
-                    <select
-                      className="min-h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
-                      value={detailsForm.bird_type}
-                      onChange={(event) =>
-                        setDetailsForm((current) => ({
-                          ...current,
-                          bird_type: event.target.value,
-                        }))
-                      }
-                    >
-                      <option value="">Not set</option>
-                      {catalogBirdTypeOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
                     Egg Color
                     <select
                       className="min-h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
@@ -783,7 +759,6 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
 
 const emptyDetailsForm: CatalogDetailsForm = {
   annual_egg_production: "",
-  bird_type: "",
   breed_name: "",
   category: "",
   description: "",
@@ -800,7 +775,6 @@ function toDetailsForm(
 
   return {
     annual_egg_production: breed.annual_egg_production ?? "",
-    bird_type: breed.bird_type ?? "",
     breed_name: breed.breed_name,
     category: breed.category ?? "",
     description: breed.description ?? "",

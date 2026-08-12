@@ -19,7 +19,6 @@ export type BreedLibraryItem = {
   category: string | null;
   breed_slug: string;
   description: string | null;
-  bird_type: string | null;
   egg_color: string | null;
   annual_egg_production: string | null;
   image_url: string | null;
@@ -39,7 +38,6 @@ export type SellerBreedProfile = {
   seller_notes: string | null;
   visibility_status: string;
   moderation_status: string;
-  bird_type: string | null;
   egg_color: string | null;
   annual_egg_production: string | null;
 };
@@ -66,9 +64,9 @@ export type RestoreCatalogDefaultPhotoBestEffortResult =
 
 export const speciesSelect = "id, common_name, slug, sort_order";
 export const breedLibrarySelect =
-  "id, species_id, breed_name, variety, breed_slug, description, category, bird_type, egg_color, annual_egg_production, image_url, sort_order";
+  "id, species_id, breed_name, variety, breed_slug, description, category, egg_color, annual_egg_production, image_url, sort_order";
 export const sellerBreedProfileSelect =
-  "id, store_id, species_id, breed_id, custom_breed_name, display_name, variety, breed_category, seller_description, seller_notes, visibility_status, moderation_status, bird_type, egg_color, annual_egg_production";
+  "id, store_id, species_id, breed_id, custom_breed_name, display_name, variety, breed_category, seller_description, seller_notes, visibility_status, moderation_status, egg_color, annual_egg_production";
 export const sellerMediaSelect =
   "media_asset_id, media_link_id, store_id, entity_type, entity_id, display_context, public_url, alt_text, caption, sort_order, is_featured, crop_metadata, moderation_status, asset_status, visibility_status, original_filename, content_type, file_size_bytes, width_px, height_px, source_type, source_breed_id, source_image_url";
 
@@ -87,7 +85,6 @@ export function getProfileDescription(profile: SellerBreedProfile) {
 export function getCatalogBreedSnapshotRpcArgs(breed: BreedLibraryItem) {
   return {
     p_annual_egg_production: breed.annual_egg_production,
-    p_bird_type: breed.bird_type,
     p_breed_id: breed.id,
     p_custom_breed_name: null,
     p_display_name: formatBreedDisplayName(breed.breed_name, breed.variety),

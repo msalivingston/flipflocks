@@ -3,7 +3,6 @@
 import {
   annualEggProductionOptions,
   breedCategoryOptions,
-  catalogBirdTypeOptions,
   eggColorOptions,
 } from "@/lib/chicken-metadata-options";
 import type { RefObject } from "react";
@@ -13,7 +12,6 @@ export const breedDescriptionMaxLength = 1500;
 
 export type CustomBreedDraft = {
   annualEggProduction: string;
-  birdType: string;
   breedCategory: string;
   description: string;
   eggColor: string;
@@ -41,7 +39,6 @@ export function createBlankCustomBreedDraft(
 ): CustomBreedDraft {
   return {
     annualEggProduction: "",
-    birdType: "",
     breedCategory: "",
     description: "",
     eggColor: "",
@@ -62,7 +59,6 @@ export function sanitizeCustomBreedDraft({
 
   return {
     annualEggProduction: isChicken ? draft.annualEggProduction.trim() : "",
-    birdType: isChicken ? draft.birdType.trim() : "",
     breedCategory: isChicken ? draft.breedCategory.trim() : "",
     description: draft.description.trim(),
     eggColor: isChicken ? draft.eggColor.trim() : "",
@@ -94,13 +90,6 @@ export function validateCustomBreedDraft({
       ok: false,
       message: `Breed description must be ${breedDescriptionMaxLength} characters or less.`,
     };
-  }
-
-  if (
-    nextDraft.birdType &&
-    !catalogBirdTypeOptions.some((option) => option.value === nextDraft.birdType)
-  ) {
-    return { ok: false, message: "Choose a supported bird type." };
   }
 
   if (
@@ -178,7 +167,6 @@ export function CustomBreedForm({
             updateDraft({
               annualEggProduction: "",
               breedCategory: "",
-              birdType: "",
               eggColor: "",
               speciesId: event.target.value,
             })
@@ -231,23 +219,6 @@ export function CustomBreedForm({
               {breedCategoryOptions.map((category) => (
                 <option key={category} value={category}>
                   {category}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className={labelClass}>
-            Bird Type <span className="font-normal text-stone-500">(optional)</span>
-            <select
-              className={fieldClass}
-              disabled={disabled}
-              value={draft.birdType}
-              onChange={(event) => updateDraft({ birdType: event.target.value })}
-            >
-              <option value="">Not set</option>
-              {catalogBirdTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
                 </option>
               ))}
             </select>

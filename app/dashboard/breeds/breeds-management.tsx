@@ -374,7 +374,6 @@ export function BreedsManagement() {
   async function addCustomBreed(draft: CustomBreedDraft): Promise<AddBreedResult> {
     const { data, error } = await supabase.rpc("seller_upsert_breed_profile", {
       p_annual_egg_production: draft.annualEggProduction || null,
-      p_bird_type: draft.birdType || null,
       p_breed_category: draft.breedCategory || null,
       p_breed_id: null,
       p_custom_breed_name: draft.name,
@@ -478,7 +477,6 @@ export function BreedsManagement() {
 
     const { error } = await supabase.rpc("seller_upsert_breed_profile", {
       p_annual_egg_production: profile.annual_egg_production,
-      p_bird_type: profile.bird_type,
       p_breed_category: profile.breed_category,
       p_breed_id: profile.breed_id,
       p_custom_breed_name: profile.custom_breed_name,

@@ -1269,7 +1269,6 @@ export function LiveBirdsListingForm({
         p_custom_breed_name: profile.custom_breed_name,
         p_display_name: profile.display_name,
         p_annual_egg_production: profile.annual_egg_production,
-        p_bird_type: profile.bird_type,
         p_egg_color: profile.egg_color,
         p_seller_breed_profile_id: profile.id,
         p_seller_description: nextDescription || null,
@@ -4644,7 +4643,6 @@ async function createSellerCustomBreedProfile({
 > {
   const upsertResult = await supabase.rpc("seller_upsert_breed_profile", {
     p_annual_egg_production: draft.annualEggProduction || null,
-    p_bird_type: draft.birdType || null,
     p_breed_category: draft.breedCategory || null,
     p_breed_id: null,
     p_custom_breed_name: draft.name,

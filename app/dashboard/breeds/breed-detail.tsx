@@ -14,7 +14,6 @@ import {
 import {
   annualEggProductionOptions,
   breedCategoryOptions,
-  catalogBirdTypeOptions,
   eggColorOptions,
 } from "@/lib/chicken-metadata-options";
 import {
@@ -50,7 +49,6 @@ import { breedDescriptionMaxLength } from "./custom-breed-form";
 
 type BreedDraft = {
   annualEggProduction: string;
-  birdType: string;
   breedCategory: string;
   breedName: string;
   eggColor: string;
@@ -168,7 +166,6 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
         nextProfile
           ? {
               annualEggProduction: nextProfile.annual_egg_production ?? "",
-              birdType: nextProfile.bird_type ?? "",
               breedCategory: nextProfile.breed_category ?? "",
               breedName: getBaseBreedFromDisplayName(
                 nextProfile.display_name,
@@ -231,7 +228,6 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
       catalogBreed &&
       (catalogBreed.variety ||
         catalogBreed.category ||
-        catalogBreed.bird_type ||
         catalogBreed.egg_color ||
         catalogBreed.annual_egg_production),
   );
@@ -332,7 +328,6 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
       p_annual_egg_production: isChickenBreed
         ? draft.annualEggProduction || null
         : null,
-      p_bird_type: isChickenBreed ? draft.birdType || null : null,
       p_breed_category: isChickenBreed ? draft.breedCategory || null : null,
       p_egg_color: isChickenBreed ? draft.eggColor || null : null,
       p_seller_breed_profile_id: profile.id,
@@ -381,9 +376,6 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
     const restoredDescription = shouldRestoreDescription
       ? catalogBreed.description?.trim() ?? ""
       : profile.seller_description ?? "";
-    const restoredBirdType = shouldRestoreDetails
-      ? catalogBreed.bird_type ?? null
-      : profile.bird_type ?? null;
     const restoredVariety = shouldRestoreDetails
       ? catalogBreed.variety ?? null
       : profile.variety ?? null;
@@ -405,7 +397,6 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
           ? formatBreedDisplayName(catalogBreed.breed_name, restoredVariety)
           : profile.display_name,
         p_annual_egg_production: restoredAnnualEggProduction,
-        p_bird_type: restoredBirdType,
         p_breed_category: restoredBreedCategory,
         p_egg_color: restoredEggColor,
         p_seller_breed_profile_id: profile.id,
@@ -431,7 +422,6 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
         .from("seller_breed_profiles")
         .update({
           annual_egg_production: restoredAnnualEggProduction,
-          bird_type: restoredBirdType,
           breed_category: restoredBreedCategory,
           egg_color: restoredEggColor,
           variety: restoredVariety,
@@ -468,7 +458,6 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
         annualEggProduction: shouldRestoreDetails
           ? restoredAnnualEggProduction ?? ""
           : current.annualEggProduction,
-        birdType: shouldRestoreDetails ? restoredBirdType ?? "" : current.birdType,
         breedCategory: shouldRestoreDetails
           ? restoredBreedCategory ?? ""
           : current.breedCategory,
@@ -761,24 +750,6 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
                       {breedCategoryOptions.map((category) => (
                         <option key={category} value={category}>
                           {category}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                    Bird Type <span className="font-normal text-stone-500">(optional)</span>
-                    <select
-                      className="seller-form-field min-h-10 py-1.5"
-                      value={draft.birdType}
-                      onChange={(event) =>
-                        updateDraft({ birdType: event.target.value })
-                      }
-                    >
-                      <option value="">Not set</option>
-                      {catalogBirdTypeOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
                         </option>
                       ))}
                     </select>

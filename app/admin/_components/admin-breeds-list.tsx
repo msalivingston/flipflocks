@@ -305,11 +305,6 @@ function BreedQueueRow({
             {breed.species_name} / {breed.breed_slug}
           </p>
           <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-stone-600">
-            {breed.bird_type ? (
-              <span className="rounded bg-stone-100 px-2 py-1 capitalize">
-                {breed.bird_type.replaceAll("_", " ")}
-              </span>
-            ) : null}
             {breed.egg_color ? (
               <span className="rounded bg-stone-100 px-2 py-1">
                 {breed.egg_color}

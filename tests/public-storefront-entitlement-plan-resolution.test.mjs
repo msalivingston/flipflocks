@@ -16,12 +16,17 @@ const storefrontForwardFixPath = resolve(
   root,
   "supabase/migrations/20260818121000_restore_public_storefront_entitlement_predicate.sql",
 );
+const birdTypeRemovalPath = resolve(
+  root,
+  "supabase/migrations/20260818132000_remove_legacy_bird_type.sql",
+);
 const sqlTestPath = resolve(
   root,
   "supabase/tests/public_storefront_entitlement_plan_resolution_test.sql",
 );
 const migration = readFileSync(migrationPath, "utf8");
 const storefrontForwardFix = readFileSync(storefrontForwardFixPath, "utf8");
+const birdTypeRemoval = readFileSync(birdTypeRemovalPath, "utf8");
 const sqlTest = readFileSync(sqlTestPath, "utf8");
 
 const directViews = [
@@ -156,9 +161,14 @@ test("the seller snapshot regression is repaired without changing the view contr
   assert.match(storefrontForwardFix, /columns\.attname/);
   assert.match(storefrontForwardFix, /columns\.atttypid/);
   assert.match(storefrontForwardFix, /columns\.atttypmod/);
+  assert.match(birdTypeRemoval, /rename column breed_bird_type to breed_category/);
+  assert.match(
+    birdTypeRemoval,
+    /seller_breed_profiles\.bird_type[\s\S]*seller_breed_profiles\.breed_category/,
+  );
   assert.match(
     storefrontForwardFix,
-    /seller_breed_profiles\.bird_type[\s\S]*seller_breed_profiles\.egg_color[\s\S]*seller_breed_profiles\.annual_egg_production/,
+    /seller_breed_profiles\.egg_color[\s\S]*seller_breed_profiles\.annual_egg_production/,
   );
   assert.doesNotMatch(
     storefrontForwardFix,

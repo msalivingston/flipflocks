@@ -105,7 +105,7 @@ export type StorefrontInventoryItem = {
   unit_price: number;
   featured_image_url: string | null;
   featured_image_alt_text: string | null;
-  breed_bird_type: string | null;
+  breed_category: string | null;
   breed_egg_color: string | null;
   breed_annual_egg_production: string | null;
   breed_sort_order: number | null;
@@ -621,7 +621,7 @@ export function toStorefrontProduct(
     description: first.breed_description,
     imageUrl: profileImage?.imageUrl ?? first.featured_image_url,
     imageAlt: profileImage?.imageAlt ?? first.featured_image_alt_text,
-    purpose: formatBirdPurpose(first.breed_bird_type),
+    purpose: first.breed_category,
     eggColor: formatEggColor(first.breed_egg_color),
     annualEggProduction: formatAnnualEggProduction(
       first.breed_annual_egg_production,
@@ -1033,16 +1033,6 @@ export function formatCurrency(value: number) {
     currency: "USD",
     style: "currency",
   }).format(value);
-}
-
-function formatBirdPurpose(value: string | null) {
-  const labels: Record<string, string> = {
-    dual_purpose: "Dual-purpose",
-    layer: "Layer",
-    meat: "Meat",
-  };
-
-  return value ? labels[value] ?? toTitleText(value) : null;
 }
 
 function formatEggColor(value: string | null) {

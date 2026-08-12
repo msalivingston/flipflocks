@@ -94,7 +94,6 @@ export type AdminCatalogBreedListRow = {
   image_url: string | null;
   has_image: boolean;
   category: string | null;
-  bird_type: string | null;
   egg_color: string | null;
   annual_egg_production: string | null;
   temperament: string | null;
