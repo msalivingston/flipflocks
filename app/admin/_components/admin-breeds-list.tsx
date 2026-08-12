@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { formatBreedDisplayName } from "@/lib/breed-identity";
 import type { AdminCatalogBreedListRow } from "../_lib/admin-types";
 import {
   AdminAccessState,
@@ -94,7 +95,9 @@ export function AdminBreedsList({
       .filter((breed) => {
         const matchesQuery =
           !normalizedQuery ||
-          breed.breed_name.toLowerCase().includes(normalizedQuery) ||
+          formatBreedDisplayName(breed.breed_name, breed.variety)
+            .toLowerCase()
+            .includes(normalizedQuery) ||
           breed.breed_slug.toLowerCase().includes(normalizedQuery);
         const matchesSpecies =
           speciesFilter === "all" || breed.species_slug === speciesFilter;
@@ -106,9 +109,13 @@ export function AdminBreedsList({
         return matchesQuery && matchesSpecies && matchesImage;
       })
       .toSorted((first, second) =>
-        first.breed_name.localeCompare(second.breed_name, undefined, {
+        formatBreedDisplayName(first.breed_name, first.variety).localeCompare(
+          formatBreedDisplayName(second.breed_name, second.variety),
+          undefined,
+          {
           sensitivity: "base",
-        }),
+          },
+        ),
       );
   }, [breeds, imageFilter, query, speciesFilter]);
 
@@ -117,7 +124,7 @@ export function AdminBreedsList({
 
   async function deleteBreed(breed: AdminCatalogBreedListRow) {
     const confirmed = window.confirm(
-      `Permanently delete ${breed.breed_name}? This cannot be undone.`,
+      `Permanently delete ${formatBreedDisplayName(breed.breed_name, breed.variety)}? This cannot be undone.`,
     );
     if (!confirmed) return;
 
@@ -288,7 +295,7 @@ function BreedQueueRow({
               className="truncate text-base font-bold text-stone-950 hover:text-emerald-900"
               href={`/admin/breeds/${breed.breed_id}`}
             >
-              {breed.breed_name}
+              {formatBreedDisplayName(breed.breed_name, breed.variety)}
             </Link>
             <AdminStatusBadge
               value={breed.has_image ? "Has image" : "Missing image"}
@@ -347,7 +354,7 @@ function BreedThumbnail({ breed }: { breed: AdminCatalogBreedListRow }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      alt={`${breed.breed_name} catalog`}
+      alt={`${formatBreedDisplayName(breed.breed_name, breed.variety)} catalog`}
       className="aspect-square w-20 rounded-lg border border-stone-200 object-cover"
       src={imageSrc}
       onError={() => setFailed(true)}

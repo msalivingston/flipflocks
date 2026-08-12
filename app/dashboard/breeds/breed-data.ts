@@ -1,6 +1,7 @@
 "use client";
 
 import { supabase } from "@/lib/supabase";
+import { formatBreedDisplayName } from "@/lib/breed-identity";
 import type { ListingPhotoItem } from "../listings/[listingBatchId]/listing-photos-section";
 
 export type BreedSpecies = {
@@ -14,6 +15,8 @@ export type BreedLibraryItem = {
   id: string;
   species_id: string;
   breed_name: string;
+  variety: string | null;
+  category: string | null;
   breed_slug: string;
   description: string | null;
   bird_type: string | null;
@@ -30,6 +33,8 @@ export type SellerBreedProfile = {
   breed_id: string | null;
   custom_breed_name: string | null;
   display_name: string;
+  variety: string | null;
+  breed_category: string | null;
   seller_description: string | null;
   seller_notes: string | null;
   visibility_status: string;
@@ -61,9 +66,9 @@ export type RestoreCatalogDefaultPhotoBestEffortResult =
 
 export const speciesSelect = "id, common_name, slug, sort_order";
 export const breedLibrarySelect =
-  "id, species_id, breed_name, breed_slug, description, bird_type, egg_color, annual_egg_production, image_url, sort_order";
+  "id, species_id, breed_name, variety, breed_slug, description, category, bird_type, egg_color, annual_egg_production, image_url, sort_order";
 export const sellerBreedProfileSelect =
-  "id, store_id, species_id, breed_id, custom_breed_name, display_name, seller_description, seller_notes, visibility_status, moderation_status, bird_type, egg_color, annual_egg_production";
+  "id, store_id, species_id, breed_id, custom_breed_name, display_name, variety, breed_category, seller_description, seller_notes, visibility_status, moderation_status, bird_type, egg_color, annual_egg_production";
 export const sellerMediaSelect =
   "media_asset_id, media_link_id, store_id, entity_type, entity_id, display_context, public_url, alt_text, caption, sort_order, is_featured, crop_metadata, moderation_status, asset_status, visibility_status, original_filename, content_type, file_size_bytes, width_px, height_px, source_type, source_breed_id, source_image_url";
 
@@ -85,8 +90,10 @@ export function getCatalogBreedSnapshotRpcArgs(breed: BreedLibraryItem) {
     p_bird_type: breed.bird_type,
     p_breed_id: breed.id,
     p_custom_breed_name: null,
-    p_display_name: breed.breed_name,
+    p_display_name: formatBreedDisplayName(breed.breed_name, breed.variety),
     p_egg_color: breed.egg_color,
+    p_variety: breed.variety,
+    p_breed_category: breed.category,
     p_seller_description: breed.description,
   };
 }
@@ -146,7 +153,9 @@ export function sortBreedLibrary(
 
     if (sortOrder !== 0) return sortOrder;
 
-    return first.breed_name.localeCompare(second.breed_name);
+    return formatBreedDisplayName(first.breed_name, first.variety).localeCompare(
+      formatBreedDisplayName(second.breed_name, second.variety),
+    );
   });
 }
 

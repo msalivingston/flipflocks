@@ -54,6 +54,8 @@ select
   breeds.id as breed_id,
   breeds.species_id,
   breeds.breed_name,
+  breeds.variety,
+  breeds.category,
   breeds.description,
   breeds.bird_type,
   breeds.egg_color,
@@ -102,8 +104,23 @@ select is(
     where store_id = 'b1200000-0000-4000-8000-000000000010'
       and breed_id = (select breed_id from breed_snapshot_catalog_source)
   ),
-  (select breed_name from breed_snapshot_catalog_source),
+  (
+    select case when variety is null then breed_name
+      else breed_name || ' - ' || variety end
+    from breed_snapshot_catalog_source
+  ),
   'initial platform add snapshots the catalog display name'
+);
+
+select is(
+  (
+    select concat_ws('|', variety, breed_category)
+    from public.seller_breed_profiles
+    where store_id = 'b1200000-0000-4000-8000-000000000010'
+      and breed_id = (select breed_id from breed_snapshot_catalog_source)
+  ),
+  (select concat_ws('|', variety, category) from breed_snapshot_catalog_source),
+  'initial platform add snapshots Variety and Breed Category'
 );
 
 select is(
@@ -236,6 +253,8 @@ set
   bird_type = 'meat',
   egg_color = 'white',
   annual_egg_production = 'under_150',
+  variety = 'Seller Variety',
+  breed_category = 'Specialty / Project',
   visibility_status = 'archived'
 where store_id = 'b1200000-0000-4000-8000-000000000010'
   and breed_id = (select breed_id from breed_snapshot_catalog_source);
@@ -251,13 +270,13 @@ select is(
   (
     select concat_ws(
       '|', display_name, seller_description, bird_type, egg_color,
-      annual_egg_production, visibility_status
+      annual_egg_production, variety, breed_category, visibility_status
     )
     from public.seller_breed_profiles
     where store_id = 'b1200000-0000-4000-8000-000000000010'
       and breed_id = (select breed_id from breed_snapshot_catalog_source)
   ),
-  'Seller Custom Orpington|Seller custom description|meat|white|under_150|active',
+  'Seller Custom Orpington|Seller custom description|meat|white|under_150|Seller Variety|Specialty / Project|active',
   're-adding an archived platform copy preserves customization and reactivates it'
 );
 
@@ -279,19 +298,23 @@ from public.seller_upsert_breed_profile(
   ),
   'layer',
   'blue',
-  'over_300'
+  'over_300',
+  (select variety from breed_snapshot_catalog_source),
+  (select category from breed_snapshot_catalog_source),
+  true
 );
 
 select is(
   (
     select concat_ws(
-      '|', seller_description, bird_type, egg_color, annual_egg_production
+      '|', seller_description, bird_type, egg_color, annual_egg_production,
+      variety, breed_category
     )
     from public.seller_breed_profiles
     where store_id = 'b1200000-0000-4000-8000-000000000010'
       and breed_id = (select breed_id from breed_snapshot_catalog_source)
   ),
-  'Changed platform description|layer|blue|over_300',
+  'Changed platform description|layer|blue|over_300|Buff|Layers',
   'an explicit existing-profile update can restore current catalog values'
 );
 

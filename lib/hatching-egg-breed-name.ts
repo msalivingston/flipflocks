@@ -1,5 +1,8 @@
+import { formatBreedDisplayName } from "./breed-identity";
+
 export type HatchingEggPlatformBreed = {
   breed_name: string;
+  variety?: string | null;
   id: string;
   species_id: string;
 };
@@ -25,7 +28,9 @@ export function findMatchingHatchingEggPlatformBreed({
     breeds.find(
       (breed) =>
         breed.species_id === speciesId &&
-        normalizeHatchingEggBreedName(breed.breed_name) === normalizedName,
+        normalizeHatchingEggBreedName(
+          formatBreedDisplayName(breed.breed_name, breed.variety),
+        ) === normalizedName,
     ) ?? null
   );
 }
@@ -46,7 +51,9 @@ export function resolveHatchingEggBreedName({
   });
 
   return {
-    canonicalName: matchingBreed?.breed_name ?? name.trim().replace(/\s+/g, " "),
+    canonicalName: matchingBreed
+      ? formatBreedDisplayName(matchingBreed.breed_name, matchingBreed.variety)
+      : name.trim().replace(/\s+/g, " "),
     matchingBreed,
   };
 }

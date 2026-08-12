@@ -168,6 +168,7 @@ export type ReferenceBreed = {
   id: string;
   species_id: string;
   breed_name: string;
+  variety: string | null;
   breed_slug: string;
   sort_order: number | null;
 };
@@ -183,6 +184,8 @@ export type SellerBreedProfileOption = {
   breed_id: string | null;
   custom_breed_name: string | null;
   display_name: string;
+  variety: string | null;
+  breed_category: string | null;
   seller_description: string | null;
   seller_notes: string | null;
   visibility_status: string;

@@ -89,6 +89,7 @@ export type AdminCatalogBreedListRow = {
   species_name: string;
   species_slug: string;
   breed_name: string;
+  variety: string | null;
   breed_slug: string;
   image_url: string | null;
   has_image: boolean;
@@ -96,6 +97,7 @@ export type AdminCatalogBreedListRow = {
   bird_type: string | null;
   egg_color: string | null;
   annual_egg_production: string | null;
+  temperament: string | null;
   image_prompt: string | null;
   is_active: boolean;
   sort_order: number;

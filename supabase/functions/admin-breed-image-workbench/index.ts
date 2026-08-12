@@ -41,6 +41,7 @@ type PlanRecord = {
 type BreedRow = {
   id: string;
   breed_name: string;
+  variety: string | null;
   breed_slug: string;
   category: string | null;
   image_url: string | null;
@@ -526,7 +527,7 @@ async function readOpenAiImage(response: Response) {
 async function loadActiveChickenBreeds(serviceClient: ReturnType<typeof createClient>) {
   const { data, error } = await serviceClient
     .from("breeds")
-    .select("id, breed_name, breed_slug, category, image_url, is_active, is_custom, sort_order, species:species_id!inner(slug)")
+    .select("id, breed_name, variety, breed_slug, category, image_url, is_active, is_custom, sort_order, species:species_id!inner(slug)")
     .eq("is_active", true)
     .eq("is_custom", false)
     .eq("species.slug", "chicken")
@@ -550,7 +551,12 @@ async function listWorkbench(serviceClient: ReturnType<typeof createClient>) {
 
   return Promise.all(breeds.map(async (breed) => {
     const record = planById.get(breed.id);
-    if (!record || record.slug !== breed.breed_slug) {
+    if (
+      !record ||
+      record.slug !== breed.breed_slug ||
+      record.breed !== breed.breed_name ||
+      (record.variety || null) !== breed.variety
+    ) {
       throw new Error(`Image-family plan does not match active breed ${breed.id} (${breed.breed_slug})`);
     }
 
@@ -584,9 +590,11 @@ async function listWorkbench(serviceClient: ReturnType<typeof createClient>) {
     return {
       stable_id: breed.id,
       slug: breed.breed_slug,
-      breed_name: breed.breed_name,
-      base_breed: record.breed,
-      variety: record.variety || null,
+      breed_name: breed.variety
+        ? `${breed.breed_name} - ${breed.variety}`
+        : breed.breed_name,
+      base_breed: breed.breed_name,
+      variety: breed.variety,
       breed_category: breed.category,
       image_strategy: record.image_strategy,
       proposed_image_family: record.proposed_image_family,

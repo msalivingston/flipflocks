@@ -2,6 +2,7 @@
 
 import {
   annualEggProductionOptions,
+  breedCategoryOptions,
   catalogBirdTypeOptions,
   eggColorOptions,
 } from "@/lib/chicken-metadata-options";
@@ -13,9 +14,11 @@ export const breedDescriptionMaxLength = 1500;
 export type CustomBreedDraft = {
   annualEggProduction: string;
   birdType: string;
+  breedCategory: string;
   description: string;
   eggColor: string;
   name: string;
+  variety: string;
   speciesId: string;
 };
 
@@ -39,9 +42,11 @@ export function createBlankCustomBreedDraft(
   return {
     annualEggProduction: "",
     birdType: "",
+    breedCategory: "",
     description: "",
     eggColor: "",
     name: "",
+    variety: "",
     speciesId,
   };
 }
@@ -58,9 +63,11 @@ export function sanitizeCustomBreedDraft({
   return {
     annualEggProduction: isChicken ? draft.annualEggProduction.trim() : "",
     birdType: isChicken ? draft.birdType.trim() : "",
+    breedCategory: isChicken ? draft.breedCategory.trim() : "",
     description: draft.description.trim(),
     eggColor: isChicken ? draft.eggColor.trim() : "",
     name: draft.name.trim(),
+    variety: draft.variety.trim(),
     speciesId: draft.speciesId,
   };
 }
@@ -93,7 +100,16 @@ export function validateCustomBreedDraft({
     nextDraft.birdType &&
     !catalogBirdTypeOptions.some((option) => option.value === nextDraft.birdType)
   ) {
-    return { ok: false, message: "Choose a supported purpose." };
+    return { ok: false, message: "Choose a supported bird type." };
+  }
+
+  if (
+    nextDraft.breedCategory &&
+    !breedCategoryOptions.some(
+      (category) => category === nextDraft.breedCategory,
+    )
+  ) {
+    return { ok: false, message: "Choose a supported Breed Category." };
   }
 
   if (
@@ -161,6 +177,7 @@ export function CustomBreedForm({
           onChange={(event) =>
             updateDraft({
               annualEggProduction: "",
+              breedCategory: "",
               birdType: "",
               eggColor: "",
               speciesId: event.target.value,
@@ -176,7 +193,7 @@ export function CustomBreedForm({
       </label>
 
       <label className={labelClass}>
-        Breed name
+        Breed
         <input
           className={fieldClass}
           disabled={disabled}
@@ -187,17 +204,47 @@ export function CustomBreedForm({
         />
       </label>
 
+      <label className={labelClass}>
+        Variety <span className="font-normal text-stone-500">(optional)</span>
+        <input
+          className={fieldClass}
+          disabled={disabled}
+          placeholder="Example: Black"
+          value={draft.variety}
+          onChange={(event) => updateDraft({ variety: event.target.value })}
+        />
+      </label>
+
       {isChicken ? (
         <>
           <label className={labelClass}>
-            Purpose
+            Breed Category
+            <select
+              className={fieldClass}
+              disabled={disabled}
+              value={draft.breedCategory}
+              onChange={(event) =>
+                updateDraft({ breedCategory: event.target.value })
+              }
+            >
+              <option value="">Choose Breed Category</option>
+              {breedCategoryOptions.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className={labelClass}>
+            Bird Type <span className="font-normal text-stone-500">(optional)</span>
             <select
               className={fieldClass}
               disabled={disabled}
               value={draft.birdType}
               onChange={(event) => updateDraft({ birdType: event.target.value })}
             >
-              <option value="">Choose purpose</option>
+              <option value="">Not set</option>
               {catalogBirdTypeOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}

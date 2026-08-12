@@ -13,9 +13,14 @@ import {
 } from "react";
 import {
   annualEggProductionOptions,
+  breedCategoryOptions,
   catalogBirdTypeOptions,
   eggColorOptions,
 } from "@/lib/chicken-metadata-options";
+import {
+  formatBreedDisplayName,
+  getBaseBreedFromDisplayName,
+} from "@/lib/breed-identity";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../_components/seller-context";
 import {
@@ -46,9 +51,11 @@ import { breedDescriptionMaxLength } from "./custom-breed-form";
 type BreedDraft = {
   annualEggProduction: string;
   birdType: string;
-  displayName: string;
+  breedCategory: string;
+  breedName: string;
   eggColor: string;
   sellerDescription: string;
+  variety: string;
 };
 
 type RestoreDefaultPhotoResponse = {
@@ -162,9 +169,14 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
           ? {
               annualEggProduction: nextProfile.annual_egg_production ?? "",
               birdType: nextProfile.bird_type ?? "",
-              displayName: nextProfile.display_name,
+              breedCategory: nextProfile.breed_category ?? "",
+              breedName: getBaseBreedFromDisplayName(
+                nextProfile.display_name,
+                nextProfile.variety,
+              ),
               eggColor: nextProfile.egg_color ?? "",
               sellerDescription: nextProfile.seller_description ?? "",
+              variety: nextProfile.variety ?? "",
             }
           : null,
       );
@@ -217,7 +229,9 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
   const hasCatalogDetails = Boolean(
     isChickenBreed &&
       catalogBreed &&
-      (catalogBreed.bird_type ||
+      (catalogBreed.variety ||
+        catalogBreed.category ||
+        catalogBreed.bird_type ||
         catalogBreed.egg_color ||
         catalogBreed.annual_egg_production),
   );
@@ -295,7 +309,7 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
   async function saveChanges() {
     if (!profile || !draft || isSaving) return;
 
-    if (!draft.displayName.trim()) {
+    if (!draft.breedName.trim()) {
       setSaveError("Add a breed name.");
       return;
     }
@@ -313,12 +327,13 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
 
     const { error } = await supabase.rpc("seller_upsert_breed_profile", {
       p_breed_id: profile.breed_id,
-      p_custom_breed_name: profile.custom_breed_name,
-      p_display_name: draft.displayName.trim(),
+      p_custom_breed_name: profile.breed_id ? null : draft.breedName.trim(),
+      p_display_name: formatBreedDisplayName(draft.breedName, draft.variety),
       p_annual_egg_production: isChickenBreed
         ? draft.annualEggProduction || null
         : null,
       p_bird_type: isChickenBreed ? draft.birdType || null : null,
+      p_breed_category: isChickenBreed ? draft.breedCategory || null : null,
       p_egg_color: isChickenBreed ? draft.eggColor || null : null,
       p_seller_breed_profile_id: profile.id,
       p_seller_description: draft.sellerDescription.trim() || null,
@@ -326,6 +341,8 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
       p_species_id: profile.species_id,
       p_store_id: storeId,
       p_visibility_status: profile.visibility_status,
+      p_variety: draft.variety || null,
+      p_update_identity: true,
     });
 
     if (error) {
@@ -367,6 +384,12 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
     const restoredBirdType = shouldRestoreDetails
       ? catalogBreed.bird_type ?? null
       : profile.bird_type ?? null;
+    const restoredVariety = shouldRestoreDetails
+      ? catalogBreed.variety ?? null
+      : profile.variety ?? null;
+    const restoredBreedCategory = shouldRestoreDetails
+      ? catalogBreed.category ?? null
+      : profile.breed_category ?? null;
     const restoredEggColor = shouldRestoreDetails
       ? catalogBreed.egg_color ?? null
       : profile.egg_color ?? null;
@@ -378,9 +401,12 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
       const { error } = await supabase.rpc("seller_upsert_breed_profile", {
         p_breed_id: profile.breed_id,
         p_custom_breed_name: profile.custom_breed_name,
-        p_display_name: profile.display_name,
+        p_display_name: shouldRestoreDetails
+          ? formatBreedDisplayName(catalogBreed.breed_name, restoredVariety)
+          : profile.display_name,
         p_annual_egg_production: restoredAnnualEggProduction,
         p_bird_type: restoredBirdType,
+        p_breed_category: restoredBreedCategory,
         p_egg_color: restoredEggColor,
         p_seller_breed_profile_id: profile.id,
         p_seller_description: restoredDescription || null,
@@ -388,6 +414,8 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
         p_species_id: profile.species_id,
         p_store_id: storeId,
         p_visibility_status: profile.visibility_status,
+        p_variety: restoredVariety,
+        p_update_identity: true,
       });
 
       if (error) {
@@ -404,7 +432,9 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
         .update({
           annual_egg_production: restoredAnnualEggProduction,
           bird_type: restoredBirdType,
+          breed_category: restoredBreedCategory,
           egg_color: restoredEggColor,
+          variety: restoredVariety,
         })
         .eq("store_id", storeId)
         .eq("id", profile.id);
@@ -439,10 +469,19 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
           ? restoredAnnualEggProduction ?? ""
           : current.annualEggProduction,
         birdType: shouldRestoreDetails ? restoredBirdType ?? "" : current.birdType,
+        breedCategory: shouldRestoreDetails
+          ? restoredBreedCategory ?? ""
+          : current.breedCategory,
+        breedName: shouldRestoreDetails
+          ? catalogBreed.breed_name
+          : current.breedName,
         eggColor: shouldRestoreDetails ? restoredEggColor ?? "" : current.eggColor,
         sellerDescription: shouldRestoreDescription
           ? restoredDescription
           : current.sellerDescription,
+        variety: shouldRestoreDetails
+          ? restoredVariety ?? ""
+          : current.variety,
       };
     });
     setSuccessMessage("Selected catalog defaults restored.");
@@ -688,20 +727,47 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
               </div>
 
               <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                Breed name
+                Breed
                 <input
                   className="seller-form-field min-h-10 py-1.5"
-                  value={draft.displayName}
+                  value={draft.breedName}
                   onChange={(event) =>
-                    updateDraft({ displayName: event.target.value })
+                    updateDraft({ breedName: event.target.value })
                   }
+                />
+              </label>
+
+              <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                Variety <span className="font-normal text-stone-500">(optional)</span>
+                <input
+                  className="seller-form-field min-h-10 py-1.5"
+                  value={draft.variety}
+                  onChange={(event) => updateDraft({ variety: event.target.value })}
                 />
               </label>
 
               {isChickenBreed ? (
                 <>
                   <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                    Purpose
+                    Breed Category
+                    <select
+                      className="seller-form-field min-h-10 py-1.5"
+                      value={draft.breedCategory}
+                      onChange={(event) =>
+                        updateDraft({ breedCategory: event.target.value })
+                      }
+                    >
+                      <option value="">Choose Breed Category</option>
+                      {breedCategoryOptions.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    Bird Type <span className="font-normal text-stone-500">(optional)</span>
                     <select
                       className="seller-form-field min-h-10 py-1.5"
                       value={draft.birdType}
@@ -709,7 +775,7 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
                         updateDraft({ birdType: event.target.value })
                       }
                     >
-                      <option value="">Choose purpose</option>
+                      <option value="">Not set</option>
                       {catalogBirdTypeOptions.map((option) => (
                         <option key={option.value} value={option.value}>
                           {option.label}

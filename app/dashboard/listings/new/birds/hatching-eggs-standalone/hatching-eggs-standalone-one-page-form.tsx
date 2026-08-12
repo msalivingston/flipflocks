@@ -8,6 +8,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { playDustySuccessSound } from "@/lib/success-sound";
 import { supabase } from "@/lib/supabase";
+import { formatBreedDisplayName } from "@/lib/breed-identity";
 import {
   canUseCustomHatchingEggBreedName,
   findMatchingHatchingEggPlatformBreed,
@@ -217,7 +218,7 @@ export function HatchingEggsStandaloneOnePageForm({
           .returns<ReferenceSpecies[]>(),
         supabase
           .from("breeds")
-          .select("id, species_id, breed_name, breed_slug, sort_order")
+          .select("id, species_id, breed_name, variety, breed_slug, sort_order")
           .eq("is_active", true)
           .order("sort_order", { ascending: true })
           .order("breed_name", { ascending: true })
@@ -367,7 +368,9 @@ export function HatchingEggsStandaloneOnePageForm({
       name: value,
       speciesId: form.speciesId,
     });
-    const nextName = matchingBreed?.breed_name ?? value;
+    const nextName = matchingBreed
+      ? formatBreedDisplayName(matchingBreed.breed_name, matchingBreed.variety)
+      : value;
 
     setSelectedBreedId(matchingBreed?.id ?? null);
     updateForm(buildNameUpdateWithSharedDescription(nextName));
@@ -375,7 +378,11 @@ export function HatchingEggsStandaloneOnePageForm({
 
   function selectReferenceBreed(breed: ReferenceBreed) {
     setSelectedBreedId(breed.id);
-    updateForm(buildNameUpdateWithSharedDescription(breed.breed_name));
+    updateForm(
+      buildNameUpdateWithSharedDescription(
+        formatBreedDisplayName(breed.breed_name, breed.variety),
+      ),
+    );
   }
 
   function updateDescription(value: string) {
@@ -2625,7 +2632,9 @@ function HatchingEggBreedLookup({
   const matchingBreeds = useMemo(() => {
     const matches = normalizedValue
       ? speciesBreeds.filter((breed) =>
-          normalizeHatchingEggBreedName(breed.breed_name).includes(normalizedValue),
+          normalizeHatchingEggBreedName(
+            formatBreedDisplayName(breed.breed_name, breed.variety),
+          ).includes(normalizedValue),
         )
       : speciesBreeds;
 
@@ -2673,7 +2682,8 @@ function HatchingEggBreedLookup({
 
       {selectedBreed ? (
         <p className="mt-1 text-xs font-semibold text-emerald-800">
-          Using reference breed name: {selectedBreed.breed_name}
+          Using reference breed name:{" "}
+          {formatBreedDisplayName(selectedBreed.breed_name, selectedBreed.variety)}
         </p>
       ) : value.trim() ? (
         <p className="mt-1 text-xs font-semibold text-stone-500">
@@ -2711,7 +2721,7 @@ function HatchingEggBreedLookup({
               onMouseDown={(event) => event.preventDefault()}
             >
               <span className="block font-semibold text-stone-950">
-                {breed.breed_name}
+                {formatBreedDisplayName(breed.breed_name, breed.variety)}
               </span>
             </button>
           ))}

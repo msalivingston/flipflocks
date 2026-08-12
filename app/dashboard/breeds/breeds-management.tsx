@@ -13,6 +13,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { supabase } from "@/lib/supabase";
+import { formatBreedDisplayName } from "@/lib/breed-identity";
 import { useSellerContext } from "../_components/seller-context";
 import {
   EmptyState,
@@ -374,9 +375,10 @@ export function BreedsManagement() {
     const { data, error } = await supabase.rpc("seller_upsert_breed_profile", {
       p_annual_egg_production: draft.annualEggProduction || null,
       p_bird_type: draft.birdType || null,
+      p_breed_category: draft.breedCategory || null,
       p_breed_id: null,
       p_custom_breed_name: draft.name,
-      p_display_name: draft.name,
+      p_display_name: formatBreedDisplayName(draft.name, draft.variety),
       p_egg_color: draft.eggColor || null,
       p_seller_breed_profile_id: null,
       p_seller_description: draft.description || null,
@@ -384,6 +386,7 @@ export function BreedsManagement() {
       p_species_id: draft.speciesId,
       p_store_id: storeId,
       p_visibility_status: "active",
+      p_variety: draft.variety || null,
     });
 
     if (error) return { ok: false, message: error.message };
@@ -476,6 +479,7 @@ export function BreedsManagement() {
     const { error } = await supabase.rpc("seller_upsert_breed_profile", {
       p_annual_egg_production: profile.annual_egg_production,
       p_bird_type: profile.bird_type,
+      p_breed_category: profile.breed_category,
       p_breed_id: profile.breed_id,
       p_custom_breed_name: profile.custom_breed_name,
       p_display_name: profile.display_name,
@@ -486,6 +490,7 @@ export function BreedsManagement() {
       p_species_id: profile.species_id,
       p_store_id: storeId,
       p_visibility_status: profile.visibility_status,
+      p_variety: profile.variety,
     });
 
     if (error) {
@@ -1471,7 +1476,9 @@ function BreedLibraryPanel({
 
         if (!normalizedQuery) return true;
 
-        return breed.breed_name.toLowerCase().includes(normalizedQuery);
+        return formatBreedDisplayName(breed.breed_name, breed.variety)
+          .toLowerCase()
+          .includes(normalizedQuery);
       })
       .slice(0, 40);
   }, [libraryBreeds, query, speciesFilter]);
@@ -1557,12 +1564,12 @@ function BreedLibraryPanel({
                   <div className="flex items-start gap-2.5">
                     <BreedThumbnail
                       imageUrls={breed.image_url ? [breed.image_url] : []}
-                      name={breed.breed_name}
+                      name={formatBreedDisplayName(breed.breed_name, breed.variety)}
                       size="small"
                     />
                     <div className="min-w-0">
                       <h3 className="text-sm font-semibold text-stone-950">
-                        {breed.breed_name}
+                        {formatBreedDisplayName(breed.breed_name, breed.variety)}
                       </h3>
                       <p className="mt-0.5 text-xs font-medium text-emerald-800">
                         {speciesName}
@@ -1578,8 +1585,8 @@ function BreedLibraryPanel({
                     <button
                       aria-label={
                         isAdded
-                          ? `${breed.breed_name} is already in your Breed Catalog`
-                          : `Add ${breed.breed_name} to catalog`
+                          ? `${formatBreedDisplayName(breed.breed_name, breed.variety)} is already in your Breed Catalog`
+                          : `Add ${formatBreedDisplayName(breed.breed_name, breed.variety)} to catalog`
                       }
                       className={
                         isAdded
@@ -1836,7 +1843,9 @@ function DesktopAddBreedModal({
         }
         if (!normalizedQuery) return true;
 
-        return breed.breed_name.toLowerCase().includes(normalizedQuery);
+        return formatBreedDisplayName(breed.breed_name, breed.variety)
+          .toLowerCase()
+          .includes(normalizedQuery);
       })
       .slice(0, 20);
   }, [existingBreedIds, libraryBreeds, query, speciesFilter]);
@@ -1990,12 +1999,12 @@ function DesktopAddBreedModal({
                     >
                       <BreedThumbnail
                         imageUrls={breed.image_url ? [breed.image_url] : []}
-                        name={breed.breed_name}
+                        name={formatBreedDisplayName(breed.breed_name, breed.variety)}
                         size="small"
                       />
                       <div>
                         <h3 className="font-semibold text-stone-950">
-                          {breed.breed_name}
+                          {formatBreedDisplayName(breed.breed_name, breed.variety)}
                         </h3>
                         <p className="mt-1 text-sm text-stone-600">
                           {speciesById.get(breed.species_id) ?? "Species"}

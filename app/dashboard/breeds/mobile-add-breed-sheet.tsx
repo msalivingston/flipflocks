@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { formatBreedDisplayName } from "@/lib/breed-identity";
 import {
   Camera,
   ChevronLeft,
@@ -120,7 +121,9 @@ export function MobileAddBreedSheet({
           return false;
         }
         if (!normalizedQuery) return true;
-        return breed.breed_name.toLowerCase().includes(normalizedQuery);
+        return formatBreedDisplayName(breed.breed_name, breed.variety)
+          .toLowerCase()
+          .includes(normalizedQuery);
       })
       .slice(0, 40);
   }, [
@@ -429,7 +432,7 @@ export function MobileAddBreedSheet({
                         <MobileLibraryThumbnail breed={breed} />
                         <div className="min-w-0 flex-1">
                           <h3 className="truncate text-base font-bold text-stone-950">
-                            {breed.breed_name}
+                            {formatBreedDisplayName(breed.breed_name, breed.variety)}
                           </h3>
                           <p className="mt-1 text-sm font-medium text-stone-600">
                             {speciesById.get(breed.species_id) ?? "Species"}
@@ -438,8 +441,8 @@ export function MobileAddBreedSheet({
                         <button
                           aria-label={
                             isAdded
-                              ? `${breed.breed_name} was added to My Breeds`
-                              : `Add ${breed.breed_name} to My Breeds`
+                              ? `${formatBreedDisplayName(breed.breed_name, breed.variety)} was added to My Breeds`
+                              : `Add ${formatBreedDisplayName(breed.breed_name, breed.variety)} to My Breeds`
                           }
                           className={`min-h-11 shrink-0 rounded-full border px-4 text-sm font-bold ${
                             isAdded
@@ -776,7 +779,7 @@ function MobileLibraryThumbnail({ breed }: { breed: BreedLibraryItem }) {
         aria-hidden="true"
         className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-base font-bold text-emerald-900"
       >
-        {getBreedInitials(breed.breed_name)}
+        {getBreedInitials(formatBreedDisplayName(breed.breed_name, breed.variety))}
       </span>
     );
   }

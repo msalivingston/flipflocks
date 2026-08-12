@@ -15,6 +15,8 @@ export const catalogBirdTypeOptions = [
   { label: "Dual-Purpose", value: "dual_purpose" },
 ] as const;
 
+export { breedCategoryOptions } from "./breed-identity";
+
 export const annualEggProductionOptions = [
   { label: "Less than 150 eggs/year", value: "under_150" },
   { label: "150-200 eggs/year", value: "150_200" },

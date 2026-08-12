@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { formatBreedDisplayName } from "@/lib/breed-identity";
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { playDustySuccessSound } from "@/lib/success-sound";
 import {
@@ -4397,7 +4398,7 @@ function getBreedOptionsForSpecies({
 
       return {
         id: null,
-        label: breed.breed_name,
+        label: formatBreedDisplayName(breed.breed_name, breed.variety),
         speciesId: breed.species_id,
         breedId: breed.id,
         catalogImageUrl: breed.image_url,
@@ -4644,9 +4645,10 @@ async function createSellerCustomBreedProfile({
   const upsertResult = await supabase.rpc("seller_upsert_breed_profile", {
     p_annual_egg_production: draft.annualEggProduction || null,
     p_bird_type: draft.birdType || null,
+    p_breed_category: draft.breedCategory || null,
     p_breed_id: null,
     p_custom_breed_name: draft.name,
-    p_display_name: draft.name,
+    p_display_name: formatBreedDisplayName(draft.name, draft.variety),
     p_egg_color: draft.eggColor || null,
     p_seller_breed_profile_id: null,
     p_seller_description: draft.description || null,
@@ -4654,6 +4656,7 @@ async function createSellerCustomBreedProfile({
     p_species_id: speciesId,
     p_store_id: storeId,
     p_visibility_status: "active",
+    p_variety: draft.variety || null,
   });
 
   if (upsertResult.error) {

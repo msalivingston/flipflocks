@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  breedCategoryOptions,
   catalogBirdTypeOptions,
   eggColorOptions,
 } from "@/lib/chicken-metadata-options";
 import { supabase } from "@/lib/supabase";
+import { formatBreedDisplayName } from "@/lib/breed-identity";
 import type {
   AdminCatalogBreedDetailRow,
   AdminCatalogBreedListRow,
@@ -54,10 +56,13 @@ type DeleteResponse = {
 type CatalogDetailsForm = {
   annual_egg_production: string;
   bird_type: string;
+  breed_name: string;
   category: string;
   description: string;
   egg_color: string;
   image_prompt: string;
+  temperament: string;
+  variety: string;
 };
 
 export function AdminBreedImageManager({ breedId }: { breedId: string }) {
@@ -266,11 +271,14 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
       {
         p_annual_egg_production: detailsForm.annual_egg_production,
         p_bird_type: detailsForm.bird_type,
+        p_breed_name: detailsForm.breed_name,
         p_breed_id: breed.breed_id,
         p_category: detailsForm.category,
         p_description: detailsForm.description,
         p_egg_color: detailsForm.egg_color,
         p_image_prompt: detailsForm.image_prompt,
+        p_temperament: detailsForm.temperament,
+        p_variety: detailsForm.variety,
       },
     );
 
@@ -295,7 +303,7 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
   async function deleteBreed() {
     if (!breed) return;
     const confirmed = window.confirm(
-      `Permanently delete ${breed.breed_name}? This cannot be undone.`,
+      `Permanently delete ${formatBreedDisplayName(breed.breed_name, breed.variety)}? This cannot be undone.`,
     );
     if (!confirmed) return;
 
@@ -343,7 +351,11 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
     <>
       <AdminPageHeader
         eyebrow="Platform Admin"
-        title={breed?.breed_name ?? "Breed Image"}
+        title={
+          breed
+            ? formatBreedDisplayName(breed.breed_name, breed.variety)
+            : "Breed Image"
+        }
         description="Upload or replace the default catalog image for this breed. Seller-uploaded images are not changed."
         action={
           <Link className="seller-secondary-button" href="/admin/breeds">
@@ -374,7 +386,7 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-xl font-bold text-stone-950">
-                      {breed.breed_name}
+                      {formatBreedDisplayName(breed.breed_name, breed.variety)}
                     </h2>
                     <AdminStatusBadge
                       value={breed.has_image ? "Has image" : "Missing image"}
@@ -405,7 +417,7 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
                     {previewSrc && !imageLoadFailed ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        alt={`${breed.breed_name} catalog preview`}
+                        alt={`${formatBreedDisplayName(breed.breed_name, breed.variety)} catalog preview`}
                         className="aspect-square w-full object-cover"
                         src={previewSrc}
                         onError={() => setImageLoadFailed(true)}
@@ -536,10 +548,38 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
                   </p>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <ReadOnlyFact label="Breed Name" value={breed.breed_name} />
+                <div className="grid gap-3 sm:grid-cols-2">
                   <ReadOnlyFact label="Breed Slug" value={breed.breed_slug} />
                   <ReadOnlyFact label="Species" value={breed.species_name} />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    Base Breed
+                    <input
+                      className="min-h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                      value={detailsForm.breed_name}
+                      onChange={(event) =>
+                        setDetailsForm((current) => ({
+                          ...current,
+                          breed_name: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                    Variety <span className="font-normal text-stone-500">(optional)</span>
+                    <input
+                      className="min-h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                      value={detailsForm.variety}
+                      onChange={(event) =>
+                        setDetailsForm((current) => ({
+                          ...current,
+                          variety: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
                 </div>
 
                 <label className="grid gap-1 text-sm font-semibold text-stone-700">
@@ -558,8 +598,9 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <label className="grid gap-1 text-sm font-semibold text-stone-700">
-                    Category
-                    <input
+                    Breed Category
+                    {breed.species_slug === "chicken" ? (
+                    <select
                       className="min-h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
                       value={detailsForm.category}
                       onChange={(event) =>
@@ -568,7 +609,25 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
                           category: event.target.value,
                         }))
                       }
-                    />
+                    >
+                      {breedCategoryOptions.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                    ) : (
+                      <input
+                        className="min-h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                        value={detailsForm.category}
+                        onChange={(event) =>
+                          setDetailsForm((current) => ({
+                            ...current,
+                            category: event.target.value,
+                          }))
+                        }
+                      />
+                    )}
                   </label>
 
                   <label className="grid gap-1 text-sm font-semibold text-stone-700">
@@ -634,6 +693,20 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
                     </select>
                   </label>
                 </div>
+
+                <label className="grid gap-1 text-sm font-semibold text-stone-700">
+                  Temperament
+                  <input
+                    className="min-h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                    value={detailsForm.temperament}
+                    onChange={(event) =>
+                      setDetailsForm((current) => ({
+                        ...current,
+                        temperament: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
 
                 <label className="grid gap-1 text-sm font-semibold text-stone-700">
                   Image Prompt
@@ -711,10 +784,13 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
 const emptyDetailsForm: CatalogDetailsForm = {
   annual_egg_production: "",
   bird_type: "",
+  breed_name: "",
   category: "",
   description: "",
   egg_color: "",
   image_prompt: "",
+  temperament: "",
+  variety: "",
 };
 
 function toDetailsForm(
@@ -725,10 +801,13 @@ function toDetailsForm(
   return {
     annual_egg_production: breed.annual_egg_production ?? "",
     bird_type: breed.bird_type ?? "",
+    breed_name: breed.breed_name,
     category: breed.category ?? "",
     description: breed.description ?? "",
     egg_color: breed.egg_color ?? "",
     image_prompt: breed.image_prompt ?? "",
+    temperament: breed.temperament ?? "",
+    variety: breed.variety ?? "",
   };
 }
 
