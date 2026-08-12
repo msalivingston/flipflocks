@@ -98,7 +98,6 @@ export const fallbackBreedOptions: BreedOption[] = [
 export const soldAsOptions = [
   "Female",
   "Male",
-  "Straight run",
   "Unsexed",
   "Pair",
   "Trio",
