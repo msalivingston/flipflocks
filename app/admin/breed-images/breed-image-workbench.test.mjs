@@ -45,6 +45,14 @@ test("the five final human decisions are unique masters", () => {
   }
 });
 
+test("new or changed breeds receive a safe runtime image plan", () => {
+  assert.match(edgeSource, /function resolvePlanRecord\(breed: BreedRow\)/);
+  assert.match(edgeSource, /const record = resolvePlanRecord\(breed\)/);
+  assert.match(edgeSource, /image_strategy: "UNIQUE_MASTER"/);
+  assert.match(edgeSource, /proposed_master_record: `\$\{breed\.id\} \| \$\{breed\.breed_slug\}`/);
+  assert.doesNotMatch(edgeSource, /Image-family plan does not match active breed/);
+});
+
 test("derivative generation requires the approved plan master", () => {
   assert.match(edgeSource, /mode === "derivative" && !masterBreed\?\.image_url\?\.trim\(\)/);
   assert.match(edgeSource, /master_not_approved/);
@@ -63,6 +71,17 @@ test("reference research uses OpenAI image search with the exact finalized ident
   assert.match(edgeSource, /`Variety: \$\{record\.variety \|\| "none"\}\.`/);
   assert.match(edgeSource, /established hatcheries, poultry breed clubs, agricultural or university sources/);
   assert.match(edgeSource, /do not substitute a vaguely similar heritage breed/);
+});
+
+test("workbench supports and displays all poultry species", () => {
+  assert.match(edgeSource, /species:species_id!inner\(common_name, slug\)/);
+  assert.doesNotMatch(edgeSource, /\.eq\("species\.slug", "chicken"\)/);
+  assert.match(edgeSource, /`Species: \$\{species\}`[\s\S]*?`Breed: \$\{record\.breed\}`[\s\S]*?`Variety: \$\{record\.variety \|\| "none"\}`/);
+  assert.match(edgeSource, /return `\$\{identityContext\}\\n\\n\$\{approvedPrompt\}\\n\\n\$\{recordFacts\.join\("\\n"\)\}`/);
+  assert.match(edgeSource, /\.replace\("hen and rooster", "male and female"\)/);
+  assert.match(uiSource, /setSpeciesFilter/);
+  assert.match(uiSource, /<Fact label="Species" value=\{record\.species\} \/>/);
+  assert.match(uiSource, /record\.species === speciesFilter/);
 });
 
 test("selected web references are short-lived server-verified generation inputs", () => {

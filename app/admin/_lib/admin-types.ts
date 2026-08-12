@@ -119,6 +119,7 @@ export type AdminBreedImageWorkbenchStatus =
 export type AdminBreedImageWorkbenchRow = {
   stable_id: string;
   slug: string;
+  species: string;
   breed_name: string;
   base_breed: string;
   variety: string | null;

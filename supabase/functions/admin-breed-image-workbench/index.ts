@@ -48,7 +48,7 @@ type BreedRow = {
   is_active: boolean;
   is_custom: boolean;
   sort_order: number;
-  species: { slug: string } | null;
+  species: { common_name: string; slug: string } | null;
 };
 
 type ReviewRow = {
@@ -103,6 +103,39 @@ class PublicSafeError extends Error {
 
 const plan = imageFamilyPlan as PlanRecord[];
 const planById = new Map(plan.map((record) => [record.stable_id, record]));
+
+function resolvePlanRecord(breed: BreedRow): PlanRecord {
+  const curatedRecord = planById.get(breed.id);
+  if (
+    curatedRecord &&
+    curatedRecord.slug === breed.breed_slug &&
+    curatedRecord.breed === breed.breed_name &&
+    (curatedRecord.variety || null) === breed.variety
+  ) {
+    return curatedRecord;
+  }
+
+  const displayName = breed.variety
+    ? `${breed.breed_name} - ${breed.variety}`
+    : breed.breed_name;
+
+  return {
+    stable_id: breed.id,
+    slug: breed.breed_slug,
+    breed: breed.breed_name,
+    variety: breed.variety ?? "",
+    breed_category: breed.category ?? "Uncategorized",
+    image_strategy: "UNIQUE_MASTER",
+    proposed_image_family: `${displayName} - standalone catalog image`,
+    proposed_master_record: `${breed.id} | ${breed.breed_slug}`,
+    defining_visual_traits:
+      `Accurate ${displayName} phenotype, including breed-appropriate body type, plumage, comb, leg color, and other visible characteristics`,
+    derivative_change_needed: "none - independently generated master",
+    confidence: "Runtime fallback",
+    review_notes:
+      "This breed is not in the curated image-family plan, so the workbench treats it as an independent master until a curated relationship is added.",
+  };
+}
 
 function getCorsHeaders(req: Request): Record<string, string> {
   const requestOrigin = req.headers.get("Origin");
@@ -360,8 +393,9 @@ function extensionForMimeType(mimeType: string) {
   return "png";
 }
 
-function buildPrompt(record: PlanRecord, hasReferenceImage: boolean) {
-  const approvedPrompt = Deno.env.get(APPROVED_PROMPT_ENV)?.trim();
+function buildPrompt(record: PlanRecord, species: string, hasReferenceImage: boolean) {
+  const approvedPrompt = Deno.env.get(APPROVED_PROMPT_ENV)?.trim()
+    .replace("hen and rooster", "male and female");
   if (!approvedPrompt) {
     throw new PublicSafeError(
       "configuration_error",
@@ -370,10 +404,13 @@ function buildPrompt(record: PlanRecord, hasReferenceImage: boolean) {
     );
   }
 
+  const identityContext = [
+    `Species: ${species}`,
+    `Breed: ${record.breed}`,
+    `Variety: ${record.variety || "none"}`,
+  ].join("\n");
   const recordFacts = [
     "Catalog record facts:",
-    `- Breed: ${record.breed}`,
-    `- Variety: ${record.variety || "none"}`,
     `- Breed Category: ${record.breed_category}`,
     `- Image strategy: ${record.image_strategy}`,
     `- Defining visual traits: ${record.defining_visual_traits}`,
@@ -404,7 +441,7 @@ function buildPrompt(record: PlanRecord, hasReferenceImage: boolean) {
     );
   }
 
-  return `${approvedPrompt}\n\n${recordFacts.join("\n")}`;
+  return `${identityContext}\n\n${approvedPrompt}\n\n${recordFacts.join("\n")}`;
 }
 
 async function loadImageFile(
@@ -524,21 +561,20 @@ async function readOpenAiImage(response: Response) {
   return Uint8Array.from(atob(payload.data[0].b64_json), (character) => character.charCodeAt(0));
 }
 
-async function loadActiveChickenBreeds(serviceClient: ReturnType<typeof createClient>) {
+async function loadActiveBreeds(serviceClient: ReturnType<typeof createClient>) {
   const { data, error } = await serviceClient
     .from("breeds")
-    .select("id, breed_name, variety, breed_slug, category, image_url, is_active, is_custom, sort_order, species:species_id!inner(slug)")
+    .select("id, breed_name, variety, breed_slug, category, image_url, is_active, is_custom, sort_order, species:species_id!inner(common_name, slug)")
     .eq("is_active", true)
     .eq("is_custom", false)
-    .eq("species.slug", "chicken")
     .order("sort_order", { ascending: true })
     .returns<BreedRow[]>();
-  if (error) throw new Error(`Unable to load active chicken breeds: ${error.message}`);
+  if (error) throw new Error(`Unable to load active breeds: ${error.message}`);
   return data ?? [];
 }
 
 async function listWorkbench(serviceClient: ReturnType<typeof createClient>) {
-  const breeds = await loadActiveChickenBreeds(serviceClient);
+  const breeds = await loadActiveBreeds(serviceClient);
   const { data: reviewRows, error: reviewError } = await serviceClient
     .from("admin_breed_image_reviews")
     .select("breed_id, status, candidate_storage_path, generation_mode, last_error, generated_at, approved_at, skipped_at")
@@ -550,15 +586,7 @@ async function listWorkbench(serviceClient: ReturnType<typeof createClient>) {
   const reviewsByBreedId = new Map((reviewRows ?? []).map((review) => [review.breed_id, review]));
 
   return Promise.all(breeds.map(async (breed) => {
-    const record = planById.get(breed.id);
-    if (
-      !record ||
-      record.slug !== breed.breed_slug ||
-      record.breed !== breed.breed_name ||
-      (record.variety || null) !== breed.variety
-    ) {
-      throw new Error(`Image-family plan does not match active breed ${breed.id} (${breed.breed_slug})`);
-    }
+    const record = resolvePlanRecord(breed);
 
     const review = reviewsByBreedId.get(breed.id);
     const masterSlug = parseMasterSlug(record);
@@ -590,6 +618,7 @@ async function listWorkbench(serviceClient: ReturnType<typeof createClient>) {
     return {
       stable_id: breed.id,
       slug: breed.breed_slug,
+      species: breed.species?.common_name ?? breed.species?.slug ?? "Unknown",
       breed_name: breed.variety
         ? `${breed.breed_name} - ${breed.variety}`
         : breed.breed_name,
@@ -609,12 +638,12 @@ async function listWorkbench(serviceClient: ReturnType<typeof createClient>) {
 }
 
 async function loadBreed(serviceClient: ReturnType<typeof createClient>, breedId: string) {
-  const breeds = await loadActiveChickenBreeds(serviceClient);
+  const breeds = await loadActiveBreeds(serviceClient);
   const breed = breeds.find((item) => item.id === breedId);
-  const record = planById.get(breedId);
-  if (!breed || !record || breed.breed_slug !== record.slug) {
-    throw new PublicSafeError("not_found", "Active chicken breed was not found in the finalized image-family plan", 404);
+  if (!breed) {
+    throw new PublicSafeError("not_found", "Active breed was not found", 404);
   }
+  const record = resolvePlanRecord(breed);
   return { breed, breeds, record };
 }
 
@@ -676,7 +705,11 @@ async function generateCandidate(
       ? await loadWebReferenceFile(await verifyReferenceToken(webReferenceToken, breedId, serviceRoleKey))
       : referenceImage;
     if (selectedReference) normalizeMimeType(selectedReference);
-    const prompt = buildPrompt(record, Boolean(selectedReference));
+    const prompt = buildPrompt(
+      record,
+      breed.species?.common_name ?? breed.species?.slug ?? "Unknown",
+      Boolean(selectedReference),
+    );
     const inputImages: File[] = [];
     if (mode === "derivative" && masterBreed?.image_url) {
       inputImages.push(await loadImageFile(serviceClient, masterBreed.image_url, `${masterBreed.breed_slug}-approved-master`));

@@ -45,6 +45,7 @@ const statusLabels: Record<AdminBreedImageWorkbenchStatus, string> = {
 export function AdminBreedImageWorkbench() {
   const [records, setRecords] = useState<AdminBreedImageWorkbenchRow[]>([]);
   const [query, setQuery] = useState("");
+  const [speciesFilter, setSpeciesFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [strategyFilter, setStrategyFilter] = useState("all");
   const [referenceFiles, setReferenceFiles] = useState<Record<string, File | null>>({});
@@ -76,6 +77,7 @@ export function AdminBreedImageWorkbench() {
     const normalizedQuery = query.trim().toLowerCase();
     return records.filter((record) => {
       const matchesQuery = !normalizedQuery || [
+        record.species,
         record.breed_name,
         record.base_breed,
         record.variety ?? "",
@@ -83,10 +85,11 @@ export function AdminBreedImageWorkbench() {
         record.proposed_image_family,
       ].some((value) => value.toLowerCase().includes(normalizedQuery));
       return matchesQuery &&
+        (speciesFilter === "all" || record.species === speciesFilter) &&
         (statusFilter === "all" || record.status === statusFilter) &&
         (strategyFilter === "all" || record.image_strategy === strategyFilter);
     });
-  }, [query, records, statusFilter, strategyFilter]);
+  }, [query, records, speciesFilter, statusFilter, strategyFilter]);
 
   const counts = useMemo(() => ({
     approved: records.filter((record) => record.status === "approved").length,
@@ -214,16 +217,23 @@ export function AdminBreedImageWorkbench() {
         </div>
 
         <AdminCard>
-          <div className="grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_220px_220px]">
+          <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_200px_200px_200px]">
             <label className="grid gap-1 text-sm font-semibold text-stone-700">
               Search breeds
               <input
                 className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-stone-950"
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Breed, variety, slug, or family"
+                placeholder="Species, breed, variety, slug, or family"
                 type="search"
                 value={query}
               />
+            </label>
+            <label className="grid gap-1 text-sm font-semibold text-stone-700">
+              Species
+              <select className="min-h-11 rounded-md border border-stone-300 bg-white px-3" onChange={(event) => setSpeciesFilter(event.target.value)} value={speciesFilter}>
+                <option value="all">All species</option>
+                {[...new Set(records.map((record) => record.species))].sort().map((species) => <option key={species} value={species}>{species}</option>)}
+              </select>
             </label>
             <label className="grid gap-1 text-sm font-semibold text-stone-700">
               Status
@@ -244,7 +254,7 @@ export function AdminBreedImageWorkbench() {
 
         {message ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">{message}</div> : null}
         {error ? <AdminErrorState message={error} title="Workbench action failed" /> : null}
-        {isLoading ? <AdminLoadingState label="Loading active chicken Breed Library records" /> : null}
+        {isLoading ? <AdminLoadingState label="Loading active poultry Breed Library records" /> : null}
 
         {!isLoading && filteredRecords.length === 0 ? (
           <AdminCard><div className="p-6 text-sm font-semibold text-stone-600">No breeds match these filters.</div></AdminCard>
@@ -275,6 +285,7 @@ export function AdminBreedImageWorkbench() {
                     </div>
 
                     <dl className="mt-4 grid gap-x-5 gap-y-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                      <Fact label="Species" value={record.species} />
                       <Fact label="Base Breed" value={record.base_breed} />
                       <Fact label="Variety" value={record.variety || "—"} />
                       <Fact label="Breed Category" value={record.breed_category || "—"} />
