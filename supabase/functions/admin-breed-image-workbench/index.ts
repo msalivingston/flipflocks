@@ -548,10 +548,6 @@ async function listWorkbench(serviceClient: ReturnType<typeof createClient>) {
   const breedsBySlug = new Map(breeds.map((breed) => [breed.breed_slug, breed]));
   const reviewsByBreedId = new Map((reviewRows ?? []).map((review) => [review.breed_id, review]));
 
-  if (breeds.length !== plan.length) {
-    throw new Error(`Finalized image-family plan has ${plan.length} records but the active chicken catalog has ${breeds.length}`);
-  }
-
   return Promise.all(breeds.map(async (breed) => {
     const record = planById.get(breed.id);
     if (!record || record.slug !== breed.breed_slug) {

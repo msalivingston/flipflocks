@@ -37,6 +37,20 @@ type UploadResponse = {
   message?: string;
 };
 
+type DeleteResponse = {
+  deleted?: {
+    deleted_breed_id: string;
+    deleted_breed_name: string;
+    deleted_breed_slug: string;
+    seller_profiles_detached: number;
+  };
+  error?: {
+    code?: string;
+    message?: string;
+  };
+  storage_warnings?: string[];
+};
+
 type CatalogDetailsForm = {
   annual_egg_production: string;
   bird_type: string;
@@ -67,6 +81,10 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [detailsMessage, setDetailsMessage] = useState<string | null>(null);
   const [isSavingDetails, setIsSavingDetails] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -274,6 +292,49 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
 
     setDetailsMessage("Catalog details saved.");
     setIsSavingDetails(false);
+  }
+
+  async function deleteBreed() {
+    if (!breed || deleteConfirmation !== breed.breed_name) return;
+
+    setIsDeleting(true);
+    setDeleteError(null);
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (sessionError || !accessToken) {
+      setDeleteError("Please sign in again before deleting this breed.");
+      setIsDeleting(false);
+      return;
+    }
+
+    const { data, error: deleteRequestError } = await supabase.functions.invoke<DeleteResponse>(
+      "admin-catalog-breed-delete",
+      {
+        body: { breed_id: breed.breed_id },
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+
+    if (deleteRequestError || data?.error) {
+      let responseMessage = data?.error?.message ?? null;
+      const errorContext = deleteRequestError && typeof deleteRequestError === "object" && "context" in deleteRequestError
+        ? deleteRequestError.context
+        : null;
+      if (!responseMessage && errorContext instanceof Response) {
+        try {
+          const errorBody = await errorContext.clone().json() as DeleteResponse;
+          responseMessage = errorBody.error?.message ?? null;
+        } catch {
+          responseMessage = null;
+        }
+      }
+      setDeleteError(responseMessage ?? deleteRequestError?.message ?? "Breed deletion failed.");
+      setIsDeleting(false);
+      return;
+    }
+
+    router.replace("/admin/breeds");
+    router.refresh();
   }
 
   return (
@@ -609,6 +670,82 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
                 </div>
               </div>
             </AdminCard>
+
+            <AdminCard>
+              <div className="grid gap-4 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                <div>
+                  <h2 className="text-lg font-bold text-red-900">Permanently delete breed</h2>
+                  <p className="mt-1 max-w-3xl text-sm leading-6 text-stone-600">
+                    This permanently removes the exact default Breed Library record. Seller-owned
+                    breed profiles, listings, inventory, and historical orders are retained.
+                  </p>
+                </div>
+                <button
+                  className="inline-flex min-h-10 items-center justify-center rounded-md border border-red-300 bg-white px-4 text-sm font-bold text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isDeleting}
+                  onClick={() => {
+                    setDeleteConfirmation("");
+                    setDeleteError(null);
+                    setShowDeleteDialog(true);
+                  }}
+                  type="button"
+                >
+                  Delete Breed
+                </button>
+              </div>
+            </AdminCard>
+
+            {showDeleteDialog ? (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-stone-950/50 p-4" role="presentation">
+                <div
+                  aria-labelledby="delete-breed-title"
+                  aria-modal="true"
+                  className="w-full max-w-lg rounded-xl border border-red-200 bg-white p-5 shadow-2xl"
+                  role="dialog"
+                >
+                  <h2 className="text-xl font-bold text-red-950" id="delete-breed-title">
+                    Permanently delete {breed.breed_name}?
+                  </h2>
+                  <p className="mt-3 text-sm leading-6 text-stone-700">
+                    This is a real database deletion and cannot be undone. It is not archive or
+                    deactivate. Type the exact breed name to confirm.
+                  </p>
+                  <label className="mt-4 grid gap-1 text-sm font-semibold text-stone-700">
+                    Type <span className="font-bold text-stone-950">{breed.breed_name}</span>
+                    <input
+                      autoFocus
+                      className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-stone-950"
+                      disabled={isDeleting}
+                      onChange={(event) => setDeleteConfirmation(event.target.value)}
+                      value={deleteConfirmation}
+                    />
+                  </label>
+                  {deleteError ? (
+                    <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+                      {deleteError}
+                    </p>
+                  ) : null}
+                  <div className="mt-5 flex flex-wrap justify-end gap-2">
+                    <button
+                      className="seller-secondary-button"
+                      disabled={isDeleting}
+                      onClick={() => setShowDeleteDialog(false)}
+                      type="button"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="inline-flex min-h-10 items-center justify-center rounded-md bg-red-700 px-4 text-sm font-bold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={isDeleting || deleteConfirmation !== breed.breed_name}
+                      onClick={() => void deleteBreed()}
+                      type="button"
+                    >
+                      {isDeleting ? "Deleting…" : "Permanently Delete Breed"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </>
         ) : null}
       </div>

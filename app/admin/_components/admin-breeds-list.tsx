@@ -16,6 +16,10 @@ import {
 
 type ImageFilter = "all" | "missing" | "has";
 
+type DeleteResponse = {
+  error?: { message?: string };
+};
+
 export function AdminBreedsList({
   initialImageFilter = "all",
 }: {
@@ -28,6 +32,8 @@ export function AdminBreedsList({
     useState<ImageFilter>(initialImageFilter);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [deletingBreedId, setDeletingBreedId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -109,6 +115,45 @@ export function AdminBreedsList({
   const missingCount = breeds.filter((breed) => !breed.has_image).length;
   const hasImageCount = breeds.length - missingCount;
 
+  async function deleteBreed(breed: AdminCatalogBreedListRow) {
+    const confirmation = window.prompt(
+      `Permanently delete ${breed.breed_name}? This is not archive or deactivate.\n\nType the exact breed name to confirm:`,
+    );
+    if (confirmation !== breed.breed_name) return;
+
+    setDeletingBreedId(breed.breed_id);
+    setActionError(null);
+    const { data: sessionData, error: sessionError } =
+      await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (sessionError || !accessToken) {
+      setActionError("Please sign in again before deleting this breed.");
+      setDeletingBreedId(null);
+      return;
+    }
+
+    const { data, error: deleteRequestError } =
+      await supabase.functions.invoke<DeleteResponse>(
+        "admin-catalog-breed-delete",
+        {
+          body: { breed_id: breed.breed_id },
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      );
+    if (deleteRequestError || data?.error) {
+      setActionError(
+        data?.error?.message ??
+          deleteRequestError?.message ??
+          "Breed deletion failed.",
+      );
+      setDeletingBreedId(null);
+      return;
+    }
+
+    setBreeds((current) => current.filter((item) => item.breed_id !== breed.breed_id));
+    setDeletingBreedId(null);
+  }
+
   return (
     <>
       <AdminPageHeader
@@ -130,6 +175,12 @@ export function AdminBreedsList({
 
         {!isLoading && !error ? (
           <>
+            {actionError ? (
+              <AdminErrorState
+                message={actionError}
+                title="Breed deletion failed"
+              />
+            ) : null}
             <div className="grid gap-3 sm:grid-cols-3">
               <QueueCard label="Missing Images" value={missingCount} />
               <QueueCard label="Has Image" value={hasImageCount} />
@@ -195,7 +246,12 @@ export function AdminBreedsList({
             <div className="grid gap-3">
               {filteredBreeds.length > 0 ? (
                 filteredBreeds.map((breed) => (
-                  <BreedQueueRow breed={breed} key={breed.breed_id} />
+                  <BreedQueueRow
+                    breed={breed}
+                    isDeleting={deletingBreedId === breed.breed_id}
+                    key={breed.breed_id}
+                    onDelete={() => void deleteBreed(breed)}
+                  />
                 ))
               ) : (
                 <AdminCard>
@@ -212,7 +268,15 @@ export function AdminBreedsList({
   );
 }
 
-function BreedQueueRow({ breed }: { breed: AdminCatalogBreedListRow }) {
+function BreedQueueRow({
+  breed,
+  isDeleting,
+  onDelete,
+}: {
+  breed: AdminCatalogBreedListRow;
+  isDeleting: boolean;
+  onDelete: () => void;
+}) {
   return (
     <AdminCard>
       <article className="grid gap-4 p-4 md:grid-cols-[5rem_1fr_auto] md:items-center">
@@ -247,12 +311,22 @@ function BreedQueueRow({ breed }: { breed: AdminCatalogBreedListRow }) {
           </div>
         </div>
 
-        <Link
-          className="seller-small-button justify-center"
-          href={`/admin/breeds/${breed.breed_id}`}
-        >
-          Open
-        </Link>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Link
+            className="seller-small-button justify-center"
+            href={`/admin/breeds/${breed.breed_id}`}
+          >
+            Open
+          </Link>
+          <button
+            className="inline-flex min-h-9 items-center justify-center rounded-md border border-red-300 bg-white px-3 text-xs font-bold text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isDeleting}
+            onClick={onDelete}
+            type="button"
+          >
+            {isDeleting ? "Deleting…" : "Delete"}
+          </button>
+        </div>
       </article>
     </AdminCard>
   );

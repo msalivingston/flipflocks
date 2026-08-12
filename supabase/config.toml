@@ -23,3 +23,6 @@ verify_jwt = true
 
 [functions.admin-breed-image-workbench]
 verify_jwt = true
+
+[functions.admin-catalog-breed-delete]
+verify_jwt = true
