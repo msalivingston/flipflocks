@@ -31,7 +31,7 @@ const demoStoreHref = "/store/meadowgate-poultry";
 const benefits = [
   {
     title: "List once",
-    copy: "Prices can adjust as chicks grow, so your listings stay current.",
+    copy: "Birds age automatically, and prices adjust with them.",
     icon: "/landing-page/calendar-transparent.png",
     alt: "",
   },
@@ -87,7 +87,7 @@ const farmBullets = [
     icon: "/landing-page/chicken-transparent.png",
   },
   {
-    copy: "Keep pricing current as chicks grow.",
+    copy: "Your birds keep aging. FlockFront keeps up.",
     icon: "/landing-page/growth-chart-transparent.png",
   },
   {
@@ -227,7 +227,7 @@ export default async function Home() {
             <h1 className="text-balance font-serif text-[clamp(2.05rem,3.5vw,3.35rem)] leading-[1.05] max-[899px]:leading-[1.02]">
               A better way to sell poultry.
               <br />
-              List once. Sell from one simple link.
+              List your birds once. Keep selling from one simple link.
             </h1>
             <p className="mt-4 max-w-2xl text-balance text-[17px] font-medium leading-7 text-white/95 md:mt-5 md:text-[23px] md:leading-9">
               FlockFront gives independent poultry sellers their own simple storefront and
