@@ -76,7 +76,10 @@ Deno.serve(async (request) => {
           requirement_collection: "stripe",
           stripe_dashboard: { type: "full" },
         },
-        capabilities: { card_payments: { requested: true } },
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
         business_profile: { name: store.store_name },
         metadata: { flockfront_store_id: store.id, schema_version: "ff_connect_account_v1" },
       }, { idempotencyKey: `ff-connect-account:${livemode}:${store.id}` });
