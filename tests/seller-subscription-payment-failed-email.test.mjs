@@ -174,7 +174,7 @@ test("worker selects the invoice scope and sender without broadening existing sc
     /\? \{ subscription_invoice_id: notification\.subscription_invoice_id \}/);
   assert.match(worker, /fromEmail: sellerPaymentFailedFromEmail/);
   assert.match(worker, /tag: "flockfront-seller-payment-failed"/);
-  assert.match(worker, /claim_seller_subscription_welcome_email/);
+  assert.match(worker, /claim_subscription_enrollment_emails/);
   assert.match(worker, /claim_phase_1_postmark_email_notifications_for_order/);
   assert.match(worker, /await beginNotificationDispatch[\s\S]*await sendPostmarkEmail/);
   assert.match(worker, /markNotificationDeliveryUnknown/);

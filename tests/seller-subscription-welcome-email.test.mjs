@@ -191,7 +191,7 @@ test("worker preserves order sender behavior and selects the welcome alias narro
   assert.match(worker, /tag: "flockfront-seller-welcome"/);
   assert.match(worker, /tag: "flockfront-order-notification"/);
   assert.match(worker, /get_seller_subscription_welcome_context/);
-  assert.match(worker, /claim_seller_subscription_welcome_email/);
+  assert.match(worker, /claim_subscription_enrollment_emails/);
   assert.match(scopeMigration, /where enrollment\.id = p_subscription_enrollment_id/);
   assert.doesNotMatch(scopeMigration, /buyer_order_confirmation|seller_new_order/);
   assert.match(worker, /await beginNotificationDispatch[\s\S]*await sendPostmarkEmail/);

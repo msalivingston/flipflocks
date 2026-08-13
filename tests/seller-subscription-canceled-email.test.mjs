@@ -184,7 +184,7 @@ test("worker selects only the episode scope and billing sender", () => {
   assert.match(worker, /fromEmail: sellerSubscriptionCanceledFromEmail/);
   assert.match(worker, /tag: "flockfront-seller-subscription-canceled"/);
   assert.match(worker, /claim_seller_subscription_payment_failed_email/);
-  assert.match(worker, /claim_seller_subscription_welcome_email/);
+  assert.match(worker, /claim_subscription_enrollment_emails/);
   assert.match(worker, /claim_phase_1_postmark_email_notifications_for_order/);
 });
 

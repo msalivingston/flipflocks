@@ -43,6 +43,14 @@ import {
   sellerNewOrderNotificationType,
   sellerNewOrderSubject,
 } from "./seller-new-order.ts";
+import {
+  adminNewSubscriberNotificationType,
+  adminNewSubscriberRecipientEmail,
+  adminNewSubscriberSubject,
+  parseAdminNewSubscriberContext,
+  parseAdminNewSubscriberPayload,
+  renderAdminNewSubscriberEmail,
+} from "./admin-new-subscriber.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("FLIPFLOCKS_PUBLIC_API_ORIGIN") ??
@@ -605,6 +613,54 @@ async function renderSellerWelcomeNotification(
     html: document.html,
     text: document.text,
     tag: "flockfront-seller-welcome",
+  };
+}
+
+async function renderAdminNewSubscriberNotification(
+  supabase: SupabaseClient,
+  notification: ClaimedNotification,
+  fromEmail: string,
+): Promise<RenderedEmail> {
+  if (
+    notification.notification_type !== adminNewSubscriberNotificationType ||
+    notification.recipient_type !== "admin" ||
+    notification.order_id !== null ||
+    notification.recipient_email !== adminNewSubscriberRecipientEmail
+  ) {
+    throw new Error("Admin subscriber notification envelope is invalid.");
+  }
+
+  const payload = parseAdminNewSubscriberPayload(notification.payload);
+  const { data, error } = await supabase.rpc(
+    "get_admin_new_subscriber_context",
+    { p_subscription_enrollment_id: payload.subscription_enrollment_id },
+  );
+  const rows = Array.isArray(data) ? data : [];
+
+  if (error) {
+    throw new Error(
+      error.message || "Admin subscriber context could not be resolved.",
+    );
+  }
+  if (rows.length !== 1) {
+    throw new Error("Admin subscriber context was not found.");
+  }
+
+  const context = parseAdminNewSubscriberContext(rows[0]);
+  const expectedSubject = adminNewSubscriberSubject(context.storeName);
+  if (notification.subject_snapshot !== expectedSubject) {
+    throw new Error("Admin subscriber subject is invalid.");
+  }
+  const document = renderAdminNewSubscriberEmail(context);
+
+  return {
+    to: context.recipientEmail,
+    fromName: "FlockFront",
+    fromEmail,
+    subject: document.subject,
+    html: document.html,
+    text: document.text,
+    tag: "flockfront-admin-new-subscriber",
   };
 }
 
@@ -1840,7 +1896,7 @@ Deno.serve(async (request: Request) => {
       : invoiceScope
       ? "claim_seller_subscription_payment_failed_email"
       : enrollmentScope
-      ? "claim_seller_subscription_welcome_email"
+      ? "claim_subscription_enrollment_emails"
       : orderScope
       ? "claim_phase_1_postmark_email_notifications_for_order"
       : "claim_phase_1_postmark_email_notifications";
@@ -1910,7 +1966,8 @@ Deno.serve(async (request: Request) => {
           notification.notification_type !== sellerFirstSaleNotificationType &&
           notification.notification_type !== sellerPaymentFailedNotificationType &&
           notification.notification_type !==
-            sellerSubscriptionCanceledNotificationType
+            sellerSubscriptionCanceledNotificationType &&
+          notification.notification_type !== adminNewSubscriberNotificationType
         ) {
           throw new Error(
             `Unsupported Phase 1 notification type: ${notification.notification_type}`,
@@ -1920,6 +1977,12 @@ Deno.serve(async (request: Request) => {
         const email = notification.notification_type ===
             sellerWelcomeNotificationType
           ? await renderSellerWelcomeNotification(supabase, notification)
+          : notification.notification_type === adminNewSubscriberNotificationType
+          ? await renderAdminNewSubscriberNotification(
+            supabase,
+            notification,
+            fromEmail,
+          )
           : notification.notification_type === sellerFirstSaleNotificationType
           ? await renderSellerFirstSaleNotification(supabase, notification)
           : notification.notification_type === sellerNewOrderNotificationType
