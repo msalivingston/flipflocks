@@ -21,6 +21,15 @@ verify_jwt = true
 [functions.stripe-saas-subscription-action]
 verify_jwt = true
 
+[functions.stripe-connect-account]
+verify_jwt = true
+
+[functions.stripe-connect-checkout]
+verify_jwt = false
+
+[functions.stripe-connect-webhook]
+verify_jwt = false
+
 [functions.admin-breed-image-workbench]
 verify_jwt = true
 

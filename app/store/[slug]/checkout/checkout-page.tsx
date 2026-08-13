@@ -110,6 +110,16 @@ type OrderResponse = {
 type SuccessState = {
   orderNumber: string | null;
   totalText: string;
+  paidByCard: boolean;
+};
+
+type PaymentMethod = "pay_at_pickup" | "stripe_checkout";
+
+type CardCheckoutResponse = {
+  available?: boolean;
+  checkout_url?: string;
+  status?: "paid" | "pending" | "expired";
+  order?: OrderResponse["order"];
 };
 
 const initialForm: BuyerForm = {
@@ -132,9 +142,11 @@ const initialForm: BuyerForm = {
 const emptyCartItems: StorefrontCart["items"] = [];
 
 export function CheckoutPage({
+  cardCheckoutSessionId,
   orderMode,
   store,
 }: {
+  cardCheckoutSessionId: string | null;
   orderMode: EmbeddedOrderModeContext | null;
   store: StorefrontHome;
 }) {
@@ -157,6 +169,9 @@ export function CheckoutPage({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState<SuccessState | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pay_at_pickup");
+  const [cardPaymentsAvailable, setCardPaymentsAvailable] = useState(false);
+  const [isConfirmingCardPayment, setIsConfirmingCardPayment] = useState(Boolean(cardCheckoutSessionId));
   const [activeStep, setActiveStep] = useState<CheckoutStep>("contact");
   const [completedSteps, setCompletedSteps] = useState<
     Record<CheckoutStep, boolean>
@@ -186,6 +201,51 @@ export function CheckoutPage({
 
     return () => window.clearTimeout(timeout);
   }, [store.store_slug]);
+
+  useEffect(() => {
+    let active = true;
+    void publicSupabase.functions.invoke<CardCheckoutResponse>("stripe-connect-checkout", {
+      body: { action: "availability", store_slug: store.store_slug },
+    }).then(({ data }) => {
+      if (!active) return;
+      const available = data?.available === true;
+      setCardPaymentsAvailable(available);
+      if (!available) setPaymentMethod("pay_at_pickup");
+    });
+    return () => { active = false; };
+  }, [store.store_slug]);
+
+  useEffect(() => {
+    if (!cardCheckoutSessionId) return;
+    let active = true;
+    async function confirmPayment() {
+      setIsConfirmingCardPayment(true);
+      const { data, error } = await publicSupabase.functions.invoke<CardCheckoutResponse>(
+        "stripe-connect-checkout",
+        { body: { action: "status", store_slug: store.store_slug, session_id: cardCheckoutSessionId } },
+      );
+      if (!active) return;
+      if (error) {
+        setErrorMessage("We could not confirm the card payment yet. Your cart has not been cleared.");
+      } else if (data?.status === "paid") {
+        clearStorefrontCart(store.store_slug);
+        setCart(readStorefrontCart(store.store_slug));
+        setSuccess({
+          orderNumber: data.order?.order_number ?? null,
+          totalText: formatOrderTotal(data.order?.total_amount, 0),
+          paidByCard: true,
+        });
+        setForm(initialForm);
+      } else if (data?.status === "expired") {
+        setErrorMessage("This card checkout expired. Your items are available to order again.");
+      } else {
+        setErrorMessage("Your payment is still processing. Please refresh to check again; your cart has not been cleared.");
+      }
+      setIsConfirmingCardPayment(false);
+    }
+    void confirmPayment();
+    return () => { active = false; };
+  }, [cardCheckoutSessionId, store.store_slug]);
 
   const usesManualPickupOptions = store.pickup_method === "manual_options";
 
@@ -302,8 +362,8 @@ export function CheckoutPage({
       : activeStep === "fulfillment"
         ? "Continue to review"
         : isSubmitting
-          ? "Placing order..."
-          : "Place order";
+          ? paymentMethod === "stripe_checkout" ? "Opening Stripe..." : "Placing order..."
+          : paymentMethod === "stripe_checkout" ? "Pay Now by Card" : "Place order";
   const activeStepAction =
     activeStep === "contact"
       ? handleContactContinue
@@ -520,6 +580,19 @@ export function CheckoutPage({
     };
 
     try {
+      if (paymentMethod === "stripe_checkout") {
+        const { data, error } = await publicSupabase.functions.invoke<CardCheckoutResponse>(
+          "stripe-connect-checkout",
+          { body: { action: "start", ...payload } },
+        );
+        if (error || !data?.checkout_url) {
+          const detail = error ? await readFunctionError(error) : null;
+          setErrorMessage(toBuyerOrderError(detail?.message ?? "Card checkout is unavailable. Pay at Pickup is still available."));
+          return;
+        }
+        window.location.assign(data.checkout_url);
+        return;
+      }
       const { data, error } = await publicSupabase.functions.invoke<OrderResponse>(
         "pay-at-pickup-order",
         {
@@ -539,6 +612,7 @@ export function CheckoutPage({
       setSuccess({
         orderNumber: data?.order?.order_number ?? null,
         totalText: formatOrderTotal(data?.order?.total_amount, estimatedTotal),
+        paidByCard: false,
       });
       setForm(initialForm);
       router.refresh();
@@ -552,24 +626,42 @@ export function CheckoutPage({
     handleReviewSubmit();
   }
 
+  if (isConfirmingCardPayment) {
+    return (
+      <StorefrontPage size="narrow" className="py-10">
+        <StorefrontCard className="border-emerald-200 p-6">
+          <p className="storefront-primary-color text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
+            Confirming payment
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold text-stone-950">Checking with Stripe…</h1>
+          <p className="mt-3 text-sm leading-6 text-stone-600">
+            Keep this page open. Your cart will clear only after payment is confirmed.
+          </p>
+        </StorefrontCard>
+      </StorefrontPage>
+    );
+  }
+
   if (success) {
     return (
       <StorefrontPage size="narrow" className="py-10">
         <StorefrontCard className="border-emerald-200 p-6">
           <p className="storefront-primary-color text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
-            Order placed
+            {success.paidByCard ? "Payment confirmed" : "Order placed"}
           </p>
           <h1 className="mt-2 text-3xl font-semibold text-stone-950">
-            Your order has been placed.
+            {success.paidByCard ? "Your card payment is confirmed." : "Your order has been placed."}
           </h1>
           <p className="mt-3 text-sm leading-6 text-stone-600">
-            The seller will follow up with pickup details.
+            {success.paidByCard
+              ? "The seller has received your paid order and will follow up with fulfillment details."
+              : "The seller will follow up with pickup details."}
           </p>
           <dl className="mt-5 grid gap-2 text-sm">
             {success.orderNumber ? (
               <SummaryRow label="Order number" value={success.orderNumber} />
             ) : null}
-            <SummaryRow label="Estimated total" value={success.totalText} />
+            <SummaryRow label={success.paidByCard ? "Paid total" : "Estimated total"} value={success.totalText} />
           </dl>
           <StorefrontButton className="mt-6" href={continueHref}>
             {continueLabel}
@@ -958,11 +1050,23 @@ export function CheckoutPage({
                   />
                 </dl>
               </div>
+              <PaymentChoice
+                cardPaymentsAvailable={cardPaymentsAvailable}
+                paymentMethod={paymentMethod}
+                onChange={setPaymentMethod}
+              />
               <div className="rounded-lg bg-[#f3f8ef] p-3 text-sm leading-6 text-stone-700">
-                <p className="font-bold text-stone-950">
-                  No payment is collected online.
-                </p>
-                <p>You will pay the seller according to their store policies.</p>
+                {paymentMethod === "stripe_checkout" ? (
+                  <>
+                    <p className="font-bold text-stone-950">Pay securely with Stripe.</p>
+                    <p>Your items are held for 30 minutes only after you continue to Stripe.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold text-stone-950">No payment is collected online.</p>
+                    <p>You will pay the seller according to their store policies.</p>
+                  </>
+                )}
                 <p>You will receive an email confirmation after placing your order.</p>
               </div>
               {summaryMessage ? (
@@ -976,7 +1080,9 @@ export function CheckoutPage({
                 disabled={activeStepDisabled}
                 onClick={handleReviewSubmit}
               >
-                {isSubmitting ? "Placing order..." : "Place order"}
+                {isSubmitting
+                  ? paymentMethod === "stripe_checkout" ? "Opening Stripe..." : "Placing order..."
+                  : paymentMethod === "stripe_checkout" ? "Pay Now by Card" : "Place order"}
               </StorefrontButton>
             </div>
           </MobileCheckoutStep>
@@ -1243,6 +1349,11 @@ export function CheckoutPage({
                   {toBuyerOrderError(summaryMessage)}
                 </p>
               ) : null}
+              <PaymentChoice
+                cardPaymentsAvailable={cardPaymentsAvailable}
+                paymentMethod={paymentMethod}
+                onChange={setPaymentMethod}
+              />
               <StorefrontButton
                 className="mt-3 min-h-10 w-full"
                 disabled={
@@ -1260,7 +1371,9 @@ export function CheckoutPage({
                 form="storefront-checkout-form"
                 type="submit"
               >
-                {isSubmitting ? "Placing order..." : "Place order"}
+                {isSubmitting
+                  ? paymentMethod === "stripe_checkout" ? "Opening Stripe..." : "Placing order..."
+                  : paymentMethod === "stripe_checkout" ? "Pay Now by Card" : "Place order"}
               </StorefrontButton>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <StorefrontButton
@@ -1683,6 +1796,33 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
       <dt className="text-stone-600">{label}</dt>
       <dd className="font-semibold text-stone-950">{value}</dd>
     </div>
+  );
+}
+
+function PaymentChoice({
+  cardPaymentsAvailable,
+  onChange,
+  paymentMethod,
+}: {
+  cardPaymentsAvailable: boolean;
+  onChange: (method: PaymentMethod) => void;
+  paymentMethod: PaymentMethod;
+}) {
+  if (!cardPaymentsAvailable) return null;
+  return (
+    <fieldset className="rounded-lg border border-[#e7decd] bg-white p-3">
+      <legend className="px-1 text-sm font-bold text-stone-950">Payment</legend>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className={cx("flex cursor-pointer gap-2 rounded-md border p-3 text-sm", paymentMethod === "stripe_checkout" ? "border-emerald-700 bg-emerald-50" : "border-stone-200")}>
+          <input checked={paymentMethod === "stripe_checkout"} name="paymentMethod" type="radio" onChange={() => onChange("stripe_checkout")} />
+          <span><span className="block font-semibold text-stone-950">Pay Now by Card</span><span className="text-stone-600">Secure Stripe Checkout</span></span>
+        </label>
+        <label className={cx("flex cursor-pointer gap-2 rounded-md border p-3 text-sm", paymentMethod === "pay_at_pickup" ? "border-emerald-700 bg-emerald-50" : "border-stone-200")}>
+          <input checked={paymentMethod === "pay_at_pickup"} name="paymentMethod" type="radio" onChange={() => onChange("pay_at_pickup")} />
+          <span><span className="block font-semibold text-stone-950">Pay at Pickup</span><span className="text-stone-600">Arrange payment with the seller</span></span>
+        </label>
+      </div>
+    </fieldset>
   );
 }
 

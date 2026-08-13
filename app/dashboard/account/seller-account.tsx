@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../_components/seller-context";
 import { ErrorState, LoadingState } from "../_components/seller-ui";
 import { SubscriptionBillingPanel } from "./subscription-billing-panel";
+import { StripeConnectPanel } from "./stripe-connect-panel";
 
 const SUPPORT_EMAIL = "hello@flockfront.com";
 
@@ -529,6 +530,8 @@ export function SellerAccount() {
         </StaticSection>
 
         <SubscriptionBillingPanel />
+
+        {seller.store_slug === "sunshine-mesa-farm" ? <StripeConnectPanel /> : null}
 
         <section className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-white px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">

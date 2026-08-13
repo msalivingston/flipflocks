@@ -52,6 +52,7 @@ export function formatOrderSource(order: OrderSource) {
 
 export function formatPaymentMethod(value: string | null) {
   if (value === "pay_at_pickup") return "Pay at pickup";
+  if (value === "stripe_checkout") return "Card payment";
 
   return formatPlainLabel(value);
 }

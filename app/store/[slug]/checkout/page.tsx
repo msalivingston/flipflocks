@@ -17,7 +17,10 @@ export default async function StorefrontCheckoutRoute({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<EmbeddedOrderModeSearchParams>;
+  searchParams: Promise<EmbeddedOrderModeSearchParams & {
+    card_checkout?: string | string[];
+    session_id?: string | string[];
+  }>;
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
   const [{ categories, error, store }, accessResult] = await Promise.all([
@@ -71,7 +74,15 @@ export default async function StorefrontCheckoutRoute({
       orderMode={orderMode}
       store={store}
     >
-      <CheckoutPage orderMode={orderMode} store={store} />
+      <CheckoutPage
+        cardCheckoutSessionId={
+          query.card_checkout === "return" && typeof query.session_id === "string"
+            ? query.session_id
+            : null
+        }
+        orderMode={orderMode}
+        store={store}
+      />
     </StorefrontChrome>
   );
 }
