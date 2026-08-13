@@ -99,7 +99,11 @@ Deno.serve(async (request) => {
   const eventSession = event.data.object as Stripe.Checkout.Session;
 
   try {
-    const session = await stripe.checkout.sessions.retrieve(eventSession.id, { stripeAccount: accountId });
+    const session = await stripe.checkout.sessions.retrieve(
+      eventSession.id,
+      {},
+      { stripeAccount: accountId },
+    );
     const reservationId = session.metadata?.reservation_id;
     const storeId = session.metadata?.store_id;
     if (!reservationId || !storeId || session.metadata?.environment_id !== environmentId ||

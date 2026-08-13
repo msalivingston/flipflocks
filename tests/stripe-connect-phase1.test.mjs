@@ -27,6 +27,16 @@ test("direct-charge Checkout is scoped to the connected account without platform
   assert.match(checkout, /expiresAt\s*=\s*Math\.floor\(Date\.now\(\)\s*\/\s*1000\)\s*\+\s*30\s*\*\s*60/);
 });
 
+test("connected Checkout retrieval passes account context as Stripe request options", () => {
+  const connectedRetrieve = /checkout\.sessions\.retrieve\(\s*[^,]+,\s*\{\},\s*\{\s*stripeAccount:\s*[^}]+\}\s*,?\s*\)/g;
+  assert.equal(webhook.match(connectedRetrieve)?.length, 1);
+  assert.equal(checkout.match(connectedRetrieve)?.length, 2);
+  assert.doesNotMatch(
+    `${webhook}\n${checkout}`,
+    /checkout\.sessions\.retrieve\(\s*[^,]+,\s*\{\s*stripeAccount:/,
+  );
+});
+
 test("inventory is held only after Session creation and URL stays private until reservation succeeds", () => {
   const createPosition = checkout.indexOf("stripe.checkout.sessions.create");
   const reservePosition = checkout.indexOf('service.rpc("reserve_storefront_card_checkout"');

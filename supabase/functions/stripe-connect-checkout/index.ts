@@ -159,9 +159,11 @@ async function cleanStale(storeId: string) {
     .eq("store_id", storeId).lt("expires_at", new Date().toISOString()).limit(3);
   for (const reservation of data ?? []) {
     try {
-      let session = await stripe.checkout.sessions.retrieve(reservation.stripe_checkout_session_id, {
-        stripeAccount: reservation.stripe_account_id,
-      });
+      let session = await stripe.checkout.sessions.retrieve(
+        reservation.stripe_checkout_session_id,
+        {},
+        { stripeAccount: reservation.stripe_account_id },
+      );
       if (session.status === "open") {
         session = await stripe.checkout.sessions.expire(session.id, { stripeAccount: reservation.stripe_account_id });
       }
@@ -222,7 +224,11 @@ Deno.serve(async (request) => {
       .eq("store_id", storeId).maybeSingle();
     if (!reservation) return json(404, { error: "checkout_not_found" }, cors.headers);
     try {
-      const session = await stripe.checkout.sessions.retrieve(sessionId, { stripeAccount: reservation.stripe_account_id });
+      const session = await stripe.checkout.sessions.retrieve(
+        sessionId,
+        {},
+        { stripeAccount: reservation.stripe_account_id },
+      );
       if (session.metadata?.store_id !== storeId || session.metadata?.environment_id !== environmentId ||
         session.mode !== "payment" || session.livemode !== livemode || session.amount_total !== reservation.amount_total_cents ||
         session.currency !== reservation.currency) throw new Error("session_binding_invalid");
