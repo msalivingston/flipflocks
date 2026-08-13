@@ -2,21 +2,16 @@ import type { Metadata } from "next";
 
 export const PRODUCTION_ORIGIN = "https://www.flockfront.com";
 
-// Launch action: set SEO_INDEXING_ENABLED=true only in the Vercel Production
-// environment. Preview, development, and local builds remain blocked regardless.
+// Public indexing is enabled only for the Vercel Production environment.
+// Preview, development, and local builds remain blocked.
 export function isIndexingEnabled(
   environment: {
-    SEO_INDEXING_ENABLED?: string;
     VERCEL_ENV?: string;
   } = {
-    SEO_INDEXING_ENABLED: process.env.SEO_INDEXING_ENABLED,
     VERCEL_ENV: process.env.VERCEL_ENV,
   },
 ) {
-  return (
-    environment.VERCEL_ENV === "production" &&
-    environment.SEO_INDEXING_ENABLED === "true"
-  );
+  return environment.VERCEL_ENV === "production";
 }
 
 export const INDEXING_ENABLED = isIndexingEnabled();

@@ -9,39 +9,29 @@ import {
 
 const repositoryRoot = new URL("../", import.meta.url);
 
-test("indexing is enabled only by the production-only launch combination", () => {
+test("indexing is enabled only in production", () => {
   assert.equal(isIndexingEnabled({}), false);
   assert.equal(
     isIndexingEnabled({
-      SEO_INDEXING_ENABLED: "true",
       VERCEL_ENV: "preview",
     }),
     false,
   );
   assert.equal(
     isIndexingEnabled({
-      SEO_INDEXING_ENABLED: "true",
       VERCEL_ENV: "development",
     }),
     false,
   );
   assert.equal(
     isIndexingEnabled({
-      SEO_INDEXING_ENABLED: "false",
-      VERCEL_ENV: "production",
-    }),
-    false,
-  );
-  assert.equal(
-    isIndexingEnabled({
-      SEO_INDEXING_ENABLED: "true",
       VERCEL_ENV: "production",
     }),
     true,
   );
 });
 
-test("robots blocks prelaunch and allows all crawling after launch", async () => {
+test("robots blocks non-production and allows only public crawling in production", async () => {
   const blocked = await loadTypeScriptModule("app/robots.ts", {
     "@/lib/seo-config": {
       INDEXING_ENABLED: false,
@@ -62,7 +52,26 @@ test("robots blocks prelaunch and allows all crawling after launch", async () =>
   const output = launched.default();
   assert.deepEqual(output, {
     host: PRODUCTION_ORIGIN,
-    rules: { allow: "/", userAgent: "*" },
+    rules: {
+      allow: "/",
+      disallow: [
+        "/admin",
+        "/auth",
+        "/dashboard",
+        "/dev",
+        "/embed",
+        "/listings",
+        "/login",
+        "/onboarding",
+        "/reset-password",
+        "/sign-in",
+        "/signup",
+        "/store/*/cart",
+        "/store/*/checkout",
+        "/store/*/items",
+      ],
+      userAgent: "*",
+    },
     sitemap: `${PRODUCTION_ORIGIN}/sitemap.xml`,
   });
 });
