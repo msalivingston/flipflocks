@@ -24,7 +24,7 @@ const stateCopy: Record<ConnectionState, { title: string; description: string }>
   },
   active: {
     title: "Card payments ready",
-    description: "Stripe manages your payments, payouts, verification, refunds, and disputes.",
+    description: "Customers can pay you by card at checkout. Payments go directly to your Stripe account, and FlockFront does not take a percentage of your sales.",
   },
   restricted: {
     title: "Stripe needs information",
@@ -110,6 +110,16 @@ export function StripeConnectPanel() {
 
   const copy = state ? stateCopy[state] : null;
   const isStripeReturnPending = returnedFromStripe && state !== "active";
+  const statusTone = state === "active"
+    ? "bg-emerald-100 text-emerald-900"
+    : isStripeReturnPending || state === "restricted"
+    ? "bg-amber-100 text-amber-950"
+    : "bg-stone-100 text-stone-800";
+  const statusDotTone = state === "active"
+    ? "bg-emerald-600"
+    : isStripeReturnPending || state === "restricted"
+    ? "bg-amber-500"
+    : "bg-stone-400";
   return (
     <section className="rounded-lg border border-stone-200 bg-white px-4 py-3 sm:px-5">
       <h2 className="text-lg font-semibold text-stone-950">Customer card payments</h2>
@@ -121,12 +131,13 @@ export function StripeConnectPanel() {
           <button className="seller-secondary-button" type="button" onClick={() => void load()}>Try again</button>
         </div>
       ) : copy && state ? (
-        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-stone-950">
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
+          <div className="min-w-0">
+            <p className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-sm font-semibold ${statusTone}`}>
+              <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${statusDotTone}`} />
               {isStripeReturnPending ? "Stripe setup submitted" : copy.title}
             </p>
-            <p className="mt-0.5 max-w-2xl text-sm leading-5 text-stone-600">
+            <p className="mt-1.5 max-w-2xl text-sm leading-5 text-stone-600">
               {isStripeReturnPending
                 ? "Stripe is finishing your setup. This can take a few minutes. You do not need to complete setup again. Refresh this page in a few minutes."
                 : copy.description}

@@ -35,3 +35,11 @@ test("existing setup and active-account actions remain available", () => {
   assert.match(panel, /action:\s*"onboard"/);
   assert.match(panel, /Open Stripe Dashboard/);
 });
+
+test("active card payments show a green ready status and seller reassurance", () => {
+  assert.match(panel, /Card payments ready/);
+  assert.match(panel, /Customers can pay you by card at checkout\. Payments go directly to your Stripe account, and FlockFront does not take a percentage of your sales\./);
+  assert.match(panel, /state === "active"[\s\S]*bg-emerald-100 text-emerald-900/);
+  assert.match(panel, /state === "active"[\s\S]*bg-emerald-600/);
+  assert.match(panel, /aria-hidden="true"[\s\S]*rounded-full[\s\S]*statusDotTone/);
+});
