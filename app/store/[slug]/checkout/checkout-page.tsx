@@ -51,6 +51,10 @@ import {
   buildEmbeddedOrderModeHref,
   type EmbeddedOrderModeContext,
 } from "@/lib/embedded-order-mode";
+import {
+  resolveBuyerPaymentAvailability,
+  type StorefrontPaymentMethod,
+} from "@/lib/store-payment-methods";
 
 type BuyerForm = {
   buyerEmail: string;
@@ -113,7 +117,7 @@ type SuccessState = {
   paidByCard: boolean;
 };
 
-type PaymentMethod = "pay_at_pickup" | "stripe_checkout";
+type PaymentMethod = StorefrontPaymentMethod;
 
 type CardCheckoutResponse = {
   available?: boolean;
@@ -142,12 +146,16 @@ const initialForm: BuyerForm = {
 const emptyCartItems: StorefrontCart["items"] = [];
 
 export function CheckoutPage({
+  cardPaymentsEnabled,
   cardCheckoutSessionId,
   orderMode,
+  payAtPickupEnabled,
   store,
 }: {
+  cardPaymentsEnabled: boolean;
   cardCheckoutSessionId: string | null;
   orderMode: EmbeddedOrderModeContext | null;
+  payAtPickupEnabled: boolean;
   store: StorefrontHome;
 }) {
   const router = useRouter();
@@ -169,8 +177,13 @@ export function CheckoutPage({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState<SuccessState | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pay_at_pickup");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
+    payAtPickupEnabled ? "pay_at_pickup" : "stripe_checkout",
+  );
   const [cardPaymentsAvailable, setCardPaymentsAvailable] = useState(false);
+  const [cardAvailabilityChecked, setCardAvailabilityChecked] = useState(
+    !cardPaymentsEnabled,
+  );
   const [isConfirmingCardPayment, setIsConfirmingCardPayment] = useState(Boolean(cardCheckoutSessionId));
   const [activeStep, setActiveStep] = useState<CheckoutStep>("contact");
   const [completedSteps, setCompletedSteps] = useState<
@@ -203,6 +216,10 @@ export function CheckoutPage({
   }, [store.store_slug]);
 
   useEffect(() => {
+    if (!cardPaymentsEnabled) {
+      return;
+    }
+
     let active = true;
     void publicSupabase.functions.invoke<CardCheckoutResponse>("stripe-connect-checkout", {
       body: { action: "availability", store_slug: store.store_slug },
@@ -210,10 +227,15 @@ export function CheckoutPage({
       if (!active) return;
       const available = data?.available === true;
       setCardPaymentsAvailable(available);
-      if (!available) setPaymentMethod("pay_at_pickup");
+      setCardAvailabilityChecked(true);
+      if (available && !payAtPickupEnabled) {
+        setPaymentMethod("stripe_checkout");
+      } else if (!available && payAtPickupEnabled) {
+        setPaymentMethod("pay_at_pickup");
+      }
     });
     return () => { active = false; };
-  }, [store.store_slug]);
+  }, [cardPaymentsEnabled, payAtPickupEnabled, store.store_slug]);
 
   useEffect(() => {
     if (!cardCheckoutSessionId) return;
@@ -356,6 +378,13 @@ export function CheckoutPage({
           (option) => option.pickup_option_id === form.pickupOptionId,
         ) ?? null
       : null;
+  const paymentAvailability = resolveBuyerPaymentAvailability({
+    cardPaymentsEnabled,
+    cardPaymentsReady: cardPaymentsAvailable,
+    payAtPickupEnabled,
+  });
+  const paymentUnavailable =
+    cardAvailabilityChecked && paymentAvailability.checkoutBlocked;
   const activeStepActionLabel =
     activeStep === "contact"
       ? "Continue to pickup"
@@ -375,7 +404,9 @@ export function CheckoutPage({
     isChecking ||
     isLoadingPickupOptions ||
     checkoutItems.length === 0 ||
-    summary?.is_checkout_available === false;
+    summary?.is_checkout_available === false ||
+    !cardAvailabilityChecked ||
+    paymentUnavailable;
 
   useEffect(() => {
     if (cart === null || checkoutItems.length === 0) {
@@ -548,6 +579,19 @@ export function CheckoutPage({
       return;
     }
 
+    if (!cardAvailabilityChecked || paymentUnavailable) {
+      setErrorMessage(
+        paymentAvailability.unavailableMessage ??
+          "Payment availability is still being checked. Please try again.",
+      );
+      return;
+    }
+
+    if (!paymentAvailability.availableMethods.includes(paymentMethod)) {
+      setErrorMessage("Choose an available payment method before continuing.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     const payload = {
@@ -587,7 +631,14 @@ export function CheckoutPage({
         );
         if (error || !data?.checkout_url) {
           const detail = error ? await readFunctionError(error) : null;
-          setErrorMessage(toBuyerOrderError(detail?.message ?? "Card checkout is unavailable. Pay at Pickup is still available."));
+          setErrorMessage(
+            toBuyerOrderError(
+              detail?.message ??
+                (payAtPickupEnabled
+                  ? "Card checkout is unavailable. Pay at Pickup is still available."
+                  : "Online payment is temporarily unavailable. This store does not offer Pay at Pickup."),
+            ),
+          );
           return;
         }
         window.location.assign(data.checkout_url);
@@ -1051,12 +1102,25 @@ export function CheckoutPage({
                 </dl>
               </div>
               <PaymentChoice
+                cardAvailabilityChecked={cardAvailabilityChecked}
+                cardPaymentsEnabled={cardPaymentsEnabled}
                 cardPaymentsAvailable={cardPaymentsAvailable}
-                paymentMethod={paymentMethod}
                 onChange={setPaymentMethod}
+                payAtPickupEnabled={payAtPickupEnabled}
+                paymentMethod={paymentMethod}
               />
+              {paymentUnavailable ? (
+                <MobileError>{paymentAvailability.unavailableMessage}</MobileError>
+              ) : null}
               <div className="rounded-lg bg-[#f3f8ef] p-3 text-sm leading-6 text-stone-700">
-                {paymentMethod === "stripe_checkout" ? (
+                {paymentUnavailable ? (
+                  <>
+                    <p className="font-bold text-stone-950">
+                      Payment is temporarily unavailable.
+                    </p>
+                    <p>{paymentAvailability.unavailableMessage}</p>
+                  </>
+                ) : paymentMethod === "stripe_checkout" ? (
                   <>
                     <p className="font-bold text-stone-950">Pay securely with Stripe.</p>
                     <p>Your items are held for 30 minutes only after you continue to Stripe.</p>
@@ -1350,10 +1414,18 @@ export function CheckoutPage({
                 </p>
               ) : null}
               <PaymentChoice
+                cardAvailabilityChecked={cardAvailabilityChecked}
+                cardPaymentsEnabled={cardPaymentsEnabled}
                 cardPaymentsAvailable={cardPaymentsAvailable}
-                paymentMethod={paymentMethod}
                 onChange={setPaymentMethod}
+                payAtPickupEnabled={payAtPickupEnabled}
+                paymentMethod={paymentMethod}
               />
+              {paymentUnavailable ? (
+                <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
+                  {paymentAvailability.unavailableMessage}
+                </p>
+              ) : null}
               <StorefrontButton
                 className="mt-3 min-h-10 w-full"
                 disabled={
@@ -1362,6 +1434,8 @@ export function CheckoutPage({
                   isLoadingPickupOptions ||
                   checkoutItems.length === 0 ||
                   summary?.is_checkout_available === false ||
+                  !cardAvailabilityChecked ||
+                  paymentUnavailable ||
                   (form.fulfillmentMethod === "pickup" &&
                     usesManualPickupOptions &&
                     !form.pickupOptionId) ||
@@ -1800,27 +1874,84 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 }
 
 function PaymentChoice({
+  cardAvailabilityChecked,
+  cardPaymentsEnabled,
   cardPaymentsAvailable,
   onChange,
+  payAtPickupEnabled,
   paymentMethod,
 }: {
+  cardAvailabilityChecked: boolean;
+  cardPaymentsEnabled: boolean;
   cardPaymentsAvailable: boolean;
   onChange: (method: PaymentMethod) => void;
+  payAtPickupEnabled: boolean;
   paymentMethod: PaymentMethod;
 }) {
-  if (!cardPaymentsAvailable) return null;
   return (
     <fieldset className="rounded-lg border border-[#e7decd] bg-white p-3">
       <legend className="px-1 text-sm font-bold text-stone-950">Payment</legend>
       <div className="grid gap-2 sm:grid-cols-2">
-        <label className={cx("flex cursor-pointer gap-2 rounded-md border p-3 text-sm", paymentMethod === "stripe_checkout" ? "border-emerald-700 bg-emerald-50" : "border-stone-200")}>
-          <input checked={paymentMethod === "stripe_checkout"} name="paymentMethod" type="radio" onChange={() => onChange("stripe_checkout")} />
-          <span><span className="block font-semibold text-stone-950">Pay Now by Card</span><span className="text-stone-600">Secure Stripe Checkout</span></span>
-        </label>
-        <label className={cx("flex cursor-pointer gap-2 rounded-md border p-3 text-sm", paymentMethod === "pay_at_pickup" ? "border-emerald-700 bg-emerald-50" : "border-stone-200")}>
-          <input checked={paymentMethod === "pay_at_pickup"} name="paymentMethod" type="radio" onChange={() => onChange("pay_at_pickup")} />
-          <span><span className="block font-semibold text-stone-950">Pay at Pickup</span><span className="text-stone-600">Arrange payment with the seller</span></span>
-        </label>
+        {cardPaymentsEnabled ? (
+          <label
+            className={cx(
+              "flex gap-2 rounded-md border p-3 text-sm",
+              cardPaymentsAvailable && paymentMethod === "stripe_checkout"
+                ? "border-emerald-700 bg-emerald-50"
+                : "border-stone-200",
+              cardPaymentsAvailable
+                ? "cursor-pointer"
+                : "cursor-not-allowed bg-stone-50 opacity-75",
+            )}
+          >
+            <input
+              checked={
+                cardPaymentsAvailable && paymentMethod === "stripe_checkout"
+              }
+              disabled={!cardPaymentsAvailable}
+              name="paymentMethod"
+              onChange={() => onChange("stripe_checkout")}
+              type="radio"
+            />
+            <span>
+              <span className="block font-semibold text-stone-950">
+                Pay Now by Card
+              </span>
+              <span className="text-stone-600">
+                {!cardAvailabilityChecked
+                  ? "Checking Stripe availability…"
+                  : cardPaymentsAvailable
+                    ? "Secure Stripe Checkout"
+                    : "Online payment is temporarily unavailable"}
+              </span>
+            </span>
+          </label>
+        ) : null}
+        {payAtPickupEnabled ? (
+          <label
+            className={cx(
+              "flex cursor-pointer gap-2 rounded-md border p-3 text-sm",
+              paymentMethod === "pay_at_pickup"
+                ? "border-emerald-700 bg-emerald-50"
+                : "border-stone-200",
+            )}
+          >
+            <input
+              checked={paymentMethod === "pay_at_pickup"}
+              name="paymentMethod"
+              onChange={() => onChange("pay_at_pickup")}
+              type="radio"
+            />
+            <span>
+              <span className="block font-semibold text-stone-950">
+                Pay at Pickup
+              </span>
+              <span className="text-stone-600">
+                Arrange payment with the seller
+              </span>
+            </span>
+          </label>
+        ) : null}
       </div>
     </fieldset>
   );

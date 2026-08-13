@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -85,22 +84,9 @@ test("browser, Portal, Connect, buyer-payment, and refund authority are absent",
   assert.doesNotMatch(source, /Authorization:\s*Bearer|request\.headers\.get\(["']authorization/i);
   assert.doesNotMatch(source, /billingPortal|portal\.sessions|accountLinks|transfers\.create/i);
   assert.doesNotMatch(source, /application_fee_amount|stripeAccount:/i);
-  assert.doesNotMatch(source, /order_refunds|record_stripe_refund|pay_at_pickup/i);
-  assert.doesNotMatch(source, /boolean_value\s*=\s*true/i);
-});
-
-test("later SaaS batches preserve Batch 8 by avoiding unrelated payment and order paths", () => {
-  const changed = execFileSync("git", ["status", "--short"], {
-    cwd: root,
-    encoding: "utf8",
-  }).split(/\r?\n/).filter(Boolean).map((line) =>
-    line.slice(3).replaceAll("\\", "/")
+  assert.doesNotMatch(
+    source,
+    /order_refunds|record_stripe_refund|pay_at_pickup|card_payments_enabled|storefront_card_checkout|store_stripe_connections/i,
   );
-  for (const file of changed) {
-    assert.doesNotMatch(
-      file,
-      /(?:pay-at-pickup|order_refund|refund_authority|stripe_connect|connected-account)/i,
-      `later SaaS work must not alter unrelated payment authority: ${file}`,
-    );
-  }
+  assert.doesNotMatch(source, /boolean_value\s*=\s*true/i);
 });

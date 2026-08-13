@@ -183,7 +183,11 @@ test("each public server route independently reconstructs validated context", as
   for (const routePath of routePaths) {
     const source = await read(routePath);
 
-    assert.match(source, /searchParams: Promise<EmbeddedOrderModeSearchParams>/, routePath);
+    assert.match(
+      source,
+      /searchParams: Promise<EmbeddedOrderModeSearchParams(?:\s*&|>)/,
+      routePath,
+    );
     if (routePath.startsWith("app/embed/")) {
       assert.match(source, /resolveEmbeddedOrderModeContext\(\{/, routePath);
       assert.match(source, /websiteUrl: storeResult\.data\.website_url/, routePath);

@@ -57,10 +57,25 @@ Deno.serve(async (request) => {
   const { data: store } = await service.from("stores").select("id,store_name,store_slug")
     .eq("owner_user_id", user.id).limit(1).maybeSingle();
   if (!store) return json(403, { error: "seller_store_required" }, cors.headers);
-  const { data: connection } = await service.from("store_stripe_connections")
+  let { data: connection } = await service.from("store_stripe_connections")
     .select("store_id,stripe_account_id,stripe_livemode").eq("store_id", store.id)
     .eq("stripe_livemode", livemode).maybeSingle();
-  if (!connection) return json(403, { error: "connect_not_available" }, cors.headers);
+
+  if (!connection && body.action === "status") {
+    return json(200, { state: "not_connected", dashboard_url: null }, cors.headers);
+  }
+
+  if (!connection) {
+    const { data: createdConnection, error: connectionError } = await service
+      .from("store_stripe_connections")
+      .insert({ store_id: store.id, stripe_livemode: livemode })
+      .select("store_id,stripe_account_id,stripe_livemode")
+      .single();
+    if (connectionError || !createdConnection) {
+      return json(503, { error: "stripe_unavailable", message: "Stripe setup is temporarily unavailable." }, cors.headers);
+    }
+    connection = createdConnection;
+  }
 
   let accountId = connection.stripe_account_id as string | null;
   if (body.action === "status" && !accountId) {
@@ -95,8 +110,8 @@ Deno.serve(async (request) => {
       const accountLink = await stripe.accountLinks.create({
         account: account.id,
         type: "account_onboarding",
-        refresh_url: `${publicSiteOrigin}/dashboard/account?stripe=refresh`,
-        return_url: `${publicSiteOrigin}/dashboard/account?stripe=return`,
+        refresh_url: `${publicSiteOrigin}/dashboard/store-admin?tab=payment-methods&stripe=refresh`,
+        return_url: `${publicSiteOrigin}/dashboard/store-admin?tab=payment-methods&stripe=return`,
       });
       return json(200, { state: accountState(account), onboarding_url: accountLink.url }, cors.headers);
     }
@@ -123,4 +138,3 @@ function accountState(account: {
   if (account.requirements?.disabled_reason || (account.requirements?.past_due?.length ?? 0) > 0) return "restricted";
   return account.details_submitted ? "restricted" : "incomplete";
 }
-

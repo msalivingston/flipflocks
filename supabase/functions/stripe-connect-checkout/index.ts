@@ -200,6 +200,9 @@ Deno.serve(async (request) => {
   await cleanStale(storeId);
 
   if (body.action === "availability") {
+    if (storefrontData.card_payments_enabled !== true) {
+      return json(200, { available: false }, cors.headers);
+    }
     const accountId = await connectionForStore(storeId);
     if (!accountId) return json(200, { available: false }, cors.headers);
     try { return json(200, { available: await readyAccount(accountId) }, cors.headers); }
@@ -250,6 +253,9 @@ Deno.serve(async (request) => {
   }
 
   if (body.action !== "start") return json(400, { error: "invalid_action" }, cors.headers);
+  if (storefrontData.card_payments_enabled !== true) {
+    return json(409, { error: "card_payments_disabled" }, cors.headers);
+  }
   const start = body as unknown as StartRequest;
   if (!start.idempotency_key || start.idempotency_key.length > 200 || !start.buyer_email ||
     !start.buyer_first_name || !start.buyer_last_name || !start.buyer_phone || !Array.isArray(start.items) || !start.items.length ||

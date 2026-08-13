@@ -688,6 +688,13 @@ export function createPayAtPickupHandler(
     }, corsHeaders);
   }
 
+  if (storefrontStatus.storefront.pay_at_pickup_enabled !== true) {
+    return jsonResponse(409, {
+      error: "pay_at_pickup_unavailable",
+      message: "This store does not offer Pay at Pickup.",
+    }, corsHeaders);
+  }
+
   const buyerIp = parseBuyerIp(request);
   const rateLimits = rateLimitConfiguration(dependencies.env);
   const { data: rateLimitRows, error: rateLimitError } = await supabase.rpc(

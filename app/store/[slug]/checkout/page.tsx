@@ -9,7 +9,10 @@ import { notFound, redirect } from "next/navigation";
 import {
   type EmbeddedOrderModeSearchParams,
 } from "@/lib/embedded-order-mode";
-import { loadStorefrontAccess } from "../storefront-data";
+import {
+  loadStorefrontAccess,
+  loadStorefrontPaymentMethods,
+} from "../storefront-data";
 import { resolveStorefrontVisibilityDecision } from "@/lib/storefront-visibility";
 
 export default async function StorefrontCheckoutRoute({
@@ -23,9 +26,10 @@ export default async function StorefrontCheckoutRoute({
   }>;
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
-  const [{ categories, error, store }, accessResult] = await Promise.all([
+  const [{ categories, error, store }, accessResult, paymentMethodsResult] = await Promise.all([
     loadStorefrontChrome(slug),
     loadStorefrontAccess(slug),
+    loadStorefrontPaymentMethods(slug),
   ]);
 
   if (error) {
@@ -54,7 +58,14 @@ export default async function StorefrontCheckoutRoute({
     );
   }
 
-  if (accessResult.error || !accessResult.data) notFound();
+  if (
+    accessResult.error ||
+    !accessResult.data ||
+    paymentMethodsResult.error ||
+    !paymentMethodsResult.data
+  ) {
+    notFound();
+  }
 
   const visibilityDecision = resolveStorefrontVisibilityDecision({
     isPubliclyAvailable: accessResult.data.is_publicly_available,
@@ -81,6 +92,8 @@ export default async function StorefrontCheckoutRoute({
             : null
         }
         orderMode={orderMode}
+        cardPaymentsEnabled={paymentMethodsResult.data.card_payments_enabled}
+        payAtPickupEnabled={paymentMethodsResult.data.pay_at_pickup_enabled}
         store={store}
       />
     </StorefrontChrome>

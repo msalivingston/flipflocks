@@ -58,6 +58,12 @@ export type StorefrontAccess = {
   is_publicly_available: boolean;
 };
 
+export type StorefrontPaymentMethods = {
+  store_id: string;
+  pay_at_pickup_enabled: boolean;
+  card_payments_enabled: boolean;
+};
+
 export type StorefrontPickupOption = {
   store_id: string;
   store_slug: string;
@@ -271,6 +277,21 @@ export async function loadStorefrontAccess(slug: string) {
 
   return {
     data: data as StorefrontAccess | null,
+    error,
+  };
+}
+
+export async function loadStorefrontPaymentMethods(slug: string) {
+  const { data, error } = await publicSupabase.rpc(
+    "get_public_store_payment_methods",
+    { p_store_slug: slug },
+  );
+  const row = Array.isArray(data)
+    ? (data[0] as StorefrontPaymentMethods | undefined)
+    : undefined;
+
+  return {
+    data: row ?? null,
     error,
   };
 }

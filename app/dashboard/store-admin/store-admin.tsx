@@ -75,6 +75,7 @@ import {
 } from "./delivery-options-section";
 import type { PickupDeliveryTabProps } from "./pickup-delivery-tab";
 import type { PoliciesTabProps } from "./policies-tab";
+import type { PaymentMethodsTabProps } from "./payment-methods-tab";
 import { SellerTermsAcceptance } from "@/app/_components/seller-terms-acceptance";
 
 const DynamicPickupDeliveryTab = dynamic<PickupDeliveryTabProps>(
@@ -84,6 +85,11 @@ const DynamicPickupDeliveryTab = dynamic<PickupDeliveryTabProps>(
 
 const DynamicPoliciesTab = dynamic<PoliciesTabProps>(
   () => import("./policies-tab"),
+  { loading: () => null, ssr: false },
+);
+
+const DynamicPaymentMethodsTab = dynamic<PaymentMethodsTabProps>(
+  () => import("./payment-methods-tab"),
   { loading: () => null, ssr: false },
 );
 
@@ -127,6 +133,8 @@ type StoreAdminForm = {
   hatching_eggs_enabled: boolean;
   equipment_supplies_enabled: boolean;
   processed_poultry_enabled: boolean;
+  pay_at_pickup_enabled: boolean;
+  card_payments_enabled: boolean;
 };
 
 type StoreAdminFieldUpdater = <TKey extends keyof StoreAdminForm>(
@@ -160,6 +168,12 @@ type StoreVisibilityRow = {
   store_id: string;
   storefront_visibility: StorefrontVisibility | string;
   website_url: string | null;
+};
+
+type StorePaymentMethodsRow = {
+  store_id: string;
+  pay_at_pickup_enabled: boolean;
+  card_payments_enabled: boolean;
 };
 
 type PickupOption = {
@@ -241,7 +255,8 @@ type StoreSetupTab =
   | "photos"
   | "what-you-sell"
   | "pickup"
-  | "policies";
+  | "policies"
+  | "payment-methods";
 
 type ModulePreferenceField =
   | "hatching_eggs_enabled"
@@ -361,6 +376,7 @@ const storeSetupTabs: Array<{ id: StoreSetupTab; label: string }> = [
   { id: "what-you-sell", label: "What You Sell" },
   { id: "pickup", label: "Pickup/Delivery" },
   { id: "policies", label: "Policies" },
+  { id: "payment-methods", label: "Payment Methods" },
 ];
 
 const blankForm: StoreAdminForm = {
@@ -403,6 +419,8 @@ const blankForm: StoreAdminForm = {
   hatching_eggs_enabled: false,
   equipment_supplies_enabled: false,
   processed_poultry_enabled: false,
+  pay_at_pickup_enabled: true,
+  card_payments_enabled: false,
 };
 
 export function StoreAdmin() {
@@ -476,6 +494,20 @@ export function StoreAdmin() {
   }, [saveMessage]);
 
   useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (
+      query.get("tab") === "payment-methods" ||
+      query.has("stripe")
+    ) {
+      const timeoutId = window.setTimeout(
+        () => setActiveTab("payment-methods"),
+        0,
+      );
+      return () => window.clearTimeout(timeoutId);
+    }
+  }, []);
+
+  useEffect(() => {
     let isMounted = true;
 
     async function loadStoreAdmin() {
@@ -493,6 +525,7 @@ export function StoreAdmin() {
         readinessResult,
         mediaResult,
         visibilityResult,
+        paymentMethodsResult,
       ] = await Promise.all([
           supabase
             .from("seller_store_defaults")
@@ -537,6 +570,11 @@ export function StoreAdmin() {
               p_store_id: seller.store_id,
             })
             .maybeSingle<StoreVisibilityRow>(),
+          supabase
+            .rpc("seller_get_payment_methods", {
+              p_store_id: seller.store_id,
+            })
+            .maybeSingle<StorePaymentMethodsRow>(),
         ]);
 
       if (!isMounted) return;
@@ -546,7 +584,8 @@ export function StoreAdmin() {
         pickupOptionsResult.error ??
         deliveryOptionsResult.error ??
         mediaResult.error ??
-        visibilityResult.error;
+        visibilityResult.error ??
+        paymentMethodsResult.error;
 
       if (firstError) {
         setLoadError(firstError.message);
@@ -559,6 +598,7 @@ export function StoreAdmin() {
         seller,
         defaults,
         visibilityResult.data?.storefront_visibility,
+        paymentMethodsResult.data,
       );
       const nextPickupOptions = (pickupOptionsResult.data ?? []).map(
         toPickupOptionDraft,
@@ -1830,6 +1870,22 @@ export function StoreAdmin() {
       return;
     }
 
+    const paymentMethodsResult = await supabase.rpc(
+      "seller_update_payment_methods",
+      {
+        p_store_id: seller.store_id,
+        p_pay_at_pickup_enabled: form.pay_at_pickup_enabled,
+        p_card_payments_enabled: form.card_payments_enabled,
+      },
+    );
+
+    if (paymentMethodsResult.error) {
+      setIsSaving(false);
+      setSaveState("error");
+      setSaveMessage(paymentMethodsResult.error.message);
+      return;
+    }
+
     const defaultsResult = await supabase.rpc("seller_update_store_defaults", {
       p_store_id: seller.store_id,
       p_defaults: defaultsPayload,
@@ -2344,6 +2400,19 @@ export function StoreAdmin() {
               />
             ) : null}
 
+            {activeTab === "payment-methods" ? (
+              <DynamicPaymentMethodsTab
+                cardPaymentsEnabled={form.card_payments_enabled}
+                onCardPaymentsEnabledChange={(enabled) =>
+                  updateField("card_payments_enabled", enabled)
+                }
+                onPayAtPickupEnabledChange={(enabled) =>
+                  updateField("pay_at_pickup_enabled", enabled)
+                }
+                payAtPickupEnabled={form.pay_at_pickup_enabled}
+              />
+            ) : null}
+
           </div>
         </div>
       </div>
@@ -2807,6 +2876,7 @@ function StorefrontTab({
                 {publicContactValidationMessage}
               </p>
             ) : null}
+
           </div>
           <StorefrontNote>
             Email uses the store owner&apos;s current account email and is managed
@@ -5115,6 +5185,7 @@ function buildInitialForm(
   seller: NonNullable<ReturnType<typeof useSellerContext>["seller"]>,
   defaults?: StoreDefaults | null,
   storefrontVisibility?: unknown,
+  paymentMethods?: StorePaymentMethodsRow | null,
 ): StoreAdminForm {
   return {
     store_name: seller.store_name ?? "",
@@ -5170,6 +5241,8 @@ function buildInitialForm(
     hatching_eggs_enabled: Boolean(seller.hatching_eggs_enabled),
     equipment_supplies_enabled: Boolean(seller.equipment_supplies_enabled),
     processed_poultry_enabled: Boolean(seller.processed_poultry_enabled),
+    pay_at_pickup_enabled: paymentMethods?.pay_at_pickup_enabled ?? true,
+    card_payments_enabled: paymentMethods?.card_payments_enabled ?? false,
   };
 }
 
@@ -5474,6 +5547,9 @@ function validateForm(
   pickupOptions: PickupOptionDraft[],
   activeTab: StoreSetupTab,
 ) {
+  if (!form.pay_at_pickup_enabled && !form.card_payments_enabled) {
+    return "At least one payment method must be enabled.";
+  }
   if (!form.store_name.trim()) return "Store name is required.";
   if (!form.public_city.trim()) return "City is required.";
   if (!form.public_state.trim()) return "State is required.";

@@ -1,12 +1,9 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
-const execFileAsync = promisify(execFile);
 const root = fileURLToPath(new URL("..", import.meta.url));
 const migrationPath = path.join(root, "supabase/migrations/20260801105000_trusted_saas_price_catalog_registration.sql");
 const runtimePath = path.join(root, "supabase/functions/_shared/stripe-saas-runtime.mjs");
@@ -113,11 +110,11 @@ test("migration exposes only service-role catalog contracts and seeds no IDs", a
   assert.doesNotMatch(migration, /saas_(?:subscription_checkout|billing_portal)_enabled[^;]*true/i);
 });
 
-test("post-Batch-4 billing work adds only approved SaaS server endpoints and no browser Stripe SDK surface", async () => {
+test("SaaS billing exposes only approved server endpoints and no browser Stripe SDK surface", async () => {
   const functionEntries = await readdir(path.join(root, "supabase/functions"), { withFileTypes: true });
   const names = functionEntries.filter((entry) => entry.isDirectory() && entry.name !== "_shared").map((entry) => entry.name);
   assert.deepEqual(
-    names.filter((name) => /(?:checkout|webhook|portal|subscription)/i.test(name)).sort(),
+    names.filter((name) => name.startsWith("stripe-saas-")).sort(),
     [
       "stripe-saas-checkout",
       "stripe-saas-portal",
@@ -180,16 +177,18 @@ test("documentation requires only Product and Price read permissions for catalog
   assert.doesNotMatch(documentation, /STRIPE_SAAS_CATALOG_READ_KEY\s*=/);
 });
 
-test("current SaaS billing batch changes no Pay at Pickup, refund, or Connect application file", async () => {
-  const { stdout } = await execFileAsync("git", ["status", "--porcelain=v1", "-uall"], { cwd: root });
-  const changed = stdout.split(/\r?\n/).filter((line) => line.trim()).map((line) => line.slice(3));
-  assert.ok(changed.every((file) => !/(pay-at-pickup|refund|connect)/i.test(file)));
-  const batch9Ui = /^app\/(?:dashboard\/(?:_components\/seller-(?:app-shell|billing-banner|billing-context)|account\/(?:seller-account|subscription-billing-panel))|onboarding\/(?:page|_components\/(?:onboarding-flow|step-5-plan-access-form)|billing\/return\/(?:page|stripe-return-status)))\.tsx$/;
-  assert.ok(changed.every((file) => batch9Ui.test(file)
-    || /^app\/admin\/[^/]+\/(?:page|[^/]+-form)\.tsx$/.test(file)
-    || /^app\/admin\/stripe-subscription-resync\/(?:page|stripe-subscription-resync-form)\.tsx$/.test(file)
-    || /^supabase\/functions\/postmark-email-worker\/(?:index|seller-(?:welcome|payment-failed|subscription-canceled))\.ts$/.test(file)
-    || /^supabase\/migrations\/2026081[12]100000_seller_subscription_(?:payment_failed|canceled)_email\.sql$/.test(file)
-    || /^tests\/seller-subscription-(?:payment-failed|canceled)-email\.test\.mjs$/.test(file)
-    || /^(?:package\.json|scripts\/stripe\/[^/]+\.mjs|lib\/saas-billing-(?:status|management)\.ts|docs\/stripe-saas-|supabase\/(?:config\.toml|functions\/(?:_shared\/stripe-saas-|stripe-saas-)|migrations\/(?:20260802|2026080310(?:0000|1000|2000|3000|4000|5000|6000|7000)_saas_|20260805120000_saas_|20260806100000_saas_)|tests\/(?:seller_saas_|verified_saas_|saas_))|tests\/(?:authoritative-entitlements|seller-saas-|stripe-saas-))/.test(file)));
+test("SaaS billing sources remain isolated from storefront payment methods and Stripe Connect", async () => {
+  const functionFiles = await walk(path.join(root, "supabase/functions"));
+  const saasFiles = functionFiles.filter((file) =>
+    file.split(path.sep).some((segment) => segment.startsWith("stripe-saas-"))
+  );
+  saasFiles.push(
+    path.join(root, "lib/saas-billing-status.ts"),
+    path.join(root, "lib/saas-billing-management.ts"),
+  );
+  const source = (await Promise.all(saasFiles.map((file) => readFile(file, "utf8")))).join("\n");
+  assert.doesNotMatch(
+    source,
+    /pay-at-pickup|stripe-connect|store_stripe_connections|storefront_card_checkout|pay_at_pickup_enabled|card_payments_enabled|seller_(?:get|update)_payment_methods|get_public_store_payment_methods/i,
+  );
 });

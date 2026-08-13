@@ -58,6 +58,7 @@ function createHarness({
     retry_after_seconds: 0,
   }),
   environment = {},
+  payAtPickupEnabled = true,
 } = {}) {
   const calls = [];
   let emailWorkerCalls = 0;
@@ -72,7 +73,10 @@ function createHarness({
           data: [{
             is_publicly_available: true,
             store_exists: true,
-            storefront: { store_id: STORE_ID },
+            storefront: {
+              store_id: STORE_ID,
+              pay_at_pickup_enabled: payAtPickupEnabled,
+            },
           }],
           error: null,
         };
@@ -319,6 +323,21 @@ test("configured origin is allowed and reflected exactly", async () => {
   assert.equal(
     response.headers.get("access-control-allow-origin"),
     "https://flockfront.test",
+  );
+});
+
+test("a card-only store cannot create a Pay at Pickup order", async () => {
+  const harness = createHarness({ payAtPickupEnabled: false });
+  const response = await harness.handler(requestFor(validPayload()));
+
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), {
+    error: "pay_at_pickup_unavailable",
+    message: "This store does not offer Pay at Pickup.",
+  });
+  assert.deepEqual(
+    harness.calls.map((call) => call.name),
+    ["get_public_storefront_by_slug"],
   );
 });
 
