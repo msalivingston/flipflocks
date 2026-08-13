@@ -88,6 +88,51 @@ async function readyAccount(accountId: string) {
     account.charges_enabled === true && account.payouts_enabled === true;
 }
 
+async function triggerPostmarkEmailWorker(orderId: string): Promise<void> {
+  const workerSecret = Deno.env.get("POSTMARK_WORKER_SECRET")?.trim();
+
+  if (!workerSecret) {
+    console.warn("postmark-email-worker invocation skipped: worker secret is not configured");
+    return;
+  }
+
+  const workerUrl = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/postmark-email-worker`;
+
+  try {
+    const response = await fetch(workerUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${serviceRoleKey}`,
+        "apikey": serviceRoleKey,
+        "x-flockfront-worker-secret": workerSecret,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        batch_size: 10,
+        order_id: orderId,
+        source: "stripe-connect-checkout",
+      }),
+    });
+
+    if (!response.ok) {
+      const responseBody = await response.text().catch(() => "");
+      console.warn(
+        "postmark-email-worker invocation returned non-2xx",
+        JSON.stringify({
+          status: response.status,
+          status_text: response.statusText,
+          response_body: responseBody.slice(0, 2000),
+        }),
+      );
+    }
+  } catch (error) {
+    console.warn(
+      "postmark-email-worker invocation failed",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
 async function settle(session: Stripe.Checkout.Session, accountId: string, outcome: "paid" | "expired") {
   const { data, error } = await service.rpc("settle_storefront_card_checkout", {
     p_stripe_checkout_session_id: session.id,
@@ -100,7 +145,12 @@ async function settle(session: Stripe.Checkout.Session, accountId: string, outco
     p_paid_at: outcome === "paid" ? new Date().toISOString() : null,
   });
   if (error) throw error;
-  return first(data);
+  const result = first(data);
+  const orderId = result?.order_id;
+  if (outcome === "paid" && typeof orderId === "string" && uuid.test(orderId)) {
+    await triggerPostmarkEmailWorker(orderId);
+  }
+  return result;
 }
 
 async function cleanStale(storeId: string) {

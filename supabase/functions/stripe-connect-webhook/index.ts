@@ -19,13 +19,61 @@ function response(status: number, body: Record<string, unknown>) {
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 }
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const stripe = createStripeConnectClient(required("STRIPE_CONNECT_API_KEY"));
 const webhookSecret = required("STRIPE_CONNECT_WEBHOOK_SECRET");
 const livemode = strictBoolean("STRIPE_CONNECT_LIVEMODE");
 const environmentId = required("FLOCKFRONT_ENVIRONMENT_ID");
-const service = createClient(required("SUPABASE_URL"), required("SUPABASE_SERVICE_ROLE_KEY"), {
+const supabaseUrl = required("SUPABASE_URL");
+const serviceRoleKey = required("SUPABASE_SERVICE_ROLE_KEY");
+const service = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
+
+async function triggerPostmarkEmailWorker(orderId: string): Promise<void> {
+  const workerSecret = Deno.env.get("POSTMARK_WORKER_SECRET")?.trim();
+
+  if (!workerSecret) {
+    console.warn("postmark-email-worker invocation skipped: worker secret is not configured");
+    return;
+  }
+
+  const workerUrl = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/postmark-email-worker`;
+
+  try {
+    const response = await fetch(workerUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${serviceRoleKey}`,
+        "apikey": serviceRoleKey,
+        "x-flockfront-worker-secret": workerSecret,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        batch_size: 10,
+        order_id: orderId,
+        source: "stripe-connect-webhook",
+      }),
+    });
+
+    if (!response.ok) {
+      const responseBody = await response.text().catch(() => "");
+      console.warn(
+        "postmark-email-worker invocation returned non-2xx",
+        JSON.stringify({
+          status: response.status,
+          status_text: response.statusText,
+          response_body: responseBody.slice(0, 2000),
+        }),
+      );
+    }
+  } catch (error) {
+    console.warn(
+      "postmark-email-worker invocation failed",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
 
 Deno.serve(async (request) => {
   if (request.method !== "POST") return response(405, { error: "method_not_allowed" });
@@ -96,6 +144,10 @@ Deno.serve(async (request) => {
       p_paid_at: outcome === "paid" ? new Date(event.created * 1000).toISOString() : null,
     });
     if (error || !Array.isArray(data) || !data[0]) throw error ?? new Error("settlement_failed");
+    const orderId = data[0].order_id;
+    if (outcome === "paid" && typeof orderId === "string" && uuid.test(orderId)) {
+      await triggerPostmarkEmailWorker(orderId);
+    }
     return response(200, { received: true });
   } catch (error) {
     console.error("stripe-connect-webhook settlement failed", error instanceof Error ? error.message : "unknown");

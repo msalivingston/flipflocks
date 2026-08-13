@@ -7,6 +7,7 @@ const migration = read("supabase/migrations/20260820100000_sunshine_mesa_stripe_
 const checkout = read("supabase/functions/stripe-connect-checkout/index.ts");
 const webhook = read("supabase/functions/stripe-connect-webhook/index.ts");
 const account = read("supabase/functions/stripe-connect-account/index.ts");
+const emailWorker = read("supabase/functions/postmark-email-worker/index.ts");
 const payAtPickup = read("supabase/functions/pay-at-pickup-order/handler.ts");
 const saasCheckout = read("supabase/functions/stripe-saas-checkout/index.ts");
 const saasWebhook = read("supabase/functions/stripe-saas-webhook/handler.ts");
@@ -52,6 +53,26 @@ test("settlement is idempotent for duplicate webhook and browser/webhook races",
   assert.match(webhook, /duplicate:\s*true/);
   assert.match(checkout, /body\.action === "status"[\s\S]*settle\(session, reservation\.stripe_account_id, "paid"\)/);
   assert.match(webhook, /settle_storefront_card_checkout/);
+});
+
+test("successful card settlement invokes the existing order-scoped email worker", () => {
+  for (const [source, sourceName] of [
+    [checkout, "stripe-connect-checkout"],
+    [webhook, "stripe-connect-webhook"],
+  ]) {
+    assert.match(source, /POSTMARK_WORKER_SECRET/);
+    assert.match(source, /\/functions\/v1\/postmark-email-worker/);
+    assert.match(source, /order_id:\s*orderId/);
+    assert.match(source, new RegExp(`source: "${sourceName}"`));
+    assert.match(source, /outcome === "paid"[\s\S]*await triggerPostmarkEmailWorker\(orderId\)/);
+    assert.doesNotMatch(source, /enqueue_email_notification/);
+  }
+
+  assert.match(checkout, /if \(error\) throw error;[\s\S]*const result = first\(data\);[\s\S]*await triggerPostmarkEmailWorker\(orderId\)/);
+  assert.match(webhook, /if \(error \|\| !Array\.isArray\(data\) \|\| !data\[0\]\)[\s\S]*await triggerPostmarkEmailWorker\(orderId\)/);
+  assert.match(migration, /if v_reservation\.id is null then[\s\S]*return query select 'paid'::text,v_existing_order\.id/);
+  assert.match(emailWorker, /orderScope[\s\S]*claim_phase_1_postmark_email_notifications_for_order/);
+  assert.match(emailWorker, /orderScope[\s\S]*p_order_id:\s*orderScope/);
 });
 
 test("restricted connected accounts fail closed while pickup remains available", () => {
