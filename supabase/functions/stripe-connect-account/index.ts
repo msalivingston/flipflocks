@@ -82,7 +82,7 @@ Deno.serve(async (request) => {
         },
         business_profile: { name: store.store_name },
         metadata: { flockfront_store_id: store.id, schema_version: "ff_connect_account_v1" },
-      }, { idempotencyKey: `ff-connect-account:${livemode}:${store.id}` });
+      }, { idempotencyKey: `ff-connect-account:v2:${livemode}:${store.id}` });
       accountId = account.id;
       const { error } = await service.from("store_stripe_connections")
         .update({ stripe_account_id: accountId }).eq("store_id", store.id)
