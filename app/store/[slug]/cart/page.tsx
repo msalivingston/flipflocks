@@ -68,6 +68,7 @@ export default async function StorefrontCartRoute({
     <StorefrontChrome
       categories={categories}
       orderMode={orderMode}
+      suppressFocusedHeader={Boolean(orderMode)}
       store={store}
     >
       <CartPage orderMode={orderMode} store={store} />

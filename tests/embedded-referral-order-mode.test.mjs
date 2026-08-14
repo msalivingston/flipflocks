@@ -249,11 +249,15 @@ test("focused chrome is compact and omits ordinary navigation and footer", async
 });
 
 test("cart, checkout, and confirmation preserve focused context without changing order creation", async () => {
-  const [cartPage, checkoutPage] = await Promise.all([
+  const [cartRoute, cartPage, checkoutPage, shell] = await Promise.all([
+    read("app/store/[slug]/cart/page.tsx"),
     read("app/store/[slug]/cart/cart-page.tsx"),
     read("app/store/[slug]/checkout/checkout-page.tsx"),
+    read("app/store/[slug]/storefront-shell-components.tsx"),
   ]);
 
+  assert.match(cartRoute, /suppressFocusedHeader=\{Boolean\(orderMode\)\}/);
+  assert.match(shell, /suppressFocusedHeader \? null : \([\s\S]*StorefrontFocusedOrderHeader/);
   assert.match(cartPage, /const checkoutHref = buildEmbeddedOrderModeHref\(/);
   assert.match(cartPage, /const continueHref = buildEmbeddedOrderModeHref\(/);
   assert.match(cartPage, /orderMode \? "Continue Shopping" : "Continue shopping"/);

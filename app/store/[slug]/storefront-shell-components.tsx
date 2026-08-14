@@ -37,6 +37,7 @@ export function StorefrontChrome({
   checkoutMode = false,
   footerVariant = "default",
   orderMode = null,
+  suppressFocusedHeader = false,
   store,
 }: {
   categories: StorefrontCategoryAvailability;
@@ -44,6 +45,7 @@ export function StorefrontChrome({
   checkoutMode?: boolean;
   footerVariant?: "default" | "about";
   orderMode?: EmbeddedOrderModeContext | null;
+  suppressFocusedHeader?: boolean;
   store: StorefrontHome;
 }) {
   const theme = {
@@ -56,7 +58,9 @@ export function StorefrontChrome({
   if (orderMode) {
     return (
       <StorefrontShell theme={theme}>
-        <StorefrontFocusedOrderHeader orderMode={orderMode} store={store} />
+        {suppressFocusedHeader ? null : (
+          <StorefrontFocusedOrderHeader orderMode={orderMode} store={store} />
+        )}
         {children}
       </StorefrontShell>
     );
