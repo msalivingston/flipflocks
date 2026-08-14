@@ -176,6 +176,7 @@ test("category selection and the existing search and filters limit embed listing
       ageFilterDays: [56],
       batchFilters: [{ ageFilterDays: 56, availabilityCode: "ready_now" }],
       breedFilter: "Production Red",
+      eggColorFilter: "Brown",
       href: "/store/sunshine-mesa-farm/products/red",
       price: "From $21.00",
       title: "Production Red",
@@ -185,6 +186,7 @@ test("category selection and the existing search and filters limit embed listing
       availabilityCode: "reserve_now",
       batchFilters: [{ ageFilterDays: 140, availabilityCode: "reserve_now" }],
       breedFilter: "Barred Rock",
+      eggColorFilter: "Blue-green",
       href: "/store/sunshine-mesa-farm/products/rock",
       price: "$15.00",
       title: "Barred Rock",
@@ -230,6 +232,15 @@ test("category selection and the existing search and filters limit embed listing
       })
       .map((card) => card.title),
     ["Production Red"],
+  );
+  assert.deepEqual(
+    listingTabs
+      .filterStorefrontListingCards(liveCards, {
+        ...allFilters,
+        eggColor: "Blue-green",
+      })
+      .map((card) => card.title),
+    ["Barred Rock"],
   );
 });
 
@@ -332,6 +343,7 @@ test("pagination controls are compact and filters reset page membership", async 
     "changeAgeFilter",
     "changeAvailabilityFilter",
     "changeBreedFilter",
+    "changeEggColorFilter",
     "changePriceFilter",
     "changeQuery",
     "changeSpeciesFilter",
