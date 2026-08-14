@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(8);
+select plan(10);
 select set_config('request.jwt.claim.role', 'service_role', true);
 
 insert into auth.users (
@@ -28,20 +28,21 @@ values
 
 insert into public.stores (
   id, owner_user_id, store_name, store_slug, store_status, storefront_mode,
-  storefront_enabled, storefront_visibility, website_url
+  storefront_enabled, storefront_visibility, website_url,
+  pay_at_pickup_enabled, card_payments_enabled
 )
 values
   (
     'e8100000-0000-4000-8000-000000000010',
     'e8100000-0000-4000-8000-000000000001',
     'Public Checkout Farm', 'public-checkout-farm', 'live', 'hosted', true,
-    'public', null
+    'public', null, true, false
   ),
   (
     'e8100000-0000-4000-8000-000000000020',
     'e8100000-0000-4000-8000-000000000002',
     'Embed Checkout Farm', 'embed-checkout-farm', 'live', 'hosted', true,
-    'embed_only', 'https://example.test/shopping'
+    'embed_only', 'https://example.test/shopping', true, true
   );
 
 insert into public.seller_billing_status (
@@ -117,6 +118,24 @@ select is(
   ),
   'e8100000-0000-4000-8000-000000000020',
   'embed-only storefront lookup returns its canonical home payload'
+);
+
+select is(
+  (
+    select storefront ->> 'pay_at_pickup_enabled'
+    from public.get_public_storefront_by_slug('embed-checkout-farm')
+  ),
+  'true',
+  'embed-only storefront payload preserves Pay at Pickup'
+);
+
+select is(
+  (
+    select storefront ->> 'card_payments_enabled'
+    from public.get_public_storefront_by_slug('embed-checkout-farm')
+  ),
+  'true',
+  'embed-only storefront payload exposes enabled card payments to availability checks'
 );
 
 select is(
