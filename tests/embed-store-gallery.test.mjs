@@ -381,8 +381,9 @@ test("the embed reuses storefront controls while omitting storefront chrome and 
   }
   assert.match(
     gallery,
-    /<StorefrontListingTabs[\s\S]*cartHref=\{cartHref\}[\s\S]*embedCartControl=\{[\s\S]*?<StorefrontFocusedOrderActions[\s\S]*?orderMode=\{orderMode\}[\s\S]*sections=\{sections\}[\s\S]*variant="embed"/,
+    /<StorefrontListingTabs[\s\S]*cartHref=\{cartHref\}[\s\S]*cartStoreSlug=\{storeSlug\}[\s\S]*orderMode=\{orderMode\}[\s\S]*sections=\{sections\}[\s\S]*variant="embed"/,
   );
+  assert.match(listingTabs, /<StorefrontFocusedOrderActions[\s\S]*cartHref=\{cartHref\}/);
   assert.match(listingTabs, /target=\{isEmbed \? "_top" : undefined\}/);
   assert.doesNotMatch(listingTabs, /target=\{isEmbed \? "_blank" : undefined\}/);
   assert.doesNotMatch(listingTabs, /rel=\{isEmbed \? "noopener noreferrer" : undefined\}/);
@@ -608,6 +609,9 @@ async function loadListingTabsModule() {
   return loadTypeScriptModule(listingTabsPath, {
     "./storefront-category-symbols": {},
     "./storefront-fonts": {},
+    "./storefront-header-cart-link": {
+      StorefrontFocusedOrderActions: () => null,
+    },
     "./storefront-ui": {},
     "@/lib/embedded-order-mode": {
       buildEmbeddedOrderModeHref: (href) => href,

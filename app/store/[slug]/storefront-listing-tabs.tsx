@@ -24,6 +24,7 @@ import {
   buildEmbeddedOrderModeHref,
   type EmbeddedOrderModeContext,
 } from "@/lib/embedded-order-mode";
+import { StorefrontFocusedOrderActions } from "./storefront-header-cart-link";
 
 export type StorefrontListingCard = {
   ageFilterDays?: number[];
@@ -91,14 +92,12 @@ export function paginateStorefrontListingCards(
 export function StorefrontListingTabs({
   cartHref,
   cartStoreSlug,
-  embedCartControl,
   orderMode = null,
   sections,
   variant = "storefront",
 }: {
   cartHref?: string;
   cartStoreSlug?: string;
-  embedCartControl?: React.ReactNode;
   orderMode?: EmbeddedOrderModeContext | null;
   sections: StorefrontListingSection[];
   variant?: "embed" | "storefront";
@@ -420,7 +419,12 @@ export function StorefrontListingTabs({
             );
           })}
           </div>
-          {isEmbed ? embedCartControl : null}
+          {isEmbed && cartHref && cartStoreSlug ? (
+            <StorefrontFocusedOrderActions
+              cartHref={cartHref}
+              storeSlug={cartStoreSlug}
+            />
+          ) : null}
         </div>
       </div>
 
