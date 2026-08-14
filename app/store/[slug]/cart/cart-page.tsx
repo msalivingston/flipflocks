@@ -49,7 +49,10 @@ export function CartPage({
 
   const items = cart?.items ?? emptyItems;
   const summary = useMemo(() => summarizeStorefrontCart(items), [items]);
-  const continueHref = orderMode?.returnUrl ?? `/store/${store.store_slug}`;
+  const continueHref = buildEmbeddedOrderModeHref(
+    `/store/${store.store_slug}`,
+    orderMode,
+  );
   const continueLabel = orderMode ? "Continue Shopping" : "Continue shopping";
   const checkoutHref = buildEmbeddedOrderModeHref(
     `/store/${store.store_slug}/checkout`,
