@@ -24,6 +24,7 @@ import {
   buildEmbeddedOrderModeHref,
   type EmbeddedOrderModeContext,
 } from "@/lib/embedded-order-mode";
+import { StorefrontFocusedOrderActions } from "./storefront-header-cart-link";
 
 export type StorefrontListingCard = {
   ageFilterDays?: number[];
@@ -88,10 +89,14 @@ export function paginateStorefrontListingCards(
 }
 
 export function StorefrontListingTabs({
+  cartHref,
+  cartStoreSlug,
   orderMode = null,
   sections,
   variant = "storefront",
 }: {
+  cartHref?: string;
+  cartStoreSlug?: string;
   orderMode?: EmbeddedOrderModeContext | null;
   sections: StorefrontListingSection[];
   variant?: "embed" | "storefront";
@@ -353,16 +358,17 @@ export function StorefrontListingTabs({
         >
           Shop
         </h2>
-        <div
-          aria-label="Storefront listing categories"
-          className={cx(
-            "hidden gap-2",
-            isEmbed
-              ? "sm:flex sm:flex-wrap"
-              : "border-b border-[#ddd5c7] lg:grid lg:grid-cols-4",
-          )}
-          role="tablist"
-        >
+        <div className={isEmbed ? "flex items-center justify-between gap-2" : undefined}>
+          <div
+            aria-label="Storefront listing categories"
+            className={cx(
+              "hidden gap-2",
+              isEmbed
+                ? "sm:flex sm:flex-wrap"
+                : "border-b border-[#ddd5c7] lg:grid lg:grid-cols-4",
+            )}
+            role="tablist"
+          >
           {sections.map((section) => {
             const active = section.id === activeSection.id;
 
@@ -390,6 +396,13 @@ export function StorefrontListingTabs({
               </button>
             );
           })}
+          </div>
+          {isEmbed && cartHref && cartStoreSlug ? (
+            <StorefrontFocusedOrderActions
+              cartHref={cartHref}
+              storeSlug={cartStoreSlug}
+            />
+          ) : null}
         </div>
       </div>
 
