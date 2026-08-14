@@ -384,8 +384,7 @@ test("pagination controls are compact and filters reset page membership", async 
 });
 
 test("Egg Color uses the shared hosted and embedded filter UI only when data exists", async () => {
-  const [gallery, listingCards, listingTabs] = await Promise.all([
-    read(galleryPath),
+  const [listingCards, listingTabs] = await Promise.all([
     read(listingCardsPath),
     read(listingTabsPath),
   ]);
@@ -402,11 +401,33 @@ test("Egg Color uses the shared hosted and embedded filter UI only when data exi
     2,
     "mobile and desktop shared filter panels",
   );
-  assert.doesNotMatch(gallery, /Cart|cartHref|cartStoreSlug/);
+});
+
+test("embedded View Cart reuses focused context and top-level navigation without cart state", async () => {
+  const [gallery, listingTabs] = await Promise.all([
+    read(galleryPath),
+    read(listingTabsPath),
+  ]);
+
+  assert.doesNotMatch(gallery, /cartHref|cartStoreSlug/);
   assert.doesNotMatch(
     listingTabs,
-    /StorefrontFocusedOrderActions|cartHref|cartStoreSlug/,
+    /StorefrontFocusedOrderActions|useStorefrontCartCount|readStorefrontCart|storefrontCartChangedEvent|localStorage/,
   );
+  assert.match(
+    listingTabs,
+    /const cartHref =\s*isEmbed && orderMode\s*\? buildEmbeddedOrderModeHref\(\s*`\/store\/\$\{orderMode\.storeSlug\}\/cart`,\s*orderMode,\s*\)\s*: null/,
+  );
+  assert.match(listingTabs, /View Cart\s*<\/Link>/);
+  assert.match(
+    listingTabs,
+    /href=\{cartHref\}[\s\S]*?target=\{isEmbed \? "_top" : undefined\}/,
+  );
+  assert.match(
+    listingTabs,
+    /isEmbed\s*\? "grid-cols-\[minmax\(0,1fr\)_auto\] items-center"/,
+  );
+  assert.match(listingTabs, /className="col-start-2 row-start-1[^"\n]*"/);
   assert.match(listingTabs, /target=\{isEmbed \? "_top" : undefined\}/);
 });
 
@@ -427,7 +448,6 @@ test("the embed reuses storefront controls while omitting storefront chrome and 
     "about_text",
     "Dashboard",
     "Login",
-    "Cart",
     "<header",
     "<nav",
     "<footer",

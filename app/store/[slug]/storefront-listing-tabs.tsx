@@ -13,6 +13,7 @@ import {
   AvailabilityBadge,
   EmptyStorefront,
   ListingPhoto,
+  StorefrontGlyph,
   cx,
 } from "./storefront-ui";
 import { storefrontSerifClass } from "./storefront-fonts";
@@ -98,6 +99,13 @@ export function StorefrontListingTabs({
   variant?: "embed" | "storefront";
 }) {
   const isEmbed = variant === "embed";
+  const cartHref =
+    isEmbed && orderMode
+      ? buildEmbeddedOrderModeHref(
+          `/store/${orderMode.storeSlug}/cart`,
+          orderMode,
+        )
+      : null;
   const [activeId, setActiveId] = useState(sections[0]?.id ?? "");
   const [ageFilter, setAgeFilter] = useState("all");
   const [availabilityFilter, setAvailabilityFilter] = useState("all");
@@ -362,7 +370,7 @@ export function StorefrontListingTabs({
         className={cx(
           "grid min-w-0 gap-3",
           isEmbed
-            ? "lg:items-end"
+            ? "grid-cols-[minmax(0,1fr)_auto] items-center"
             : "lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-end",
         )}
       >
@@ -414,6 +422,17 @@ export function StorefrontListingTabs({
             );
           })}
         </div>
+        {cartHref ? (
+          <Link
+            aria-label="View Cart"
+            className="col-start-2 row-start-1 inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 justify-self-end rounded-md border border-[#cfc6b7] bg-white px-3 text-xs font-bold text-[#24512f] shadow-[0_1px_2px_rgba(41,37,36,0.05)] transition hover:border-[#24512f] hover:bg-[#f8f3ea] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 sm:text-sm lg:min-h-11"
+            href={cartHref}
+            target={isEmbed ? "_top" : undefined}
+          >
+            <StorefrontGlyph className="h-4 w-4" src="/glyphs/cart.png" />
+            View Cart
+          </Link>
+        ) : null}
       </div>
 
       <div className={isEmbed ? "min-[975px]:hidden" : "lg:hidden"}>
