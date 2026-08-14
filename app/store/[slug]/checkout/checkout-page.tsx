@@ -392,7 +392,7 @@ export function CheckoutPage({
         ? "Continue to review"
         : isSubmitting
           ? paymentMethod === "stripe_checkout" ? "Opening Stripe..." : "Placing order..."
-          : paymentMethod === "stripe_checkout" ? "Pay Now by Card" : "Place order";
+          : paymentMethod === "stripe_checkout" ? "Continue to secure payment" : "Place order";
   const activeStepAction =
     activeStep === "contact"
       ? handleContactContinue
@@ -1146,7 +1146,7 @@ export function CheckoutPage({
               >
                 {isSubmitting
                   ? paymentMethod === "stripe_checkout" ? "Opening Stripe..." : "Placing order..."
-                  : paymentMethod === "stripe_checkout" ? "Pay Now by Card" : "Place order"}
+                  : paymentMethod === "stripe_checkout" ? "Continue to secure payment" : "Place order"}
               </StorefrontButton>
             </div>
           </MobileCheckoutStep>
@@ -1447,7 +1447,7 @@ export function CheckoutPage({
               >
                 {isSubmitting
                   ? paymentMethod === "stripe_checkout" ? "Opening Stripe..." : "Placing order..."
-                  : paymentMethod === "stripe_checkout" ? "Pay Now by Card" : "Place order"}
+                  : paymentMethod === "stripe_checkout" ? "Continue to secure payment" : "Place order"}
               </StorefrontButton>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <StorefrontButton
@@ -1889,16 +1889,16 @@ function PaymentChoice({
   paymentMethod: PaymentMethod;
 }) {
   return (
-    <fieldset className="rounded-lg border border-[#e7decd] bg-white p-3">
-      <legend className="px-1 text-sm font-bold text-stone-950">Payment</legend>
-      <div className="grid gap-2 sm:grid-cols-2">
+    <fieldset className="mt-5">
+      <legend className="text-sm font-bold text-stone-950">Payment method</legend>
+      <div className="mt-2 grid gap-2">
         {cardPaymentsEnabled ? (
           <label
             className={cx(
-              "flex gap-2 rounded-md border p-3 text-sm",
+              "flex w-full gap-2 rounded-md border p-3 text-sm",
               cardPaymentsAvailable && paymentMethod === "stripe_checkout"
                 ? "border-emerald-700 bg-emerald-50"
-                : "border-stone-200",
+                : "border-[#ded7c8] bg-white",
               cardPaymentsAvailable
                 ? "cursor-pointer"
                 : "cursor-not-allowed bg-stone-50 opacity-75",
@@ -1909,19 +1909,20 @@ function PaymentChoice({
                 cardPaymentsAvailable && paymentMethod === "stripe_checkout"
               }
               disabled={!cardPaymentsAvailable}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-800"
               name="paymentMethod"
               onChange={() => onChange("stripe_checkout")}
               type="radio"
             />
             <span>
               <span className="block font-semibold text-stone-950">
-                Pay Now by Card
+                Pay now by card
               </span>
-              <span className="text-stone-600">
+              <span className="block text-stone-600">
                 {!cardAvailabilityChecked
                   ? "Checking Stripe availability…"
                   : cardPaymentsAvailable
-                    ? "Secure Stripe Checkout"
+                    ? "Secure checkout with Stripe"
                     : "Online payment is temporarily unavailable"}
               </span>
             </span>
@@ -1930,14 +1931,15 @@ function PaymentChoice({
         {payAtPickupEnabled ? (
           <label
             className={cx(
-              "flex cursor-pointer gap-2 rounded-md border p-3 text-sm",
+              "flex w-full cursor-pointer gap-2 rounded-md border p-3 text-sm",
               paymentMethod === "pay_at_pickup"
                 ? "border-emerald-700 bg-emerald-50"
-                : "border-stone-200",
+                : "border-[#ded7c8] bg-white",
             )}
           >
             <input
               checked={paymentMethod === "pay_at_pickup"}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-800"
               name="paymentMethod"
               onChange={() => onChange("pay_at_pickup")}
               type="radio"
@@ -1946,8 +1948,8 @@ function PaymentChoice({
               <span className="block font-semibold text-stone-950">
                 Pay at Pickup
               </span>
-              <span className="text-stone-600">
-                Arrange payment with the seller
+              <span className="block text-stone-600">
+                Arrange payment directly with the seller
               </span>
             </span>
           </label>
