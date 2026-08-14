@@ -62,16 +62,16 @@ export function HatchInformationCard({
     return (
       <div className="space-y-5 sm:space-y-0">
         <div className="max-sm:pr-24">
-          <p className="text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">
+          <p className="text-base font-bold text-stone-950 sm:text-lg sm:font-semibold">
             When did these birds hatch?
           </p>
-          <p className="mt-2 text-base leading-7 text-stone-600">
+          <p className="mt-2 text-base leading-7 text-stone-600 sm:hidden">
             {introText ??
               "All birds added here should share the same hatch date. Start a separate listing for birds from another hatch."}
           </p>
         </div>
         <div
-          className={`grid gap-5 ${
+          className={`grid gap-5 sm:mt-4 ${
             desktopPanelMode
               ? "lg:grid-cols-[0.9fr_1fr_1.25fr] lg:[&>label>span:first-child]:whitespace-nowrap"
               : "lg:grid-cols-3"
