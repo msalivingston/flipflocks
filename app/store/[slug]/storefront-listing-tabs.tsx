@@ -1264,7 +1264,6 @@ function ListingCard({
       <Link
         className="grid min-w-0 grid-cols-[42%_minmax(0,1fr)] gap-2 p-2 focus:outline-none focus:ring-2 focus:ring-emerald-700 lg:hidden"
         href={href}
-        target={isEmbed ? "_top" : undefined}
       >
         <div className="relative overflow-hidden rounded-md">
           <ListingPhoto alt={card.imageAlt} aspect="square" src={card.imageUrl} />
@@ -1308,7 +1307,6 @@ function ListingCard({
       <Link
         className="hidden flex-col focus:outline-none focus:ring-2 focus:ring-emerald-700 lg:flex"
         href={href}
-        target={isEmbed ? "_top" : undefined}
       >
         <div className="px-3.5 pb-2 pt-3 lg:px-4 lg:pb-2.5 lg:pt-4">
           <p className="storefront-primary-color truncate text-[0.7rem] font-bold uppercase tracking-[0.08em] text-emerald-700">
