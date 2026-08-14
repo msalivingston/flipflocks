@@ -35,6 +35,7 @@ export type StorefrontListingCard = {
   conditionFilter?: string | null;
   description: string | null;
   detail: string;
+  eggColorFilter?: string | null;
   href: string;
   imageAlt: string;
   imageUrl: string | null;
@@ -101,6 +102,7 @@ export function StorefrontListingTabs({
   const [ageFilter, setAgeFilter] = useState("all");
   const [availabilityFilter, setAvailabilityFilter] = useState("all");
   const [breedFilter, setBreedFilter] = useState("all");
+  const [eggColorFilter, setEggColorFilter] = useState("all");
   const [priceFilter, setPriceFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [requestedPage, setRequestedPage] = useState(1);
@@ -118,11 +120,18 @@ export function StorefrontListingTabs({
   const showSpeciesFilter = activeSection?.id !== "equipment-supplies";
   const showBreedFilter =
     activeSection?.id === "live-poultry" || activeSection?.id === "hatching-eggs";
+  const showEggColorFilter = showBreedFilter && (activeSection?.cards ?? []).some(
+    (card) => card.eggColorFilter,
+  );
   const showAvailabilityFilter = activeSection?.id !== "equipment-supplies";
   const showCategoryFilter = activeSection?.id === "equipment-supplies";
   const showConditionFilter = activeSection?.id === "equipment-supplies";
   const breedOptions = useMemo(
     () => buildBreedOptions(activeSection?.cards ?? []),
+    [activeSection],
+  );
+  const eggColorOptions = useMemo(
+    () => buildEggColorOptions(activeSection?.cards ?? []),
     [activeSection],
   );
   const categoryOptions = useMemo(
@@ -143,6 +152,7 @@ export function StorefrontListingTabs({
         availability: showAvailabilityFilter ? availabilityFilter : "all",
         age: showAgeFilter ? ageFilter : "all",
         breed: showBreedFilter ? breedFilter : "all",
+        eggColor: showEggColorFilter ? eggColorFilter : "all",
         category: showCategoryFilter ? speciesFilter : "all",
         condition: showConditionFilter ? breedFilter : "all",
         price: priceFilter,
@@ -154,11 +164,13 @@ export function StorefrontListingTabs({
       ageFilter,
       availabilityFilter,
       breedFilter,
+      eggColorFilter,
       priceFilter,
       query,
       showAgeFilter,
       showAvailabilityFilter,
       showBreedFilter,
+      showEggColorFilter,
       showCategoryFilter,
       showConditionFilter,
       showSpeciesFilter,
@@ -169,6 +181,7 @@ export function StorefrontListingTabs({
     ageFilter !== "all" ||
     availabilityFilter !== "all" ||
     breedFilter !== "all" ||
+    eggColorFilter !== "all" ||
     priceFilter !== "all" ||
     query.trim() !== "" ||
     speciesFilter !== "all";
@@ -184,12 +197,14 @@ export function StorefrontListingTabs({
     age: ageFilter,
     availability: availabilityFilter,
     breed: breedFilter,
+    eggColor: eggColorFilter,
     condition: breedFilter,
     price: priceFilter,
     query,
     showAgeFilter,
     showAvailabilityFilter,
     showBreedFilter,
+    showEggColorFilter,
     showCategoryFilter,
     showConditionFilter,
     showSpeciesFilter,
@@ -219,6 +234,7 @@ export function StorefrontListingTabs({
       setAgeFilter("all");
       setAvailabilityFilter("all");
       setBreedFilter("all");
+      setEggColorFilter("all");
       setPriceFilter("all");
       setQuery("");
       setRequestedPage(1);
@@ -281,6 +297,7 @@ export function StorefrontListingTabs({
     setAgeFilter("all");
     setAvailabilityFilter("all");
     setBreedFilter("all");
+    setEggColorFilter("all");
     setPriceFilter("all");
     setQuery("");
     setRequestedPage(1);
@@ -294,6 +311,7 @@ export function StorefrontListingTabs({
     setAgeFilter("all");
     setAvailabilityFilter("all");
     setBreedFilter("all");
+    setEggColorFilter("all");
     setPriceFilter("all");
     setQuery("");
     setRequestedPage(1);
@@ -312,6 +330,11 @@ export function StorefrontListingTabs({
 
   function changeBreedFilter(value: string) {
     setBreedFilter(value);
+    setRequestedPage(1);
+  }
+
+  function changeEggColorFilter(value: string) {
+    setEggColorFilter(value);
     setRequestedPage(1);
   }
 
@@ -530,12 +553,15 @@ export function StorefrontListingTabs({
                   showAgeFilter={showAgeFilter}
                   showAvailabilityFilter={showAvailabilityFilter}
                   showBreedFilter={showBreedFilter}
+                  showEggColorFilter={showEggColorFilter}
                   showCategoryFilter={showCategoryFilter}
                   showConditionFilter={showConditionFilter}
                   showSpeciesFilter={showSpeciesFilter}
                   availability={availabilityFilter}
                   breed={breedFilter}
                   breedOptions={breedOptions}
+                  eggColor={eggColorFilter}
+                  eggColorOptions={eggColorOptions}
                   category={speciesFilter}
                   categoryOptions={categoryOptions}
                   condition={breedFilter}
@@ -548,6 +574,7 @@ export function StorefrontListingTabs({
                   onAgeChange={changeAgeFilter}
                   onAvailabilityChange={changeAvailabilityFilter}
                   onBreedChange={changeBreedFilter}
+                  onEggColorChange={changeEggColorFilter}
                   onPriceChange={changePriceFilter}
                   onQueryChange={changeQuery}
                   onReset={resetFilters}
@@ -620,12 +647,15 @@ export function StorefrontListingTabs({
               showAgeFilter={showAgeFilter}
               showAvailabilityFilter={showAvailabilityFilter}
               showBreedFilter={showBreedFilter}
+              showEggColorFilter={showEggColorFilter}
               showCategoryFilter={showCategoryFilter}
               showConditionFilter={showConditionFilter}
               showSpeciesFilter={showSpeciesFilter}
               availability={availabilityFilter}
               breed={breedFilter}
               breedOptions={breedOptions}
+              eggColor={eggColorFilter}
+              eggColorOptions={eggColorOptions}
               category={speciesFilter}
               categoryOptions={categoryOptions}
               condition={breedFilter}
@@ -638,6 +668,7 @@ export function StorefrontListingTabs({
               onAgeChange={changeAgeFilter}
               onAvailabilityChange={changeAvailabilityFilter}
               onBreedChange={changeBreedFilter}
+              onEggColorChange={changeEggColorFilter}
               onPriceChange={changePriceFilter}
               onQueryChange={changeQuery}
               onReset={resetFilters}
@@ -911,12 +942,14 @@ function buildActiveFilterLabels({
   age,
   availability,
   breed,
+  eggColor,
   condition,
   price,
   query,
   showAgeFilter,
   showAvailabilityFilter,
   showBreedFilter,
+  showEggColorFilter,
   showCategoryFilter,
   showConditionFilter,
   showSpeciesFilter,
@@ -925,12 +958,14 @@ function buildActiveFilterLabels({
   age: string;
   availability: string;
   breed: string;
+  eggColor: string;
   condition: string;
   price: string;
   query: string;
   showAgeFilter: boolean;
   showAvailabilityFilter: boolean;
   showBreedFilter: boolean;
+  showEggColorFilter: boolean;
   showCategoryFilter: boolean;
   showConditionFilter: boolean;
   showSpeciesFilter: boolean;
@@ -941,6 +976,7 @@ function buildActiveFilterLabels({
     showSpeciesFilter && species !== "all" ? `Species: ${species}` : null,
     showCategoryFilter && species !== "all" ? `Category: ${species}` : null,
     showBreedFilter && breed !== "all" ? `Breed: ${breed}` : null,
+    showEggColorFilter && eggColor !== "all" ? `Egg Color: ${eggColor}` : null,
     showConditionFilter && condition !== "all" ? `Condition: ${condition}` : null,
     showAgeFilter && age !== "all" ? `Age: ${formatFilterLabel(age, ageRangeOptions)}` : null,
     showAvailabilityFilter && availability !== "all"
@@ -960,10 +996,13 @@ function ListingFilters({
   className,
   condition,
   conditionOptions,
+  eggColor,
+  eggColorOptions,
   hasActiveFilters,
   onAgeChange,
   onAvailabilityChange,
   onBreedChange,
+  onEggColorChange,
   onPriceChange,
   onQueryChange,
   onReset,
@@ -973,6 +1012,7 @@ function ListingFilters({
   showAgeFilter,
   showAvailabilityFilter,
   showBreedFilter,
+  showEggColorFilter,
   showCategoryFilter,
   showConditionFilter,
   showSpeciesFilter,
@@ -988,10 +1028,13 @@ function ListingFilters({
   className?: string;
   condition: string;
   conditionOptions: string[];
+  eggColor: string;
+  eggColorOptions: string[];
   hasActiveFilters: boolean;
   onAgeChange: (value: string) => void;
   onAvailabilityChange: (value: string) => void;
   onBreedChange: (value: string) => void;
+  onEggColorChange: (value: string) => void;
   onPriceChange: (value: string) => void;
   onQueryChange: (value: string) => void;
   onReset: () => void;
@@ -1001,6 +1044,7 @@ function ListingFilters({
   showAgeFilter: boolean;
   showAvailabilityFilter: boolean;
   showBreedFilter: boolean;
+  showEggColorFilter: boolean;
   showCategoryFilter: boolean;
   showConditionFilter: boolean;
   showSpeciesFilter: boolean;
@@ -1074,6 +1118,21 @@ function ListingFilters({
             options={[
               { label: "All breeds", value: "all" },
               ...breedOptions.map((option) => ({
+                label: option,
+                value: option,
+              })),
+            ]}
+          />
+        ) : null}
+
+        {showEggColorFilter ? (
+          <FilterSelect
+            label="Egg Color"
+            value={eggColor}
+            onChange={onEggColorChange}
+            options={[
+              { label: "All egg colors", value: "all" },
+              ...eggColorOptions.map((option) => ({
                 label: option,
                 value: option,
               })),
@@ -1291,6 +1350,10 @@ function buildBreedOptions(cards: StorefrontListingCard[]) {
   return buildFilterOptions(cards.map((card) => card.breedFilter));
 }
 
+function buildEggColorOptions(cards: StorefrontListingCard[]) {
+  return buildFilterOptions(cards.map((card) => card.eggColorFilter));
+}
+
 function buildCategoryOptions(cards: StorefrontListingCard[]) {
   return buildFilterOptions(cards.map((card) => card.categoryFilter));
 }
@@ -1325,6 +1388,7 @@ export function filterStorefrontListingCards(
     breed: string;
     category: string;
     condition: string;
+    eggColor: string;
     price: string;
     query: string;
     species: string;
@@ -1358,6 +1422,14 @@ export function filterStorefrontListingCards(
       filters.breed !== "all" &&
       normalizeFilterValue(card.breedFilter ?? card.title) !==
         normalizeFilterValue(filters.breed)
+    ) {
+      return false;
+    }
+
+    if (
+      filters.eggColor !== "all" &&
+      normalizeFilterValue(card.eggColorFilter ?? "") !==
+        normalizeFilterValue(filters.eggColor)
     ) {
       return false;
     }

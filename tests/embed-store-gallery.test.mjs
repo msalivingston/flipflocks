@@ -176,6 +176,7 @@ test("category selection and the existing search and filters limit embed listing
       ageFilterDays: [56],
       batchFilters: [{ ageFilterDays: 56, availabilityCode: "ready_now" }],
       breedFilter: "Production Red",
+      eggColorFilter: "Brown",
       href: "/store/sunshine-mesa-farm/products/red",
       price: "From $21.00",
       title: "Production Red",
@@ -185,6 +186,7 @@ test("category selection and the existing search and filters limit embed listing
       availabilityCode: "reserve_now",
       batchFilters: [{ ageFilterDays: 140, availabilityCode: "reserve_now" }],
       breedFilter: "Barred Rock",
+      eggColorFilter: "Blue-green",
       href: "/store/sunshine-mesa-farm/products/rock",
       price: "$15.00",
       title: "Barred Rock",
@@ -230,6 +232,36 @@ test("category selection and the existing search and filters limit embed listing
       })
       .map((card) => card.title),
     ["Production Red"],
+  );
+  assert.deepEqual(
+    listingTabs
+      .filterStorefrontListingCards(liveCards, {
+        ...allFilters,
+        eggColor: "blue-GREEN",
+      })
+      .map((card) => card.title),
+    ["Barred Rock"],
+  );
+});
+
+test("product cards reuse public egg color data and omit missing values", async () => {
+  const listingCards = await loadListingCardsModule();
+  const sections = listingCards.buildStorefrontListingSections({
+    equipment: [],
+    hatchingEggProducts: [],
+    livePoultryProducts: [
+      { ...product("blue-layer", "listing_inventory"), eggColor: "Blue" },
+      { ...product("unlisted-layer", "listing_inventory"), eggColor: null },
+    ],
+    processedPoultry: [],
+  });
+
+  assert.deepEqual(
+    sections[0].cards.map((card) => [card.title, card.eggColorFilter]),
+    [
+      ["blue-layer", "Blue"],
+      ["unlisted-layer", null],
+    ],
   );
 });
 
@@ -332,6 +364,7 @@ test("pagination controls are compact and filters reset page membership", async 
     "changeAgeFilter",
     "changeAvailabilityFilter",
     "changeBreedFilter",
+    "changeEggColorFilter",
     "changePriceFilter",
     "changeQuery",
     "changeSpeciesFilter",
@@ -342,6 +375,39 @@ test("pagination controls are compact and filters reset page membership", async 
       handler,
     );
   }
+
+  assert.equal(
+    listingTabs.match(/setEggColorFilter\("all"\)/g)?.length,
+    3,
+    "hash/category changes and Reset all clear Egg Color",
+  );
+});
+
+test("Egg Color uses the shared hosted and embedded filter UI only when data exists", async () => {
+  const [gallery, listingCards, listingTabs] = await Promise.all([
+    read(galleryPath),
+    read(listingCardsPath),
+    read(listingTabsPath),
+  ]);
+
+  assert.match(listingCards, /eggColorFilter: product\.eggColor/);
+  assert.match(
+    listingTabs,
+    /const showEggColorFilter = showBreedFilter[\s\S]*?some\([\s\S]*?card\.eggColorFilter/,
+  );
+  assert.match(listingTabs, /label="Egg Color"/);
+  assert.match(listingTabs, /Egg Color: \$\{eggColor\}/);
+  assert.equal(
+    listingTabs.match(/showEggColorFilter=\{showEggColorFilter\}/g)?.length,
+    2,
+    "mobile and desktop shared filter panels",
+  );
+  assert.doesNotMatch(gallery, /Cart|cartHref|cartStoreSlug/);
+  assert.doesNotMatch(
+    listingTabs,
+    /StorefrontFocusedOrderActions|cartHref|cartStoreSlug/,
+  );
+  assert.match(listingTabs, /target=\{isEmbed \? "_top" : undefined\}/);
 });
 
 test("the embed reuses storefront controls while omitting storefront chrome and private seller fields", async () => {
@@ -691,6 +757,7 @@ function clearedFilters() {
     breed: "all",
     category: "all",
     condition: "all",
+    eggColor: "all",
     price: "all",
     query: "",
     species: "all",

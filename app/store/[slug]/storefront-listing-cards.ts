@@ -195,6 +195,7 @@ function toProductCard(product: StorefrontProduct): StorefrontListingCard {
     breedFilter: product.name,
     description: product.description,
     detail: product.quantityLabel,
+    eggColorFilter: product.eggColor,
     href: requirePublicListingPath({
       listingType:
         product.productSource === "hatching_egg_inventory"
