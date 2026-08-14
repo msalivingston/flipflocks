@@ -59,11 +59,7 @@ export default async function EmbeddedStoreInventoryPage({
 
   return (
     <EmbedFrame>
-      <EmbedInventoryGallery
-        orderMode={orderMode}
-        sections={visibleSections}
-        storeSlug={storeResult.data.store_slug}
-      />
+      <EmbedInventoryGallery orderMode={orderMode} sections={visibleSections} />
     </EmbedFrame>
   );
 }

@@ -93,7 +93,6 @@ function StorefrontFocusedOrderHeader({
         <a
           className="storefront-primary-color inline-flex min-h-10 items-center rounded-md pr-3 text-sm font-bold text-[#073f1e] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
           href={orderMode.returnUrl}
-          target="_top"
         >
           <span aria-hidden="true" className="mr-1.5 text-xl leading-none">
             ←

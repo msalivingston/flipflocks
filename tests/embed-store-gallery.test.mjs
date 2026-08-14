@@ -176,7 +176,6 @@ test("category selection and the existing search and filters limit embed listing
       ageFilterDays: [56],
       batchFilters: [{ ageFilterDays: 56, availabilityCode: "ready_now" }],
       breedFilter: "Production Red",
-      eggColorFilter: "Brown",
       href: "/store/sunshine-mesa-farm/products/red",
       price: "From $21.00",
       title: "Production Red",
@@ -186,7 +185,6 @@ test("category selection and the existing search and filters limit embed listing
       availabilityCode: "reserve_now",
       batchFilters: [{ ageFilterDays: 140, availabilityCode: "reserve_now" }],
       breedFilter: "Barred Rock",
-      eggColorFilter: "Blue-green",
       href: "/store/sunshine-mesa-farm/products/rock",
       price: "$15.00",
       title: "Barred Rock",
@@ -232,15 +230,6 @@ test("category selection and the existing search and filters limit embed listing
       })
       .map((card) => card.title),
     ["Production Red"],
-  );
-  assert.deepEqual(
-    listingTabs
-      .filterStorefrontListingCards(liveCards, {
-        ...allFilters,
-        eggColor: "Blue-green",
-      })
-      .map((card) => card.title),
-    ["Barred Rock"],
   );
 });
 
@@ -343,7 +332,6 @@ test("pagination controls are compact and filters reset page membership", async 
     "changeAgeFilter",
     "changeAvailabilityFilter",
     "changeBreedFilter",
-    "changeEggColorFilter",
     "changePriceFilter",
     "changeQuery",
     "changeSpeciesFilter",
@@ -373,6 +361,7 @@ test("the embed reuses storefront controls while omitting storefront chrome and 
     "about_text",
     "Dashboard",
     "Login",
+    "Cart",
     "<header",
     "<nav",
     "<footer",
@@ -381,10 +370,9 @@ test("the embed reuses storefront controls while omitting storefront chrome and 
   }
   assert.match(
     gallery,
-    /<StorefrontListingTabs[\s\S]*cartHref=\{cartHref\}[\s\S]*cartStoreSlug=\{storeSlug\}[\s\S]*orderMode=\{orderMode\}[\s\S]*sections=\{sections\}[\s\S]*variant="embed"/,
+    /<StorefrontListingTabs[\s\S]*orderMode=\{orderMode\}[\s\S]*sections=\{sections\}[\s\S]*variant="embed"/,
   );
-  assert.match(listingTabs, /<StorefrontFocusedOrderActions[\s\S]*cartHref=\{cartHref\}/);
-  assert.doesNotMatch(listingTabs, /target=\{isEmbed \? "_top" : undefined\}/);
+  assert.match(listingTabs, /target=\{isEmbed \? "_top" : undefined\}/);
   assert.doesNotMatch(listingTabs, /target=\{isEmbed \? "_blank" : undefined\}/);
   assert.doesNotMatch(listingTabs, /rel=\{isEmbed \? "noopener noreferrer" : undefined\}/);
   assert.match(listingTabs, /const actionLabel = "View"/);
@@ -609,9 +597,6 @@ async function loadListingTabsModule() {
   return loadTypeScriptModule(listingTabsPath, {
     "./storefront-category-symbols": {},
     "./storefront-fonts": {},
-    "./storefront-header-cart-link": {
-      StorefrontFocusedOrderActions: () => null,
-    },
     "./storefront-ui": {},
     "@/lib/embedded-order-mode": {
       buildEmbeddedOrderModeHref: (href) => href,

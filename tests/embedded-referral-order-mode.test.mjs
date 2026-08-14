@@ -145,23 +145,6 @@ test("validated context is appended to every embedded listing route family", () 
     assert.equal(parsed.searchParams.get("return"), safeReturn);
   }
 
-  const embeddedStorefrontHref = buildEmbeddedOrderModeHref(
-    "/embed/store/sunshine-mesa-farm",
-    context,
-  );
-  const embeddedStorefrontUrl = new URL(
-    embeddedStorefrontHref,
-    "https://www.flockfront.com",
-  );
-
-  assert.equal(
-    embeddedStorefrontUrl.pathname,
-    "/embed/store/sunshine-mesa-farm",
-  );
-  assert.equal(embeddedStorefrontUrl.searchParams.get("orderMode"), "embed");
-  assert.equal(embeddedStorefrontUrl.searchParams.get("return"), safeReturn);
-  assert.notEqual(embeddedStorefrontUrl.pathname, "/store/sunshine-mesa-farm");
-
   assert.equal(
     buildEmbeddedOrderModeHref(
       "/store/another-farm/products/product-1",
@@ -257,7 +240,6 @@ test("focused chrome is compact and omits ordinary navigation and footer", async
   assert.match(source, /if \(orderMode\)[\s\S]*StorefrontFocusedOrderHeader/);
   assert.match(source, /Back to \{store\.store_name\}/);
   assert.match(source, /href=\{orderMode\.returnUrl\}/);
-  assert.match(source, /href=\{orderMode\.returnUrl\}[\s\S]*target="_top"/);
   assert.match(source, /<StorefrontFocusedOrderActions/);
   assert.match(source, /buildEmbeddedOrderModeHref\([\s\S]*?\/cart/);
   assert.match(cartLink, /StorefrontFocusedOrderActions/);
@@ -267,17 +249,13 @@ test("focused chrome is compact and omits ordinary navigation and footer", async
 });
 
 test("cart, checkout, and confirmation preserve focused context without changing order creation", async () => {
-  const [cartRoute, cartPage, checkoutPage, shell] = await Promise.all([
-    read("app/store/[slug]/cart/page.tsx"),
+  const [cartPage, checkoutPage] = await Promise.all([
     read("app/store/[slug]/cart/cart-page.tsx"),
     read("app/store/[slug]/checkout/checkout-page.tsx"),
-    read("app/store/[slug]/storefront-shell-components.tsx"),
   ]);
 
-  assert.doesNotMatch(cartRoute, /suppressFocusedHeader/);
-  assert.doesNotMatch(shell, /suppressFocusedHeader/);
   assert.match(cartPage, /const checkoutHref = buildEmbeddedOrderModeHref\(/);
-  assert.match(cartPage, /const continueHref = orderMode[\s\S]*?\/embed\/store\//);
+  assert.match(cartPage, /orderMode\?\.returnUrl/);
   assert.match(cartPage, /orderMode \? "Continue Shopping" : "Continue shopping"/);
   assert.match(checkoutPage, /const cartHref = buildEmbeddedOrderModeHref\(/);
   assert.match(checkoutPage, /orderMode\?\.returnUrl/);

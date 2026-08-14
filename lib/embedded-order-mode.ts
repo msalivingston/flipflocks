@@ -132,16 +132,11 @@ export function buildEmbeddedOrderModeHref(
   }
 
   const storePath = `/store/${context.storeSlug}`;
-  const embeddedStorePath = `/embed/store/${encodeURIComponent(context.storeSlug)}`;
-  const isStoreRoute =
-    destination.pathname === storePath ||
-    destination.pathname.startsWith(`${storePath}/`);
-  const isEmbeddedStorefrontRoute =
-    destination.pathname === embeddedStorePath;
 
   if (
     destination.origin !== internalNavigationOrigin ||
-    (!isStoreRoute && !isEmbeddedStorefrontRoute)
+    (destination.pathname !== storePath &&
+      !destination.pathname.startsWith(`${storePath}/`))
   ) {
     return href;
   }
