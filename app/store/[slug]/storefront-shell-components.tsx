@@ -37,7 +37,6 @@ export function StorefrontChrome({
   checkoutMode = false,
   footerVariant = "default",
   orderMode = null,
-  suppressFocusedHeader = false,
   store,
 }: {
   categories: StorefrontCategoryAvailability;
@@ -45,7 +44,6 @@ export function StorefrontChrome({
   checkoutMode?: boolean;
   footerVariant?: "default" | "about";
   orderMode?: EmbeddedOrderModeContext | null;
-  suppressFocusedHeader?: boolean;
   store: StorefrontHome;
 }) {
   const theme = {
@@ -58,9 +56,7 @@ export function StorefrontChrome({
   if (orderMode) {
     return (
       <StorefrontShell theme={theme}>
-        {suppressFocusedHeader ? null : (
-          <StorefrontFocusedOrderHeader orderMode={orderMode} store={store} />
-        )}
+        <StorefrontFocusedOrderHeader orderMode={orderMode} store={store} />
         {children}
       </StorefrontShell>
     );
@@ -97,6 +93,7 @@ function StorefrontFocusedOrderHeader({
         <a
           className="storefront-primary-color inline-flex min-h-10 items-center rounded-md pr-3 text-sm font-bold text-[#073f1e] focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
           href={orderMode.returnUrl}
+          target="_top"
         >
           <span aria-hidden="true" className="mr-1.5 text-xl leading-none">
             ←
