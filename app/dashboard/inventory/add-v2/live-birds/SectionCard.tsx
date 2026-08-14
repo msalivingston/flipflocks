@@ -8,6 +8,8 @@ export function SectionCard({
   desktopComplete = false,
   desktopDisabled = false,
   desktopExpanded,
+  desktopHeaderArtwork,
+  desktopPanelMode = false,
   desktopSummary,
   mobileComplete = false,
   mobileArtwork,
@@ -25,6 +27,8 @@ export function SectionCard({
   desktopComplete?: boolean;
   desktopDisabled?: boolean;
   desktopExpanded?: boolean;
+  desktopHeaderArtwork?: ReactNode;
+  desktopPanelMode?: boolean;
   desktopSummary?: ReactNode;
   mobileComplete?: boolean;
   mobileArtwork?: ReactNode;
@@ -43,6 +47,7 @@ export function SectionCard({
         {step}
       </span>
       <h2 className="min-w-0 text-xl font-bold text-stone-950">{title}</h2>
+      {desktopHeaderArtwork}
       {badge ? (
         <span className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs font-semibold text-stone-600">
           {badge}
@@ -55,7 +60,7 @@ export function SectionCard({
             Complete
           </span>
         ) : null}
-        {desktopCollapsible && !desktopDisabled ? (
+        {desktopCollapsible && !desktopDisabled && !desktopPanelMode ? (
           <>
             <span className="text-sm font-bold text-emerald-800">
               {desktopExpanded ? "Collapse" : "Edit"}
@@ -80,7 +85,9 @@ export function SectionCard({
         desktopDisabled
           ? "sm:border-stone-200 sm:bg-stone-50/70 sm:opacity-60 sm:shadow-none"
           : ""
-      } ${className}`}
+      } ${
+        desktopPanelMode ? "sm:rounded-l-none" : ""
+      } ${desktopPanelMode && !desktopExpanded ? "sm:hidden" : ""} ${className}`}
     >
       <button
         aria-expanded={hasMobileDisclosure ? mobileExpanded : undefined}
@@ -129,7 +136,7 @@ export function SectionCard({
           />
         ) : null}
       </button>
-      {hasDesktopDisclosure && desktopCollapsible ? (
+      {hasDesktopDisclosure && desktopCollapsible && !desktopPanelMode ? (
         <button
           aria-expanded={desktopExpanded}
           className="hidden min-h-12 w-full items-center gap-4 text-left sm:flex sm:disabled:cursor-not-allowed"
@@ -140,7 +147,7 @@ export function SectionCard({
           {desktopHeaderContent}
         </button>
       ) : null}
-      {hasDesktopDisclosure && !desktopCollapsible ? (
+      {hasDesktopDisclosure && (!desktopCollapsible || desktopPanelMode) ? (
         <div className="hidden min-h-12 w-full items-center gap-4 sm:flex">
           {desktopHeaderContent}
         </div>
@@ -150,7 +157,7 @@ export function SectionCard({
           {mobileSummary}
         </div>
       ) : null}
-      {hasDesktopDisclosure && !desktopExpanded && desktopSummary ? (
+      {hasDesktopDisclosure && !desktopExpanded && desktopSummary && !desktopPanelMode ? (
         <div className="mt-1 hidden pl-14 text-sm font-medium leading-5 text-stone-600 sm:block">
           {desktopSummary}
         </div>
@@ -158,7 +165,11 @@ export function SectionCard({
       <div
         className={`mt-3 sm:mt-4 ${
           hasMobileDisclosure && !mobileExpanded ? "hidden sm:block" : ""
-        } ${hasDesktopDisclosure && !desktopExpanded ? "sm:hidden" : ""}`}
+        } ${
+          hasDesktopDisclosure && !desktopExpanded && !desktopPanelMode
+            ? "sm:hidden"
+            : ""
+        }`}
       >
         {children}
       </div>

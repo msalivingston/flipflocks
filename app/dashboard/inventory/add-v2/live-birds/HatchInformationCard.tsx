@@ -12,6 +12,7 @@ export function HatchInformationCard({
   availableDate,
   availableDateHelpText,
   desktopActive,
+  desktopPanelMode = false,
   hatchDate,
   introText,
   mobileActive,
@@ -33,6 +34,7 @@ export function HatchInformationCard({
   availableDate: string;
   availableDateHelpText?: string;
   desktopActive: boolean;
+  desktopPanelMode?: boolean;
   hatchDate: string;
   introText?: string;
   mobileActive: boolean;
@@ -68,7 +70,13 @@ export function HatchInformationCard({
               "All birds added here should share the same hatch date. Start a separate listing for birds from another hatch."}
           </p>
         </div>
-        <div className="grid gap-5 lg:grid-cols-3">
+        <div
+          className={`grid gap-5 ${
+            desktopPanelMode
+              ? "lg:grid-cols-[0.9fr_1fr_1.25fr] lg:[&>label>span:first-child]:whitespace-nowrap"
+              : "lg:grid-cols-3"
+          }`}
+        >
           <SpeciesField
             disabled={speciesReadOnly}
             fieldId="species"
@@ -171,6 +179,19 @@ export function HatchInformationCard({
         <SectionCard
           desktopComplete={isComplete}
           desktopExpanded={desktopActive}
+          desktopHeaderArtwork={
+            desktopPanelMode ? (
+              <Image
+                alt=""
+                aria-hidden="true"
+                className="h-14 w-20 object-contain opacity-90"
+                height={56}
+                src="/illustrations/live-birds-hen-duck.png"
+                width={80}
+              />
+            ) : undefined
+          }
+          desktopPanelMode={desktopPanelMode}
           desktopSummary={
             <span>
               Hatch: {formatMobileDate(hatchDate)}{" "}
@@ -184,15 +205,17 @@ export function HatchInformationCard({
           step="1"
           title="Hatch Details"
         >
-          <div className="relative pr-0 xl:pr-36">
-            <Image
-              alt=""
-              aria-hidden="true"
-              className="absolute right-0 top-0 hidden h-28 w-36 object-contain opacity-90 xl:block"
-              height={112}
-              src="/illustrations/live-birds-hen-duck.png"
-              width={144}
-            />
+          <div className={desktopPanelMode ? "" : "relative pr-0 xl:pr-36"}>
+            {!desktopPanelMode ? (
+              <Image
+                alt=""
+                aria-hidden="true"
+                className="absolute right-0 top-0 hidden h-28 w-36 object-contain opacity-90 xl:block"
+                height={112}
+                src="/illustrations/live-birds-hen-duck.png"
+                width={144}
+              />
+            ) : null}
             {renderBody()}
             <button
               className="ml-auto mt-5 hidden min-h-10 items-center justify-center rounded-md bg-emerald-800 px-6 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500 sm:inline-flex"
@@ -316,7 +339,7 @@ function SpeciesField({
 }) {
   return (
     <label>
-      <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600">
+      <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-sm sm:font-semibold sm:text-stone-600">
         Species
       </span>
       <span className="relative block">
@@ -389,7 +412,7 @@ function DateField({
 }) {
   return (
     <label className="block min-w-0">
-      <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-xs sm:font-semibold sm:text-stone-600 max-sm:flex max-sm:min-h-12 max-sm:items-center">
+      <span className="mb-1.5 block text-base font-bold text-stone-700 sm:text-sm sm:font-semibold sm:text-stone-600 max-sm:flex max-sm:min-h-12 max-sm:items-center">
         {label}
       </span>
       <span className="relative block w-full min-w-0 max-w-full max-sm:overflow-hidden max-sm:rounded-md">

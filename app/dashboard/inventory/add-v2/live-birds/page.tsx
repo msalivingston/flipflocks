@@ -37,9 +37,9 @@ import {
   validateCustomBreedDraft,
 } from "../../../breeds/custom-breed-form";
 import type { ListingPhotoItem } from "../../../listings/[listingBatchId]/listing-photos-section";
-import { BirdOfferingsCard } from "./BirdOfferingsCard";
 import { AgeBasedPriceChangesCard } from "./AgeBasedPriceChangesCard";
 import { BatchSummaryCard } from "./BatchSummaryCard";
+import { BirdOfferingsCard } from "./BirdOfferingsCard";
 import {
   fallbackBreedOptions,
   fallbackSpeciesOptions,
@@ -52,6 +52,7 @@ import {
   buildCreateLiveBirdsPublishPayload,
   type CreateLiveBirdsPublishPayload,
 } from "./createDraftPayload";
+import { DesktopLiveBirdsStepNav } from "./DesktopLiveBirdsStepNav";
 import {
   areAllReadinessChecksComplete,
   getAgeAtAvailability,
@@ -235,6 +236,8 @@ export function LiveBirdsListingForm({
     useState(false);
   const isNavigatingAfterPublishRef = useRef(false);
   const [isStartOverDialogOpen, setIsStartOverDialogOpen] = useState(false);
+  const [pendingSpeciesChange, setPendingSpeciesChange] =
+    useState<SpeciesOption | null>(null);
   const [pendingNavigationHref, setPendingNavigationHref] = useState<
     string | null
   >(null);
@@ -814,6 +817,26 @@ export function LiveBirdsListingForm({
   }
 
   function selectSpecies(nextSpecies: SpeciesOption) {
+    const speciesChanged =
+      nextSpecies.id !== species.id ||
+      nextSpecies.slug !== species.slug ||
+      nextSpecies.label !== species.label;
+
+    if (
+      speciesChanged &&
+      offerings.some((offering) => isBirdsForSaleGroupStarted(offering))
+    ) {
+      setPendingSpeciesChange(nextSpecies);
+      return;
+    }
+
+    applySpeciesChange(nextSpecies, false);
+  }
+
+  function applySpeciesChange(
+    nextSpecies: SpeciesOption,
+    clearBirdEntries: boolean,
+  ) {
     const nextBreedOptions = getBreedOptionsForSpecies({
       catalogBreeds,
       mediaItems: breedMediaItems,
@@ -827,9 +850,30 @@ export function LiveBirdsListingForm({
       nextHatchDate: hatchDate,
       nextSpecies,
     });
+
+    if (clearBirdEntries) {
+      setOfferings(
+        alignOfferingsToBreedOptions(initialOfferings, nextBreedOptions),
+      );
+      nextOfferingId.current = initialOfferings.length + 1;
+      setGroupsReviewMode(false);
+      setScrollToOfferingId(null);
+      setShowBirdsForSaleCompletionError(false);
+      setBreedPhotoActionMessage(null);
+      setHighestUnlockedDesktopStep(2);
+      return;
+    }
+
     setOfferings((currentOfferings) =>
       alignOfferingsToBreedOptions(currentOfferings, nextBreedOptions),
     );
+  }
+
+  function confirmSpeciesChange() {
+    if (!pendingSpeciesChange) return;
+
+    applySpeciesChange(pendingSpeciesChange, true);
+    setPendingSpeciesChange(null);
   }
 
   function unlockBirdsForSaleIfReady({
@@ -1157,16 +1201,36 @@ export function LiveBirdsListingForm({
 
   function focusPublishValidationIssue(issue: PublishValidationIssue) {
     if (issue.target.type === "hatch") {
-      const fieldSelector = `[data-live-birds-field="${issue.target.field}"]`;
-      const field = document.querySelector<HTMLElement>(fieldSelector);
+      const hatchField = issue.target.field;
+      const focusHatchField = () => {
+        const fieldSelector = `[data-live-birds-field="${hatchField}"]`;
+        const field = Array.from(
+          document.querySelectorAll<HTMLElement>(fieldSelector),
+        ).find((candidate) => candidate.offsetParent !== null);
 
-      field?.scrollIntoView({ block: "center", behavior: "smooth" });
-      field?.focus({ preventScroll: true });
+        field?.scrollIntoView({ block: "center", behavior: "smooth" });
+        field?.focus({ preventScroll: true });
+      };
+
+      if (window.matchMedia("(min-width: 640px)").matches && !isEditMode) {
+        setDesktopExpandedStep(1);
+        window.setTimeout(focusHatchField, 0);
+      } else {
+        focusHatchField();
+      }
       return;
     }
 
     setGroupsReviewMode(false);
     const offeringId = issue.target.offeringId;
+
+    if (window.matchMedia("(min-width: 640px)").matches && !isEditMode) {
+      setDesktopExpandedStep(2);
+      setScrollToOfferingId(null);
+      window.setTimeout(() => setScrollToOfferingId(offeringId), 0);
+    } else {
+      setScrollToOfferingId(offeringId);
+    }
 
     setOfferings((currentOfferings) =>
       currentOfferings.map((offering) => ({
@@ -1174,7 +1238,6 @@ export function LiveBirdsListingForm({
         expanded: offering.id === offeringId,
       })),
     );
-    setScrollToOfferingId(offeringId);
   }
 
   function updateBreedDescription(offeringId: string, description: string) {
@@ -2229,7 +2292,7 @@ export function LiveBirdsListingForm({
               <p className="mt-2 max-w-3xl text-base leading-7 text-stone-600">
                 {isEditMode
                   ? "Update the hatch details, bird entries, pricing, and buyer content for this listing."
-                  : "Add birds from one hatch date. Create a separate entry when the breed, sex/type, quantity, or current price is different."}
+                  : "Tell us when these birds hatched so FlockFront can keep track of their age and update your listings automatically as they get older. Then add the birds you’re selling. Make a separate entry whenever the breed, sex/type, quantity, or price is different."}
               </p>
               {!isEditMode && isLoadedDraft ? (
                 <p className="mt-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-base font-semibold leading-7 text-sky-800">
@@ -2284,11 +2347,13 @@ export function LiveBirdsListingForm({
               </span>
             </div>
           </div>
-          <DesktopLiveBirdsProgress
-            currentStep={desktopExpandedStep}
-            highestUnlockedStep={highestUnlockedDesktopStep}
-            onStepOpen={(step) => setDesktopExpandedStep(step)}
-          />
+          {isEditMode ? (
+            <DesktopLiveBirdsProgress
+              currentStep={desktopExpandedStep}
+              highestUnlockedStep={highestUnlockedDesktopStep}
+              onStepOpen={(step) => setDesktopExpandedStep(step)}
+            />
+          ) : null}
         </header>
 
         {draftLoading ? (
@@ -2311,7 +2376,27 @@ export function LiveBirdsListingForm({
             className="w-full"
             key={formResetKey}
           >
-            <main className="space-y-4 max-sm:space-y-3 sm:space-y-5">
+            <div
+              className={
+                isEditMode
+                  ? ""
+                  : "sm:grid sm:grid-cols-[11.25rem_minmax(0,1fr)] sm:items-start sm:gap-0 lg:grid-cols-[12.25rem_minmax(0,1fr)]"
+              }
+            >
+              {!isEditMode ? (
+                <DesktopLiveBirdsStepNav
+                  activeStep={desktopExpandedStep ?? 1}
+                  highestUnlockedStep={highestUnlockedDesktopStep}
+                  onStepSelect={setDesktopExpandedStep}
+                />
+              ) : null}
+              <main
+                className={`min-w-0 ${
+                  isEditMode
+                    ? "space-y-4 max-sm:space-y-3 sm:space-y-5"
+                    : "max-sm:space-y-3 sm:-ml-px sm:space-y-0"
+                }`}
+              >
               {isEditMode && birdsForSaleGroupCount > 1 ? (
                 <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-base font-semibold leading-7 text-sky-900">
                   This listing includes multiple bird entries. Hatch date and
@@ -2322,6 +2407,7 @@ export function LiveBirdsListingForm({
                 ageAtAvailability={ageAtAvailability}
                 availableDate={availableDate}
                 desktopActive={desktopExpandedStep === 1}
+                desktopPanelMode={!isEditMode}
                 hatchDate={hatchDate}
                 referenceError={referenceDataError}
                 referenceLoading={referenceDataLoading}
@@ -2370,6 +2456,7 @@ export function LiveBirdsListingForm({
                 duplicateOfferingIds={duplicateOfferingIds}
                 desktopActive={desktopExpandedStep === 2}
                 desktopDisabled={highestUnlockedDesktopStep < 2}
+                desktopPanelMode={!isEditMode}
                 groupsReviewMode={groupsReviewMode}
                 mobileActive={visibleMobileActiveStep === 2}
                 offerings={offerings}
@@ -2422,7 +2509,11 @@ export function LiveBirdsListingForm({
                 mode={mode}
               />
               {breedPhotoActionMessage ? (
-                <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-base font-semibold leading-7 text-emerald-900">
+                <p
+                  className={`rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-base font-semibold leading-7 text-emerald-900 ${
+                    !isEditMode && desktopExpandedStep !== 2 ? "sm:hidden" : ""
+                  }`}
+                >
                   {breedPhotoActionMessage}
                 </p>
               ) : null}
@@ -2434,6 +2525,7 @@ export function LiveBirdsListingForm({
                   desktopActive={desktopExpandedStep === 3}
                   desktopComplete={highestUnlockedDesktopStep === 4}
                   desktopDisabled={highestUnlockedDesktopStep < 3}
+                  desktopPanelMode={!isEditMode}
                   locked={!plan.ageBasedPricingEnabled}
                   mobileActive={visibleMobileActiveStep === 3}
                   onMobileContinue={() => {
@@ -2479,6 +2571,7 @@ export function LiveBirdsListingForm({
                 />
               ) : (
                 <ReviewPublishCard
+                  desktopActive={desktopExpandedStep === 4}
                   desktopDisabled={highestUnlockedDesktopStep < 4}
                   desktopListingSummary={
                     <BatchSummaryCard
@@ -2489,6 +2582,7 @@ export function LiveBirdsListingForm({
                       priceAdjustment={priceAdjustment}
                     />
                   }
+                  desktopPanelMode
                   mobileActive={visibleMobileActiveStep === 4}
                   onMobileOpen={() => {
                     if (mobileStepProgression.highestUnlockedStep >= 4) {
@@ -2527,23 +2621,8 @@ export function LiveBirdsListingForm({
                   </div>
                 </div>
               ) : null}
-              {!isEditMode && highestUnlockedDesktopStep === 4 ? (
-                <div className="hidden items-center gap-5 rounded-lg border border-stone-200 bg-white px-6 py-5 shadow-sm sm:flex">
-                  <MobileLiveBirdsArtwork
-                    className="h-20 w-24 rounded-xl opacity-70"
-                    name="nest"
-                  />
-                  <div>
-                    <p className="text-lg font-bold text-stone-950">Almost there!</p>
-                    <p className="mt-1 text-sm leading-6 text-stone-600">
-                      Once published, your birds will appear in your storefront
-                      inventory.
-                    </p>
-                  </div>
-                </div>
-              ) : null}
-            </main>
-
+              </main>
+            </div>
           </div>
         )}
       </div>
@@ -2565,6 +2644,13 @@ export function LiveBirdsListingForm({
         <StartOverDialog
           onCancel={() => setIsStartOverDialogOpen(false)}
           onConfirm={confirmStartOver}
+        />
+      ) : null}
+      {pendingSpeciesChange ? (
+        <SpeciesChangeWarningDialog
+          nextSpeciesLabel={pendingSpeciesChange.label}
+          onCancel={() => setPendingSpeciesChange(null)}
+          onConfirm={confirmSpeciesChange}
         />
       ) : null}
       {!isEditMode && pendingNavigationHref ? (
@@ -2974,6 +3060,64 @@ function StartOverDialog({
             onClick={onConfirm}
           >
             Start over
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SpeciesChangeWarningDialog({
+  nextSpeciesLabel,
+  onCancel,
+  onConfirm,
+}: {
+  nextSpeciesLabel: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      aria-labelledby="species-change-warning-title"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 px-4"
+      role="dialog"
+    >
+      <div className="w-full max-w-md rounded-lg border border-amber-200 bg-white p-5 shadow-xl">
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-lg font-bold text-amber-800"
+          >
+            !
+          </span>
+          <div className="min-w-0">
+            <h2
+              className="text-lg font-semibold text-stone-950"
+              id="species-change-warning-title"
+            >
+              Change species?
+            </h2>
+            <p className="mt-2 text-base leading-7 text-stone-600">
+              Changing the species to {nextSpeciesLabel} will remove all bird
+              entries you have already added. This cannot be undone.
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            className="inline-flex min-h-12 items-center justify-center rounded-md border border-stone-300 bg-white px-4 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-10 sm:text-sm sm:font-semibold"
+            type="button"
+            onClick={onCancel}
+          >
+            Keep current species
+          </button>
+          <button
+            className="inline-flex min-h-12 items-center justify-center rounded-md bg-red-700 px-4 text-base font-bold text-white shadow-sm transition hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2 sm:min-h-10 sm:text-sm sm:font-semibold"
+            type="button"
+            onClick={onConfirm}
+          >
+            Change species and remove birds
           </button>
         </div>
       </div>

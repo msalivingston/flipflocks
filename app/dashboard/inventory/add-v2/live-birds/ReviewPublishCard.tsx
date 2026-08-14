@@ -8,8 +8,10 @@ import { MobileLiveBirdsArtwork } from "./MobileLiveBirdsArtwork";
 
 export function ReviewPublishCard({
   onValidationIssueClick,
+  desktopActive = true,
   desktopDisabled,
   desktopListingSummary,
+  desktopPanelMode = false,
   onSaveDraft,
   onMobileOpen,
   onReviewPublish,
@@ -25,8 +27,10 @@ export function ReviewPublishCard({
   validationIssues,
 }: {
   onValidationIssueClick?: (issue: PublishValidationIssue) => void;
+  desktopActive?: boolean;
   desktopDisabled: boolean;
   desktopListingSummary?: ReactNode;
+  desktopPanelMode?: boolean;
   onSaveDraft: () => void;
   onMobileOpen: () => void;
   onReviewPublish: () => void;
@@ -202,9 +206,15 @@ export function ReviewPublishCard({
           </p>
         )}
       </section>
-      <div className="hidden sm:block">
+      <div
+        className={
+          desktopPanelMode && !desktopActive ? "hidden" : "hidden sm:block"
+        }
+      >
         <section
           className={`rounded-lg border border-stone-200 bg-white p-5 shadow-sm ${
+            desktopPanelMode ? "rounded-l-none" : ""
+          } ${
             desktopDisabled || stepLocked
               ? "bg-stone-50/70 opacity-60 shadow-none"
               : ""
@@ -217,6 +227,12 @@ export function ReviewPublishCard({
             <h2 className="min-w-0 text-xl font-bold text-stone-950">
               Ready to Publish
             </h2>
+            {desktopPanelMode ? (
+              <MobileLiveBirdsArtwork
+                className="h-14 w-20 rounded-xl opacity-80"
+                name="nest"
+              />
+            ) : null}
           </div>
           {!desktopDisabled ? <div className="mt-4">{renderContent()}</div> : null}
         </section>

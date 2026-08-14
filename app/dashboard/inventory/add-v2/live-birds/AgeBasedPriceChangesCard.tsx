@@ -16,6 +16,7 @@ export function AgeBasedPriceChangesCard({
   desktopActive,
   desktopComplete,
   desktopDisabled,
+  desktopPanelMode = false,
   introText,
   offerings,
   priceAdjustment,
@@ -31,6 +32,7 @@ export function AgeBasedPriceChangesCard({
   desktopActive: boolean;
   desktopComplete: boolean;
   desktopDisabled: boolean;
+  desktopPanelMode?: boolean;
   introText?: string;
   offerings: BirdOffering[];
   priceAdjustment: PriceAdjustmentState;
@@ -222,6 +224,7 @@ export function AgeBasedPriceChangesCard({
           desktopComplete={desktopComplete}
           desktopDisabled={desktopDisabled}
           desktopExpanded={desktopActive}
+          desktopPanelMode={desktopPanelMode}
           desktopSummary={
             priceAdjustment.enabled
               ? getCompactPriceAdjustmentSummary(priceAdjustment)

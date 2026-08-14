@@ -28,6 +28,7 @@ export function BirdOfferingsCard({
   duplicateOfferingIds,
   desktopActive,
   desktopDisabled,
+  desktopPanelMode = false,
   groupsReviewMode,
   mobileActive,
   offerings,
@@ -57,6 +58,7 @@ export function BirdOfferingsCard({
   duplicateOfferingIds: Set<string>;
   desktopActive: boolean;
   desktopDisabled: boolean;
+  desktopPanelMode?: boolean;
   groupsReviewMode: boolean;
   mobileActive: boolean;
   offerings: BirdOffering[];
@@ -100,6 +102,7 @@ export function BirdOfferingsCard({
       desktopComplete={groupsReviewMode}
       desktopDisabled={desktopDisabled}
       desktopExpanded={desktopActive}
+      desktopPanelMode={desktopPanelMode}
       desktopSummary={desktopSummary}
       onDesktopToggle={onDesktopOpen}
       mobileComplete={groupsReviewMode}
@@ -151,6 +154,7 @@ export function BirdOfferingsCard({
                 canRemove={!isEditMode && offerings.length > 1}
                 hasDuplicateCombination={duplicateOfferingIds.has(offering.id)}
                 isEditMode={isEditMode}
+                desktopPanelMode={desktopPanelMode}
                 index={index}
                 offering={offering}
                 prepareBreedPhotoProfile={prepareBreedPhotoProfile}
@@ -219,6 +223,7 @@ function ExpandedOfferingCard({
   canRemove,
   hasDuplicateCombination,
   isEditMode,
+  desktopPanelMode,
   index,
   offering,
   prepareBreedPhotoProfile,
@@ -239,6 +244,7 @@ function ExpandedOfferingCard({
   canRemove: boolean;
   hasDuplicateCombination: boolean;
   isEditMode: boolean;
+  desktopPanelMode: boolean;
   index: number;
   offering: BirdOffering;
   prepareBreedPhotoProfile: (offeringId: string) => void;
@@ -353,7 +359,13 @@ function ExpandedOfferingCard({
         </div>
       </div>
 
-      <div className="grid gap-0 px-4 py-5 sm:gap-4 sm:px-4 sm:py-4 lg:grid-cols-4">
+      <div
+        className={`grid gap-0 px-4 py-5 sm:gap-4 sm:px-4 sm:py-4 ${
+          desktopPanelMode
+            ? "lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(8rem,0.7fr)_minmax(8rem,0.75fr)]"
+            : "lg:grid-cols-4"
+        }`}
+      >
         <div className="space-y-4 border-b border-stone-100 pb-5 sm:contents sm:border-0 sm:pb-0">
           <div>
             <SelectField
@@ -429,9 +441,20 @@ function ExpandedOfferingCard({
           onClick={toggleBreedContent}
         >
           <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">
-              Photo and description
+            <span
+              className={`text-base font-bold text-stone-950 sm:text-sm sm:font-semibold ${
+                desktopPanelMode ? "hidden sm:inline" : ""
+              }`}
+            >
+              {desktopPanelMode
+                ? "Breed Photo and Description"
+                : "Photo and description"}
             </span>
+            {desktopPanelMode ? (
+              <span className="text-base font-bold text-stone-950 sm:hidden">
+                Photo and description
+              </span>
+            ) : null}
             <span
               className={`text-sm font-semibold leading-5 ${
                 contentStatus.needsAttention ? "text-amber-700" : "text-emerald-800"
@@ -446,9 +469,14 @@ function ExpandedOfferingCard({
           </span>
         </button>
         {isBreedContentExpanded ? (
-          <div className="mt-3 grid gap-4 sm:grid-cols-2 sm:items-stretch">
+          <div
+            className={`mt-3 grid gap-4 sm:items-stretch ${
+              desktopPanelMode ? "sm:grid-cols-1" : "sm:grid-cols-2"
+            }`}
+          >
             <BreedPhotoPanel
               breedMediaItems={breedMediaItems}
+              compactDesktop={desktopPanelMode}
               offering={offering}
               prepareBreedPhotoProfile={prepareBreedPhotoProfile}
               storeId={storeId}
@@ -462,7 +490,9 @@ function ExpandedOfferingCard({
                 Description
               </p>
               <textarea
-                className={`${inputClass} mt-2 min-h-32 resize-y py-3 leading-6 sm:min-h-56 sm:flex-1`}
+                className={`${inputClass} mt-2 min-h-32 resize-y py-3 leading-6 sm:flex-1 ${
+                  desktopPanelMode ? "sm:min-h-42" : "sm:min-h-56"
+                }`}
                 value={offering.description}
                 onChange={(event) =>
                   updateBreedDescription(offering.id, event.target.value)
@@ -472,7 +502,11 @@ function ExpandedOfferingCard({
                 {offering.description.length} / 500
               </p>
             </div>
-            <div className="flex justify-end sm:col-span-2">
+            <div
+              className={`flex justify-end ${
+                desktopPanelMode ? "sm:col-span-1" : "sm:col-span-2"
+              }`}
+            >
               <button
                 className="inline-flex min-h-10 items-center justify-center rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2"
                 type="button"
@@ -861,19 +895,21 @@ function NumberField({
 
 function BreedPhotoPanel({
   breedMediaItems,
+  compactDesktop,
   offering,
   prepareBreedPhotoProfile,
   storeId,
   onBreedPhotosChanged,
 }: {
   breedMediaItems: ListingPhotoItem[];
+  compactDesktop: boolean;
   offering: BirdOffering;
   prepareBreedPhotoProfile: (offeringId: string) => void;
   storeId: string;
   onBreedPhotosChanged: () => void;
 }) {
   return (
-    <div className="min-w-0">
+    <div className={`min-w-0 ${compactDesktop ? "sm:w-2/3" : ""}`}>
       <div>
         {offering.sellerBreedProfileId ? (
           <ListingPhotosSection

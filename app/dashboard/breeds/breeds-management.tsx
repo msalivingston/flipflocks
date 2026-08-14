@@ -1755,8 +1755,8 @@ function RemoveBreedDialog({
               </>
             ) : (
               <p>
-                This removes the breed from your Breed Catalog. It will no
-                longer be available for new inventory or listings.
+                This removes the breed from your current Breed Catalog, along
+                with any details you have customized.
               </p>
             )}
           </div>
