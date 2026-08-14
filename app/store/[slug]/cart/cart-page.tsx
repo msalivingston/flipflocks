@@ -202,9 +202,6 @@ export function CartPage({
                 value={formatCurrency(summary.subtotal)}
               />
             </dl>
-            <p className="mt-2.5 rounded-lg bg-[#fbf7ef] px-3 py-2 text-xs leading-5 text-stone-600 sm:mt-3 sm:p-2.5">
-              Final availability is checked again before your order is placed.
-            </p>
             <div className="mt-3 grid gap-2">
               <StorefrontButton
                 className="min-h-10"
