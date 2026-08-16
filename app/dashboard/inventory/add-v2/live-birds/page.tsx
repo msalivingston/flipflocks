@@ -1921,7 +1921,7 @@ export function LiveBirdsListingForm({
   }) {
     const rowsResult = await loadListingRows({
       listingBatchId,
-      mode: "create",
+      mode: "edit",
       storeId,
     });
 

@@ -56,6 +56,18 @@ test("seller entry cards retain pending photos locally until the matching invent
   assert.match(control, /archiveSellerPhoto/);
 });
 
+test("pending entry photos can match rows after either draft save or direct publish", () => {
+  const page = read("app/dashboard/inventory/add-v2/live-birds/page.tsx");
+  const uploadPendingStart = page.indexOf("async function uploadPendingEntryPhotos");
+  const saveDraftStart = page.indexOf("async function saveDraftFromCurrentForm");
+  const uploadPendingSource = page.slice(uploadPendingStart, saveDraftStart);
+
+  assert.ok(uploadPendingStart >= 0);
+  assert.ok(saveDraftStart > uploadPendingStart);
+  assert.match(uploadPendingSource, /loadListingRows\(\{[\s\S]*?mode: "edit"/);
+  assert.doesNotMatch(uploadPendingSource, /mode: "create"/);
+});
+
 test("only Sunshine Mesa Farm receives the seller entry-photo pilot control", () => {
   const page = read("app/dashboard/inventory/add-v2/live-birds/page.tsx");
   const card = read(
