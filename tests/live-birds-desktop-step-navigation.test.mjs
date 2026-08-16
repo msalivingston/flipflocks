@@ -75,15 +75,20 @@ test("all four desktop steps remain mounted and use panel visibility", () => {
   assert.match(pageSource, /desktopActive=\{desktopExpandedStep === 4\}/);
 });
 
-test("Edit Live Birds reuses the Add tabs with management wording", () => {
+test("Edit Live Birds uses the first three Add tabs and the sticky save flow", () => {
   assert.match(pageSource, /mode=\{mode\}/);
-  assert.match(navSource, /label: "Review & Save"/);
+  assert.match(navSource, /addSteps\.filter\(\(item\) => item\.step !== 4\)/);
+  assert.doesNotMatch(navSource, /label: "Review & Save"/);
   assert.match(navSource, /Edit Live Birds sections/);
   assert.match(pageSource, />\(isEditMode \? 2 : 1\);/);
   assert.doesNotMatch(pageSource, /<EditCurrentStateSummary/);
-  assert.match(pageSource, /<EditPricingContext/);
+  assert.doesNotMatch(pageSource, /<EditPricingContext/);
   assert.doesNotMatch(navSource, /saveAction/);
   assert.match(pageSource, /<EditStickySaveBar/);
+  assert.match(
+    pageSource,
+    /onDesktopContinue=\{\(\) => \{[\s\S]*?if \(isEditMode\) \{[\s\S]*?setDesktopExpandedStep\(1\)/,
+  );
 });
 
 test("desktop publish validation activates a target panel before focus", () => {

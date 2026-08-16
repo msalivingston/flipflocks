@@ -2741,7 +2741,7 @@ export function LiveBirdsListingForm({
               </h1>
               <p className="mt-2 max-w-3xl text-base leading-7 text-stone-600">
                 {isEditMode
-                  ? "Update the hatch details, bird entries, pricing, and buyer content for this listing."
+                  ? "Update your listing details below. Each time you save, your storefront listing updates automatically. When you’re finished, click Return to Inventory."
                   : "Tell us when these birds hatched so FlockFront can keep track of their age and update your listings automatically as they get older. Then add the birds you’re selling. Make a separate entry whenever the breed, sex/type, quantity, or price is different."}
               </p>
               {!isEditMode && isLoadedDraft ? (
@@ -2760,7 +2760,7 @@ export function LiveBirdsListingForm({
                     type="button"
                     onClick={backToInventory}
                   >
-                    Back to Inventory
+                    Return to Inventory
                   </button>
                   <button
                     className="inline-flex min-h-12 items-center rounded-md bg-emerald-800 px-4 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-emerald-800/45 sm:min-h-9 sm:text-sm sm:font-semibold"
@@ -2985,17 +2985,16 @@ export function LiveBirdsListingForm({
                   desktopDisabled={highestUnlockedDesktopStep < 3}
                   desktopPanelMode
                   locked={!plan.ageBasedPricingEnabled}
-                  editContext={
-                    isEditMode ? (
-                      <EditPricingContext
-                        availableDate={availableDate}
-                        baseline={editBaseline}
-                        offerings={offerings}
-                        priceAdjustment={priceAdjustment}
-                      />
-                    ) : undefined
-                  }
                   mobileActive={visibleMobileActiveStep === 3}
+                  onDesktopContinue={() => {
+                    if (isEditMode) {
+                      setDesktopExpandedStep(1);
+                      return;
+                    }
+
+                    setDesktopExpandedStep(4);
+                    setHighestUnlockedDesktopStep(4);
+                  }}
                   onMobileContinue={() => {
                     if (!mobileStepProgression.step3Complete) return;
 
@@ -3578,78 +3577,6 @@ function SpeciesChangeWarningDialog({
   );
 }
 
-function EditPricingContext({
-  availableDate,
-  baseline,
-  offerings,
-  priceAdjustment,
-}: {
-  availableDate: string;
-  baseline: EditBaseline | null;
-  offerings: BirdOffering[];
-  priceAdjustment: PriceAdjustmentState;
-}) {
-  const savedOfferings = baseline?.offerings ?? offerings;
-  const savedAvailableDate = baseline?.availableDate ?? availableDate;
-  const savedRule = baseline?.priceAdjustment ?? priceAdjustment;
-  const currentPrices = savedOfferings.map((offering) =>
-    calculateCurrentListingPrice({
-      availableDate: savedAvailableDate,
-      price: offering.price,
-      priceAdjustment: savedRule,
-    }),
-  );
-  const pendingPrices = offerings.map((offering) =>
-    calculateCurrentListingPrice({
-      availableDate,
-      price: offering.price,
-      priceAdjustment,
-    }),
-  );
-  const currentStartingPrices = savedOfferings.map((offering) =>
-    Number(offering.price),
-  );
-  const pendingStartingPrices = offerings.map((offering) =>
-    Number(offering.price),
-  );
-  const nextAdjustment = getNextPriceAdjustment({
-    availableDate,
-    offerings,
-    priceAdjustment,
-  });
-  const currentRange = formatPriceRange(currentPrices);
-  const pendingRange = formatPriceRange(pendingPrices);
-  const currentStartingRange = formatPriceRange(currentStartingPrices);
-  const pendingStartingRange = formatPriceRange(pendingStartingPrices);
-  const currentAdjustmentRange = formatSignedCurrencyRange(
-    currentPrices.map((price, index) => price - currentStartingPrices[index]),
-  );
-
-  return (
-    <div className="rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm leading-6 text-stone-700">
-      <div className="flex flex-wrap gap-x-5 gap-y-1">
-        <p><span className="font-semibold">Starting price:</span> {currentStartingRange}</p>
-        {pendingStartingRange !== currentStartingRange ? (
-          <p><span className="font-semibold">New starting price:</span> {pendingStartingRange}</p>
-        ) : null}
-        {savedRule.enabled ? (
-          <p><span className="font-semibold">Current adjustment:</span> {currentAdjustmentRange}</p>
-        ) : null}
-        <p><span className="font-semibold">Current storefront price:</span> {currentRange}</p>
-        {pendingRange !== currentRange ? (
-          <p><span className="font-semibold">After saving:</span> {pendingRange}</p>
-        ) : null}
-        <p>
-          <span className="font-semibold">Next adjustment:</span>{" "}
-          {nextAdjustment
-            ? `${nextAdjustment.adjustmentRange} total \u2192 ${nextAdjustment.priceRange} on ${nextAdjustment.dateLabel}`
-            : "None scheduled"}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function EditAgeContext({
   availableDate,
   baselineHatchDate,
@@ -3757,7 +3684,7 @@ function EditModeActionsCard({
             type="button"
             onClick={onBack}
           >
-            Back to Inventory
+            Return to Inventory
           </button>
           <button
             className="inline-flex min-h-12 items-center justify-center rounded-md border border-stone-300 bg-white px-5 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60 sm:min-h-10 sm:text-sm sm:font-semibold"
@@ -5115,58 +5042,6 @@ function calculateCurrentListingPrice({
   );
 }
 
-function getNextPriceAdjustment({
-  availableDate,
-  offerings,
-  priceAdjustment,
-}: {
-  availableDate: string;
-  offerings: BirdOffering[];
-  priceAdjustment: PriceAdjustmentState;
-}) {
-  if (!priceAdjustment.enabled || offerings.length === 0) return null;
-  const available = parseDateValue(availableDate);
-  const today = parseDateValue(getTodayDateInputValue());
-  const intervalWeeks = Number(priceAdjustment.intervalWeeks);
-  if (!available || !today || !Number.isInteger(intervalWeeks) || intervalWeeks <= 0) return null;
-
-  const intervalMs = intervalWeeks * 7 * 24 * 60 * 60 * 1000;
-  const completed = today > available
-    ? Math.floor((today.getTime() - available.getTime()) / intervalMs)
-    : 0;
-  const nextDate = new Date(available.getTime() + (completed + 1) * intervalMs);
-  const prices = offerings.map((offering) => {
-    const current = calculateCurrentListingPrice({ availableDate, price: offering.price, priceAdjustment });
-    const amount = Number(priceAdjustment.amount);
-    const limit = Number(
-      priceAdjustment.direction === "increase"
-        ? priceAdjustment.maxPrice
-        : priceAdjustment.minPrice,
-    );
-    return priceAdjustment.direction === "increase"
-      ? Math.min(current + amount, Number.isFinite(limit) ? limit : current + amount)
-      : Math.max(current - amount, Number.isFinite(limit) ? limit : 0, 0);
-  });
-  const currentPrices = offerings.map((offering) =>
-    calculateCurrentListingPrice({ availableDate, price: offering.price, priceAdjustment }),
-  );
-  if (prices.every((price, index) => price === currentPrices[index])) return null;
-
-  const startingPrices = offerings.map((offering) => Number(offering.price));
-
-  return {
-    adjustmentRange: formatSignedCurrencyRange(
-      prices.map((price, index) => price - startingPrices[index]),
-    ),
-    dateLabel: new Intl.DateTimeFormat("en-US", {
-      day: "numeric",
-      month: "long",
-      timeZone: "UTC",
-    }).format(nextDate),
-    priceRange: formatPriceRange(prices),
-  };
-}
-
 function formatAgeFromHatchDate(value: string) {
   const hatch = parseDateValue(value);
   const today = parseDateValue(getTodayDateInputValue());
@@ -5203,17 +5078,6 @@ function formatPriceRange(values: number[]) {
   return finite[0] === finite[finite.length - 1]
     ? formatCurrency(finite[0])
     : `${formatCurrency(finite[0])}–${formatCurrency(finite[finite.length - 1])}`;
-}
-
-function formatSignedCurrencyRange(values: number[]) {
-  const finite = values.filter(Number.isFinite).sort((a, b) => a - b);
-  if (finite.length === 0) return "Not available";
-  const formatSigned = (value: number) =>
-    `${value > 0 ? "+" : value < 0 ? "-" : ""}${formatCurrency(Math.abs(value))}`;
-
-  return finite[0] === finite[finite.length - 1]
-    ? formatSigned(finite[0])
-    : `${formatSigned(finite[0])}â€“${formatSigned(finite[finite.length - 1])}`;
 }
 
 function mergeDraftSpeciesOptions(

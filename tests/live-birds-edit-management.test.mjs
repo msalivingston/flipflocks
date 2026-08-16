@@ -142,15 +142,26 @@ test("desktop entry-photo explanation is hidden behind an accessible disclosure"
 test("Edit separates configured Starting Price from calculated storefront price", () => {
   assert.match(offerings, /label=\{isEditMode \? "Starting price"/);
   assert.doesNotMatch(offerings, /Starting\/base price/);
-  assert.match(page, /Current adjustment:/);
-  assert.match(page, /Current storefront price:/);
-  assert.match(page, /New starting price:/);
+  assert.doesNotMatch(page, /function EditPricingContext/);
   assert.match(page, /calculateCurrentListingPrice/);
   assert.match(page, /row\.price_override \?\? row\.base_price/);
+});
+
+test("Edit Automatic Price Changes omits the range helper bar", () => {
+  assert.doesNotMatch(page, /function EditPricingContext/);
+  assert.doesNotMatch(page, /Current adjustment:/);
+  assert.doesNotMatch(page, /Next adjustment:/);
 });
 
 test("Edit retains the shared entry-photo component and Sunshine pilot gate", () => {
   assert.match(page, /seller\?\.store_id === sunshineMesaFarmStoreId/);
   assert.match(offerings, /<EntryPhotoControl/);
   assert.match(page, /uploadPendingEntryPhotos/);
+});
+
+test("Edit introduction explains saving and returning to inventory", () => {
+  assert.match(page, /Update your listing details below\./);
+  assert.match(page, /Each time you save, your storefront listing updates automatically\./);
+  assert.match(page, /When you’re finished, click Return to Inventory\./);
+  assert.equal((page.match(/Return to Inventory/g) ?? []).length, 3);
 });

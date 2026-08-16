@@ -18,13 +18,13 @@ export function AgeBasedPriceChangesCard({
   desktopDisabled,
   desktopPanelMode = false,
   introText,
-  editContext,
   offerings,
   priceAdjustment,
   stepLocked = false,
   updatePriceAdjustment,
   locked = false,
   mobileActive = false,
+  onDesktopContinue,
   onMobileContinue,
   onMobileOpen,
   onDesktopOpen,
@@ -35,13 +35,13 @@ export function AgeBasedPriceChangesCard({
   desktopDisabled: boolean;
   desktopPanelMode?: boolean;
   introText?: string;
-  editContext?: React.ReactNode;
   offerings: BirdOffering[];
   priceAdjustment: PriceAdjustmentState;
   stepLocked?: boolean;
   updatePriceAdjustment: (updates: Partial<PriceAdjustmentState>) => void;
   locked?: boolean;
   mobileActive?: boolean;
+  onDesktopContinue: () => void;
   onMobileContinue: () => void;
   onMobileOpen: () => void;
   onDesktopOpen: () => void;
@@ -85,8 +85,6 @@ export function AgeBasedPriceChangesCard({
             <span>{locked ? "Market" : priceAdjustment.enabled ? "On" : "Off"}</span>
           </button>
         </div>
-        {editContext}
-
         {locked ? (
           <PlanUpgradePrompt compact feature="age_based_pricing" />
         ) : null}
@@ -161,7 +159,7 @@ export function AgeBasedPriceChangesCard({
           className="ml-auto hidden min-h-10 items-center justify-center rounded-md bg-emerald-800 px-6 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500 sm:inline-flex"
           disabled={stepLocked}
           type="button"
-          onClick={onMobileContinue}
+          onClick={onDesktopContinue}
         >
           Continue
         </button>

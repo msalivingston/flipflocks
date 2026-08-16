@@ -23,9 +23,7 @@ export function DesktopLiveBirdsStepNav({
 }) {
   const steps =
     mode === "edit"
-      ? addSteps.map((item) =>
-          item.step === 4 ? { ...item, label: "Review & Save" } : item,
-        )
+      ? addSteps.filter((item) => item.step !== 4)
       : addSteps;
 
   return (
