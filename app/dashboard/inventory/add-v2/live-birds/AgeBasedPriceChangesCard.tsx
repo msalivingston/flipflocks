@@ -18,6 +18,7 @@ export function AgeBasedPriceChangesCard({
   desktopDisabled,
   desktopPanelMode = false,
   introText,
+  editContext,
   offerings,
   priceAdjustment,
   stepLocked = false,
@@ -34,6 +35,7 @@ export function AgeBasedPriceChangesCard({
   desktopDisabled: boolean;
   desktopPanelMode?: boolean;
   introText?: string;
+  editContext?: React.ReactNode;
   offerings: BirdOffering[];
   priceAdjustment: PriceAdjustmentState;
   stepLocked?: boolean;
@@ -83,6 +85,7 @@ export function AgeBasedPriceChangesCard({
             <span>{locked ? "Market" : priceAdjustment.enabled ? "On" : "Off"}</span>
           </button>
         </div>
+        {editContext}
 
         {locked ? (
           <PlanUpgradePrompt compact feature="age_based_pricing" />

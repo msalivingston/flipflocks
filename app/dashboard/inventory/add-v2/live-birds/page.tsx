@@ -57,7 +57,6 @@ import { DesktopLiveBirdsStepNav } from "./DesktopLiveBirdsStepNav";
 import {
   areAllReadinessChecksComplete,
   getAgeAtAvailability,
-  getBirdsForSaleGroupCount,
   getNumberInputValue,
   getReadinessChecks,
   isBirdsForSaleGroupStarted,
@@ -151,11 +150,34 @@ type ReservationRow = {
   remaining_unfulfilled_quantity: number | null;
 };
 
+type RemovalHistoryItemRow = {
+  fulfilled_quantity: number | null;
+  inventory_item_id: string | null;
+  order_id: string;
+};
+
+type RemovalHistoryOrderRow = {
+  order_id: string;
+  order_status: string;
+};
+
 type BreedProfileUpsertResult = {
   seller_breed_profile_id?: string | null;
 };
 
 type EditSaveStatus = "idle" | "saving" | "success" | "error";
+
+type EditBaseline = {
+  availableDate: string;
+  hatchDate: string;
+  offerings: BirdOffering[];
+  priceAdjustment: PriceAdjustmentState;
+};
+
+type PendingRemovedOffering = {
+  index: number;
+  offering: BirdOffering;
+};
 
 type LivePoultryPublishSuccessDialogState = {
   products: LivePoultryShareProduct[];
@@ -269,6 +291,14 @@ export function LiveBirdsListingForm({
     getTodayDateInputValue(),
   );
   const [offerings, setOfferings] = useState<BirdOffering[]>(initialOfferings);
+  const [editBaseline, setEditBaseline] = useState<EditBaseline | null>(null);
+  const [pendingRemovedOfferings, setPendingRemovedOfferings] = useState<
+    PendingRemovedOffering[]
+  >([]);
+  const [removeBlockedInventoryItemIds, setRemoveBlockedInventoryItemIds] =
+    useState<Set<string>>(() => new Set());
+  const [hasUnsavedSavedEntryPhotoChanges, setHasUnsavedSavedEntryPhotoChanges] =
+    useState(false);
   const [scrollToOfferingId, setScrollToOfferingId] = useState<string | null>(
     null,
   );
@@ -280,7 +310,7 @@ export function LiveBirdsListingForm({
   ] = useState(false);
   const [desktopExpandedStep, setDesktopExpandedStep] = useState<
     1 | 2 | 3 | 4 | null
-  >(1);
+  >(isEditMode ? 2 : 1);
   const [highestUnlockedDesktopStep, setHighestUnlockedDesktopStep] = useState<
     1 | 2 | 3 | 4
   >(isEditMode ? 4 : 1);
@@ -353,10 +383,6 @@ export function LiveBirdsListingForm({
     () => getAgeAtAvailability(hatchDate, availableDate),
     [availableDate, hatchDate],
   );
-  const birdsForSaleGroupCount = useMemo(
-    () => getBirdsForSaleGroupCount(offerings),
-    [offerings],
-  );
   const readiness = useMemo(
     () =>
       getReadinessChecks({
@@ -404,7 +430,77 @@ export function LiveBirdsListingForm({
   const hasMeaningfulUnsavedChanges =
     publishedListingBatchId === null &&
     savedFormSnapshot !== null &&
-    currentFormSnapshot !== savedFormSnapshot;
+    (currentFormSnapshot !== savedFormSnapshot ||
+      pendingRemovedOfferings.length > 0 ||
+      hasUnsavedSavedEntryPhotoChanges ||
+      Object.keys(pendingEntryPhotos).length > 0);
+  const editChangeSummaries = useMemo(
+    () =>
+      isEditMode
+        ? getEditChangeSummaries({
+            availableDate,
+            baseline: editBaseline,
+            hatchDate,
+            offerings,
+            pendingEntryPhotos,
+            pendingRemovedOfferings,
+            priceAdjustment,
+          })
+        : [],
+    [
+      availableDate,
+      editBaseline,
+      hatchDate,
+      isEditMode,
+      offerings,
+      pendingEntryPhotos,
+      pendingRemovedOfferings,
+      priceAdjustment,
+    ],
+  );
+  const editCurrentAgeLabel = isEditMode
+    ? formatAgeFromHatchDate(editBaseline?.hatchDate ?? hatchDate)
+    : null;
+  const editPriceSummariesByOfferingId = useMemo(() => {
+    if (!isEditMode) return {};
+
+    const baselineByInventoryId = new Map(
+      (editBaseline?.offerings ?? []).map((offering) => [
+        offering.inventoryItemId,
+        offering,
+      ]),
+    );
+
+    return Object.fromEntries(
+      offerings.map((offering) => {
+        const baselineOffering = offering.inventoryItemId
+          ? baselineByInventoryId.get(offering.inventoryItemId)
+          : null;
+        const current = calculateCurrentListingPrice({
+          availableDate: editBaseline?.availableDate ?? availableDate,
+          price: baselineOffering?.price ?? offering.price,
+          priceAdjustment: editBaseline?.priceAdjustment ?? priceAdjustment,
+        });
+        const after = calculateCurrentListingPrice({
+          availableDate,
+          price: offering.price,
+          priceAdjustment,
+        });
+        const currentStarting = Number(baselineOffering?.price ?? offering.price);
+        const newStarting = Number(offering.price);
+
+        return [
+          offering.id,
+          {
+            after: formatCurrency(after),
+            current: formatCurrency(current),
+            currentStarting: formatCurrency(currentStarting),
+            newStarting: formatCurrency(newStarting),
+          },
+        ];
+      }),
+    );
+  }, [availableDate, editBaseline, isEditMode, offerings, priceAdjustment]);
   const saveDraftPreflight = useMemo(
     () =>
       getSaveDraftPreflight({
@@ -432,6 +528,7 @@ export function LiveBirdsListingForm({
   const publishValidationIssues = useMemo(
     () =>
       getPublishValidationIssues({
+        allowZeroQuantity: isEditMode,
         availableDate,
         breedMediaItemsByProfileId,
         breedOptions,
@@ -445,6 +542,7 @@ export function LiveBirdsListingForm({
       breedMediaItemsByProfileId,
       breedOptions,
       hatchDate,
+      isEditMode,
       offerings,
       priceAdjustment,
       species,
@@ -642,6 +740,12 @@ export function LiveBirdsListingForm({
             storeId: seller.store_id,
           })
         : { items: [] as ListingPhotoItem[] };
+      const removalHistoryResult =
+        draftRows && isEditMode
+          ? await loadInventoryRemovalBlockedIds(
+              draftRows.rows.map((row) => row.inventory_item_id),
+            )
+          : { blockedIds: new Set<string>() };
 
       if (!isMounted) return;
 
@@ -670,6 +774,8 @@ export function LiveBirdsListingForm({
       setSellerBreedProfiles(loadedSellerBreedProfiles);
       setBreedMediaItems(loadedBreedMediaItems);
       setEntryMediaItems(loadedEntryMediaItems);
+      setRemoveBlockedInventoryItemIds(removalHistoryResult.blockedIds);
+      setHasUnsavedSavedEntryPhotoChanges(false);
       setSpecies(selectedSpecies);
 
       if (draftRows) {
@@ -686,16 +792,29 @@ export function LiveBirdsListingForm({
         setHatchDate(loadedHatchDate);
         setAvailableDate(loadedAvailableDate);
         setHighestUnlockedDesktopStep(
-          isBirdsForSaleStepLocked({
+          isEditMode
+            ? 4
+            : isBirdsForSaleStepLocked({
             availableDate: loadedAvailableDate,
             hatchDate: loadedHatchDate,
             species: selectedSpecies,
           })
-            ? 1
-            : 2,
+              ? 1
+              : 2,
         );
         setPriceAdjustment(loadedPriceAdjustment);
         setOfferings(loadedOfferings);
+        setPendingRemovedOfferings([]);
+        setEditBaseline(
+          isEditMode
+            ? {
+                availableDate: loadedAvailableDate,
+                hatchDate: loadedHatchDate,
+                offerings: loadedOfferings,
+                priceAdjustment: loadedPriceAdjustment,
+              }
+            : null,
+        );
         nextOfferingId.current = loadedOfferings.length + 1;
         setGroupsReviewMode(false);
         setSavedFormSnapshot(getLiveBirdsFormSnapshot({
@@ -729,6 +848,8 @@ export function LiveBirdsListingForm({
         setHighestUnlockedDesktopStep(1);
         setPriceAdjustment(defaultPriceAdjustment);
         setOfferings(blankOfferings);
+        setPendingRemovedOfferings([]);
+        setEditBaseline(null);
         nextOfferingId.current = initialOfferings.length + 1;
         setGroupsReviewMode(false);
         setSavedFormSnapshot(getLiveBirdsFormSnapshot({
@@ -759,7 +880,7 @@ export function LiveBirdsListingForm({
     return () => {
       isMounted = false;
     };
-  }, [draftId, mode, seller]);
+  }, [draftId, isEditMode, mode, seller]);
 
   useEffect(() => {
     if (isEditMode || !hasMeaningfulUnsavedChanges) return;
@@ -1215,6 +1336,11 @@ export function LiveBirdsListingForm({
     if ("items" in refreshedMedia) setEntryMediaItems(refreshedMedia.items);
   }
 
+  function handleSavedEntryPhotosChanged() {
+    setHasUnsavedSavedEntryPhotoChanges(true);
+    void reloadEntryPhotos();
+  }
+
   function toggleOfferingExpanded(offeringId: string) {
     setGroupsReviewMode(false);
     setOfferings((currentOfferings) =>
@@ -1326,6 +1452,16 @@ export function LiveBirdsListingForm({
   }
 
   function removeOffering(offeringId: string) {
+    const offering = offerings.find((item) => item.id === offeringId);
+
+    if (isEditMode && offering?.inventoryItemId) {
+      const index = offerings.findIndex((item) => item.id === offeringId);
+      setPendingRemovedOfferings((current) => [
+        ...current,
+        { index, offering },
+      ]);
+    }
+
     clearPendingEntryPhoto(offeringId);
     setOfferings((currentOfferings) => {
       if (currentOfferings.length <= 1) return currentOfferings;
@@ -1345,6 +1481,22 @@ export function LiveBirdsListingForm({
         expanded: index === 0,
       }));
     });
+  }
+
+  function undoPendingRemoval(offeringId: string) {
+    const pending = pendingRemovedOfferings.find(
+      ({ offering }) => offering.id === offeringId,
+    );
+    if (!pending) return;
+
+    setOfferings((current) => {
+      const next = [...current];
+      next.splice(Math.min(pending.index, next.length), 0, pending.offering);
+      return next;
+    });
+    setPendingRemovedOfferings((current) =>
+      current.filter(({ offering }) => offering.id !== offeringId),
+    );
   }
 
   function setPendingEntryPhoto(offeringId: string, file: File) {
@@ -1755,7 +1907,7 @@ export function LiveBirdsListingForm({
 
     if ("error" in refreshedRows) {
       setDraftLoadError(refreshedRows.error);
-      return;
+      return false;
     }
 
     const loadedOfferings = alignOfferingsToBreedOptions(
@@ -1765,8 +1917,19 @@ export function LiveBirdsListingForm({
     const loadedHatchDate = refreshedRows.rows[0]?.origin_date ?? "";
     const loadedAvailableDate = refreshedRows.rows[0]?.available_date ?? "";
     const loadedPriceAdjustment = hydratePriceAdjustment(refreshedRows.rows[0]);
+    const removalHistoryResult = await loadInventoryRemovalBlockedIds(
+      refreshedRows.rows.map((row) => row.inventory_item_id),
+    );
 
     setOfferings(loadedOfferings);
+    setPendingRemovedOfferings([]);
+    setEditBaseline({
+      availableDate: loadedAvailableDate,
+      hatchDate: loadedHatchDate,
+      offerings: loadedOfferings,
+      priceAdjustment: loadedPriceAdjustment,
+    });
+    setRemoveBlockedInventoryItemIds(removalHistoryResult.blockedIds);
     nextOfferingId.current = loadedOfferings.length + 1;
     setGroupsReviewMode(false);
     setHatchDate(loadedHatchDate);
@@ -1785,6 +1948,9 @@ export function LiveBirdsListingForm({
         }),
       );
     }
+
+
+    return true;
   }
 
   async function saveEditedListing({
@@ -1828,6 +1994,9 @@ export function LiveBirdsListingForm({
       currentRows,
       loadedSpeciesId: loadedDraftSpeciesId,
       offerings,
+      pendingRemovalInventoryItemIds: pendingRemovedOfferings
+        .map(({ offering }) => offering.inventoryItemId)
+        .filter((value): value is string => Boolean(value)),
       reservationMap: reservationResult.reservationMap,
       speciesId: species.id,
       sellerBreedProfiles,
@@ -1891,6 +2060,25 @@ export function LiveBirdsListingForm({
         message: syncResult.message,
         shouldReloadListing: true,
       };
+    }
+
+    const inventoryItemIdsToDelete = pendingRemovedOfferings
+      .map(({ offering }) => offering.inventoryItemId)
+      .filter((value): value is string => Boolean(value));
+
+    if (inventoryItemIdsToDelete.length > 0) {
+      const deletionResult = await supabase.rpc("seller_delete_inventory_entries", {
+        p_equipment_inventory_item_ids: [],
+        p_inventory_item_ids: inventoryItemIdsToDelete,
+      });
+
+      if (deletionResult.error) {
+        return {
+          ok: false,
+          message: `The other changes were saved, but the selected bird entry could not be permanently removed. ${deletionResult.error.message}`,
+          shouldReloadListing: false,
+        };
+      }
     }
 
     return { ok: true };
@@ -2119,12 +2307,68 @@ export function LiveBirdsListingForm({
       return;
     }
 
-    await refreshEditListingState({
+    const pendingUploadResult = await uploadPendingEntryPhotos({
+      listingBatchId: listingBatchId ?? "",
+      offeringsToSave: offerings,
+      storeId: seller.store_id,
+    });
+
+    if (pendingUploadResult.failedOfferingIds.length === 0) {
+      Object.values(pendingEntryPhotosRef.current).forEach((photo) => {
+        URL.revokeObjectURL(photo.previewUrl);
+      });
+      pendingEntryPhotosRef.current = {};
+      setPendingEntryPhotos({});
+    }
+
+    const refreshSucceeded = await refreshEditListingState({
       storeId: seller.store_id,
       updateSnapshot: true,
     });
+    if (!refreshSucceeded) {
+      setEditSaveStatus("error");
+      setEditSaveMessage(
+        "Changes were saved, but the refreshed listing could not be loaded. Reload this page before editing again.",
+      );
+      return;
+    }
+    setHasUnsavedSavedEntryPhotoChanges(false);
     setEditSaveStatus("success");
-    setEditSaveMessage("Changes saved");
+    setEditSaveMessage(
+      pendingUploadResult.failedOfferingIds.length > 0
+        ? `Changes saved. ${pendingUploadResult.failedOfferingIds.length} option photo${pendingUploadResult.failedOfferingIds.length === 1 ? " needs" : "s need"} attention; retry it from the matching bird entry.`
+        : "Changes saved",
+    );
+  }
+
+  function undoEditChanges() {
+    if (!editBaseline || editSaveStatus === "saving") return;
+
+    Object.values(pendingEntryPhotosRef.current).forEach((photo) => {
+      URL.revokeObjectURL(photo.previewUrl);
+    });
+    pendingEntryPhotosRef.current = {};
+    setPendingEntryPhotos({});
+    setOfferings(editBaseline.offerings);
+    setPendingRemovedOfferings([]);
+    setHatchDate(editBaseline.hatchDate);
+    setAvailableDate(editBaseline.availableDate);
+    setPriceAdjustment(editBaseline.priceAdjustment);
+    nextOfferingId.current = editBaseline.offerings.length + 1;
+    setGroupsReviewMode(false);
+    setHasUnsavedSavedEntryPhotoChanges(false);
+    setSavedFormSnapshot(
+      getLiveBirdsFormSnapshot({
+        availableDate: editBaseline.availableDate,
+        hatchDate: editBaseline.hatchDate,
+        offerings: editBaseline.offerings,
+        priceAdjustment: editBaseline.priceAdjustment,
+        species,
+      }),
+    );
+    setEditSaveStatus("idle");
+    setEditSaveMessage(null);
+    setFormResetKey((current) => current + 1);
   }
 
   async function handleReviewPublish() {
@@ -2466,7 +2710,13 @@ export function LiveBirdsListingForm({
       onStartOver={() => setIsStartOverDialogOpen(true)}
       saveDraftStatus={saveDraftStatus}
     />
-    <DashboardPageContent className="bg-stone-50/60 max-sm:px-4 max-sm:py-5 max-sm:pb-24">
+    <DashboardPageContent
+      className={`bg-stone-50/60 max-sm:px-4 max-sm:py-5 ${
+        isEditMode && hasMeaningfulUnsavedChanges
+          ? "pb-32 sm:pb-28"
+          : "max-sm:pb-24"
+      }`}
+    >
       <div className="mx-auto w-full max-w-[1150px]">
         <header className="mb-5 max-sm:hidden">
           <Link
@@ -2504,13 +2754,23 @@ export function LiveBirdsListingForm({
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap lg:shrink-0">
               {isEditMode ? (
-                <button
-                  className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-3 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-9 sm:text-sm sm:font-semibold"
-                  type="button"
-                  onClick={backToInventory}
-                >
-                  Back to Inventory
-                </button>
+                <>
+                  <button
+                    className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-3 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-9 sm:text-sm sm:font-semibold"
+                    type="button"
+                    onClick={backToInventory}
+                  >
+                    Back to Inventory
+                  </button>
+                  <button
+                    className="inline-flex min-h-12 items-center rounded-md bg-emerald-800 px-4 text-base font-bold text-white shadow-sm transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-emerald-800/45 sm:min-h-9 sm:text-sm sm:font-semibold"
+                    disabled={Boolean(editSaveDisabledReason)}
+                    type="button"
+                    onClick={handleSaveEdit}
+                  >
+                    {editSaveStatus === "saving" ? "Saving..." : "Save Changes"}
+                  </button>
+                </>
               ) : (
                 <button
                   className="inline-flex min-h-12 items-center rounded-md border border-stone-300 bg-white px-3 text-base font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-9 sm:text-sm sm:font-semibold"
@@ -2535,7 +2795,7 @@ export function LiveBirdsListingForm({
               >
                 {isEditMode
                   ? hasMeaningfulUnsavedChanges
-                    ? "Unsaved changes"
+                    ? `${editChangeSummaries.length || 1} unsaved change${editChangeSummaries.length === 1 ? "" : "s"}`
                     : "Changes saved"
                   : isPublished
                     ? "Published"
@@ -2547,13 +2807,6 @@ export function LiveBirdsListingForm({
               </span>
             </div>
           </div>
-          {isEditMode ? (
-            <DesktopLiveBirdsProgress
-              currentStep={desktopExpandedStep}
-              highestUnlockedStep={highestUnlockedDesktopStep}
-              onStepOpen={(step) => setDesktopExpandedStep(step)}
-            />
-          ) : null}
         </header>
 
         {draftLoading ? (
@@ -2576,39 +2829,31 @@ export function LiveBirdsListingForm({
             className="w-full"
             key={formResetKey}
           >
-            <div
-              className={
-                isEditMode
-                  ? ""
-                  : "sm:grid sm:grid-cols-[11.25rem_minmax(0,1fr)] sm:items-start sm:gap-0 lg:grid-cols-[12.25rem_minmax(0,1fr)]"
-              }
-            >
-              {!isEditMode ? (
-                <DesktopLiveBirdsStepNav
-                  activeStep={desktopExpandedStep ?? 1}
-                  highestUnlockedStep={highestUnlockedDesktopStep}
-                  onStepSelect={setDesktopExpandedStep}
-                />
-              ) : null}
+            <div className="sm:grid sm:grid-cols-[11.25rem_minmax(0,1fr)] sm:items-start sm:gap-0 lg:grid-cols-[12.25rem_minmax(0,1fr)]">
+              <DesktopLiveBirdsStepNav
+                activeStep={desktopExpandedStep ?? 1}
+                highestUnlockedStep={highestUnlockedDesktopStep}
+                mode={mode}
+                onStepSelect={setDesktopExpandedStep}
+              />
               <main
-                className={`min-w-0 ${
-                  isEditMode
-                    ? "space-y-4 max-sm:space-y-3 sm:space-y-5"
-                    : "max-sm:space-y-3 sm:-ml-px sm:space-y-0"
-                }`}
+                className="min-w-0 max-sm:space-y-3 sm:-ml-px sm:space-y-0"
               >
-              {isEditMode && birdsForSaleGroupCount > 1 ? (
-                <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-base font-semibold leading-7 text-sky-900">
-                  This listing includes multiple bird entries. Hatch date and
-                  available date apply to all birds in this listing.
-                </p>
-              ) : null}
               <HatchInformationCard
                 ageAtAvailability={ageAtAvailability}
                 availableDate={availableDate}
                 desktopActive={desktopExpandedStep === 1}
-                desktopPanelMode={!isEditMode}
+                desktopPanelMode
                 hatchDate={hatchDate}
+                ageContext={
+                  isEditMode ? (
+                    <EditAgeContext
+                      availableDate={availableDate}
+                      baselineHatchDate={editBaseline?.hatchDate ?? hatchDate}
+                      hatchDate={hatchDate}
+                    />
+                  ) : undefined
+                }
                 referenceError={referenceDataError}
                 referenceLoading={referenceDataLoading}
                 species={species}
@@ -2654,13 +2899,15 @@ export function LiveBirdsListingForm({
                 entryPhotoPilotEnabled={
                   seller?.store_id === sunshineMesaFarmStoreId
                 }
+                editCurrentAgeLabel={editCurrentAgeLabel}
+                editPriceSummariesByOfferingId={editPriceSummariesByOfferingId}
                 breedOptions={breedOptions}
                 breedOptionsMessage={breedOptionsMessage}
                 canAddCustomBreed={Boolean(species.id)}
                 duplicateOfferingIds={duplicateOfferingIds}
                 desktopActive={desktopExpandedStep === 2}
                 desktopDisabled={highestUnlockedDesktopStep < 2}
-                desktopPanelMode={!isEditMode}
+                desktopPanelMode
                 groupsReviewMode={groupsReviewMode}
                 mobileActive={visibleMobileActiveStep === 2}
                 offerings={offerings}
@@ -2709,10 +2956,13 @@ export function LiveBirdsListingForm({
                 updateOffering={updateOffering}
                 updateOfferingBreed={updateOfferingBreed}
                 onBreedPhotosChanged={() => void reloadBreedPhotos()}
-                onEntryPhotosChanged={() => void reloadEntryPhotos()}
+                onEntryPhotosChanged={handleSavedEntryPhotosChanged}
                 onPendingEntryPhotoChange={setPendingEntryPhoto}
                 onPendingEntryPhotoRemove={clearPendingEntryPhoto}
                 pendingEntryPhotosByOfferingId={pendingEntryPhotos}
+                pendingRemovedOfferings={pendingRemovedOfferings}
+                removeBlockedInventoryItemIds={removeBlockedInventoryItemIds}
+                undoPendingRemoval={undoPendingRemoval}
                 planKey={seller?.plan_key}
                 mode={mode}
               />
@@ -2733,8 +2983,18 @@ export function LiveBirdsListingForm({
                   desktopActive={desktopExpandedStep === 3}
                   desktopComplete={highestUnlockedDesktopStep === 4}
                   desktopDisabled={highestUnlockedDesktopStep < 3}
-                  desktopPanelMode={!isEditMode}
+                  desktopPanelMode
                   locked={!plan.ageBasedPricingEnabled}
+                  editContext={
+                    isEditMode ? (
+                      <EditPricingContext
+                        availableDate={availableDate}
+                        baseline={editBaseline}
+                        offerings={offerings}
+                        priceAdjustment={priceAdjustment}
+                      />
+                    ) : undefined
+                  }
                   mobileActive={visibleMobileActiveStep === 3}
                   onMobileContinue={() => {
                     if (!mobileStepProgression.step3Complete) return;
@@ -2764,6 +3024,8 @@ export function LiveBirdsListingForm({
               </div>
               {isEditMode ? (
                 <EditModeActionsCard
+                  active={desktopExpandedStep === 4}
+                  changes={editChangeSummaries}
                   disabledReason={editSaveDisabledReason}
                   isSharing={isResolvingShareProducts}
                   message={
@@ -2926,7 +3188,62 @@ export function LiveBirdsListingForm({
         )
       ) : null}
     </DashboardPageContent>
+    {isEditMode && hasMeaningfulUnsavedChanges ? (
+      <EditStickySaveBar
+        changedCount={editChangeSummaries.length || 1}
+        disabledReason={editSaveDisabledReason}
+        isSaving={editSaveStatus === "saving"}
+        onSave={handleSaveEdit}
+        onUndo={undoEditChanges}
+      />
+    ) : null}
     </>
+  );
+}
+
+function EditStickySaveBar({
+  changedCount,
+  disabledReason,
+  isSaving,
+  onSave,
+  onUndo,
+}: {
+  changedCount: number;
+  disabledReason: string | null;
+  isSaving: boolean;
+  onSave: () => void;
+  onUndo: () => void;
+}) {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-amber-200 bg-white/95 px-4 py-3 shadow-[0_-10px_30px_rgba(0,0,0,0.12)] backdrop-blur">
+      <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-base font-bold text-stone-950 sm:text-sm">
+          Unsaved changes
+          <span className="ml-2 font-semibold text-stone-600">
+            {changedCount} change{changedCount === 1 ? "" : "s"}
+          </span>
+        </p>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+          <button
+            className="seller-secondary-button"
+            disabled={isSaving}
+            type="button"
+            onClick={onUndo}
+          >
+            Undo Changes
+          </button>
+          <button
+            className="seller-primary-button"
+            disabled={Boolean(disabledReason) || isSaving}
+            title={disabledReason ?? undefined}
+            type="button"
+            onClick={onSave}
+          >
+            {isSaving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -3047,78 +3364,6 @@ function MobileLiveBirdsTaskHeader({
         </button>
       </div>
     </header>
-  );
-}
-
-function DesktopLiveBirdsProgress({
-  currentStep,
-  highestUnlockedStep,
-  onStepOpen,
-}: {
-  currentStep: 1 | 2 | 3 | 4 | null;
-  highestUnlockedStep: 1 | 2 | 3 | 4;
-  onStepOpen: (step: 1 | 2 | 3 | 4) => void;
-}) {
-  const steps = [
-    "Hatch Details",
-    "Birds for Sale",
-    "Automatic Price Changes",
-    "Ready to Publish",
-  ] as const;
-
-  return (
-    <nav
-      aria-label="Add Live Birds progress"
-      className="mx-auto mt-8 hidden max-w-4xl px-4 sm:block"
-    >
-      <ol className="relative grid grid-cols-4">
-        <span
-          aria-hidden="true"
-          className="absolute left-[12.5%] right-[12.5%] top-5 h-px bg-stone-300"
-        />
-        {steps.map((label, index) => {
-          const step = (index + 1) as 1 | 2 | 3 | 4;
-          const active = step === currentStep;
-          const complete = step < highestUnlockedStep;
-          const disabled = step > highestUnlockedStep;
-
-          return (
-            <li className="relative flex flex-col items-center" key={label}>
-              <button
-                aria-current={active ? "step" : undefined}
-                className="group z-10 flex flex-col items-center text-center focus:outline-none disabled:cursor-not-allowed"
-                disabled={disabled}
-                type="button"
-                onClick={() => onStepOpen(step)}
-              >
-                <span
-                  className={`flex size-10 items-center justify-center rounded-full border text-sm font-bold shadow-sm transition-all group-hover:-translate-y-0.5 group-focus:ring-2 group-focus:ring-emerald-700 group-focus:ring-offset-2 ${
-                    (active || complete) && !disabled
-                      ? "border-emerald-800 bg-emerald-800 text-white"
-                      : disabled
-                        ? "border-stone-200 bg-stone-100 text-stone-400 shadow-none"
-                        : "border-stone-300 bg-white text-stone-600"
-                  }`}
-                >
-                  {step}
-                </span>
-                <span
-                  className={`mt-2 text-sm font-semibold ${
-                    disabled
-                      ? "text-stone-400"
-                      : active
-                        ? "text-stone-950"
-                        : "text-stone-600"
-                  }`}
-                >
-                  {label}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
   );
 }
 
@@ -3333,7 +3578,114 @@ function SpeciesChangeWarningDialog({
   );
 }
 
+function EditPricingContext({
+  availableDate,
+  baseline,
+  offerings,
+  priceAdjustment,
+}: {
+  availableDate: string;
+  baseline: EditBaseline | null;
+  offerings: BirdOffering[];
+  priceAdjustment: PriceAdjustmentState;
+}) {
+  const savedOfferings = baseline?.offerings ?? offerings;
+  const savedAvailableDate = baseline?.availableDate ?? availableDate;
+  const savedRule = baseline?.priceAdjustment ?? priceAdjustment;
+  const currentPrices = savedOfferings.map((offering) =>
+    calculateCurrentListingPrice({
+      availableDate: savedAvailableDate,
+      price: offering.price,
+      priceAdjustment: savedRule,
+    }),
+  );
+  const pendingPrices = offerings.map((offering) =>
+    calculateCurrentListingPrice({
+      availableDate,
+      price: offering.price,
+      priceAdjustment,
+    }),
+  );
+  const currentStartingPrices = savedOfferings.map((offering) =>
+    Number(offering.price),
+  );
+  const pendingStartingPrices = offerings.map((offering) =>
+    Number(offering.price),
+  );
+  const nextAdjustment = getNextPriceAdjustment({
+    availableDate,
+    offerings,
+    priceAdjustment,
+  });
+  const currentRange = formatPriceRange(currentPrices);
+  const pendingRange = formatPriceRange(pendingPrices);
+  const currentStartingRange = formatPriceRange(currentStartingPrices);
+  const pendingStartingRange = formatPriceRange(pendingStartingPrices);
+  const currentAdjustmentRange = formatSignedCurrencyRange(
+    currentPrices.map((price, index) => price - currentStartingPrices[index]),
+  );
+
+  return (
+    <div className="rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm leading-6 text-stone-700">
+      <div className="flex flex-wrap gap-x-5 gap-y-1">
+        <p><span className="font-semibold">Starting price:</span> {currentStartingRange}</p>
+        {pendingStartingRange !== currentStartingRange ? (
+          <p><span className="font-semibold">New starting price:</span> {pendingStartingRange}</p>
+        ) : null}
+        {savedRule.enabled ? (
+          <p><span className="font-semibold">Current adjustment:</span> {currentAdjustmentRange}</p>
+        ) : null}
+        <p><span className="font-semibold">Current storefront price:</span> {currentRange}</p>
+        {pendingRange !== currentRange ? (
+          <p><span className="font-semibold">After saving:</span> {pendingRange}</p>
+        ) : null}
+        <p>
+          <span className="font-semibold">Next adjustment:</span>{" "}
+          {nextAdjustment
+            ? `${nextAdjustment.adjustmentRange} total \u2192 ${nextAdjustment.priceRange} on ${nextAdjustment.dateLabel}`
+            : "None scheduled"}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function EditAgeContext({
+  availableDate,
+  baselineHatchDate,
+  hatchDate,
+}: {
+  availableDate: string;
+  baselineHatchDate: string;
+  hatchDate: string;
+}) {
+  const currentAge = formatAgeFromHatchDate(baselineHatchDate);
+  const pendingAge = formatAgeFromHatchDate(hatchDate);
+  const availableLabel = formatDateForDisplay(availableDate);
+  const isAvailable = Boolean(availableDate && availableDate <= getTodayDateInputValue());
+
+  return (
+    <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-base leading-7 text-emerald-950">
+      <span className="font-semibold">Current age today:</span>{" "}
+      {currentAge ?? "Not available"}
+      {pendingAge && pendingAge !== currentAge ? (
+        <>
+          <span aria-hidden="true"> &nbsp;&#8226;&nbsp; </span>
+          <span className="font-semibold">After saving:</span> {pendingAge}
+        </>
+      ) : null}
+      {availableLabel ? (
+        <p className="mt-1 text-sm text-emerald-900">
+          {isAvailable ? "Available since" : "Available on"} {availableLabel}.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function EditModeActionsCard({
+  active,
+  changes,
   disabledReason,
   isSharing,
   message,
@@ -3342,6 +3694,8 @@ function EditModeActionsCard({
   onShare,
   status,
 }: {
+  active: boolean;
+  changes: string[];
   disabledReason: string | null;
   isSharing: boolean;
   message: string | null;
@@ -3354,16 +3708,34 @@ function EditModeActionsCard({
   const isDisabled = Boolean(disabledReason) || isSaving;
 
   return (
-    <section className="rounded-xl border border-transparent bg-white p-5 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm">
+    <section
+      className={`rounded-xl border border-transparent bg-white p-5 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm ${
+        active ? "" : "sm:hidden"
+      }`}
+    >
       <div className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-stone-950">
-            Ready to save?
+            Review & Save
           </h2>
           <p className="mt-1 text-base leading-7 text-stone-600">
-            Save listing-level details and updates to existing bird entries.
+            Review only the changes you are making to this live listing.
           </p>
         </div>
+        {changes.length > 0 ? (
+          <ul className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm leading-6 text-stone-700">
+            {changes.map((change) => (
+              <li className="flex gap-2" key={change}>
+                <span aria-hidden="true" className="text-emerald-700">&#8226;</span>
+                <span>{change}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-600">
+            No unsaved changes.
+          </p>
+        )}
         {message ? (
           <p
             className={`rounded-md border px-3 py-2 text-sm font-semibold leading-6 ${
@@ -3647,10 +4019,58 @@ async function loadActiveReservationMap(inventoryItemIds: string[]) {
   return { ok: true as const, reservationMap };
 }
 
+async function loadInventoryRemovalBlockedIds(inventoryItemIds: string[]) {
+  const uniqueInventoryItemIds = Array.from(new Set(inventoryItemIds));
+  const blockAll = () => ({ blockedIds: new Set(uniqueInventoryItemIds) });
+
+  if (uniqueInventoryItemIds.length === 0) {
+    return { blockedIds: new Set<string>() };
+  }
+
+  const itemResult = await supabase
+    .from("seller_order_item_detail")
+    .select("inventory_item_id, order_id, fulfilled_quantity")
+    .in("inventory_item_id", uniqueInventoryItemIds)
+    .returns<RemovalHistoryItemRow[]>();
+
+  if (itemResult.error) return blockAll();
+
+  const itemRows = itemResult.data ?? [];
+  const orderIds = Array.from(new Set(itemRows.map((row) => row.order_id)));
+  if (orderIds.length === 0) return { blockedIds: new Set<string>() };
+
+  const orderResult = await supabase
+    .from("seller_order_management")
+    .select("order_id, order_status")
+    .in("order_id", orderIds)
+    .returns<RemovalHistoryOrderRow[]>();
+
+  if (orderResult.error) return blockAll();
+
+  const statusByOrderId = new Map(
+    (orderResult.data ?? []).map((row) => [row.order_id, row.order_status]),
+  );
+  const blockedIds = new Set<string>();
+
+  itemRows.forEach((row) => {
+    if (!row.inventory_item_id) return;
+    const orderStatus = statusByOrderId.get(row.order_id);
+    if (
+      orderStatus !== "canceled" ||
+      Math.max(row.fulfilled_quantity ?? 0, 0) > 0
+    ) {
+      blockedIds.add(row.inventory_item_id);
+    }
+  });
+
+  return { blockedIds };
+}
+
 function getEditCurrentRowsValidationIssue({
   currentRows,
   loadedSpeciesId,
   offerings,
+  pendingRemovalInventoryItemIds,
   reservationMap,
   speciesId,
   sellerBreedProfiles,
@@ -3658,6 +4078,7 @@ function getEditCurrentRowsValidationIssue({
   currentRows: DraftInventoryRow[];
   loadedSpeciesId: string | null;
   offerings: BirdOffering[];
+  pendingRemovalInventoryItemIds: string[];
   reservationMap: Map<string, number>;
   speciesId: string | null;
   sellerBreedProfiles: SellerBreedProfile[];
@@ -3671,6 +4092,7 @@ function getEditCurrentRowsValidationIssue({
       .map((offering) => offering.inventoryItemId)
       .filter((value): value is string => Boolean(value)),
   );
+  const removalInventoryIds = new Set(pendingRemovalInventoryItemIds);
   const breedProfileSpeciesById = new Map(
     sellerBreedProfiles.map((profile) => [profile.id, profile.species_id] as const),
   );
@@ -3689,9 +4111,13 @@ function getEditCurrentRowsValidationIssue({
   }
 
   if (
-    activeRows.some((row) => !offeringInventoryIds.has(row.inventory_item_id))
+    activeRows.some(
+      (row) =>
+        !offeringInventoryIds.has(row.inventory_item_id) &&
+        !removalInventoryIds.has(row.inventory_item_id),
+    )
   ) {
-    return "Entry removal is not available yet.";
+    return "This listing changed elsewhere. Reload it before saving.";
   }
 
   for (const offering of offerings) {
@@ -4304,6 +4730,7 @@ function getBirdsForSaleCompletionErrorMessage(
 }
 
 function getPublishValidationIssues({
+  allowZeroQuantity = false,
   availableDate,
   breedMediaItemsByProfileId,
   breedOptions,
@@ -4312,6 +4739,7 @@ function getPublishValidationIssues({
   priceAdjustment,
   species,
 }: {
+  allowZeroQuantity?: boolean;
   availableDate: string;
   breedMediaItemsByProfileId: Record<string, ListingPhotoItem[]>;
   breedOptions: BreedOption[];
@@ -4403,7 +4831,7 @@ function getPublishValidationIssues({
     if (
       !offering.quantity.trim() ||
       !Number.isInteger(quantity) ||
-      quantity <= 0
+      quantity < (allowZeroQuantity ? 0 : 1)
     ) {
       issues.push({
         id: `${offering.id}-quantity`,
@@ -4557,6 +4985,235 @@ function getLiveBirdsFormSnapshot({
       slug: species.slug,
     },
   });
+}
+
+function getEditChangeSummaries({
+  availableDate,
+  baseline,
+  hatchDate,
+  offerings,
+  pendingEntryPhotos,
+  pendingRemovedOfferings,
+  priceAdjustment,
+}: {
+  availableDate: string;
+  baseline: EditBaseline | null;
+  hatchDate: string;
+  offerings: BirdOffering[];
+  pendingEntryPhotos: Record<string, PendingEntryPhoto>;
+  pendingRemovedOfferings: PendingRemovedOffering[];
+  priceAdjustment: PriceAdjustmentState;
+}) {
+  if (!baseline) return [];
+  const changes: string[] = [];
+
+  if (baseline.hatchDate !== hatchDate) {
+    changes.push(
+      `Hatch date changed from ${formatDateForDisplay(baseline.hatchDate)} to ${formatDateForDisplay(hatchDate)}.`,
+    );
+    changes.push(
+      `Current calculated age changes from ${formatAgeFromHatchDate(baseline.hatchDate)} to ${formatAgeFromHatchDate(hatchDate)}.`,
+    );
+  }
+  if (baseline.availableDate !== availableDate) {
+    changes.push(
+      `Available date changed from ${formatDateForDisplay(baseline.availableDate)} to ${formatDateForDisplay(availableDate)}.`,
+    );
+  }
+
+  const baselineByInventoryId = new Map(
+    baseline.offerings.map((offering) => [offering.inventoryItemId, offering]),
+  );
+  offerings.forEach((offering) => {
+    const saved = offering.inventoryItemId
+      ? baselineByInventoryId.get(offering.inventoryItemId)
+      : null;
+    const label = `${offering.breed || "Bird"} ${offering.soldAs || "entry"}`;
+    if (!saved) {
+      changes.push(`${label} will be added.`);
+      return;
+    }
+    if (saved.quantity !== offering.quantity) {
+      changes.push(`${label} quantity changed from ${saved.quantity} to ${offering.quantity}.`);
+    }
+    if (saved.price !== offering.price) {
+      changes.push(`${label} starting price changed from ${formatCurrency(Number(saved.price))} to ${formatCurrency(Number(offering.price))}.`);
+    }
+    if (saved.soldAs !== offering.soldAs) {
+      changes.push(`${offering.breed} sale type changed from ${saved.soldAs} to ${offering.soldAs}.`);
+    }
+  });
+
+  pendingRemovedOfferings.forEach(({ offering }) => {
+    changes.push(`${offering.breed} ${offering.soldAs.toLowerCase()} entry will be permanently removed.`);
+  });
+  Object.keys(pendingEntryPhotos).forEach((offeringId) => {
+    const offering = offerings.find((item) => item.id === offeringId);
+    changes.push(`${offering?.breed || "Bird"} entry photo will be added.`);
+  });
+
+  const currentPrices = baseline.offerings.map((offering) =>
+    calculateCurrentListingPrice({
+      availableDate: baseline.availableDate,
+      price: offering.price,
+      priceAdjustment: baseline.priceAdjustment,
+    }),
+  );
+  const nextPrices = offerings.map((offering) =>
+    calculateCurrentListingPrice({ availableDate, price: offering.price, priceAdjustment }),
+  );
+  const currentPriceRange = formatPriceRange(currentPrices);
+  const nextPriceRange = formatPriceRange(nextPrices);
+  if (currentPriceRange !== nextPriceRange) {
+    changes.push(
+      `Current storefront price changes from ${currentPriceRange} to ${nextPriceRange}.`,
+    );
+  }
+
+  return changes;
+}
+
+function calculateCurrentListingPrice({
+  availableDate,
+  price,
+  priceAdjustment,
+}: {
+  availableDate: string;
+  price: string;
+  priceAdjustment: PriceAdjustmentState;
+}) {
+  const startingPrice = Number(price);
+  if (!Number.isFinite(startingPrice)) return 0;
+  if (!priceAdjustment.enabled) return startingPrice;
+
+  const available = parseDateValue(availableDate);
+  const today = parseDateValue(getTodayDateInputValue());
+  const intervalWeeks = Number(priceAdjustment.intervalWeeks);
+  const amount = Number(priceAdjustment.amount);
+  if (!available || !today || intervalWeeks <= 0 || amount <= 0 || today <= available) {
+    return startingPrice;
+  }
+
+  const completedIntervals = Math.floor(
+    (today.getTime() - available.getTime()) /
+      (intervalWeeks * 7 * 24 * 60 * 60 * 1000),
+  );
+  if (priceAdjustment.direction === "increase") {
+    const uncapped = startingPrice + amount * completedIntervals;
+    const maximum = Number(priceAdjustment.maxPrice);
+    return Number.isFinite(maximum)
+      ? Math.min(uncapped, Math.max(maximum, startingPrice))
+      : uncapped;
+  }
+
+  const uncapped = startingPrice - amount * completedIntervals;
+  const minimum = Number(priceAdjustment.minPrice);
+  return Math.max(
+    uncapped,
+    Number.isFinite(minimum) ? Math.min(minimum, startingPrice) : 0,
+    0,
+  );
+}
+
+function getNextPriceAdjustment({
+  availableDate,
+  offerings,
+  priceAdjustment,
+}: {
+  availableDate: string;
+  offerings: BirdOffering[];
+  priceAdjustment: PriceAdjustmentState;
+}) {
+  if (!priceAdjustment.enabled || offerings.length === 0) return null;
+  const available = parseDateValue(availableDate);
+  const today = parseDateValue(getTodayDateInputValue());
+  const intervalWeeks = Number(priceAdjustment.intervalWeeks);
+  if (!available || !today || !Number.isInteger(intervalWeeks) || intervalWeeks <= 0) return null;
+
+  const intervalMs = intervalWeeks * 7 * 24 * 60 * 60 * 1000;
+  const completed = today > available
+    ? Math.floor((today.getTime() - available.getTime()) / intervalMs)
+    : 0;
+  const nextDate = new Date(available.getTime() + (completed + 1) * intervalMs);
+  const prices = offerings.map((offering) => {
+    const current = calculateCurrentListingPrice({ availableDate, price: offering.price, priceAdjustment });
+    const amount = Number(priceAdjustment.amount);
+    const limit = Number(
+      priceAdjustment.direction === "increase"
+        ? priceAdjustment.maxPrice
+        : priceAdjustment.minPrice,
+    );
+    return priceAdjustment.direction === "increase"
+      ? Math.min(current + amount, Number.isFinite(limit) ? limit : current + amount)
+      : Math.max(current - amount, Number.isFinite(limit) ? limit : 0, 0);
+  });
+  const currentPrices = offerings.map((offering) =>
+    calculateCurrentListingPrice({ availableDate, price: offering.price, priceAdjustment }),
+  );
+  if (prices.every((price, index) => price === currentPrices[index])) return null;
+
+  const startingPrices = offerings.map((offering) => Number(offering.price));
+
+  return {
+    adjustmentRange: formatSignedCurrencyRange(
+      prices.map((price, index) => price - startingPrices[index]),
+    ),
+    dateLabel: new Intl.DateTimeFormat("en-US", {
+      day: "numeric",
+      month: "long",
+      timeZone: "UTC",
+    }).format(nextDate),
+    priceRange: formatPriceRange(prices),
+  };
+}
+
+function formatAgeFromHatchDate(value: string) {
+  const hatch = parseDateValue(value);
+  const today = parseDateValue(getTodayDateInputValue());
+  if (!hatch || !today || hatch > today) return null;
+  const days = Math.floor((today.getTime() - hatch.getTime()) / (24 * 60 * 60 * 1000));
+  if (days < 14) return `${days} day${days === 1 ? "" : "s"}`;
+  const weeks = Math.floor(days / 7);
+  return `${weeks} week${weeks === 1 ? "" : "s"}`;
+}
+
+function formatDateForDisplay(value: string) {
+  const date = parseDateValue(value);
+  if (!date) return value || "not set";
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    maximumFractionDigits: 2,
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+    style: "currency",
+  }).format(value);
+}
+
+function formatPriceRange(values: number[]) {
+  const finite = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (finite.length === 0) return "Not available";
+  return finite[0] === finite[finite.length - 1]
+    ? formatCurrency(finite[0])
+    : `${formatCurrency(finite[0])}–${formatCurrency(finite[finite.length - 1])}`;
+}
+
+function formatSignedCurrencyRange(values: number[]) {
+  const finite = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (finite.length === 0) return "Not available";
+  const formatSigned = (value: number) =>
+    `${value > 0 ? "+" : value < 0 ? "-" : ""}${formatCurrency(Math.abs(value))}`;
+
+  return finite[0] === finite[finite.length - 1]
+    ? formatSigned(finite[0])
+    : `${formatSigned(finite[0])}â€“${formatSigned(finite[finite.length - 1])}`;
 }
 
 function mergeDraftSpeciesOptions(

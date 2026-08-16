@@ -71,8 +71,19 @@ test("all four desktop steps remain mounted and use panel visibility", () => {
 
   assert.match(sectionCardSource, /desktopPanelMode && !desktopExpanded/);
   assert.match(sectionCardSource, /"sm:hidden"/);
-  assert.match(pageSource, /desktopPanelMode=\{!isEditMode\}/);
+  assert.match(pageSource, /desktopPanelMode/);
   assert.match(pageSource, /desktopActive=\{desktopExpandedStep === 4\}/);
+});
+
+test("Edit Live Birds reuses the Add tabs with management wording", () => {
+  assert.match(pageSource, /mode=\{mode\}/);
+  assert.match(navSource, /label: "Review & Save"/);
+  assert.match(navSource, /Edit Live Birds sections/);
+  assert.match(pageSource, />\(isEditMode \? 2 : 1\);/);
+  assert.doesNotMatch(pageSource, /<EditCurrentStateSummary/);
+  assert.match(pageSource, /<EditPricingContext/);
+  assert.doesNotMatch(navSource, /saveAction/);
+  assert.match(pageSource, /<EditStickySaveBar/);
 });
 
 test("desktop publish validation activates a target panel before focus", () => {

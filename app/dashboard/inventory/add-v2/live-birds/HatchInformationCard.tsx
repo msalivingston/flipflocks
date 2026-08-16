@@ -15,6 +15,7 @@ export function HatchInformationCard({
   desktopPanelMode = false,
   hatchDate,
   introText,
+  ageContext,
   mobileActive,
   onDesktopContinue,
   onMobileContinue,
@@ -37,6 +38,7 @@ export function HatchInformationCard({
   desktopPanelMode?: boolean;
   hatchDate: string;
   introText?: string;
+  ageContext?: React.ReactNode;
   mobileActive: boolean;
   onDesktopContinue: () => void;
   onMobileContinue: () => void;
@@ -101,7 +103,7 @@ export function HatchInformationCard({
             }
           />
         </div>
-        <AgeMessage ageAtAvailability={ageAtAvailability} />
+        {ageContext ?? <AgeMessage ageAtAvailability={ageAtAvailability} />}
         <ReferenceMessages
           referenceError={referenceError}
           referenceLoading={referenceLoading}

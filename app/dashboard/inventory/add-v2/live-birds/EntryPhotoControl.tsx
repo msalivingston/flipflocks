@@ -117,6 +117,8 @@ export function EntryPhotoControl({
         type="button"
       >
         {previewUrl ? (
+          // Browser object URLs from pending photos require a native image element.
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             alt={activePhoto?.alt_text || "Option photo"}
             className="size-full object-cover"
@@ -127,10 +129,34 @@ export function EntryPhotoControl({
         )}
       </button>
       <div className="min-w-0 text-left">
-        <p className="text-lg font-semibold text-stone-900">Photo of These Birds (optional)</p>
-        <p className="text-sm leading-5 text-stone-500">
-          Your storefront automatically groups all birds of the same breed together and uses the breed’s main photo for that breed listing. If you change the breed photo and description below, that change will apply to all birds you have of that breed. Add a photo here if you want buyers to see the actual bird or birds in this specific entry. This photo will appear with this entry in the Purchase Details section on your storefront.
-        </p>
+        <p className="hidden text-lg font-semibold text-stone-900 sm:block">Photo of These Birds (optional)</p>
+        <details className="group mt-1 hidden sm:block">
+          <summary className="w-fit cursor-pointer list-none text-sm font-semibold text-emerald-800 underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-emerald-700/30">
+            More information about listing photos.
+          </summary>
+          <p className="mt-2 max-w-3xl text-sm leading-5 text-stone-500">
+            Your storefront automatically groups all birds of the same breed together and uses the breed’s main photo for that breed listing. If you change the breed photo and description below, that change will apply to all birds you have of that breed. Add a photo here if you want buyers to see a photo in the product details representing the bird or birds in this specific entry.
+          </p>
+        </details>
+        <div className="sm:hidden">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-base font-semibold leading-5 text-stone-900">
+              Photo of These Birds
+            </p>
+            <span className="text-sm font-medium text-stone-500">Optional</span>
+            <details className="group relative">
+              <summary
+                aria-label="About entry photos"
+                className="flex size-9 cursor-help list-none items-center justify-center rounded-full border border-stone-300 bg-white text-sm font-bold text-stone-600 focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+              >
+                ?
+              </summary>
+              <p className="absolute right-0 z-30 mt-2 w-64 rounded-md border border-stone-200 bg-white px-3 py-2 text-sm leading-5 text-stone-600 shadow-lg">
+                Your storefront automatically groups all birds of the same breed together and uses the breed’s main photo for that breed listing. If you change the breed photo and description below, that change will apply to all birds you have of that breed. Add a photo here if you want buyers to see a photo in the product details representing the bird or birds in this specific entry.
+              </p>
+            </details>
+          </div>
+        </div>
         {activePhoto && canManage ? (
           <button
             className="mt-2 text-sm font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-700/30"

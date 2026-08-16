@@ -24,6 +24,8 @@ export function BirdOfferingsCard({
   breedMediaItemsByProfileId,
   entryMediaItemsByInventoryItemId,
   entryPhotoPilotEnabled,
+  editPriceSummariesByOfferingId = {},
+  editCurrentAgeLabel,
   breedOptions,
   breedOptionsMessage,
   canAddCustomBreed,
@@ -53,6 +55,9 @@ export function BirdOfferingsCard({
   onPendingEntryPhotoChange,
   onPendingEntryPhotoRemove,
   pendingEntryPhotosByOfferingId,
+  pendingRemovedOfferings = [],
+  removeBlockedInventoryItemIds = new Set<string>(),
+  undoPendingRemoval,
   planKey,
   mode = "create",
 }: {
@@ -60,6 +65,16 @@ export function BirdOfferingsCard({
   breedMediaItemsByProfileId: Record<string, ListingPhotoItem[]>;
   entryMediaItemsByInventoryItemId: Record<string, ListingPhotoItem[]>;
   entryPhotoPilotEnabled: boolean;
+  editPriceSummariesByOfferingId?: Record<
+    string,
+    {
+      after: string;
+      current: string;
+      currentStarting: string;
+      newStarting: string;
+    }
+  >;
+  editCurrentAgeLabel?: string | null;
   breedOptions: BreedOption[];
   breedOptionsMessage: string | null;
   canAddCustomBreed: boolean;
@@ -95,6 +110,9 @@ export function BirdOfferingsCard({
     string,
     { error: string | null; file: File; previewUrl: string }
   >;
+  pendingRemovedOfferings?: Array<{ index: number; offering: BirdOffering }>;
+  removeBlockedInventoryItemIds?: Set<string>;
+  undoPendingRemoval?: (offeringId: string) => void;
   planKey?: string | null;
   mode?: "create" | "edit";
 }) {
@@ -104,6 +122,23 @@ export function BirdOfferingsCard({
   const plan = getPlanCapabilities(planKey);
   const isEditMode = mode === "edit";
   const isLocked = Boolean(stepLocked);
+  const displayedOfferings = useMemo(() => {
+    const rows: Array<
+      | { kind: "active"; offering: BirdOffering }
+      | { kind: "removed"; offering: BirdOffering }
+    > = offerings.map((offering) => ({ kind: "active", offering }));
+
+    [...pendingRemovedOfferings]
+      .sort((left, right) => left.index - right.index)
+      .forEach(({ index, offering }) => {
+        rows.splice(Math.min(index, rows.length), 0, {
+          kind: "removed",
+          offering,
+        });
+      });
+
+    return rows;
+  }, [offerings, pendingRemovedOfferings]);
 
   return (
     <SectionCard
@@ -160,23 +195,36 @@ export function BirdOfferingsCard({
       ) : null}
       {!isLocked ? (
         <div className="mt-4 space-y-4 sm:mt-4 sm:space-y-3">
-          {offerings.map((offering, index) =>
-            offering.expanded ? (
+          {displayedOfferings.map((row, index) =>
+            row.kind === "removed" ? (
+              <RemovedOfferingRow
+                key={`removed-${row.offering.id}`}
+                index={index}
+                offering={row.offering}
+                onUndo={() => undoPendingRemoval?.(row.offering.id)}
+              />
+            ) : row.offering.expanded ? (
               <ExpandedOfferingCard
-                key={offering.id}
+                key={row.offering.id}
                 breedMediaItemsByProfileId={breedMediaItemsByProfileId}
                 entryMediaItemsByInventoryItemId={entryMediaItemsByInventoryItemId}
                 entryPhotoPilotEnabled={entryPhotoPilotEnabled}
+                editPriceSummary={editPriceSummariesByOfferingId[row.offering.id]}
+                editCurrentAgeLabel={editCurrentAgeLabel}
                 breedOptions={breedOptions}
                 canAddCustomBreed={canAddCustomBreed}
-                canRemove={!isEditMode && offerings.length > 1}
-                hasDuplicateCombination={duplicateOfferingIds.has(offering.id)}
+                canRemove={offerings.length > 1}
+                hasDuplicateCombination={duplicateOfferingIds.has(row.offering.id)}
                 isEditMode={isEditMode}
                 desktopPanelMode={desktopPanelMode}
                 index={index}
-                offering={offering}
+                offering={row.offering}
                 prepareBreedPhotoProfile={prepareBreedPhotoProfile}
                 removeOffering={removeOffering}
+                removeDisabled={Boolean(
+                  row.offering.inventoryItemId &&
+                    removeBlockedInventoryItemIds.has(row.offering.inventoryItemId),
+                )}
                 scrollToOfferingId={scrollToOfferingId}
                 storeId={storeId}
                 toggleOfferingExpanded={toggleOfferingExpanded}
@@ -186,21 +234,26 @@ export function BirdOfferingsCard({
                 onBreedPhotosChanged={onBreedPhotosChanged}
                 onEntryPhotosChanged={onEntryPhotosChanged}
                 onPendingEntryPhotoChange={(file) =>
-                  onPendingEntryPhotoChange(offering.id, file)
+                  onPendingEntryPhotoChange(row.offering.id, file)
                 }
-                onPendingEntryPhotoRemove={() => onPendingEntryPhotoRemove(offering.id)}
-                pendingEntryPhoto={pendingEntryPhotosByOfferingId[offering.id] ?? null}
+                onPendingEntryPhotoRemove={() => onPendingEntryPhotoRemove(row.offering.id)}
+                pendingEntryPhoto={pendingEntryPhotosByOfferingId[row.offering.id] ?? null}
                 onOpenCustomBreedModal={onOpenCustomBreedModal}
                 plan={plan}
               />
             ) : (
               <CollapsedOfferingRow
-                key={offering.id}
-                canRemove={!isEditMode && offerings.length > 1}
-                hasDuplicateCombination={duplicateOfferingIds.has(offering.id)}
+                key={row.offering.id}
+                canRemove={offerings.length > 1}
+                hasDuplicateCombination={duplicateOfferingIds.has(row.offering.id)}
+                isEditMode={isEditMode}
                 index={index}
-                offering={offering}
+                offering={row.offering}
                 removeOffering={removeOffering}
+                removeDisabled={Boolean(
+                  row.offering.inventoryItemId &&
+                    removeBlockedInventoryItemIds.has(row.offering.inventoryItemId),
+                )}
                 toggleOfferingExpanded={toggleOfferingExpanded}
               />
             ),
@@ -244,6 +297,8 @@ function ExpandedOfferingCard({
   breedMediaItemsByProfileId,
   entryMediaItemsByInventoryItemId,
   entryPhotoPilotEnabled,
+  editPriceSummary,
+  editCurrentAgeLabel,
   breedOptions,
   canAddCustomBreed,
   canRemove,
@@ -254,6 +309,7 @@ function ExpandedOfferingCard({
   offering,
   prepareBreedPhotoProfile,
   removeOffering,
+  removeDisabled,
   scrollToOfferingId,
   storeId,
   toggleOfferingExpanded,
@@ -271,6 +327,13 @@ function ExpandedOfferingCard({
   breedMediaItemsByProfileId: Record<string, ListingPhotoItem[]>;
   entryMediaItemsByInventoryItemId: Record<string, ListingPhotoItem[]>;
   entryPhotoPilotEnabled: boolean;
+  editPriceSummary?: {
+    after: string;
+    current: string;
+    currentStarting: string;
+    newStarting: string;
+  };
+  editCurrentAgeLabel?: string | null;
   breedOptions: BreedOption[];
   canAddCustomBreed: boolean;
   canRemove: boolean;
@@ -281,6 +344,7 @@ function ExpandedOfferingCard({
   offering: BirdOffering;
   prepareBreedPhotoProfile: (offeringId: string) => void;
   removeOffering: (offeringId: string) => void;
+  removeDisabled: boolean;
   scrollToOfferingId: string | null;
   storeId: string;
   toggleOfferingExpanded: (offeringId: string) => void;
@@ -300,7 +364,7 @@ function ExpandedOfferingCard({
 }) {
   const selectedBreedOption = findSelectedBreedOption(breedOptions, offering);
   const title = getBirdsForSaleTitle(offering);
-  const summary = getBirdsForSaleSummary(offering);
+  const summary = getBirdsForSaleSummary(offering, isEditMode);
   const cardRef = useRef<HTMLDivElement>(null);
   const breedMediaItems = offering.sellerBreedProfileId
     ? breedMediaItemsByProfileId[offering.sellerBreedProfileId] ?? []
@@ -361,16 +425,17 @@ function ExpandedOfferingCard({
           </span>
         </div>
         <div className="hidden shrink-0 items-center gap-3 sm:flex">
-          <EntryStatus offering={offering} />
+          <EntryStatus allowSoldOut={isEditMode} offering={offering} />
           {canRemove ? (
             <RemoveOfferingControl
+              disabled={removeDisabled}
               offeringId={offering.id}
               removeOffering={removeOffering}
             />
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:hidden">
-          <EntryStatus offering={offering} />
+          <EntryStatus allowSoldOut={isEditMode} offering={offering} />
           {canRemove ? (
             <details className="relative">
               <summary className="flex size-10 cursor-pointer list-none items-center justify-center rounded-md text-lg font-bold text-stone-500 focus:outline-none focus:ring-2 focus:ring-emerald-700/20">
@@ -378,6 +443,7 @@ function ExpandedOfferingCard({
               </summary>
               <div className="absolute right-0 z-20 mt-1 rounded-md border border-stone-200 bg-white p-2 shadow-lg">
                 <RemoveOfferingControl
+                  disabled={removeDisabled}
                   offeringId={offering.id}
                   removeOffering={removeOffering}
                 />
@@ -423,6 +489,30 @@ function ExpandedOfferingCard({
             : "lg:grid-cols-4"
         }`}
       >
+        {isEditMode ? (
+          <dl className="grid gap-2 rounded-lg border border-stone-200 bg-stone-50/70 px-3 py-2.5 text-stone-700 sm:col-span-full sm:grid-cols-3">
+            <EditOfferingMetric
+              label="Current age"
+              value={editCurrentAgeLabel ?? "Not available"}
+            />
+            {editPriceSummary ? (
+              <>
+                <EditOfferingMetric
+                  label="Starting price"
+                  value={editPriceSummary.newStarting}
+                />
+                <EditOfferingMetric
+                  label="Storefront price"
+                  value={
+                    editPriceSummary.after !== editPriceSummary.current
+                      ? `${editPriceSummary.current} now \u2192 ${editPriceSummary.after} after save`
+                      : editPriceSummary.current
+                  }
+                />
+              </>
+            ) : null}
+          </dl>
+        ) : null}
         <div className="space-y-4 border-b border-stone-100 pb-5 sm:contents sm:border-0 sm:pb-0">
           <div>
             <SelectField
@@ -476,7 +566,7 @@ function ExpandedOfferingCard({
             onChange={(value) => updateOffering(offering.id, { quantity: value })}
           />
           <NumberField
-            label="Price per bird"
+            label={isEditMode ? "Starting price" : "Price per bird"}
             prefix="$"
             value={offering.price}
             onChange={(value) => updateOffering(offering.id, { price: value })}
@@ -580,24 +670,41 @@ function ExpandedOfferingCard({
   );
 }
 
+function EditOfferingMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs font-semibold uppercase tracking-[0.06em] text-stone-500">
+        {label}
+      </dt>
+      <dd className="mt-0.5 text-sm font-semibold leading-5 text-stone-900">
+        {value}
+      </dd>
+    </div>
+  );
+}
+
 function CollapsedOfferingRow({
   canRemove,
   hasDuplicateCombination,
+  isEditMode,
   index,
   offering,
   removeOffering,
+  removeDisabled,
   toggleOfferingExpanded,
 }: {
   canRemove: boolean;
   hasDuplicateCombination: boolean;
+  isEditMode: boolean;
   index: number;
   offering: BirdOffering;
   removeOffering: (offeringId: string) => void;
+  removeDisabled: boolean;
   toggleOfferingExpanded: (offeringId: string) => void;
 }) {
   const title = getBirdsForSaleTitle(offering);
-  const summary = getBirdsForSaleSummary(offering);
-  const mobileSummary = getBirdsForSaleMobileSummary(offering);
+  const summary = getBirdsForSaleSummary(offering, isEditMode);
+  const mobileSummary = getBirdsForSaleMobileSummary(offering, isEditMode);
 
   return (
     <div
@@ -607,14 +714,14 @@ function CollapsedOfferingRow({
           : "border-transparent sm:border-stone-200"
       }`}
     >
-      <div className="flex items-start gap-3 text-sm sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-2">
+      <div className="flex flex-wrap items-start gap-3 text-sm sm:items-center sm:gap-x-3 sm:gap-y-2">
         <button
-          className="flex min-h-12 min-w-0 flex-1 items-start gap-3 text-left sm:items-center"
+          className="flex min-h-12 min-w-0 basis-full items-start gap-3 text-left sm:flex-1 sm:basis-auto sm:items-center"
           type="button"
           onClick={() => toggleOfferingExpanded(offering.id)}
         >
           <EntryIndex index={index} />
-          <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="break-words text-base font-bold text-stone-950 sm:text-sm sm:font-semibold">
               {title}
             </span>
@@ -622,14 +729,13 @@ function CollapsedOfferingRow({
               {summary}
             </span>
             <span className="text-sm font-medium leading-5 text-stone-600 sm:hidden">
-              {mobileSummary.lineOne}
-            </span>
-            <span className="text-sm font-medium leading-5 text-stone-600 sm:hidden">
-              {mobileSummary.lineTwo}
+              {mobileSummary}
             </span>
           </span>
         </button>
-        <EntryStatus offering={offering} />
+        <span className="hidden sm:inline-flex">
+          <EntryStatus allowSoldOut={isEditMode} offering={offering} />
+        </span>
         <button
           className={`${mutedTextActionClass} ml-auto hidden transition hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:ring-offset-2 sm:inline-flex`}
           type="button"
@@ -640,19 +746,23 @@ function CollapsedOfferingRow({
         {canRemove ? (
           <span className="hidden sm:inline-flex">
             <RemoveOfferingControl
+              disabled={removeDisabled}
               offeringId={offering.id}
               removeOffering={removeOffering}
             />
           </span>
         ) : null}
-        <button
-          aria-label="Expand bird entry"
-          className="flex size-10 shrink-0 items-center justify-center rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700/20 sm:hidden"
-          type="button"
-          onClick={() => toggleOfferingExpanded(offering.id)}
-        >
-          <DisclosureChevron />
-        </button>
+        <div className="ml-auto flex items-center gap-2 sm:hidden">
+          <EntryStatus allowSoldOut={isEditMode} offering={offering} />
+          <button
+            aria-label="Expand bird entry"
+            className="flex size-10 shrink-0 items-center justify-center rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+            type="button"
+            onClick={() => toggleOfferingExpanded(offering.id)}
+          >
+            <DisclosureChevron />
+          </button>
+        </div>
       </div>
       {hasDuplicateCombination ? (
         <p className="mt-2 text-base font-semibold text-amber-800">
@@ -663,21 +773,72 @@ function CollapsedOfferingRow({
   );
 }
 
+function RemovedOfferingRow({
+  index,
+  offering,
+  onUndo,
+}: {
+  index: number;
+  offering: BirdOffering;
+  onUndo: () => void;
+}) {
+  return (
+    <div className="flex min-h-16 flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+      <EntryIndex index={index} />
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold">{getBirdsForSaleTitle(offering)}</p>
+        <p className="mt-0.5 text-red-800">
+          Will be permanently removed when you save.
+        </p>
+      </div>
+      <button
+        className="min-h-11 rounded-md px-2 font-bold underline underline-offset-4 focus:outline-none focus:ring-2 focus:ring-red-300 sm:min-h-9"
+        type="button"
+        onClick={onUndo}
+      >
+        Undo
+      </button>
+    </div>
+  );
+}
+
 function RemoveOfferingControl({
+  disabled,
   offeringId,
   removeOffering,
 }: {
+  disabled: boolean;
   offeringId: string;
   removeOffering: (offeringId: string) => void;
 }) {
   return (
-    <button
-      className="min-h-12 rounded-md px-2 text-base font-semibold text-red-500 transition hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200 focus:ring-offset-2 sm:min-h-0 sm:px-0 sm:text-sm sm:text-red-500"
-      type="button"
-      onClick={() => removeOffering(offeringId)}
-    >
-      Remove
-    </button>
+    <span className="relative inline-flex items-center gap-1.5">
+      <button
+        className="min-h-12 rounded-md px-2 text-base font-semibold text-red-500 transition hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200 focus:ring-offset-2 disabled:cursor-not-allowed disabled:text-stone-400 sm:min-h-0 sm:px-0 sm:text-sm sm:text-red-500"
+        disabled={disabled}
+        type="button"
+        onClick={() => removeOffering(offeringId)}
+      >
+        Remove
+      </button>
+      {disabled ? <RemovalUnavailableHelp /> : null}
+    </span>
+  );
+}
+
+function RemovalUnavailableHelp() {
+  return (
+    <details className="group relative">
+      <summary
+        aria-label="Why this entry cannot be removed"
+        className="flex size-8 cursor-help list-none items-center justify-center rounded-full border border-stone-300 bg-white text-sm font-bold text-stone-600 focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:size-5 sm:text-xs"
+      >
+        ?
+      </summary>
+      <p className="absolute right-0 z-30 mt-2 hidden w-72 rounded-md border border-stone-200 bg-stone-950 px-3 py-2 text-left text-xs font-medium leading-5 text-white shadow-lg group-open:block sm:block sm:pointer-events-none sm:opacity-0 sm:transition sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+        This entry can’t be removed because birds from it have already been sold. Set quantity to 0 to stop offering it for sale.
+      </p>
+    </details>
   );
 }
 
@@ -1028,25 +1189,35 @@ function EntryIndex({ index }: { index: number }) {
   );
 }
 
-function EntryStatus({ offering }: { offering: BirdOffering }) {
-  const complete = isOfferingComplete(offering);
+function EntryStatus({
+  allowSoldOut,
+  offering,
+}: {
+  allowSoldOut: boolean;
+  offering: BirdOffering;
+}) {
+  const complete = isOfferingComplete(offering, allowSoldOut);
+  const soldOut =
+    allowSoldOut && complete && getNumberInputValue(offering.quantity) === 0;
 
   return (
     <span
       className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-        complete
+        soldOut
+          ? "border-stone-300 bg-stone-100 text-stone-700"
+          : complete
           ? "border-emerald-200 bg-emerald-50 text-emerald-700"
           : "border-amber-200 bg-amber-50 text-amber-700"
       }`}
     >
-      {complete ? (
+      {complete && !soldOut ? (
         <span
           aria-hidden="true"
           className="block h-2.5 w-1.5 rotate-45 border-b-2 border-r-2 border-emerald-700"
         />
       ) : null}
-      <span className={complete ? "hidden sm:inline" : ""}>
-        {complete ? "Complete" : "Unfinished"}
+      <span className={complete && !soldOut ? "hidden sm:inline" : ""}>
+        {soldOut ? "Sold Out" : complete ? "Complete" : "Unfinished"}
       </span>
     </span>
   );
@@ -1085,37 +1256,43 @@ function getBirdsForSaleTitle(offering: BirdOffering) {
   return "New bird entry";
 }
 
-function getBirdsForSaleSummary(offering: BirdOffering) {
+function getBirdsForSaleSummary(
+  offering: BirdOffering,
+  allowSoldOut: boolean,
+) {
   const breed = offering.breed.trim();
   const soldAs = offering.soldAs.trim();
   const quantity = getNumberInputValue(offering.quantity);
   const price = getNumberInputValue(offering.price);
 
-  if (!breed || !soldAs || quantity <= 0 || price <= 0) {
+  if (
+    !breed ||
+    !soldAs ||
+    !offering.quantity.trim() ||
+    quantity < (allowSoldOut ? 0 : 1) ||
+    price <= 0
+  ) {
     return "Finish bird details";
   }
 
   return [
-    breed,
-    soldAs,
-    `${quantity} available`,
+    quantity === 0 ? "Sold out" : `${quantity} available`,
     `${formatCurrency(price)} each`,
   ].join(" · ");
 }
 
-function getBirdsForSaleMobileSummary(offering: BirdOffering) {
-  const breed = offering.breed.trim();
-  const soldAs = offering.soldAs.trim();
+function getBirdsForSaleMobileSummary(
+  offering: BirdOffering,
+  allowSoldOut: boolean,
+) {
   const quantity = getNumberInputValue(offering.quantity);
   const price = getNumberInputValue(offering.price);
 
-  return {
-    lineOne: breed && soldAs ? `${breed} - ${soldAs}` : "Finish bird details",
-    lineTwo:
-      quantity > 0 && price > 0
-        ? `${quantity} available - ${formatCurrency(price)} each`
-        : "",
-  };
+  return offering.quantity.trim() &&
+    quantity >= (allowSoldOut ? 0 : 1) &&
+    price > 0
+    ? `${quantity === 0 ? "Sold out" : `${quantity} available`} - ${formatCurrency(price)} each`
+    : "";
 }
 
 function getOfferingsMobileSummary(offerings: BirdOffering[]) {
@@ -1199,11 +1376,12 @@ function getUsableBreedMediaItems(breedMediaItems: ListingPhotoItem[]) {
   );
 }
 
-function isOfferingComplete(offering: BirdOffering) {
+function isOfferingComplete(offering: BirdOffering, allowSoldOut: boolean) {
   return (
     offering.breed.trim().length > 0 &&
     offering.soldAs.trim().length > 0 &&
-    getNumberInputValue(offering.quantity) > 0 &&
+    offering.quantity.trim().length > 0 &&
+    getNumberInputValue(offering.quantity) >= (allowSoldOut ? 0 : 1) &&
     getNumberInputValue(offering.price) > 0
   );
 }
