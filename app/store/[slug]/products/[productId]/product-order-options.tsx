@@ -15,6 +15,7 @@ import {
   StorefrontGlyph,
   cx,
   formatCurrency,
+  toPublicImageUrl,
 } from "../../storefront-ui";
 import {
   buildEmbeddedOrderModeHref,
@@ -182,6 +183,9 @@ export function ProductOrderOptions({
                 );
                 const isAvailable =
                   option.canCheckout && option.quantityAvailable > 0;
+                const entryPhotoUrl = option.entryPhotoUrl
+                  ? toPublicImageUrl(option.entryPhotoUrl)
+                  : null;
 
                 return (
                   <tr
@@ -190,14 +194,14 @@ export function ProductOrderOptions({
                   >
                     {showEntryPhotoColumn ? (
                       <TableCell>
-                        {option.entryPhotoUrl ? (
+                        {entryPhotoUrl ? (
                           <button
                             aria-label={`View photo for ${option.label}`}
                             className="size-12 overflow-hidden rounded-md border border-[#ded7c8] bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
                             onClick={() =>
                               setEntryPhotoDialog({
                                 alt: option.entryPhotoAlt || `Photo for ${option.label}`,
-                                url: option.entryPhotoUrl as string,
+                                url: entryPhotoUrl,
                               })
                             }
                             type="button"
@@ -205,7 +209,7 @@ export function ProductOrderOptions({
                             <img
                               alt=""
                               className="size-full object-cover"
-                              src={option.entryPhotoUrl}
+                              src={entryPhotoUrl}
                             />
                           </button>
                         ) : (

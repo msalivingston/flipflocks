@@ -90,6 +90,9 @@ test("purchase details conditionally renders inventory-entry photos without affe
   assert.match(source, /!isHatchingEggProduct && visibleOptions\.some/);
   assert.match(source, /showEntryPhotoColumn/);
   assert.match(source, /entryPhotoUrl/);
+  assert.match(source, /toPublicImageUrl\(option\.entryPhotoUrl\)/);
+  assert.match(source, /src=\{entryPhotoUrl\}/);
+  assert.match(source, /url: entryPhotoUrl/);
   assert.doesNotMatch(source, /sunshineMesaFarmStoreId|Sunshine Mesa Farm/);
   assert.match(source, /event\.key === "Escape"/);
   assert.match(data, /entryPhotoUrl: item\.entry_photo_url/);
