@@ -32,6 +32,10 @@ export function ProductOrderOptions({
 }: ProductOrderOptionsProps) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addedItems, setAddedItems] = useState<StorefrontCartItem[] | null>(null);
+  const [entryPhotoDialog, setEntryPhotoDialog] = useState<{
+    alt: string;
+    url: string;
+  } | null>(null);
   const isHatchingEggProduct = product.options.every(
     (option) => option.inventoryType === "hatching_eggs",
   );
@@ -53,6 +57,17 @@ export function ProductOrderOptions({
       ),
     [product.options],
   );
+  const showEntryPhotoColumn =
+    !isHatchingEggProduct && visibleOptions.some((option) => option.entryPhotoUrl);
+
+  useEffect(() => {
+    if (!entryPhotoDialog) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setEntryPhotoDialog(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [entryPhotoDialog]);
 
   const selectedItems = useMemo<StorefrontCartItem[]>(
     () =>
@@ -150,6 +165,7 @@ export function ProductOrderOptions({
           <table className="w-full table-fixed border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-[#e7decd] bg-[#fbf7ef] text-stone-950">
+                {showEntryPhotoColumn ? <TableHeading>Photo</TableHeading> : null}
                 <TableHeading>{isHatchingEggProduct ? "Item" : "Current age"}</TableHeading>
                 <TableHeading>{isHatchingEggProduct ? "Type" : "Sex"}</TableHeading>
                 <TableHeading>Ready Date</TableHeading>
@@ -172,6 +188,31 @@ export function ProductOrderOptions({
                     className="border-b border-[#eee7dc] last:border-b-0"
                     key={option.inventoryItemId}
                   >
+                    {showEntryPhotoColumn ? (
+                      <TableCell>
+                        {option.entryPhotoUrl ? (
+                          <button
+                            aria-label={`View photo for ${option.label}`}
+                            className="size-12 overflow-hidden rounded-md border border-[#ded7c8] bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+                            onClick={() =>
+                              setEntryPhotoDialog({
+                                alt: option.entryPhotoAlt || `Photo for ${option.label}`,
+                                url: option.entryPhotoUrl as string,
+                              })
+                            }
+                            type="button"
+                          >
+                            <img
+                              alt=""
+                              className="size-full object-cover"
+                              src={option.entryPhotoUrl}
+                            />
+                          </button>
+                        ) : (
+                          <span aria-label="No option photo" className="block size-12" />
+                        )}
+                      </TableCell>
+                    ) : null}
                     <TableCell className="font-medium text-stone-950">
                       {option.ageLabel}
                     </TableCell>
@@ -429,6 +470,33 @@ export function ProductOrderOptions({
                 Checkout
               </StorefrontButton>
             </div>
+          </div>
+        </div>
+      ) : null}
+      {entryPhotoDialog ? (
+        <div
+          aria-modal="true"
+          className="fixed inset-0 z-50 grid place-items-center bg-stone-950/70 p-4"
+          onClick={() => setEntryPhotoDialog(null)}
+          role="dialog"
+        >
+          <div
+            className="relative max-h-full max-w-3xl rounded-lg bg-white p-3 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              aria-label="Close photo"
+              className="absolute right-5 top-5 flex size-10 items-center justify-center rounded-full bg-white/90 text-xl font-semibold text-stone-800 shadow focus:outline-none focus:ring-2 focus:ring-emerald-700"
+              onClick={() => setEntryPhotoDialog(null)}
+              type="button"
+            >
+              ×
+            </button>
+            <img
+              alt={entryPhotoDialog.alt}
+              className="max-h-[80vh] max-w-full rounded-md object-contain"
+              src={entryPhotoDialog.url}
+            />
           </div>
         </div>
       ) : null}

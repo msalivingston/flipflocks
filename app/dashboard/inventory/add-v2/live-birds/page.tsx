@@ -37,6 +37,7 @@ import {
   validateCustomBreedDraft,
 } from "../../../breeds/custom-breed-form";
 import type { ListingPhotoItem } from "../../../listings/[listingBatchId]/listing-photos-section";
+import { uploadSellerPhoto } from "../../../_components/seller-media-client";
 import { AgeBasedPriceChangesCard } from "./AgeBasedPriceChangesCard";
 import { BatchSummaryCard } from "./BatchSummaryCard";
 import { BirdOfferingsCard } from "./BirdOfferingsCard";
@@ -124,6 +125,14 @@ type DraftInventoryRow = {
   inventory_visibility_status: string;
 };
 
+type PendingEntryPhoto = {
+  error: string | null;
+  file: File;
+  previewUrl: string;
+};
+
+const sunshineMesaFarmStoreId = "3017ade8-686d-42de-a802-4208ed7ff6f7";
+
 type CreateDraftResult = {
   listing_batch_id: string;
   visibility_status: string;
@@ -201,6 +210,13 @@ export function LiveBirdsListingForm({
   const [breedMediaItems, setBreedMediaItems] = useState<ListingPhotoItem[]>(
     [],
   );
+  const [entryMediaItems, setEntryMediaItems] = useState<ListingPhotoItem[]>(
+    [],
+  );
+  const [pendingEntryPhotos, setPendingEntryPhotos] = useState<
+    Record<string, PendingEntryPhoto>
+  >({});
+  const pendingEntryPhotosRef = useRef<Record<string, PendingEntryPhoto>>({});
   const [breedPhotoActionMessage, setBreedPhotoActionMessage] = useState<
     string | null
   >(null);
@@ -271,6 +287,19 @@ export function LiveBirdsListingForm({
   const [customBreedOfferingId, setCustomBreedOfferingId] = useState<
     string | null
   >(null);
+
+  useEffect(() => {
+    pendingEntryPhotosRef.current = pendingEntryPhotos;
+  }, [pendingEntryPhotos]);
+
+  useEffect(
+    () => () => {
+      Object.values(pendingEntryPhotosRef.current).forEach((photo) => {
+        URL.revokeObjectURL(photo.previewUrl);
+      });
+    },
+    [],
+  );
   const [customBreedDraft, setCustomBreedDraft] = useState<CustomBreedDraft>(() =>
     createBlankCustomBreedDraft(""),
   );
@@ -607,6 +636,22 @@ export function LiveBirdsListingForm({
         draftRows
           ? getDraftSpeciesOption(draftRows.rows, baseSpeciesOptions)
           : null;
+      const entryMediaResult = draftRows
+        ? await loadInventoryEntryMediaItems({
+            inventoryItemIds: draftRows.rows.map((row) => row.inventory_item_id),
+            storeId: seller.store_id,
+          })
+        : { items: [] as ListingPhotoItem[] };
+
+      if (!isMounted) return;
+
+      if ("error" in entryMediaResult) {
+        setReferenceDataError(
+          `Option photos could not be loaded. ${entryMediaResult.error}`,
+        );
+      }
+      const loadedEntryMediaItems =
+        "items" in entryMediaResult ? entryMediaResult.items : [];
       const nextSpeciesOptions =
         draftRows && nextSpecies
           ? mergeDraftSpeciesOptions(baseSpeciesOptions, nextSpecies)
@@ -624,6 +669,7 @@ export function LiveBirdsListingForm({
       setCatalogBreeds(loadedCatalogBreeds);
       setSellerBreedProfiles(loadedSellerBreedProfiles);
       setBreedMediaItems(loadedBreedMediaItems);
+      setEntryMediaItems(loadedEntryMediaItems);
       setSpecies(selectedSpecies);
 
       if (draftRows) {
@@ -1156,6 +1202,19 @@ export function LiveBirdsListingForm({
     }
   }
 
+  async function reloadEntryPhotos() {
+    if (!seller?.store_id) return;
+    const inventoryItemIds = offerings
+      .map((offering) => offering.inventoryItemId)
+      .filter((id): id is string => Boolean(id));
+    const refreshedMedia = await loadInventoryEntryMediaItems({
+      inventoryItemIds,
+      storeId: seller.store_id,
+    });
+
+    if ("items" in refreshedMedia) setEntryMediaItems(refreshedMedia.items);
+  }
+
   function toggleOfferingExpanded(offeringId: string) {
     setGroupsReviewMode(false);
     setOfferings((currentOfferings) =>
@@ -1267,6 +1326,7 @@ export function LiveBirdsListingForm({
   }
 
   function removeOffering(offeringId: string) {
+    clearPendingEntryPhoto(offeringId);
     setOfferings((currentOfferings) => {
       if (currentOfferings.length <= 1) return currentOfferings;
 
@@ -1284,6 +1344,32 @@ export function LiveBirdsListingForm({
         ...offering,
         expanded: index === 0,
       }));
+    });
+  }
+
+  function setPendingEntryPhoto(offeringId: string, file: File) {
+    setPendingEntryPhotos((current) => {
+      const previousPhoto = current[offeringId];
+      if (previousPhoto) URL.revokeObjectURL(previousPhoto.previewUrl);
+      return {
+        ...current,
+        [offeringId]: {
+          error: null,
+          file,
+          previewUrl: URL.createObjectURL(file),
+        },
+      };
+    });
+  }
+
+  function clearPendingEntryPhoto(offeringId: string) {
+    setPendingEntryPhotos((current) => {
+      const photo = current[offeringId];
+      if (!photo) return current;
+      URL.revokeObjectURL(photo.previewUrl);
+      const remaining = { ...current };
+      delete remaining[offeringId];
+      return remaining;
     });
   }
 
@@ -1824,6 +1910,91 @@ export function LiveBirdsListingForm({
       : createHiddenDraft({ offeringsToSave, storeId });
   }
 
+  async function uploadPendingEntryPhotos({
+    listingBatchId,
+    offeringsToSave,
+    storeId,
+  }: {
+    listingBatchId: string;
+    offeringsToSave: BirdOffering[];
+    storeId: string;
+  }) {
+    const rowsResult = await loadListingRows({
+      listingBatchId,
+      mode: "create",
+      storeId,
+    });
+
+    if ("error" in rowsResult) {
+      return { failedOfferingIds: Object.keys(pendingEntryPhotosRef.current) };
+    }
+
+    const rowByOfferingKey = new Map(
+      rowsResult.rows.map((row) => [getDraftRowOfferingKey(row), row] as const),
+    );
+    const savedOfferings = offeringsToSave.map((offering) => {
+      const matchingRow = rowByOfferingKey.get(getOfferingPersistenceKey(offering));
+      return matchingRow
+        ? {
+            ...offering,
+            inventoryItemId: matchingRow.inventory_item_id,
+            listingBatchBreedId: matchingRow.listing_batch_breed_id,
+          }
+        : offering;
+    });
+
+    setOfferings(savedOfferings);
+    const failedOfferingIds: string[] = [];
+    let uploadedAtLeastOne = false;
+
+    for (const offering of savedOfferings) {
+      const pendingPhoto = pendingEntryPhotosRef.current[offering.id];
+      if (!pendingPhoto) continue;
+
+      if (!offering.inventoryItemId) {
+        failedOfferingIds.push(offering.id);
+        setPendingEntryPhotos((current) => ({
+          ...current,
+          [offering.id]: {
+            ...current[offering.id],
+            error: "This option was saved, but its inventory row could not be matched for photo upload.",
+          },
+        }));
+        continue;
+      }
+
+      const uploadResult = await uploadSellerPhoto({
+        entityId: offering.inventoryItemId,
+        entityType: "inventory_item",
+        file: pendingPhoto.file,
+        isFeatured: true,
+        sortOrder: 0,
+        storeId,
+      });
+
+      if (!uploadResult.ok) {
+        failedOfferingIds.push(offering.id);
+        setPendingEntryPhotos((current) => ({
+          ...current,
+          [offering.id]: {
+            ...current[offering.id],
+            error: uploadResult.error.message,
+          },
+        }));
+        continue;
+      }
+
+      clearPendingEntryPhoto(offering.id);
+      uploadedAtLeastOne = true;
+    }
+
+    if (uploadedAtLeastOne) {
+      await reloadEntryPhotos();
+    }
+
+    return { failedOfferingIds };
+  }
+
   async function saveDraftFromCurrentForm({
     errorPrefix = "Draft could not be saved.",
   }: {
@@ -1853,6 +2024,12 @@ export function LiveBirdsListingForm({
     const offeringsToSave = pruneUntouchedOfferings(offerings);
 
     if (offeringsToSave.length !== offerings.length) {
+      const retainedOfferingIds = new Set(
+        offeringsToSave.map((offering) => offering.id),
+      );
+      Object.keys(pendingEntryPhotosRef.current).forEach((offeringId) => {
+        if (!retainedOfferingIds.has(offeringId)) clearPendingEntryPhoto(offeringId);
+      });
       setOfferings(offeringsToSave);
     }
 
@@ -1879,9 +2056,16 @@ export function LiveBirdsListingForm({
     if (!currentSavedDraftId) {
       setSavedListingBatchId(saveResult.listingBatchId);
     }
+    const pendingUploadResult = await uploadPendingEntryPhotos({
+      listingBatchId: saveResult.listingBatchId,
+      offeringsToSave,
+      storeId: seller.store_id,
+    });
     setSaveDraftStatus("success");
     setSaveDraftMessage(
-      "Draft saved. You can find it in Saved drafts at the bottom of the Add Inventory page until it is published.",
+      pendingUploadResult.failedOfferingIds.length > 0
+        ? `Draft saved. ${pendingUploadResult.failedOfferingIds.length} option photo${pendingUploadResult.failedOfferingIds.length === 1 ? " needs" : "s need"} attention; retry it from the matching bird entry.`
+        : "Draft saved. You can find it in Saved drafts at the bottom of the Add Inventory page until it is published.",
     );
 
     setSavedFormSnapshot(
@@ -1963,6 +2147,12 @@ export function LiveBirdsListingForm({
     const offeringsToSave = pruneUntouchedOfferings(offerings);
 
     if (offeringsToSave.length !== offerings.length) {
+      const retainedOfferingIds = new Set(
+        offeringsToSave.map((offering) => offering.id),
+      );
+      Object.keys(pendingEntryPhotosRef.current).forEach((offeringId) => {
+        if (!retainedOfferingIds.has(offeringId)) clearPendingEntryPhoto(offeringId);
+      });
       setOfferings(offeringsToSave);
     }
 
@@ -2079,6 +2269,12 @@ export function LiveBirdsListingForm({
       publishedListingBatchId = createResult.listingBatchId;
     }
 
+    const pendingUploadResult = await uploadPendingEntryPhotos({
+      listingBatchId: publishedListingBatchId,
+      offeringsToSave,
+      storeId: seller.store_id,
+    });
+
     const shareProductsResult = await loadLivePoultryShareProducts({
       listingBatchId: publishedListingBatchId,
       storeId: seller.store_id,
@@ -2098,7 +2294,11 @@ export function LiveBirdsListingForm({
 
     setPublishedListingBatchId(publishedListingBatchId);
     setPublishStatus("success");
-    setPublishMessage("Published to storefront.");
+    setPublishMessage(
+      pendingUploadResult.failedOfferingIds.length > 0
+        ? `Published to storefront. ${pendingUploadResult.failedOfferingIds.length} option photo${pendingUploadResult.failedOfferingIds.length === 1 ? " needs" : "s need"} attention; retry it from the matching bird entry.`
+        : "Published to storefront.",
+    );
     if (!isEditMode) {
       playDustySuccessSound();
     }
@@ -2450,6 +2650,10 @@ export function LiveBirdsListingForm({
               <BirdOfferingsCard
                 addOffering={addOffering}
                 breedMediaItemsByProfileId={breedMediaItemsByProfileId}
+                entryMediaItemsByInventoryItemId={groupEntryMediaByInventoryItemId(entryMediaItems)}
+                entryPhotoPilotEnabled={
+                  seller?.store_id === sunshineMesaFarmStoreId
+                }
                 breedOptions={breedOptions}
                 breedOptionsMessage={breedOptionsMessage}
                 canAddCustomBreed={Boolean(species.id)}
@@ -2505,6 +2709,10 @@ export function LiveBirdsListingForm({
                 updateOffering={updateOffering}
                 updateOfferingBreed={updateOfferingBreed}
                 onBreedPhotosChanged={() => void reloadBreedPhotos()}
+                onEntryPhotosChanged={() => void reloadEntryPhotos()}
+                onPendingEntryPhotoChange={setPendingEntryPhoto}
+                onPendingEntryPhotoRemove={clearPendingEntryPhoto}
+                pendingEntryPhotosByOfferingId={pendingEntryPhotos}
                 planKey={seller?.plan_key}
                 mode={mode}
               />
@@ -4395,6 +4603,22 @@ function getOfferingsFromDraftRows(rows: DraftInventoryRow[]) {
   );
 }
 
+function getOfferingPersistenceKey(offering: BirdOffering) {
+  return [
+    offering.sellerBreedProfileId ?? "",
+    mapSoldAsToInventoryType(offering.soldAs),
+    getCustomInventoryLabelForSoldAs(offering.soldAs) ?? "",
+  ].join("|");
+}
+
+function getDraftRowOfferingKey(row: DraftInventoryRow) {
+  return [
+    row.seller_breed_profile_id,
+    row.inventory_type,
+    row.custom_inventory_label ?? "",
+  ].join("|");
+}
+
 function getLoadedDraftSaveDisabledReason({
   loadedDraftSpeciesId,
   speciesId,
@@ -4608,6 +4832,13 @@ function groupBreedMediaByProfileId(mediaItems: ListingPhotoItem[]) {
   return mediaItems.reduce<Record<string, ListingPhotoItem[]>>((groups, item) => {
     groups[item.entity_id] = [...(groups[item.entity_id] ?? []), item];
 
+    return groups;
+  }, {});
+}
+
+function groupEntryMediaByInventoryItemId(mediaItems: ListingPhotoItem[]) {
+  return mediaItems.reduce<Record<string, ListingPhotoItem[]>>((groups, item) => {
+    groups[item.entity_id] = [...(groups[item.entity_id] ?? []), item];
     return groups;
   }, {});
 }
@@ -4876,6 +5107,27 @@ async function loadBreedMediaItems({
 
   if (error) return { error: error.message };
 
+  return { items: data ?? [] };
+}
+
+async function loadInventoryEntryMediaItems({
+  inventoryItemIds,
+  storeId,
+}: {
+  inventoryItemIds: string[];
+  storeId: string;
+}): Promise<{ items: ListingPhotoItem[] } | { error: string }> {
+  if (inventoryItemIds.length === 0) return { items: [] };
+
+  const { data, error } = await supabase
+    .from("seller_media_management")
+    .select(sellerMediaSelect)
+    .eq("store_id", storeId)
+    .eq("entity_type", "inventory_item")
+    .in("entity_id", inventoryItemIds)
+    .returns<ListingPhotoItem[]>();
+
+  if (error) return { error: error.message };
   return { items: data ?? [] };
 }
 

@@ -12,7 +12,7 @@ function read(relativePath) {
   return readFileSync(resolve(repositoryRoot, relativePath), "utf8");
 }
 
-test("Live Birds v2 manages seller breed profile media only", () => {
+test("Live Birds v2 keeps breed photos on profiles and option photos on inventory rows", () => {
   const page = read("app/dashboard/inventory/add-v2/live-birds/page.tsx");
   const photoControls = read(
     "app/dashboard/inventory/add-v2/live-birds/BirdOfferingsCard.tsx",
@@ -21,7 +21,9 @@ test("Live Birds v2 manages seller breed profile media only", () => {
   assert.doesNotMatch(page, legacyOwnerPattern);
   assert.doesNotMatch(photoControls, legacyOwnerPattern);
   assert.match(page, /\.eq\("entity_type", "seller_breed_profile"\)/);
+  assert.match(page, /\.eq\("entity_type", "inventory_item"\)/);
   assert.match(photoControls, /entityType="seller_breed_profile"/);
+  assert.match(photoControls, /EntryPhotoControl/);
 });
 
 test("public Live Birds product detail uses only the breed profile gallery", () => {

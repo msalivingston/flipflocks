@@ -111,6 +111,8 @@ export type StorefrontInventoryItem = {
   unit_price: number;
   featured_image_url: string | null;
   featured_image_alt_text: string | null;
+  entry_photo_url: string | null;
+  entry_photo_alt: string | null;
   breed_category: string | null;
   breed_egg_color: string | null;
   breed_annual_egg_production: string | null;
@@ -217,6 +219,8 @@ export type StorefrontPurchaseOption = {
   canCheckout: boolean;
   unitPrice: number;
   fulfillmentNote: string | null;
+  entryPhotoUrl?: string | null;
+  entryPhotoAlt?: string | null;
   minimumOrderQuantity?: number | null;
 };
 
@@ -728,6 +732,8 @@ export function toPurchaseOption(
     canCheckout: item.can_checkout,
     unitPrice: item.unit_price,
     fulfillmentNote: null,
+    entryPhotoUrl: item.entry_photo_url,
+    entryPhotoAlt: item.entry_photo_alt,
   };
 }
 
@@ -752,6 +758,8 @@ export function toHatchingEggPurchaseOption(
     canCheckout: item.can_checkout,
     unitPrice: item.unit_price,
     fulfillmentNote: null,
+    entryPhotoUrl: null,
+    entryPhotoAlt: null,
     minimumOrderQuantity: item.minimum_order_quantity,
   };
 }

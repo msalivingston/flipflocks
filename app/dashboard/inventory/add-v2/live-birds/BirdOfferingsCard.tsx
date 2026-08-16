@@ -16,11 +16,14 @@ import {
 import { toDisplayImageUrl } from "../../../breeds/breed-data";
 import { SectionCard } from "./SectionCard";
 import { MobileLiveBirdsArtwork } from "./MobileLiveBirdsArtwork";
+import { EntryPhotoControl } from "./EntryPhotoControl";
 import type { BirdOffering, BreedOption } from "./types";
 
 export function BirdOfferingsCard({
   addOffering,
   breedMediaItemsByProfileId,
+  entryMediaItemsByInventoryItemId,
+  entryPhotoPilotEnabled,
   breedOptions,
   breedOptionsMessage,
   canAddCustomBreed,
@@ -46,11 +49,17 @@ export function BirdOfferingsCard({
   updateOffering,
   updateOfferingBreed,
   onBreedPhotosChanged,
+  onEntryPhotosChanged,
+  onPendingEntryPhotoChange,
+  onPendingEntryPhotoRemove,
+  pendingEntryPhotosByOfferingId,
   planKey,
   mode = "create",
 }: {
   addOffering: () => void;
   breedMediaItemsByProfileId: Record<string, ListingPhotoItem[]>;
+  entryMediaItemsByInventoryItemId: Record<string, ListingPhotoItem[]>;
+  entryPhotoPilotEnabled: boolean;
   breedOptions: BreedOption[];
   breedOptionsMessage: string | null;
   canAddCustomBreed: boolean;
@@ -79,6 +88,13 @@ export function BirdOfferingsCard({
   ) => void;
   updateOfferingBreed: (offeringId: string, option: BreedOption) => void;
   onBreedPhotosChanged: () => void;
+  onEntryPhotosChanged: () => void;
+  onPendingEntryPhotoChange: (offeringId: string, file: File) => void;
+  onPendingEntryPhotoRemove: (offeringId: string) => void;
+  pendingEntryPhotosByOfferingId: Record<
+    string,
+    { error: string | null; file: File; previewUrl: string }
+  >;
   planKey?: string | null;
   mode?: "create" | "edit";
 }) {
@@ -149,6 +165,8 @@ export function BirdOfferingsCard({
               <ExpandedOfferingCard
                 key={offering.id}
                 breedMediaItemsByProfileId={breedMediaItemsByProfileId}
+                entryMediaItemsByInventoryItemId={entryMediaItemsByInventoryItemId}
+                entryPhotoPilotEnabled={entryPhotoPilotEnabled}
                 breedOptions={breedOptions}
                 canAddCustomBreed={canAddCustomBreed}
                 canRemove={!isEditMode && offerings.length > 1}
@@ -166,6 +184,12 @@ export function BirdOfferingsCard({
                 updateOffering={updateOffering}
                 updateOfferingBreed={updateOfferingBreed}
                 onBreedPhotosChanged={onBreedPhotosChanged}
+                onEntryPhotosChanged={onEntryPhotosChanged}
+                onPendingEntryPhotoChange={(file) =>
+                  onPendingEntryPhotoChange(offering.id, file)
+                }
+                onPendingEntryPhotoRemove={() => onPendingEntryPhotoRemove(offering.id)}
+                pendingEntryPhoto={pendingEntryPhotosByOfferingId[offering.id] ?? null}
                 onOpenCustomBreedModal={onOpenCustomBreedModal}
                 plan={plan}
               />
@@ -218,6 +242,8 @@ export function BirdOfferingsCard({
 
 function ExpandedOfferingCard({
   breedMediaItemsByProfileId,
+  entryMediaItemsByInventoryItemId,
+  entryPhotoPilotEnabled,
   breedOptions,
   canAddCustomBreed,
   canRemove,
@@ -235,10 +261,16 @@ function ExpandedOfferingCard({
   updateOffering,
   updateOfferingBreed,
   onBreedPhotosChanged,
+  onEntryPhotosChanged,
+  onPendingEntryPhotoChange,
+  onPendingEntryPhotoRemove,
+  pendingEntryPhoto,
   onOpenCustomBreedModal,
   plan,
 }: {
   breedMediaItemsByProfileId: Record<string, ListingPhotoItem[]>;
+  entryMediaItemsByInventoryItemId: Record<string, ListingPhotoItem[]>;
+  entryPhotoPilotEnabled: boolean;
   breedOptions: BreedOption[];
   canAddCustomBreed: boolean;
   canRemove: boolean;
@@ -259,6 +291,10 @@ function ExpandedOfferingCard({
   ) => void;
   updateOfferingBreed: (offeringId: string, option: BreedOption) => void;
   onBreedPhotosChanged: () => void;
+  onEntryPhotosChanged: () => void;
+  onPendingEntryPhotoChange: (file: File) => void;
+  onPendingEntryPhotoRemove: () => void;
+  pendingEntryPhoto: { error: string | null; file: File; previewUrl: string } | null;
   onOpenCustomBreedModal: (offeringId: string) => void;
   plan: PlanCapabilities;
 }) {
@@ -358,6 +394,27 @@ function ExpandedOfferingCard({
           </button>
         </div>
       </div>
+
+      {entryPhotoPilotEnabled ? (
+        // Sunshine Mesa Farm production pilot: the entry-photo system remains global,
+        // but only this seller UI is limited for now. Remove this gate to enable it for all sellers.
+        <div className="border-b border-stone-100 px-4 py-3">
+          <EntryPhotoControl
+            inventoryItemId={offering.inventoryItemId}
+            mediaItems={
+              offering.inventoryItemId
+                ? entryMediaItemsByInventoryItemId[offering.inventoryItemId] ?? []
+                : []
+            }
+            onReload={onEntryPhotosChanged}
+            onPendingPhotoChange={onPendingEntryPhotoChange}
+            onPendingPhotoRemove={onPendingEntryPhotoRemove}
+            onPendingPhotoUploaded={onPendingEntryPhotoRemove}
+            pendingPhoto={pendingEntryPhoto}
+            storeId={storeId}
+          />
+        </div>
+      ) : null}
 
       <div
         className={`grid gap-0 px-4 py-5 sm:gap-4 sm:px-4 sm:py-4 ${
