@@ -98,3 +98,41 @@ test("purchase details conditionally renders inventory-entry photos without affe
   assert.match(data, /entryPhotoUrl: item\.entry_photo_url/);
   assert.match(data, /entryPhotoUrl: null/);
 });
+
+test("desktop entry photo header uses the accessible storefront help pattern", () => {
+  const source = read(
+    "app/store/[slug]/products/[productId]/product-order-options.tsx",
+  );
+  const helperText =
+    "This photo represents birds at approximately the age shown in this row.";
+
+  assert.match(source, /<PhotoHeaderWithTooltip \/>/);
+  assert.equal(source.split(helperText).length - 1, 1);
+  assert.match(source, /aria-describedby=\{tooltipId\}/);
+  assert.match(source, /role="tooltip"/);
+  assert.match(source, /group-hover:opacity-100 group-focus-within:opacity-100/);
+});
+
+test("mobile live-bird cards place optional entry photos before age and reuse the lightbox", () => {
+  const source = read(
+    "app/store/[slug]/products/[productId]/product-order-options.tsx",
+  );
+  const mobileStart = source.indexOf(
+    'className="grid gap-2.5 rounded-lg border border-[#ded7c8] bg-white/95 p-3 shadow-[0_2px_12px_rgba(41,37,36,0.04)] md:hidden"',
+  );
+  const mobileEnd = source.indexOf("{minimumOrderNote ? (", mobileStart);
+  const mobileSource = source.slice(mobileStart, mobileEnd);
+  const photoIndex = mobileSource.indexOf("src={entryPhotoUrl}");
+  const ageIndex = mobileSource.indexOf("{option.ageLabel}");
+
+  assert.ok(mobileStart >= 0);
+  assert.ok(mobileEnd > mobileStart);
+  assert.ok(photoIndex >= 0);
+  assert.ok(ageIndex > photoIndex);
+  assert.match(mobileSource, /option\.entryPhotoUrl\s+\? toPublicImageUrl/);
+  assert.match(mobileSource, /className="size-20[^\"]*"/);
+  assert.match(mobileSource, /className="size-full object-cover"/);
+  assert.match(mobileSource, /setEntryPhotoDialog\(\{/);
+  assert.doesNotMatch(mobileSource, /No option photo/);
+  assert.equal(source.split('role="dialog"').length - 1, 1);
+});

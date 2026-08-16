@@ -166,7 +166,11 @@ export function ProductOrderOptions({
           <table className="w-full table-fixed border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-[#e7decd] bg-[#fbf7ef] text-stone-950">
-                {showEntryPhotoColumn ? <TableHeading>Photo</TableHeading> : null}
+                {showEntryPhotoColumn ? (
+                  <TableHeading>
+                    <PhotoHeaderWithTooltip />
+                  </TableHeading>
+                ) : null}
                 <TableHeading>{isHatchingEggProduct ? "Item" : "Current age"}</TableHeading>
                 <TableHeading>{isHatchingEggProduct ? "Type" : "Sex"}</TableHeading>
                 <TableHeading>Ready Date</TableHeading>
@@ -276,6 +280,9 @@ export function ProductOrderOptions({
           {visibleOptions.map((option, index) => {
             const selectedQuantity = getSelectedQuantity(option, quantities);
             const isAvailable = option.canCheckout && option.quantityAvailable > 0;
+            const entryPhotoUrl = option.entryPhotoUrl
+              ? toPublicImageUrl(option.entryPhotoUrl)
+              : null;
 
             return (
               <article
@@ -288,6 +295,25 @@ export function ProductOrderOptions({
                 )}
                 key={option.inventoryItemId}
               >
+                {entryPhotoUrl ? (
+                  <button
+                    aria-label={`View photo for ${option.label}`}
+                    className="size-20 overflow-hidden rounded-md border border-[#ded7c8] bg-stone-50 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
+                    onClick={() =>
+                      setEntryPhotoDialog({
+                        alt: option.entryPhotoAlt || `Photo for ${option.label}`,
+                        url: entryPhotoUrl,
+                      })
+                    }
+                    type="button"
+                  >
+                    <img
+                      alt=""
+                      className="size-full object-cover"
+                      src={entryPhotoUrl}
+                    />
+                  </button>
+                ) : null}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <h3 className="text-[0.96rem] font-bold leading-tight text-stone-950">
@@ -519,6 +545,31 @@ function TableHeading({
     <th className={cx("px-4 py-4 font-semibold", className)} scope="col">
       {children}
     </th>
+  );
+}
+
+function PhotoHeaderWithTooltip() {
+  const tooltipId = "purchase-details-photo-tooltip";
+
+  return (
+    <span className="group relative inline-flex items-center gap-1.5 align-middle">
+      <span>Photo</span>
+      <button
+        aria-describedby={tooltipId}
+        aria-label="About entry photos"
+        className="inline-flex size-4 items-center justify-center rounded-full border border-stone-300 bg-white text-[0.625rem] font-bold leading-none text-stone-600 transition hover:border-emerald-700 hover:text-emerald-800 focus:border-emerald-700 focus:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+        type="button"
+      >
+        i
+      </button>
+      <span
+        className="pointer-events-none absolute left-0 top-6 z-20 w-64 rounded-md border border-stone-200 bg-white px-3 py-2 text-left text-xs font-medium normal-case leading-5 tracking-normal text-stone-700 opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-within:opacity-100"
+        id={tooltipId}
+        role="tooltip"
+      >
+        This photo represents birds at approximately the age shown in this row.
+      </span>
+    </span>
   );
 }
 
