@@ -48,9 +48,15 @@ grant execute on function public.admin_grant_store_comp(uuid, text, text, timest
 -- resolver is the authoritative active-comp predicate.
 update public.seller_onboarding_state as onboarding
 set billing_complete = true
-from lateral public.resolve_store_entitlement(onboarding.store_id) as entitlement
-where onboarding.billing_complete = false
-  and entitlement.has_active_access
-  and entitlement.access_reason = 'admin_comp';
+from (
+  select candidate.store_id
+  from public.seller_onboarding_state as candidate
+  cross join lateral public.resolve_store_entitlement(candidate.store_id) as entitlement
+  where candidate.billing_complete = false
+    and entitlement.has_active_access
+    and entitlement.access_reason = 'admin_comp'
+) as active_comp
+where onboarding.store_id = active_comp.store_id
+  and onboarding.billing_complete = false;
 
 commit;

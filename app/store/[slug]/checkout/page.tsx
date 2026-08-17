@@ -22,6 +22,7 @@ export default async function StorefrontCheckoutRoute({
   params: Promise<{ slug: string }>;
   searchParams: Promise<EmbeddedOrderModeSearchParams & {
     card_checkout?: string | string[];
+    reservation_id?: string | string[];
     session_id?: string | string[];
   }>;
 }) {
@@ -86,6 +87,11 @@ export default async function StorefrontCheckoutRoute({
       store={store}
     >
       <CheckoutPage
+        cardCheckoutCancellationId={
+          query.card_checkout === "canceled" && typeof query.reservation_id === "string"
+            ? query.reservation_id
+            : null
+        }
         cardCheckoutSessionId={
           query.card_checkout === "return" && typeof query.session_id === "string"
             ? query.session_id

@@ -40,10 +40,13 @@ test("currently active administrative comps are repaired through the authoritati
     migration.indexOf("commit;"),
   );
 
-  assert.match(backfill, /from lateral public\.resolve_store_entitlement\(onboarding\.store_id\) as entitlement/);
-  assert.match(backfill, /onboarding\.billing_complete = false/);
+  assert.match(backfill, /from public\.seller_onboarding_state as candidate/);
+  assert.match(backfill, /cross join lateral public\.resolve_store_entitlement\(candidate\.store_id\) as entitlement/);
+  assert.match(backfill, /candidate\.billing_complete = false/);
   assert.match(backfill, /entitlement\.has_active_access/);
   assert.match(backfill, /entitlement\.access_reason = 'admin_comp'/);
+  assert.match(backfill, /onboarding\.store_id = active_comp\.store_id/);
+  assert.match(backfill, /onboarding\.billing_complete = false/);
   assert.doesNotMatch(
     backfill,
     /(?:profile_complete|storefront_details_complete|categories_complete|pickup_complete|onboarding_complete)\s*=/,

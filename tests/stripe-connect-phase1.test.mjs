@@ -5,6 +5,8 @@ import test from "node:test";
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const migration = read("supabase/migrations/20260820100000_sunshine_mesa_stripe_connect_phase1.sql");
 const checkout = read("supabase/functions/stripe-connect-checkout/index.ts");
+const checkoutPage = read("app/store/[slug]/checkout/checkout-page.tsx");
+const checkoutRoute = read("app/store/[slug]/checkout/page.tsx");
 const webhook = read("supabase/functions/stripe-connect-webhook/index.ts");
 const account = read("supabase/functions/stripe-connect-account/index.ts");
 const emailWorker = read("supabase/functions/postmark-email-worker/index.ts");
@@ -30,7 +32,7 @@ test("direct-charge Checkout is scoped to the connected account without platform
 test("connected Checkout retrieval passes account context as Stripe request options", () => {
   const connectedRetrieve = /checkout\.sessions\.retrieve\(\s*[^,]+,\s*\{\},\s*\{\s*stripeAccount:\s*[^}]+\}\s*,?\s*\)/g;
   assert.equal(webhook.match(connectedRetrieve)?.length, 1);
-  assert.equal(checkout.match(connectedRetrieve)?.length, 2);
+  assert.equal(checkout.match(connectedRetrieve)?.length, 4);
   assert.doesNotMatch(
     `${webhook}\n${checkout}`,
     /checkout\.sessions\.retrieve\(\s*[^,]+,\s*\{\s*stripeAccount:/,
@@ -63,6 +65,30 @@ test("settlement is idempotent for duplicate webhook and browser/webhook races",
   assert.match(webhook, /duplicate:\s*true/);
   assert.match(checkout, /body\.action === "status"[\s\S]*settle\(session, reservation\.stripe_account_id, "paid"\)/);
   assert.match(webhook, /settle_storefront_card_checkout/);
+});
+
+test("buyer cancellation expires only an open Session and reuses idempotent settlement", () => {
+  const cancel = checkout.slice(
+    checkout.indexOf('if (body.action === "cancel")'),
+    checkout.indexOf('if (body.action === "status")'),
+  );
+  assert.match(checkout, /cancel_url:\s*cancelUrl/);
+  assert.match(checkout, /checkoutReturnBase\(slug, start\.checkout_return_path\)/);
+  assert.match(cancel, /\.eq\("id", reservationId\)\.eq\("store_id", storeId\)/);
+  assert.match(cancel, /if \(session\.status === "open"\)[\s\S]*checkout\.sessions\.expire/);
+  assert.match(cancel, /if \(session\.status === "expired"\)[\s\S]*settle\(session, reservation\.stripe_account_id, "expired"\)/);
+  assert.match(cancel, /session\.status === "complete" && session\.payment_status === "paid"[\s\S]*settle\(session, reservation\.stripe_account_id, "paid"\)/);
+  assert.match(cancel, /return json\(200, \{ status: "pending" \}/);
+  assert.match(checkoutRoute, /cardCheckoutCancellationId=[\s\S]*card_checkout === "canceled"[\s\S]*query\.reservation_id/);
+  assert.match(checkoutPage, /action: "cancel"[\s\S]*reservation_id: cardCheckoutCancellationId/);
+  assert.match(checkoutPage, /data\?\.status === "canceled"[\s\S]*window\.location\.assign\(continueHref\)/);
+  assert.doesNotMatch(
+    checkoutPage.slice(
+      checkoutPage.indexOf('data?.status === "canceled"'),
+      checkoutPage.indexOf("} else {", checkoutPage.indexOf('data?.status === "canceled"')),
+    ),
+    /clearStorefrontCart/,
+  );
 });
 
 test("successful card settlement invokes the existing order-scoped email worker", () => {

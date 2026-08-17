@@ -122,7 +122,7 @@ type PaymentMethod = StorefrontPaymentMethod;
 type CardCheckoutResponse = {
   available?: boolean;
   checkout_url?: string;
-  status?: "paid" | "pending" | "expired";
+  status?: "paid" | "pending" | "expired" | "canceled";
   order?: OrderResponse["order"];
 };
 
@@ -147,12 +147,14 @@ const emptyCartItems: StorefrontCart["items"] = [];
 
 export function CheckoutPage({
   cardPaymentsEnabled,
+  cardCheckoutCancellationId,
   cardCheckoutSessionId,
   orderMode,
   payAtPickupEnabled,
   store,
 }: {
   cardPaymentsEnabled: boolean;
+  cardCheckoutCancellationId: string | null;
   cardCheckoutSessionId: string | null;
   orderMode: EmbeddedOrderModeContext | null;
   payAtPickupEnabled: boolean;
@@ -184,7 +186,9 @@ export function CheckoutPage({
   const [cardAvailabilityChecked, setCardAvailabilityChecked] = useState(
     !cardPaymentsEnabled,
   );
-  const [isConfirmingCardPayment, setIsConfirmingCardPayment] = useState(Boolean(cardCheckoutSessionId));
+  const [isConfirmingCardPayment, setIsConfirmingCardPayment] = useState(
+    Boolean(cardCheckoutSessionId || cardCheckoutCancellationId),
+  );
   const [activeStep, setActiveStep] = useState<CheckoutStep>("contact");
   const [completedSteps, setCompletedSteps] = useState<
     Record<CheckoutStep, boolean>
@@ -238,17 +242,24 @@ export function CheckoutPage({
   }, [cardPaymentsEnabled, payAtPickupEnabled, store.store_slug]);
 
   useEffect(() => {
-    if (!cardCheckoutSessionId) return;
+    if (!cardCheckoutSessionId && !cardCheckoutCancellationId) return;
     let active = true;
     async function confirmPayment() {
       setIsConfirmingCardPayment(true);
+      const body = cardCheckoutCancellationId
+        ? { action: "cancel", store_slug: store.store_slug, reservation_id: cardCheckoutCancellationId }
+        : { action: "status", store_slug: store.store_slug, session_id: cardCheckoutSessionId };
       const { data, error } = await publicSupabase.functions.invoke<CardCheckoutResponse>(
         "stripe-connect-checkout",
-        { body: { action: "status", store_slug: store.store_slug, session_id: cardCheckoutSessionId } },
+        { body },
       );
       if (!active) return;
       if (error) {
-        setErrorMessage("We could not confirm the card payment yet. Your cart has not been cleared.");
+        setErrorMessage(
+          cardCheckoutCancellationId
+            ? "We could not cancel the card checkout yet. Your cart has not been cleared. Please try again."
+            : "We could not confirm the card payment yet. Your cart has not been cleared.",
+        );
       } else if (data?.status === "paid") {
         clearStorefrontCart(store.store_slug);
         setCart(readStorefrontCart(store.store_slug));
@@ -260,6 +271,9 @@ export function CheckoutPage({
         setForm(initialForm);
       } else if (data?.status === "expired") {
         setErrorMessage("This card checkout expired. Your items are available to order again.");
+      } else if (data?.status === "canceled") {
+        window.location.assign(continueHref);
+        return;
       } else {
         setErrorMessage("Your payment is still processing. Please refresh to check again; your cart has not been cleared.");
       }
@@ -267,7 +281,7 @@ export function CheckoutPage({
     }
     void confirmPayment();
     return () => { active = false; };
-  }, [cardCheckoutSessionId, store.store_slug]);
+  }, [cardCheckoutCancellationId, cardCheckoutSessionId, continueHref, store.store_slug]);
 
   const usesManualPickupOptions = store.pickup_method === "manual_options";
 
@@ -625,9 +639,13 @@ export function CheckoutPage({
 
     try {
       if (paymentMethod === "stripe_checkout") {
+        const checkoutReturnPath = buildEmbeddedOrderModeHref(
+          `/store/${store.store_slug}/checkout`,
+          orderMode,
+        );
         const { data, error } = await publicSupabase.functions.invoke<CardCheckoutResponse>(
           "stripe-connect-checkout",
-          { body: { action: "start", ...payload } },
+          { body: { action: "start", checkout_return_path: checkoutReturnPath, ...payload } },
         );
         if (error || !data?.checkout_url) {
           const detail = error ? await readFunctionError(error) : null;
@@ -678,15 +696,20 @@ export function CheckoutPage({
   }
 
   if (isConfirmingCardPayment) {
+    const isCancelingCardCheckout = Boolean(cardCheckoutCancellationId);
     return (
       <StorefrontPage size="narrow" className="py-10">
         <StorefrontCard className="border-emerald-200 p-6">
           <p className="storefront-primary-color text-sm font-semibold uppercase tracking-[0.12em] text-emerald-800">
-            Confirming payment
+            {isCancelingCardCheckout ? "Canceling checkout" : "Confirming payment"}
           </p>
-          <h1 className="mt-2 text-3xl font-semibold text-stone-950">Checking with Stripe…</h1>
+          <h1 className="mt-2 text-3xl font-semibold text-stone-950">
+            {isCancelingCardCheckout ? "Returning you to the store…" : "Checking with Stripe…"}
+          </h1>
           <p className="mt-3 text-sm leading-6 text-stone-600">
-            Keep this page open. Your cart will clear only after payment is confirmed.
+            {isCancelingCardCheckout
+              ? "Your cart will stay intact so you can keep shopping."
+              : "Keep this page open. Your cart will clear only after payment is confirmed."}
           </p>
         </StorefrontCard>
       </StorefrontPage>

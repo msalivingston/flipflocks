@@ -11,6 +11,7 @@ type CheckoutItem = {
 
 type StartRequest = {
   action: "start";
+  checkout_return_path?: string | null;
   store_slug: string;
   idempotency_key: string;
   buyer_email: string;
@@ -64,6 +65,31 @@ function buyerIp(request: Request): string | null {
   return request.headers.get("cf-connecting-ip")?.trim() ||
     request.headers.get("x-real-ip")?.trim() ||
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+}
+
+function checkoutReturnBase(storeSlug: string, rawPath: unknown): URL {
+  const base = new URL(`/store/${storeSlug}/checkout`, publicSiteOrigin);
+  if (typeof rawPath !== "string" || rawPath.length > 8_192) return base;
+
+  try {
+    const candidate = new URL(rawPath, publicSiteOrigin);
+    if (candidate.origin !== publicSiteOrigin || candidate.pathname !== base.pathname) return base;
+    if (candidate.searchParams.get("orderMode") === "embed" && candidate.searchParams.has("return")) {
+      base.searchParams.set("orderMode", "embed");
+      base.searchParams.set("return", candidate.searchParams.get("return") ?? "");
+    }
+  } catch {
+    // Use the ordinary storefront checkout return when the optional path is malformed.
+  }
+
+  return base;
+}
+
+function checkoutReturnUrl(base: URL, checkoutState: "return" | "canceled", idName: string, idValue: string): string {
+  const returnUrl = new URL(base);
+  returnUrl.searchParams.set("card_checkout", checkoutState);
+  returnUrl.searchParams.set(idName, idValue);
+  return returnUrl.toString();
 }
 
 const supabaseUrl = required("SUPABASE_URL");
@@ -209,6 +235,77 @@ Deno.serve(async (request) => {
     catch { return json(200, { available: false }, cors.headers); }
   }
 
+  if (body.action === "cancel") {
+    const reservationId = typeof body.reservation_id === "string" ? body.reservation_id.trim() : "";
+    if (!uuid.test(reservationId)) return json(400, { error: "invalid_reservation" }, cors.headers);
+
+    const { data: reservation, error: reservationError } = await service.from("storefront_card_checkout_reservations")
+      .select("id,store_id,stripe_account_id,stripe_livemode,stripe_checkout_session_id,amount_total_cents,currency")
+      .eq("id", reservationId).eq("store_id", storeId).maybeSingle();
+    if (reservationError) return json(503, { error: "checkout_cancellation_unavailable" }, cors.headers);
+
+    if (!reservation) {
+      const { data: paidRecord, error: paidRecordError } = await service.from("stripe_checkout_sessions")
+        .select("order_id,orders(order_number,total_amount,currency_code,payment_status)")
+        .eq("store_id", storeId).contains("metadata", { reservation_id: reservationId }).maybeSingle();
+      if (paidRecordError) return json(503, { error: "checkout_cancellation_unavailable" }, cors.headers);
+      if (paidRecord?.order_id) {
+        const order = Array.isArray(paidRecord.orders) ? paidRecord.orders[0] : paidRecord.orders;
+        return json(200, { status: "paid", order: {
+          order_number: order?.order_number ?? null, total_amount: order?.total_amount ?? null,
+          currency: order?.currency_code?.toLowerCase() ?? null,
+        } }, cors.headers);
+      }
+      return json(200, { status: "canceled" }, cors.headers);
+    }
+
+    try {
+      let session = await stripe.checkout.sessions.retrieve(
+        reservation.stripe_checkout_session_id,
+        {},
+        { stripeAccount: reservation.stripe_account_id },
+      );
+      const bindingIsValid = session.metadata?.reservation_id === reservation.id &&
+        session.metadata?.store_id === storeId && session.metadata?.environment_id === environmentId &&
+        session.metadata?.schema_version === "ff_connect_checkout_v1" &&
+        session.client_reference_id === reservation.id && session.mode === "payment" &&
+        session.livemode === livemode && reservation.stripe_livemode === livemode &&
+        session.amount_total === reservation.amount_total_cents && session.currency === reservation.currency;
+      if (!bindingIsValid) throw new Error("session_binding_invalid");
+
+      if (session.status === "open") {
+        try {
+          session = await stripe.checkout.sessions.expire(session.id, {
+            stripeAccount: reservation.stripe_account_id,
+          });
+        } catch {
+          // The Session can complete or expire between retrieval and expiration.
+          session = await stripe.checkout.sessions.retrieve(
+            reservation.stripe_checkout_session_id,
+            {},
+            { stripeAccount: reservation.stripe_account_id },
+          );
+        }
+      }
+
+      if (session.status === "expired") {
+        await settle(session, reservation.stripe_account_id, "expired");
+        return json(200, { status: "canceled" }, cors.headers);
+      }
+      if (session.status === "complete" && session.payment_status === "paid") {
+        const result = await settle(session, reservation.stripe_account_id, "paid");
+        return json(200, { status: "paid", order: {
+          order_number: result?.order_number ?? null, total_amount: result?.total_amount ?? null,
+          currency: result?.currency ?? null,
+        } }, cors.headers);
+      }
+      return json(200, { status: "pending" }, cors.headers);
+    } catch (error) {
+      console.error("connected checkout cancellation failed", error instanceof Error ? error.message : "unknown");
+      return json(503, { error: "checkout_cancellation_unavailable" }, cors.headers);
+    }
+  }
+
   if (body.action === "status") {
     const sessionId = typeof body.session_id === "string" ? body.session_id.trim() : "";
     if (!sessionPattern.test(sessionId)) return json(400, { error: "invalid_session" }, cors.headers);
@@ -309,13 +406,16 @@ Deno.serve(async (request) => {
   const reservationId = crypto.randomUUID();
   const expiresAt = Math.floor(Date.now() / 1000) + 30 * 60;
   const metadata = { reservation_id: reservationId, store_id: storeId, environment_id: environmentId, schema_version: "ff_connect_checkout_v1" };
+  const returnBase = checkoutReturnBase(slug, start.checkout_return_path);
+  const successUrl = checkoutReturnUrl(returnBase, "return", "session_id", "{CHECKOUT_SESSION_ID}")
+    .replace("%7BCHECKOUT_SESSION_ID%7D", "{CHECKOUT_SESSION_ID}");
+  const cancelUrl = checkoutReturnUrl(returnBase, "canceled", "reservation_id", reservationId);
 
   let session: Stripe.Checkout.Session;
   try {
     session = await stripe.checkout.sessions.create({
       mode: "payment", payment_method_types: ["card"], line_items: lineItems, customer_email: start.buyer_email.trim().toLowerCase(),
-      expires_at: expiresAt, success_url: `${publicSiteOrigin}/store/${slug}/checkout?card_checkout=return&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${publicSiteOrigin}/store/${slug}/checkout?card_checkout=canceled`, client_reference_id: reservationId, metadata,
+      expires_at: expiresAt, success_url: successUrl, cancel_url: cancelUrl, client_reference_id: reservationId, metadata,
       payment_intent_data: { metadata },
     }, { stripeAccount: accountId, idempotencyKey: `ff-connect-checkout:${livemode}:${storeId}:${start.idempotency_key}` });
   } catch {
