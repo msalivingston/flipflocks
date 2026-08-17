@@ -144,11 +144,6 @@ type InventoryItemResult = {
   id: string;
 };
 
-type ReservationRow = {
-  inventory_item_id: string | null;
-  remaining_unfulfilled_quantity: number | null;
-};
-
 type RemovalHistoryItemRow = {
   fulfilled_quantity: number | null;
   inventory_item_id: string | null;
@@ -1981,14 +1976,6 @@ export function LiveBirdsListingForm({
     }
 
     const currentRows = currentRowsResult.rows;
-    const reservationResult = await loadActiveReservationMap(
-      currentRows.map((row) => row.inventory_item_id),
-    );
-
-    if (!reservationResult.ok) {
-      return { ok: false, message: reservationResult.message };
-    }
-
     const editValidationIssue = getEditCurrentRowsValidationIssue({
       currentRows,
       loadedSpeciesId: loadedDraftSpeciesId,
@@ -1996,7 +1983,6 @@ export function LiveBirdsListingForm({
       pendingRemovalInventoryItemIds: pendingRemovedOfferings
         .map(({ offering }) => offering.inventoryItemId)
         .filter((value): value is string => Boolean(value)),
-      reservationMap: reservationResult.reservationMap,
       speciesId: species.id,
       sellerBreedProfiles,
     });
@@ -3911,37 +3897,6 @@ function getDuplicateEditOfferingIssues(offerings: BirdOffering[]) {
     );
 }
 
-async function loadActiveReservationMap(inventoryItemIds: string[]) {
-  const uniqueInventoryItemIds = Array.from(new Set(inventoryItemIds));
-  const reservationMap = new Map<string, number>();
-
-  if (uniqueInventoryItemIds.length === 0) {
-    return { ok: true as const, reservationMap };
-  }
-
-  const { data, error } = await supabase
-    .from("seller_order_item_detail")
-    .select("inventory_item_id, remaining_unfulfilled_quantity")
-    .in("inventory_item_id", uniqueInventoryItemIds)
-    .returns<ReservationRow[]>();
-
-  if (error) {
-    return { ok: false as const, message: error.message };
-  }
-
-  (data ?? []).forEach((row) => {
-    if (!row.inventory_item_id) return;
-
-    reservationMap.set(
-      row.inventory_item_id,
-      (reservationMap.get(row.inventory_item_id) ?? 0) +
-        Math.max(row.remaining_unfulfilled_quantity ?? 0, 0),
-    );
-  });
-
-  return { ok: true as const, reservationMap };
-}
-
 async function loadInventoryRemovalBlockedIds(inventoryItemIds: string[]) {
   const uniqueInventoryItemIds = Array.from(new Set(inventoryItemIds));
   const blockAll = () => ({ blockedIds: new Set(uniqueInventoryItemIds) });
@@ -3994,7 +3949,6 @@ function getEditCurrentRowsValidationIssue({
   loadedSpeciesId,
   offerings,
   pendingRemovalInventoryItemIds,
-  reservationMap,
   speciesId,
   sellerBreedProfiles,
 }: {
@@ -4002,7 +3956,6 @@ function getEditCurrentRowsValidationIssue({
   loadedSpeciesId: string | null;
   offerings: BirdOffering[];
   pendingRemovalInventoryItemIds: string[];
-  reservationMap: Map<string, number>;
   speciesId: string | null;
   sellerBreedProfiles: SellerBreedProfile[];
 }) {
@@ -4050,15 +4003,6 @@ function getEditCurrentRowsValidationIssue({
       breedProfileSpeciesById.get(offering.sellerBreedProfileId) !== speciesId
     ) {
       return "Breed must belong to this listing species.";
-    }
-
-    if (!offering.inventoryItemId) continue;
-
-    const reservedQuantity = reservationMap.get(offering.inventoryItemId) ?? 0;
-    const nextQuantity = Number(offering.quantity);
-
-    if (nextQuantity < reservedQuantity) {
-      return "Quantity cannot be lower than the number already reserved in active orders.";
     }
   }
 
