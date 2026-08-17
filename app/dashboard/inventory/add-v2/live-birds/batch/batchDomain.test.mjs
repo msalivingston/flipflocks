@@ -1,0 +1,228 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, extname, resolve } from "node:path";
+import test from "node:test";
+import ts from "typescript";
+
+const root = resolve(import.meta.dirname, "../../../../../..");
+const moduleCache = new Map();
+
+function loadTypeScriptModule(relativePath) {
+  const filename = resolve(root, relativePath);
+  if (moduleCache.has(filename)) return moduleCache.get(filename).exports;
+
+  const loadedModule = { exports: {} };
+  moduleCache.set(filename, loadedModule);
+  const output = ts.transpileModule(readFileSync(filename, "utf8"), {
+    compilerOptions: {
+      esModuleInterop: true,
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: filename,
+  }).outputText;
+
+  function localRequire(specifier) {
+    if (!specifier.startsWith(".")) return {};
+    const candidate = resolve(dirname(filename), specifier);
+    const resolved = extname(candidate) ? candidate : `${candidate}.ts`;
+    return loadTypeScriptModule(resolved.slice(root.length + 1));
+  }
+
+  new Function("require", "module", "exports", "__filename", "__dirname", output)(
+    localRequire,
+    loadedModule,
+    loadedModule.exports,
+    filename,
+    dirname(filename),
+  );
+  return loadedModule.exports;
+}
+
+const domain = loadTypeScriptModule(
+  "app/dashboard/inventory/add-v2/live-birds/batch/batchDomain.ts",
+);
+const constants = loadTypeScriptModule(
+  "app/dashboard/inventory/add-v2/live-birds/constants.ts",
+);
+const payload = loadTypeScriptModule(
+  "app/dashboard/inventory/add-v2/live-birds/payloadPreview.ts",
+);
+
+const chicken = { id: "species-chicken", label: "Chicken", slug: "chicken" };
+const barredRock = {
+  id: "profile-barred-rock",
+  label: "Barred Rock",
+  speciesId: chicken.id,
+  breedId: "catalog-barred-rock",
+  catalogImageUrl: "https://example.test/barred-rock.jpg",
+  catalogDescription: null,
+  sellerPhotoUrl: null,
+  sellerDescription: "Calm dual-purpose birds.",
+  source: "seller_profile",
+};
+
+function completeRow(id, overrides = {}) {
+  return {
+    ...domain.createBatchRow(id),
+    species: chicken,
+    hatchDate: "2026-05-15",
+    availableDate: "2026-06-15",
+    breed: barredRock,
+    soldAs: "Female",
+    quantity: "20",
+    price: "16.00",
+    ...overrides,
+  };
+}
+
+test("Batch Add route exists and normal Add exposes a create-only entry point", () => {
+  const batchPage = readFileSync(
+    resolve(
+      root,
+      "app/dashboard/inventory/add-v2/live-birds/batch/page.tsx",
+    ),
+    "utf8",
+  );
+  const normalPage = readFileSync(
+    resolve(root, "app/dashboard/inventory/add-v2/live-birds/page.tsx"),
+    "utf8",
+  );
+
+  assert.match(batchPage, /Batch Add Live Birds/);
+  assert.match(batchPage, /Each row will become its own Live Birds inventory entry/);
+  assert.doesNotMatch(
+    batchPage,
+    /seller_create_listing_batch_with_inventory|seller_create_inventory_item/,
+  );
+  assert.match(normalPage, /!isEditMode \? <BatchAddEntryPoint \/> : null/);
+  assert.match(
+    normalPage,
+    /href="\/dashboard\/inventory\/add-v2\/live-birds\/batch"/,
+  );
+});
+
+test("Add Row inherits only species and dates and keeps stable row IDs", () => {
+  const source = completeRow("row-a", {
+    barnLocation: "Barn 2",
+    quantity: "75",
+  });
+  const rows = domain.addBatchRow([source], "row-b");
+
+  assert.equal(rows[0].id, "row-a");
+  assert.equal(rows[1].id, "row-b");
+  assert.deepEqual(rows[1].species, chicken);
+  assert.equal(rows[1].hatchDate, source.hatchDate);
+  assert.equal(rows[1].availableDate, source.availableDate);
+  assert.equal(rows[1].breed, null);
+  assert.equal(rows[1].soldAs, "");
+  assert.equal(rows[1].quantity, "");
+  assert.equal(rows[1].price, "");
+  assert.equal(rows[1].barnLocation, "");
+});
+
+test("Remove Row removes only the requested stable row", () => {
+  const rows = [completeRow("row-a"), completeRow("row-b")];
+  const remaining = domain.removeBatchRow(rows, "row-a");
+
+  assert.deepEqual(remaining.map((row) => row.id), ["row-b"]);
+});
+
+test("Duplicate Row copies the allowed values and clears quantity and barn", () => {
+  const source = completeRow("row-a", {
+    barnLocation: "Barn A",
+    quantity: "5",
+    price: "19.50",
+  });
+  const rows = domain.duplicateBatchRow([source], "row-a", "row-b");
+  const duplicate = rows[1];
+
+  assert.equal(duplicate.id, "row-b");
+  assert.deepEqual(duplicate.species, source.species);
+  assert.equal(duplicate.hatchDate, source.hatchDate);
+  assert.equal(duplicate.availableDate, source.availableDate);
+  assert.deepEqual(duplicate.breed, source.breed);
+  assert.equal(duplicate.soldAs, source.soldAs);
+  assert.equal(duplicate.price, source.price);
+  assert.equal(duplicate.quantity, "");
+  assert.equal(duplicate.barnLocation, "");
+});
+
+test("semantic duplicate Breed and Sold As rows remain valid and separate", () => {
+  const rows = [
+    completeRow("row-a", { quantity: "5", barnLocation: "Barn A" }),
+    completeRow("row-b", { quantity: "20", barnLocation: "Barn B" }),
+  ];
+
+  assert.equal(domain.isBatchRowValid(rows[0]), true);
+  assert.equal(domain.isBatchRowValid(rows[1]), true);
+  const groups = domain.groupBatchRows(rows);
+  assert.equal(groups.length, 1);
+  assert.deepEqual(groups[0].rows.map((row) => row.id), ["row-a", "row-b"]);
+  assert.equal(groups[0].totalQuantity, 25);
+});
+
+test("rows group by species, hatch date, and available date", () => {
+  const rows = [
+    completeRow("row-a"),
+    completeRow("row-b", { hatchDate: "2026-05-01" }),
+    completeRow("row-c", { availableDate: "2026-06-20" }),
+  ];
+  const groups = domain.groupBatchRows(rows);
+
+  assert.equal(groups.length, 3);
+  assert.deepEqual(
+    groups.map((group) => group.rows[0].id).sort(),
+    ["row-a", "row-b", "row-c"],
+  );
+});
+
+test("controlled Sold As values map through the existing Live Birds mapping", () => {
+  assert.ok(constants.soldAsOptions.length > 0);
+  constants.soldAsOptions.forEach((soldAs) => {
+    assert.notEqual(payload.mapSoldAsToInventoryType(soldAs), "unknown");
+  });
+});
+
+test("row validation covers dates, quantity, price, and Barn Location", () => {
+  const errors = domain.validateBatchRow(
+    completeRow("row-a", {
+      availableDate: "2026-05-01",
+      hatchDate: "2026-05-15",
+      quantity: "2.5",
+      price: "12.999",
+      barnLocation: "x".repeat(201),
+    }),
+  );
+
+  assert.match(errors.availableDate, /on or after/i);
+  assert.match(errors.quantity, /whole number/i);
+  assert.match(errors.price, /up to 2 decimals/i);
+  assert.match(errors.barnLocation, /200 characters/i);
+});
+
+test("normal Add and Batch Add share breed search and catalog profile creation", () => {
+  const normalPage = readFileSync(
+    resolve(root, "app/dashboard/inventory/add-v2/live-birds/page.tsx"),
+    "utf8",
+  );
+  const batchPage = readFileSync(
+    resolve(
+      root,
+      "app/dashboard/inventory/add-v2/live-birds/batch/page.tsx",
+    ),
+    "utf8",
+  );
+  const offeringsCard = readFileSync(
+    resolve(
+      root,
+      "app/dashboard/inventory/add-v2/live-birds/BirdOfferingsCard.tsx",
+    ),
+    "utf8",
+  );
+
+  assert.match(offeringsCard, /from "\.\/BreedCombobox"/);
+  assert.match(batchPage, /from "\.\.\/BreedCombobox"/);
+  assert.match(normalPage, /createSellerBreedProfileFromCatalogBreed/);
+  assert.match(batchPage, /createSellerBreedProfileFromCatalogBreed/);
+});

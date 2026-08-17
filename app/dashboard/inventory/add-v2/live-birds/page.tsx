@@ -20,8 +20,6 @@ import {
 } from "../../../_lib/live-poultry-share-products";
 import {
   breedLibrarySelect,
-  getCatalogBreedSnapshotRpcArgs,
-  pickFeaturedMedia,
   restoreCatalogDefaultPhotoBestEffort,
   sellerBreedProfileSelect,
   sellerMediaSelect,
@@ -42,7 +40,6 @@ import { AgeBasedPriceChangesCard } from "./AgeBasedPriceChangesCard";
 import { BatchSummaryCard } from "./BatchSummaryCard";
 import { BirdOfferingsCard } from "./BirdOfferingsCard";
 import {
-  fallbackBreedOptions,
   fallbackSpeciesOptions,
   initialOfferings,
   liveBirdsV2DraftMarker,
@@ -91,6 +88,13 @@ import type {
   PublishValidationIssue,
   SpeciesOption,
 } from "./types";
+import {
+  createSellerBreedProfileFromCatalogBreed,
+  getBreedDescriptionFromOption,
+  getBreedOptionForProfile,
+  getBreedOptionsForSpecies,
+  upsertSellerBreedProfile,
+} from "./breedProfiles";
 
 type SpeciesRow = {
   id: string;
@@ -2820,6 +2824,8 @@ export function LiveBirdsListingForm({
           </div>
         </header>
 
+        {!isEditMode ? <BatchAddEntryPoint /> : null}
+
         {draftLoading ? (
           <div className="rounded-xl border border-transparent bg-white px-5 py-8 text-base font-semibold text-stone-600 shadow-none sm:rounded-lg sm:border-stone-200 sm:shadow-sm">
             {isEditMode ? "Loading Live Birds listing..." : "Loading saved draft..."}
@@ -3204,6 +3210,22 @@ export function LiveBirdsListingForm({
       />
     ) : null}
     </>
+  );
+}
+
+function BatchAddEntryPoint() {
+  return (
+    <aside className="mb-5 flex flex-col gap-3 rounded-lg border border-emerald-900/10 bg-emerald-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm font-semibold leading-6 text-stone-700">
+        Adding several breeds or hatch dates? Enter them together in Batch Add.
+      </p>
+      <Link
+        className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-md border border-emerald-800/25 bg-white px-4 text-sm font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:ring-offset-2 sm:min-h-9"
+        href="/dashboard/inventory/add-v2/live-birds/batch"
+      >
+        Batch Add Live Birds
+      </Link>
+    </aside>
   );
 }
 
@@ -5224,103 +5246,6 @@ function normalizeBreedNameForDuplicateCheck(value: string) {
     .replace(/\s+/g, " ");
 }
 
-function getBreedOptionsForSpecies({
-  catalogBreeds,
-  mediaItems,
-  sellerBreedProfiles,
-  species,
-}: {
-  catalogBreeds: BreedLibraryItem[];
-  mediaItems: ListingPhotoItem[];
-  sellerBreedProfiles: SellerBreedProfile[];
-  species: SpeciesOption;
-}) {
-  const profilesForSpecies = species.id
-    ? sellerBreedProfiles.filter((profile) => profile.species_id === species.id)
-    : sellerBreedProfiles;
-  const profilesByBreedId = new Map(
-    profilesForSpecies
-      .filter((profile) => profile.breed_id)
-      .map((profile) => [profile.breed_id, profile] as const),
-  );
-  const catalogOptions = catalogBreeds
-    .filter((breed) => !species.id || breed.species_id === species.id)
-    .map((breed) => {
-      const profile = profilesByBreedId.get(breed.id);
-
-      if (profile) {
-        return getBreedOptionForProfile({
-          catalogBreeds,
-          mediaItems,
-          profile,
-        });
-      }
-
-      return {
-        id: null,
-        label: formatBreedDisplayName(breed.breed_name, breed.variety),
-        speciesId: breed.species_id,
-        breedId: breed.id,
-        catalogImageUrl: breed.image_url,
-        catalogDescription: breed.description,
-        sellerPhotoUrl: null,
-        sellerDescription: null,
-        source: "catalog_breed" as const,
-      };
-    });
-  const customProfileOptions = profilesForSpecies
-    .filter((profile) => !profile.breed_id)
-    .map((profile) =>
-      getBreedOptionForProfile({
-        catalogBreeds,
-        mediaItems,
-        profile,
-      }),
-    );
-  const options = [...catalogOptions, ...customProfileOptions];
-
-  return options.length > 0 ? options : fallbackBreedOptions;
-}
-
-function getBreedOptionForProfile({
-  catalogBreeds,
-  mediaItems,
-  profile,
-}: {
-  catalogBreeds: BreedLibraryItem[];
-  mediaItems: ListingPhotoItem[];
-  profile: SellerBreedProfile;
-}): BreedOption {
-  const catalogBreed = profile.breed_id
-    ? catalogBreeds.find((breed) => breed.id === profile.breed_id) ?? null
-    : null;
-  const profileMediaItems = mediaItems.filter(
-    (item) => item.entity_id === profile.id,
-  );
-  const featuredMedia = pickFeaturedMedia(profileMediaItems);
-  const sellerPhotoUrl = toDisplayImageUrl(featuredMedia?.public_url) || null;
-
-  return {
-    id: profile.id,
-    label: profile.display_name,
-    speciesId: profile.species_id,
-    breedId: profile.breed_id,
-    catalogImageUrl: catalogBreed?.image_url ?? null,
-    catalogDescription: null,
-    sellerPhotoUrl,
-    sellerDescription: profile.seller_description,
-    source: "seller_profile",
-  };
-}
-
-function getBreedDescriptionFromOption(option: BreedOption | null | undefined) {
-  return (
-    option?.sellerDescription?.trim() ||
-    option?.catalogDescription?.trim() ||
-    ""
-  );
-}
-
 function groupBreedMediaByProfileId(mediaItems: ListingPhotoItem[]) {
   return mediaItems.reduce<Record<string, ListingPhotoItem[]>>((groups, item) => {
     groups[item.entity_id] = [...(groups[item.entity_id] ?? []), item];
@@ -5410,73 +5335,6 @@ function getBreedOptionsMessage({
   return null;
 }
 
-async function createSellerBreedProfileFromCatalogBreed({
-  breedId,
-  catalogBreeds,
-  storeId,
-}: {
-  breedId: string;
-  catalogBreeds: BreedLibraryItem[];
-  storeId: string;
-}): Promise<
-  | { ok: true; profile: SellerBreedProfile }
-  | { ok: false; message: string }
-> {
-  const catalogBreed = catalogBreeds.find((breed) => breed.id === breedId);
-
-  if (!catalogBreed) {
-    return { ok: false, message: "That catalog breed could not be found." };
-  }
-
-  const upsertResult = await supabase.rpc("seller_upsert_breed_profile", {
-    ...getCatalogBreedSnapshotRpcArgs(catalogBreed),
-    p_seller_breed_profile_id: null,
-    p_seller_notes: null,
-    p_species_id: catalogBreed.species_id,
-    p_store_id: storeId,
-    p_visibility_status: "active",
-  });
-
-  if (upsertResult.error) {
-    return { ok: false, message: upsertResult.error.message };
-  }
-
-  const upsertRows = Array.isArray(upsertResult.data)
-    ? (upsertResult.data as BreedProfileUpsertResult[])
-    : [];
-  const createdProfileId =
-    upsertRows[0]?.seller_breed_profile_id ??
-    (upsertResult.data as BreedProfileUpsertResult | null)
-      ?.seller_breed_profile_id;
-
-  if (!createdProfileId) {
-    return {
-      ok: false,
-      message: "The breed could not be added to your personal breed library.",
-    };
-  }
-
-  const profileResult = await supabase
-    .from("seller_breed_profiles")
-    .select(sellerBreedProfileSelect)
-    .eq("store_id", storeId)
-    .eq("id", createdProfileId)
-    .maybeSingle<SellerBreedProfile>();
-
-  if (profileResult.error) {
-    return { ok: false, message: profileResult.error.message };
-  }
-
-  if (!profileResult.data) {
-    return {
-      ok: false,
-      message: "The new breed profile could not be loaded.",
-    };
-  }
-
-  return { ok: true, profile: profileResult.data };
-}
-
 async function createSellerCustomBreedProfile({
   draft,
   speciesId,
@@ -5542,23 +5400,6 @@ async function createSellerCustomBreedProfile({
   }
 
   return { ok: true, profile: profileResult.data };
-}
-
-function upsertSellerBreedProfile(
-  profiles: SellerBreedProfile[],
-  nextProfile: SellerBreedProfile,
-) {
-  const existingIndex = profiles.findIndex(
-    (profile) => profile.id === nextProfile.id,
-  );
-
-  if (existingIndex === -1) {
-    return [...profiles, nextProfile];
-  }
-
-  return profiles.map((profile, index) =>
-    index === existingIndex ? nextProfile : profile,
-  );
 }
 
 async function loadBreedMediaItems({
