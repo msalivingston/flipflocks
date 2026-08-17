@@ -54,6 +54,14 @@ import {
   type BatchHatchGroup,
   type BatchRowField,
 } from "./batchDomain";
+import {
+  buildBatchCreatePayload,
+  getBatchReviewSummary,
+  type BatchCreatePayload,
+  type BatchCreateResult,
+  type BatchReviewSummary,
+  type BatchRpcResponse,
+} from "./batchPersistence";
 
 type SpeciesRow = {
   id: string;
@@ -63,6 +71,12 @@ type SpeciesRow = {
 };
 
 type TouchedFields = Record<string, Partial<Record<BatchRowField, boolean>>>;
+
+type ReviewState = {
+  hatchGroups: BatchCreatePayload[];
+  requestKey: string;
+  summary: BatchReviewSummary;
+};
 
 export default function BatchAddLiveBirdsPage() {
   const { error: sellerError, isLoading: sellerLoading, seller } =
@@ -81,6 +95,18 @@ export default function BatchAddLiveBirdsPage() {
   const [touchedFields, setTouchedFields] = useState<TouchedFields>({});
   const [reviewAttempted, setReviewAttempted] = useState(false);
   const [reviewMessage, setReviewMessage] = useState<string | null>(null);
+  const [reviewState, setReviewState] = useState<ReviewState | null>(null);
+  const [submissionStatus, setSubmissionStatus] = useState<
+    "idle" | "submitting" | "success"
+  >("idle");
+  const [submissionResult, setSubmissionResult] =
+    useState<BatchCreateResult | null>(null);
+  const [serverRowErrors, setServerRowErrors] = useState<Record<string, string>>(
+    {},
+  );
+  const [serverGroupErrors, setServerGroupErrors] = useState<
+    Record<string, string>
+  >({});
   const [speciesOptions, setSpeciesOptions] = useState<SpeciesOption[]>(
     fallbackSpeciesOptions,
   );
@@ -97,10 +123,11 @@ export default function BatchAddLiveBirdsPage() {
   const hatchGroups = useMemo(() => groupBatchRows(rows), [rows]);
   const hasUnsavedChanges = useMemo(
     () =>
-      rows.length > 1 ||
-      rows.some((row) => !isBatchRowUntouched(row)) ||
-      Object.values(priceAdjustments).some((rule) => rule.enabled),
-    [priceAdjustments, rows],
+      submissionStatus !== "success" &&
+      (rows.length > 1 ||
+        rows.some((row) => !isBatchRowUntouched(row)) ||
+        Object.values(priceAdjustments).some((rule) => rule.enabled)),
+    [priceAdjustments, rows, submissionStatus],
   );
 
   useEffect(() => {
@@ -251,7 +278,14 @@ export default function BatchAddLiveBirdsPage() {
     setRows((current) =>
       current.map((row) => (row.id === rowId ? { ...row, ...updates } : row)),
     );
+    invalidateReview();
+  }
+
+  function invalidateReview() {
     setReviewMessage(null);
+    setReviewState(null);
+    setServerRowErrors({});
+    setServerGroupErrors({});
   }
 
   function touchField(rowId: string, field: BatchRowField) {
@@ -341,7 +375,7 @@ export default function BatchAddLiveBirdsPage() {
 
   function addRow() {
     setRows((current) => addBatchRow(current, createRowId()));
-    setReviewMessage(null);
+    invalidateReview();
   }
 
   function removeRow(rowId: string) {
@@ -351,13 +385,13 @@ export default function BatchAddLiveBirdsPage() {
       delete next[rowId];
       return next;
     });
-    setReviewMessage(null);
+    invalidateReview();
   }
 
   function duplicateRow(rowId: string) {
     const duplicateId = createRowId();
     setRows((current) => duplicateBatchRow(current, rowId, duplicateId));
-    setReviewMessage(null);
+    invalidateReview();
     window.setTimeout(() => {
       Array.from(
         document.querySelectorAll<HTMLInputElement>(
@@ -383,12 +417,99 @@ export default function BatchAddLiveBirdsPage() {
           invalidRowCount + pricingIssueCount === 1 ? " needs" : "s need"
         } attention before review.`,
       );
+      setReviewState(null);
       return;
     }
 
-    setReviewMessage(
-      "All rows are ready for the final save pass. No inventory has been created.",
+    const summary = getBatchReviewSummary({
+      groups: hatchGroups,
+      priceAdjustments,
+    });
+    setServerRowErrors({});
+    setServerGroupErrors({});
+    setReviewState({
+      hatchGroups: buildBatchCreatePayload({
+        groups: hatchGroups,
+        priceAdjustments,
+      }),
+      requestKey: crypto.randomUUID(),
+      summary,
+    });
+    setReviewMessage("Review the totals below, then add all inventory together.");
+  }
+
+  async function handleAddInventory() {
+    if (!reviewState || !seller || submissionStatus === "submitting") return;
+
+    setSubmissionStatus("submitting");
+    setReviewMessage(null);
+    const { data, error } = await supabase.rpc(
+      "seller_create_live_bird_batches",
+      {
+        p_hatch_groups: reviewState.hatchGroups,
+        p_request_key: reviewState.requestKey,
+        p_store_id: seller.store_id,
+      },
     );
+
+    if (error) {
+      setSubmissionStatus("idle");
+      setReviewMessage(
+        "Inventory could not be added. Your entries are still here; please try again.",
+      );
+      return;
+    }
+
+    const response = (Array.isArray(data) ? data[0] : data) as
+      | BatchRpcResponse
+      | null;
+    if (!response?.ok || !response.result) {
+      const message = response?.error_message ?? "Inventory could not be added.";
+      setSubmissionStatus("idle");
+      setReviewState(null);
+      setReviewAttempted(true);
+      setReviewMessage(message);
+      if (response?.error_row_token) {
+        setServerRowErrors({ [response.error_row_token]: message });
+      }
+      if (response?.error_group_token) {
+        setServerGroupErrors({ [response.error_group_token]: message });
+      }
+      window.setTimeout(() => {
+        const target = response?.error_row_token
+          ? document.querySelector(
+              `[data-batch-row-id="${CSS.escape(response.error_row_token)}"]`,
+            )
+          : response?.error_group_token
+            ? document.querySelector(
+                `[data-hatch-group-id="${CSS.escape(response.error_group_token)}"]`,
+              )
+            : null;
+        target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 0);
+      return;
+    }
+
+    setSubmissionResult(response.result);
+    setSubmissionStatus("success");
+    setReviewState(null);
+    setReviewMessage(null);
+    setTouchedFields({});
+    setReviewAttempted(false);
+  }
+
+  function resetBatchAdd() {
+    nextRowNumber.current = 2;
+    setRows([createBatchRow("batch-row-1")]);
+    setTouchedFields({});
+    setReviewAttempted(false);
+    setReviewMessage(null);
+    setReviewState(null);
+    setSubmissionStatus("idle");
+    setSubmissionResult(null);
+    setServerRowErrors({});
+    setServerGroupErrors({});
+    setPriceAdjustments({});
   }
 
   if (sellerLoading) {
@@ -408,6 +529,42 @@ export default function BatchAddLiveBirdsPage() {
           {sellerError ?? "Seller context is unavailable."}
         </p>
       </DashboardPageContent>
+    );
+  }
+
+  if (submissionStatus === "success" && submissionResult) {
+    return (
+      <>
+        <SellerPageHeader
+          eyebrow="Inventory / Add Inventory / Live Birds"
+          title="Inventory added"
+          description="All hatch groups and bird entries were added together."
+        />
+        <DashboardPageContent className="bg-stone-50/60 pb-24">
+          <section className="mx-auto max-w-3xl rounded-lg border border-emerald-200 bg-white p-6 shadow-sm sm:p-8">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <SuccessTotal label="Entries created" value={submissionResult.entries_created} />
+              <SuccessTotal label="Hatch groups created" value={submissionResult.hatch_groups_created} />
+              <SuccessTotal label="Birds added" value={submissionResult.total_birds_added} />
+            </div>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Link
+                className="seller-primary-button"
+                href="/dashboard/inventory?tab=live_poultry"
+              >
+                Return to Inventory
+              </Link>
+              <button
+                className="seller-secondary-button"
+                type="button"
+                onClick={resetBatchAdd}
+              >
+                Add More Live Birds
+              </button>
+            </div>
+          </section>
+        </DashboardPageContent>
+      </>
     );
   }
 
@@ -484,6 +641,7 @@ export default function BatchAddLiveBirdsPage() {
                     mode="grid"
                     reviewAttempted={reviewAttempted}
                     row={row}
+                    serverError={serverRowErrors[row.id]}
                     speciesOptions={speciesOptions}
                     touched={touchedFields[row.id] ?? {}}
                     onBreedChange={(option) => void handleBreedChange(row.id, option)}
@@ -513,6 +671,7 @@ export default function BatchAddLiveBirdsPage() {
                   mode="card"
                   reviewAttempted={reviewAttempted}
                   row={row}
+                  serverError={serverRowErrors[row.id]}
                   speciesOptions={speciesOptions}
                   touched={touchedFields[row.id] ?? {}}
                   onBreedChange={(option) => void handleBreedChange(row.id, option)}
@@ -540,28 +699,29 @@ export default function BatchAddLiveBirdsPage() {
             groups={hatchGroups}
             locked={!plan.ageBasedPricingEnabled}
             priceAdjustments={priceAdjustments}
-            onPriceAdjustmentChange={(groupId, updates) =>
+            serverErrors={serverGroupErrors}
+            onPriceAdjustmentChange={(groupId, updates) => {
+              invalidateReview();
               setPriceAdjustments((current) => ({
                 ...current,
                 [groupId]: {
                   ...(current[groupId] ?? defaultPriceAdjustment),
                   ...updates,
                 },
-              }))
-            }
+              }));
+            }}
           />
 
           <section className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <div>
               <h2 className="font-bold text-stone-950">Review Batch</h2>
               <p className="mt-1 text-sm leading-6 text-stone-600">
-                This validates the rows and hatch groups only. It does not save
-                or create inventory yet.
+                Validate every row and hatch group before adding inventory.
               </p>
               {reviewMessage ? (
                 <p
                   className={`mt-2 text-sm font-semibold ${
-                    reviewMessage.startsWith("All rows")
+                    reviewState
                       ? "text-emerald-800"
                       : "text-amber-800"
                   }`}
@@ -572,12 +732,22 @@ export default function BatchAddLiveBirdsPage() {
             </div>
             <button
               className="seller-primary-button shrink-0"
+              disabled={submissionStatus === "submitting"}
               type="button"
               onClick={handleReview}
             >
               Review Batch
             </button>
           </section>
+
+          {reviewState ? (
+            <BatchReview
+              state={reviewState}
+              submitting={submissionStatus === "submitting"}
+              onAddInventory={() => void handleAddInventory()}
+              onBack={() => setReviewState(null)}
+            />
+          ) : null}
         </div>
       </DashboardPageContent>
     </>
@@ -588,6 +758,78 @@ function GridHeading({ label }: { label: string }) {
   return <div className="flex items-end">{label}</div>;
 }
 
+function BatchReview({
+  onAddInventory,
+  onBack,
+  state,
+  submitting,
+}: {
+  onAddInventory: () => void;
+  onBack: () => void;
+  state: ReviewState;
+  submitting: boolean;
+}) {
+  const summary = state.summary;
+  const totals = [
+    ["Inventory entries", summary.entryCount],
+    ["Hatch groups", summary.hatchGroupCount],
+    ["Total birds", summary.totalBirds],
+    ["Breeds", summary.breedCount],
+    ["Starting-price range", formatPriceRange(summary.minimumPrice, summary.maximumPrice)],
+    ["Barn Locations used", summary.barnLocationCount],
+    ["Automatic pricing groups", summary.automaticPricingGroupCount],
+  ] as const;
+
+  return (
+    <section className="rounded-lg border-2 border-emerald-700/30 bg-emerald-50/40 p-4 shadow-sm sm:p-6">
+      <h2 className="text-lg font-bold text-stone-950">Ready to add inventory</h2>
+      <p className="mt-1 text-sm leading-6 text-stone-600">
+        This creates every entry below in one operation. If any item fails,
+        nothing will be added.
+      </p>
+      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {totals.map(([label, value]) => (
+          <div className="rounded-md border border-stone-200 bg-white px-4 py-3" key={label}>
+            <dt className="text-xs font-bold uppercase tracking-wide text-stone-500">
+              {label}
+            </dt>
+            <dd className="mt-1 text-lg font-bold text-stone-950">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <button
+          className="seller-secondary-button"
+          disabled={submitting}
+          type="button"
+          onClick={onBack}
+        >
+          Back to editing
+        </button>
+        <button
+          className="seller-primary-button"
+          disabled={submitting}
+          type="button"
+          onClick={onAddInventory}
+        >
+          {submitting ? "Adding Inventory..." : "Add Inventory"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function SuccessTotal({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-4 text-center">
+      <p className="text-2xl font-bold text-emerald-900">{value}</p>
+      <p className="mt-1 text-xs font-bold uppercase tracking-wide text-emerald-800">
+        {label}
+      </p>
+    </div>
+  );
+}
+
 function BatchRowEditor({
   breedOptions,
   canRemove,
@@ -596,6 +838,7 @@ function BatchRowEditor({
   mode,
   reviewAttempted,
   row,
+  serverError,
   speciesOptions,
   touched,
   onBreedChange,
@@ -612,6 +855,7 @@ function BatchRowEditor({
   mode: "grid" | "card";
   reviewAttempted: boolean;
   row: BatchBirdRow;
+  serverError?: string;
   speciesOptions: SpeciesOption[];
   touched: Partial<Record<BatchRowField, boolean>>;
   onBreedChange: (option: BreedOption) => void;
@@ -780,6 +1024,11 @@ function BatchRowEditor({
           onDuplicate={onDuplicate}
           onRemove={onRemove}
         />
+        {serverError ? (
+          <p className="col-span-9 rounded-md bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">
+            {serverError}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -798,6 +1047,11 @@ function BatchRowEditor({
         />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">{fields}</div>
+      {serverError ? (
+        <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+          {serverError}
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -860,11 +1114,13 @@ function HatchGroupsPreview({
   groups,
   locked,
   priceAdjustments,
+  serverErrors,
   onPriceAdjustmentChange,
 }: {
   groups: BatchHatchGroup[];
   locked: boolean;
   priceAdjustments: Record<string, PriceAdjustmentState>;
+  serverErrors: Record<string, string>;
   onPriceAdjustmentChange: (
     groupId: string,
     updates: Partial<PriceAdjustmentState>,
@@ -889,6 +1145,7 @@ function HatchGroupsPreview({
             return (
               <article
                 className="rounded-lg border border-stone-200 bg-stone-50/60 p-4"
+                data-hatch-group-id={group.id}
                 key={group.id}
               >
                 <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">
@@ -915,6 +1172,11 @@ function HatchGroupsPreview({
                     onPriceAdjustmentChange(group.id, updates)
                   }
                 />
+                {serverErrors[group.id] ? (
+                  <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">
+                    {serverErrors[group.id]}
+                  </p>
+                ) : null}
               </article>
             );
           })}

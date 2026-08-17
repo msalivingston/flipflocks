@@ -48,6 +48,9 @@ const constants = loadTypeScriptModule(
 const payload = loadTypeScriptModule(
   "app/dashboard/inventory/add-v2/live-birds/payloadPreview.ts",
 );
+const persistence = loadTypeScriptModule(
+  "app/dashboard/inventory/add-v2/live-birds/batch/batchPersistence.ts",
+);
 
 const chicken = { id: "species-chicken", label: "Chicken", slug: "chicken" };
 const barredRock = {
@@ -225,4 +228,77 @@ test("normal Add and Batch Add share breed search and catalog profile creation",
   assert.match(batchPage, /from "\.\.\/BreedCombobox"/);
   assert.match(normalPage, /createSellerBreedProfileFromCatalogBreed/);
   assert.match(batchPage, /createSellerBreedProfileFromCatalogBreed/);
+});
+
+test("review summary reports totals across hatch groups", () => {
+  const rows = [
+    completeRow("row-a", { quantity: "5", price: "18.00", barnLocation: "Barn A" }),
+    completeRow("row-b", { quantity: "20", price: "8.00" }),
+    completeRow("row-c", {
+      hatchDate: "2026-05-20",
+      availableDate: "2026-06-20",
+      quantity: "10",
+      price: "17.00",
+    }),
+  ];
+  const groups = domain.groupBatchRows(rows);
+  const summary = persistence.getBatchReviewSummary({
+    groups,
+    priceAdjustments: {
+      [groups[0].id]: { enabled: true },
+    },
+  });
+
+  assert.deepEqual(summary, {
+    entryCount: 3,
+    hatchGroupCount: 2,
+    totalBirds: 35,
+    breedCount: 1,
+    minimumPrice: 8,
+    maximumPrice: 18,
+    barnLocationCount: 1,
+    automaticPricingGroupCount: 1,
+  });
+});
+
+test("atomic payload keeps row tokens and derives the lowest group base price", () => {
+  const rows = [
+    completeRow("row-a", { quantity: "5", price: "18.00", barnLocation: " Barn A " }),
+    completeRow("row-b", { quantity: "20", price: "8.00", barnLocation: "Barn B" }),
+  ];
+  const groups = domain.groupBatchRows(rows);
+  const request = persistence.buildBatchCreatePayload({
+    groups,
+    priceAdjustments: {},
+  });
+
+  assert.equal(request.length, 1);
+  assert.equal(request[0].base_price, 8);
+  assert.deepEqual(
+    request[0].breed_groups[0].inventory_items.map((item) => item.client_row_token),
+    ["row-a", "row-b"],
+  );
+  assert.deepEqual(
+    request[0].breed_groups[0].inventory_items.map((item) => item.barn_location),
+    ["Barn A", "Barn B"],
+  );
+});
+
+test("Batch Add submits one atomic RPC and exposes review, failure, and success states", () => {
+  const batchPage = readFileSync(
+    resolve(root, "app/dashboard/inventory/add-v2/live-birds/batch/page.tsx"),
+    "utf8",
+  );
+
+  assert.equal(
+    (batchPage.match(/supabase\.rpc\(\s*"seller_create_live_bird_batches"/g) ?? []).length,
+    1,
+  );
+  assert.match(batchPage, /submissionStatus === "submitting"/);
+  assert.match(batchPage, /setReviewState\(null\)/);
+  assert.match(batchPage, /Inventory added/);
+  assert.match(batchPage, /Add More Live Birds/);
+  assert.match(batchPage, /href="\/dashboard\/inventory\?tab=live_poultry"/);
+  assert.match(batchPage, /error_row_token/);
+  assert.match(batchPage, /error_group_token/);
 });
