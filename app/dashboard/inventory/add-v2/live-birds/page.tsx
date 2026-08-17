@@ -63,6 +63,12 @@ import {
 } from "./helpers";
 import { HatchInformationCard } from "./HatchInformationCard";
 import {
+  applyInventoryIdentityMap,
+  getCreationInventoryIdentityMap,
+  resolveDraftInventoryRow,
+  type InventoryIdentityMap,
+} from "./inventoryIdentity";
+import {
   buildLiveBirdsSavePayloadPreview,
   getCustomInventoryLabelForSoldAs,
   mapInventoryTypeToSoldAs,
@@ -132,6 +138,7 @@ type PendingEntryPhoto = {
 
 
 type CreateDraftResult = {
+  breed_groups: unknown;
   listing_batch_id: string;
   visibility_status: string;
 };
@@ -386,10 +393,6 @@ export function LiveBirdsListingForm({
         species: species.label,
       }),
     [availableDate, hatchDate, offerings, species.label],
-  );
-  const duplicateOfferingIds = useMemo(
-    () => getDuplicateBreedSoldAsOfferingIds(offerings),
-    [offerings],
   );
   const savePayloadPreview = useMemo(
     () =>
@@ -1639,7 +1642,14 @@ export function LiveBirdsListingForm({
   }: {
     offeringsToSave?: BirdOffering[];
     storeId: string;
-  }): Promise<{ ok: true; listingBatchId: string } | { ok: false; message: string }> {
+  }): Promise<
+    | {
+        ok: true;
+        inventoryIdentities: InventoryIdentityMap;
+        listingBatchId: string;
+      }
+    | { ok: false; message: string }
+  > {
     const payload = buildCreateLiveBirdsDraftPayload({
       availableDate,
       hatchDate,
@@ -1693,7 +1703,13 @@ export function LiveBirdsListingForm({
       };
     }
 
-    return { ok: true, listingBatchId: createdDraft.listing_batch_id };
+    return {
+      ok: true,
+      inventoryIdentities: getCreationInventoryIdentityMap(
+        createdDraft.breed_groups,
+      ),
+      listingBatchId: createdDraft.listing_batch_id,
+    };
   }
 
   async function createPublishedListing({
@@ -1704,7 +1720,14 @@ export function LiveBirdsListingForm({
     offeringsToSave: BirdOffering[];
     payload: CreateLiveBirdsPublishPayload;
     storeId: string;
-  }): Promise<{ ok: true; listingBatchId: string } | { ok: false; message: string }> {
+  }): Promise<
+    | {
+        ok: true;
+        inventoryIdentities: InventoryIdentityMap;
+        listingBatchId: string;
+      }
+    | { ok: false; message: string }
+  > {
     const descriptionResult = await saveBreedDescriptionsToLibrary({
       offeringsToSave,
       storeId,
@@ -1746,7 +1769,13 @@ export function LiveBirdsListingForm({
       };
     }
 
-    return { ok: true, listingBatchId: createdListing.listing_batch_id };
+    return {
+      ok: true,
+      inventoryIdentities: getCreationInventoryIdentityMap(
+        createdListing.breed_groups,
+      ),
+      listingBatchId: createdListing.listing_batch_id,
+    };
   }
 
   async function preflightLiveBirdPublication({
@@ -1791,7 +1820,14 @@ export function LiveBirdsListingForm({
     draftId: string;
     offeringsToSave?: BirdOffering[];
     storeId: string;
-  }): Promise<{ ok: true; listingBatchId: string } | { ok: false; message: string }> {
+  }): Promise<
+    | {
+        ok: true;
+        inventoryIdentities: InventoryIdentityMap;
+        listingBatchId: string;
+      }
+    | { ok: false; message: string }
+  > {
     const draftRowsResult = await loadListingRows({
       listingBatchId: draftId,
       mode: "create",
@@ -1881,7 +1917,11 @@ export function LiveBirdsListingForm({
       setPriceAdjustment(hydratePriceAdjustment(refreshedRows.rows[0]));
     }
 
-    return { ok: true, listingBatchId: draftId };
+    return {
+      ok: true,
+      inventoryIdentities: synced.inventoryIdentities,
+      listingBatchId: draftId,
+    };
   }
 
   async function refreshEditListingState({
@@ -1943,7 +1983,6 @@ export function LiveBirdsListingForm({
       );
     }
 
-
     return true;
   }
 
@@ -1952,7 +1991,7 @@ export function LiveBirdsListingForm({
   }: {
     storeId: string;
   }): Promise<
-    | { ok: true }
+    | { ok: true; inventoryIdentities: InventoryIdentityMap }
     | { ok: false; message: string; shouldReloadListing?: boolean }
   > {
     if (!listingBatchId) {
@@ -2066,7 +2105,10 @@ export function LiveBirdsListingForm({
       }
     }
 
-    return { ok: true };
+    return {
+      ok: true,
+      inventoryIdentities: syncResult.inventoryIdentities,
+    };
   }
 
   async function saveCurrentHiddenDraft({
@@ -2084,37 +2126,18 @@ export function LiveBirdsListingForm({
   }
 
   async function uploadPendingEntryPhotos({
-    listingBatchId,
+    inventoryIdentities,
     offeringsToSave,
     storeId,
   }: {
-    listingBatchId: string;
+    inventoryIdentities: InventoryIdentityMap;
     offeringsToSave: BirdOffering[];
     storeId: string;
   }) {
-    const rowsResult = await loadListingRows({
-      listingBatchId,
-      mode: "edit",
-      storeId,
-    });
-
-    if ("error" in rowsResult) {
-      return { failedOfferingIds: Object.keys(pendingEntryPhotosRef.current) };
-    }
-
-    const rowByOfferingKey = new Map(
-      rowsResult.rows.map((row) => [getDraftRowOfferingKey(row), row] as const),
+    const savedOfferings = applyInventoryIdentityMap(
+      offeringsToSave,
+      inventoryIdentities,
     );
-    const savedOfferings = offeringsToSave.map((offering) => {
-      const matchingRow = rowByOfferingKey.get(getOfferingPersistenceKey(offering));
-      return matchingRow
-        ? {
-            ...offering,
-            inventoryItemId: matchingRow.inventory_item_id,
-            listingBatchBreedId: matchingRow.listing_batch_breed_id,
-          }
-        : offering;
-    });
 
     setOfferings(savedOfferings);
     const failedOfferingIds: string[] = [];
@@ -2230,7 +2253,7 @@ export function LiveBirdsListingForm({
       setSavedListingBatchId(saveResult.listingBatchId);
     }
     const pendingUploadResult = await uploadPendingEntryPhotos({
-      listingBatchId: saveResult.listingBatchId,
+      inventoryIdentities: saveResult.inventoryIdentities,
       offeringsToSave,
       storeId: seller.store_id,
     });
@@ -2293,7 +2316,7 @@ export function LiveBirdsListingForm({
     }
 
     const pendingUploadResult = await uploadPendingEntryPhotos({
-      listingBatchId: listingBatchId ?? "",
+      inventoryIdentities: saveResult.inventoryIdentities,
       offeringsToSave: offerings,
       storeId: seller.store_id,
     });
@@ -2422,6 +2445,7 @@ export function LiveBirdsListingForm({
     }
 
     let publishedListingBatchId: string;
+    let publishedInventoryIdentities: InventoryIdentityMap = {};
 
     if (currentSavedDraftId) {
       const saveResult = await saveCurrentHiddenDraft({
@@ -2463,6 +2487,7 @@ export function LiveBirdsListingForm({
 
       publishedListingBatchId =
         publication.listing_batch_id ?? saveResult.listingBatchId;
+      publishedInventoryIdentities = saveResult.inventoryIdentities;
     } else {
       const createResult = await createPublishedListing({
         offeringsToSave,
@@ -2496,10 +2521,11 @@ export function LiveBirdsListingForm({
       }
 
       publishedListingBatchId = createResult.listingBatchId;
+      publishedInventoryIdentities = createResult.inventoryIdentities;
     }
 
     const pendingUploadResult = await uploadPendingEntryPhotos({
-      listingBatchId: publishedListingBatchId,
+      inventoryIdentities: publishedInventoryIdentities,
       offeringsToSave,
       storeId: seller.store_id,
     });
@@ -2886,7 +2912,6 @@ export function LiveBirdsListingForm({
                 breedOptions={breedOptions}
                 breedOptionsMessage={breedOptionsMessage}
                 canAddCustomBreed={Boolean(species.id)}
-                duplicateOfferingIds={duplicateOfferingIds}
                 desktopActive={desktopExpandedStep === 2}
                 desktopDisabled={highestUnlockedDesktopStep < 2}
                 desktopPanelMode
@@ -3867,34 +3892,8 @@ function getEditSaveBlockingIssues({
 
   return [
     ...issues,
-    ...getDuplicateEditOfferingIssues(offerings),
     ...getPriceAdjustmentIssues({ offerings, priceAdjustment }),
   ];
-}
-
-function getDuplicateEditOfferingIssues(offerings: BirdOffering[]) {
-  const offeringLabelsByCombination = new Map<string, string[]>();
-
-  offerings.forEach((offering, index) => {
-    if (!offering.sellerBreedProfileId) return;
-
-    const inventoryType = mapSoldAsToInventoryType(offering.soldAs);
-
-    if (inventoryType === "unknown") return;
-
-    const combinationKey = `${offering.sellerBreedProfileId}:${inventoryType}`;
-    offeringLabelsByCombination.set(combinationKey, [
-      ...(offeringLabelsByCombination.get(combinationKey) ?? []),
-      `Entry ${index + 1}`,
-    ]);
-  });
-
-  return Array.from(offeringLabelsByCombination.values())
-    .filter((offeringLabels) => offeringLabels.length > 1)
-    .map(
-      (offeringLabels) =>
-        `${offeringLabels.join(" and ")} use the same breed and sale type.`,
-    );
 }
 
 async function loadInventoryRemovalBlockedIds(inventoryItemIds: string[]) {
@@ -4019,7 +4018,10 @@ async function syncExistingEditOfferings({
   currentRows: DraftInventoryRow[];
   listingBatchId: string;
   offerings: BirdOffering[];
-}): Promise<{ ok: true } | { ok: false; message: string }> {
+}): Promise<
+  | { ok: true; inventoryIdentities: InventoryIdentityMap }
+  | { ok: false; message: string }
+> {
   const activeRowsByInventoryId = new Map(
     getActiveInventoryRows(currentRows).map(
       (row) => [row.inventory_item_id, row] as const,
@@ -4027,6 +4029,8 @@ async function syncExistingEditOfferings({
   );
   const breedIdByProfileId = new Map<string, string>();
   const breedStatusById = new Map<string, string>();
+  const inventoryIdentities: InventoryIdentityMap = {};
+  const processedInventoryIds = new Set<string>();
 
   currentRows.forEach((row) => {
     if (!breedIdByProfileId.has(row.seller_breed_profile_id)) {
@@ -4057,6 +4061,16 @@ async function syncExistingEditOfferings({
       return {
         ok: false,
         message: `Select how the birds in Entry ${index + 1} will be sold.`,
+      };
+    }
+
+    if (
+      offering.inventoryItemId &&
+      processedInventoryIds.has(offering.inventoryItemId)
+    ) {
+      return {
+        ok: false,
+        message: `Entry ${index + 1} points to an inventory row already used by another entry. Reload the listing before saving.`,
       };
     }
 
@@ -4128,6 +4142,19 @@ async function syncExistingEditOfferings({
         return { ok: false, message: createItemResult.error.message };
       }
 
+      const createdItem = createItemResult.data as InventoryItemResult | null;
+      if (!createdItem?.id) {
+        return {
+          ok: false,
+          message: `Entry ${index + 1} was created without an inventory identity.`,
+        };
+      }
+
+      inventoryIdentities[offering.id] = {
+        inventoryItemId: createdItem.id,
+        listingBatchBreedId,
+      };
+
       continue;
     }
 
@@ -4139,6 +4166,12 @@ async function syncExistingEditOfferings({
         message: "This entry is not currently active on the listing.",
       };
     }
+
+    inventoryIdentities[offering.id] = {
+      inventoryItemId: currentRow.inventory_item_id,
+      listingBatchBreedId: currentRow.listing_batch_breed_id,
+    };
+    processedInventoryIds.add(currentRow.inventory_item_id);
 
     if (
       offering.sellerBreedProfileId !== currentRow.seller_breed_profile_id ||
@@ -4180,7 +4213,7 @@ async function syncExistingEditOfferings({
     }
   }
 
-  return { ok: true };
+  return { ok: true, inventoryIdentities };
 }
 
 function getActiveInventoryRows(rows: DraftInventoryRow[]) {
@@ -4223,13 +4256,22 @@ async function syncDraftOfferings({
   currentRows: DraftInventoryRow[];
   draftId: string;
   offerings: BirdOffering[];
-}): Promise<{ ok: true } | { ok: false; message: string }> {
+}): Promise<
+  | { ok: true; inventoryIdentities: InventoryIdentityMap }
+  | { ok: false; message: string }
+> {
   const activeRows = currentRows.filter(
     (row) =>
       row.inventory_visibility_status === "active" &&
       row.listing_batch_breed_visibility_status === "active",
   );
   const retainedInventoryIds = new Set<string>();
+  const inventoryIdentities: InventoryIdentityMap = {};
+  const claimedPersistedInventoryIds = new Set(
+    offerings
+      .map((offering) => offering.inventoryItemId)
+      .filter((value): value is string => Boolean(value)),
+  );
   const breedIdByProfileId = new Map<string, string>();
   const breedStatusById = new Map<string, string>();
 
@@ -4261,6 +4303,17 @@ async function syncDraftOfferings({
       return {
         ok: false,
         message: `Select how the birds in Entry ${index + 1} will be sold.`,
+      };
+    }
+
+
+    if (
+      offering.inventoryItemId &&
+      retainedInventoryIds.has(offering.inventoryItemId)
+    ) {
+      return {
+        ok: false,
+        message: `Entry ${index + 1} points to an inventory row already used by another entry. Reload the draft before saving.`,
       };
     }
 
@@ -4323,22 +4376,51 @@ async function syncDraftOfferings({
       }
     }
 
-    const targetMatchingRow = currentRows.find(
-      (row) =>
-        !retainedInventoryIds.has(row.inventory_item_id) &&
-        row.seller_breed_profile_id === offering.sellerBreedProfileId &&
-        row.inventory_type === inventoryType,
-    );
-    const existingRow = activeRows.find(
-      (row) =>
-        row.inventory_item_id === offering.inventoryItemId &&
-        row.seller_breed_profile_id === offering.sellerBreedProfileId &&
-        !targetMatchingRow,
-    );
-    const rowToUpdate = targetMatchingRow ?? existingRow ?? null;
+    const unavailableInventoryIds = new Set([
+      ...claimedPersistedInventoryIds,
+      ...retainedInventoryIds,
+    ]);
+    const resolution = resolveDraftInventoryRow({
+      customInventoryLabel,
+      inventoryItemId: offering.inventoryItemId,
+      inventoryType,
+      rows: currentRows,
+      sellerBreedProfileId: offering.sellerBreedProfileId,
+      unavailableInventoryIds,
+    });
+
+    if (resolution.kind === "ambiguous") {
+      return {
+        ok: false,
+        message: `Entry ${index + 1} matches more than one saved inventory row. Reload the draft before saving.`,
+      };
+    }
+
+    if (resolution.kind === "none" && offering.inventoryItemId) {
+      return {
+        ok: false,
+        message: `Entry ${index + 1} no longer matches its saved inventory row. Reload the draft before saving.`,
+      };
+    }
+
+    const rowToUpdate = resolution.row;
 
     if (rowToUpdate) {
+      if (
+        offering.sellerBreedProfileId !== rowToUpdate.seller_breed_profile_id ||
+        listingBatchBreedId !== rowToUpdate.listing_batch_breed_id
+      ) {
+        return {
+          ok: false,
+          message: "Changing an existing draft entry's breed is not supported.",
+        };
+      }
+
       retainedInventoryIds.add(rowToUpdate.inventory_item_id);
+      inventoryIdentities[offering.id] = {
+        inventoryItemId: rowToUpdate.inventory_item_id,
+        listingBatchBreedId: rowToUpdate.listing_batch_breed_id,
+      };
 
       if (rowToUpdate.inventory_visibility_status !== "active") {
         const visibilityResult = await supabase.rpc(
@@ -4400,9 +4482,18 @@ async function syncDraftOfferings({
 
       const createdItem = createItemResult.data as InventoryItemResult | null;
 
-      if (createdItem?.id) {
-        retainedInventoryIds.add(createdItem.id);
+      if (!createdItem?.id) {
+        return {
+          ok: false,
+          message: `Entry ${index + 1} was created without an inventory identity.`,
+        };
       }
+
+      retainedInventoryIds.add(createdItem.id);
+      inventoryIdentities[offering.id] = {
+        inventoryItemId: createdItem.id,
+        listingBatchBreedId,
+      };
     }
   }
 
@@ -4420,7 +4511,7 @@ async function syncDraftOfferings({
     }
   }
 
-  return { ok: true };
+  return { ok: true, inventoryIdentities };
 }
 
 async function loadListingRows({
@@ -4737,7 +4828,6 @@ function getPublishValidationIssues({
 
   return [
     ...issues,
-    ...getDuplicatePublishValidationIssues(startedOfferings),
     ...getPriceAdjustmentIssues({
       offerings: startedOfferings,
       priceAdjustment,
@@ -4769,48 +4859,6 @@ function hasPublishReadyBreedPhoto({
     Boolean(toDisplayImageUrl(breedOption?.sellerPhotoUrl)) ||
     Boolean(toDisplayImageUrl(breedOption?.catalogImageUrl))
   );
-}
-
-function getDuplicatePublishValidationIssues(
-  offerings: BirdOffering[],
-): PublishValidationIssue[] {
-  const offeringLabelsByCombination = new Map<
-    string,
-    Array<{ label: string; offeringId: string }>
-  >();
-
-  offerings.forEach((offering, index) => {
-    if (!offering.sellerBreedProfileId) return;
-
-    const inventoryType = mapSoldAsToInventoryType(offering.soldAs);
-
-    if (inventoryType === "unknown") return;
-
-    const combinationKey = `${offering.sellerBreedProfileId}:${inventoryType}`;
-    offeringLabelsByCombination.set(combinationKey, [
-      ...(offeringLabelsByCombination.get(combinationKey) ?? []),
-      { label: `Entry ${index + 1}`, offeringId: offering.id },
-    ]);
-  });
-
-  return Array.from(offeringLabelsByCombination.values())
-    .filter((offeringLabels) => offeringLabels.length > 1)
-    .map((offeringLabels, index) => ({
-      id: `duplicate-group-${index}`,
-      message: `${formatGroupLabelList(
-        offeringLabels.map((offeringLabel) => offeringLabel.label),
-      )} use the same breed and sale type. Update one entry before publishing.`,
-      target: {
-        type: "offering",
-        offeringId: offeringLabels[0]?.offeringId ?? "",
-      } as const,
-    }));
-}
-
-function formatGroupLabelList(labels: string[]) {
-  if (labels.length <= 2) return labels.join(" and ");
-
-  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
 }
 
 function getLiveBirdsFormSnapshot({
@@ -5062,22 +5110,6 @@ function getOfferingsFromDraftRows(rows: DraftInventoryRow[]) {
       expanded: index === 0,
     }),
   );
-}
-
-function getOfferingPersistenceKey(offering: BirdOffering) {
-  return [
-    offering.sellerBreedProfileId ?? "",
-    mapSoldAsToInventoryType(offering.soldAs),
-    getCustomInventoryLabelForSoldAs(offering.soldAs) ?? "",
-  ].join("|");
-}
-
-function getDraftRowOfferingKey(row: DraftInventoryRow) {
-  return [
-    row.seller_breed_profile_id,
-    row.inventory_type,
-    row.custom_inventory_label ?? "",
-  ].join("|");
 }
 
 function getLoadedDraftSaveDisabledReason({
@@ -5350,26 +5382,6 @@ function alignOfferingsToBreedOptions(
   });
 
   return changed ? nextOfferings : offerings;
-}
-
-function getDuplicateBreedSoldAsOfferingIds(offerings: BirdOffering[]) {
-  const offeringIdsByCombination = new Map<string, string[]>();
-
-  offerings.forEach((offering) => {
-    if (!offering.sellerBreedProfileId) return;
-
-    const combinationKey = `${offering.sellerBreedProfileId}:${offering.soldAs}`;
-    offeringIdsByCombination.set(combinationKey, [
-      ...(offeringIdsByCombination.get(combinationKey) ?? []),
-      offering.id,
-    ]);
-  });
-
-  return new Set(
-    Array.from(offeringIdsByCombination.values())
-      .filter((offeringIds) => offeringIds.length > 1)
-      .flat(),
-  );
 }
 
 function getBreedOptionsMessage({

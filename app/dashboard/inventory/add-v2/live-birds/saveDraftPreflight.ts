@@ -113,35 +113,7 @@ function getOfferingIssues(offerings: BirdOffering[]) {
     }
   });
 
-  return [
-    ...issues,
-    ...getDuplicateCombinationIssues(startedOfferings),
-  ];
-}
-
-function getDuplicateCombinationIssues(offerings: BirdOffering[]) {
-  const offeringLabelsByCombination = new Map<string, string[]>();
-
-  offerings.forEach((offering, index) => {
-    if (!offering.sellerBreedProfileId) return;
-
-    const inventoryType = mapSoldAsToInventoryType(offering.soldAs);
-
-    if (inventoryType === "unknown") return;
-
-    const combinationKey = `${offering.sellerBreedProfileId}:${inventoryType}`;
-    offeringLabelsByCombination.set(combinationKey, [
-      ...(offeringLabelsByCombination.get(combinationKey) ?? []),
-      `Entry ${index + 1}`,
-    ]);
-  });
-
-  return Array.from(offeringLabelsByCombination.values())
-    .filter((offeringLabels) => offeringLabels.length > 1)
-    .map(
-      (offeringLabels) =>
-        `${offeringLabels.join(" and ")} use the same breed and sale type.`,
-    );
+  return issues;
 }
 
 function getPreflightWarnings({

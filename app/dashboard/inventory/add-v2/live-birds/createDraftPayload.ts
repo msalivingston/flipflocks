@@ -18,6 +18,7 @@ export type CreateLiveBirdsPayload = {
     visibility_status: "active";
     seller_notes: null;
     inventory_items: Array<{
+      client_row_token: string;
       inventory_type: Exclude<
         ReturnType<typeof mapSoldAsToInventoryType>,
         "unknown"
@@ -175,6 +176,7 @@ function getBreedGroups({
     const price = getNumberValue(offering.price);
 
     group.inventory_items.push({
+      client_row_token: offering.id,
       inventory_type: inventoryType,
       custom_inventory_label: getCustomInventoryLabelForSoldAs(offering.soldAs),
       quantity_available: getNumberValue(offering.quantity),

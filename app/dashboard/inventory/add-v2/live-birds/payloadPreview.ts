@@ -51,8 +51,6 @@ export function buildLiveBirdsSavePayloadPreview({
   species: SpeciesOption;
 }): SavePayloadPreview {
   const recommendedBasePrice = getRecommendedBasePrice(offerings);
-  const duplicateCombinationWarnings =
-    getDuplicateInventoryCombinationWarnings(offerings);
 
   return {
     listingBatch: {
@@ -88,7 +86,6 @@ export function buildLiveBirdsSavePayloadPreview({
     warnings: [
       "Breed photos are managed through seller_breed_profiles and are not saved on draft groups or stock records.",
       ...getMissingBackendIdWarnings({ offerings, species }),
-      ...duplicateCombinationWarnings,
     ],
   };
 }
@@ -170,28 +167,6 @@ function getRecommendedBasePrice(offerings: BirdOffering[]) {
   }
 
   return null;
-}
-
-function getDuplicateInventoryCombinationWarnings(offerings: BirdOffering[]) {
-  const offeringIdsByCombination = new Map<string, string[]>();
-
-  offerings.forEach((offering) => {
-    if (!offering.sellerBreedProfileId) return;
-
-    const inventoryType = mapSoldAsToInventoryType(offering.soldAs);
-    const combinationKey = `${offering.sellerBreedProfileId}:${inventoryType}`;
-    offeringIdsByCombination.set(combinationKey, [
-      ...(offeringIdsByCombination.get(combinationKey) ?? []),
-      offering.id,
-    ]);
-  });
-
-  return Array.from(offeringIdsByCombination.entries())
-    .filter(([, offeringIds]) => offeringIds.length > 1)
-    .map(
-      ([combinationKey, offeringIds]) =>
-        `Duplicate sellerBreedProfileId + inventoryType combination (${combinationKey}) appears in local groups: ${offeringIds.join(", ")}.`,
-    );
 }
 
 function getMissingBackendIdWarnings({

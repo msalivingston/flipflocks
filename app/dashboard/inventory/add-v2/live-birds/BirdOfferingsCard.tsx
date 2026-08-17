@@ -29,7 +29,6 @@ export function BirdOfferingsCard({
   breedOptionsMessage,
   canAddCustomBreed,
   completionErrorMessage,
-  duplicateOfferingIds,
   desktopActive,
   desktopDisabled,
   desktopPanelMode = false,
@@ -77,7 +76,6 @@ export function BirdOfferingsCard({
   breedOptionsMessage: string | null;
   canAddCustomBreed: boolean;
   completionErrorMessage?: string | null;
-  duplicateOfferingIds: Set<string>;
   desktopActive: boolean;
   desktopDisabled: boolean;
   desktopPanelMode?: boolean;
@@ -185,12 +183,6 @@ export function BirdOfferingsCard({
           {breedOptionsMessage}
         </p>
       ) : null}
-      {duplicateOfferingIds.size > 0 ? (
-        <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-base font-semibold leading-7 text-amber-800">
-          This page already has an entry for this breed and sex/type. Choose
-          a different sex/type or remove the duplicate before saving later.
-        </p>
-      ) : null}
       {!isLocked ? (
         <div className="mt-4 space-y-4 sm:mt-4 sm:space-y-3">
           {displayedOfferings.map((row, index) =>
@@ -211,7 +203,6 @@ export function BirdOfferingsCard({
                 breedOptions={breedOptions}
                 canAddCustomBreed={canAddCustomBreed}
                 canRemove={offerings.length > 1}
-                hasDuplicateCombination={duplicateOfferingIds.has(row.offering.id)}
                 isEditMode={isEditMode}
                 desktopPanelMode={desktopPanelMode}
                 index={index}
@@ -242,7 +233,6 @@ export function BirdOfferingsCard({
               <CollapsedOfferingRow
                 key={row.offering.id}
                 canRemove={offerings.length > 1}
-                hasDuplicateCombination={duplicateOfferingIds.has(row.offering.id)}
                 isEditMode={isEditMode}
                 index={index}
                 offering={row.offering}
@@ -298,7 +288,6 @@ function ExpandedOfferingCard({
   breedOptions,
   canAddCustomBreed,
   canRemove,
-  hasDuplicateCombination,
   isEditMode,
   desktopPanelMode,
   index,
@@ -332,7 +321,6 @@ function ExpandedOfferingCard({
   breedOptions: BreedOption[];
   canAddCustomBreed: boolean;
   canRemove: boolean;
-  hasDuplicateCombination: boolean;
   isEditMode: boolean;
   desktopPanelMode: boolean;
   index: number;
@@ -564,13 +552,6 @@ function ExpandedOfferingCard({
           />
         </div>
       </div>
-      {hasDuplicateCombination ? (
-        <p className="mx-4 mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-base font-semibold leading-7 text-amber-800">
-          Duplicate breed and sex/type combination. Choose a different sex/type
-          or remove this entry before saving.
-        </p>
-      ) : null}
-
       {hasBreed ? (
       <div className="border-t border-stone-100 px-4 py-4 sm:border-stone-200 sm:px-4 sm:py-3">
         <button
@@ -676,7 +657,6 @@ function EditOfferingMetric({ label, value }: { label: string; value: string }) 
 
 function CollapsedOfferingRow({
   canRemove,
-  hasDuplicateCombination,
   isEditMode,
   index,
   offering,
@@ -685,7 +665,6 @@ function CollapsedOfferingRow({
   toggleOfferingExpanded,
 }: {
   canRemove: boolean;
-  hasDuplicateCombination: boolean;
   isEditMode: boolean;
   index: number;
   offering: BirdOffering;
@@ -699,11 +678,7 @@ function CollapsedOfferingRow({
 
   return (
     <div
-      className={`rounded-lg border bg-white px-3 py-2.5 shadow-sm sm:px-4 ${
-        hasDuplicateCombination
-          ? "border-amber-200"
-          : "border-transparent sm:border-stone-200"
-      }`}
+      className="rounded-lg border border-transparent bg-white px-3 py-2.5 shadow-sm sm:border-stone-200 sm:px-4"
     >
       <div className="flex flex-wrap items-start gap-3 text-sm sm:items-center sm:gap-x-3 sm:gap-y-2">
         <button
@@ -755,11 +730,6 @@ function CollapsedOfferingRow({
           </button>
         </div>
       </div>
-      {hasDuplicateCombination ? (
-        <p className="mt-2 text-base font-semibold text-amber-800">
-          Duplicate breed and sex/type combination.
-        </p>
-      ) : null}
     </div>
   );
 }
