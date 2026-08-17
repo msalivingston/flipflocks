@@ -23,7 +23,6 @@ export function BirdOfferingsCard({
   addOffering,
   breedMediaItemsByProfileId,
   entryMediaItemsByInventoryItemId,
-  entryPhotoPilotEnabled,
   editPriceSummariesByOfferingId = {},
   editCurrentAgeLabel,
   breedOptions,
@@ -64,7 +63,6 @@ export function BirdOfferingsCard({
   addOffering: () => void;
   breedMediaItemsByProfileId: Record<string, ListingPhotoItem[]>;
   entryMediaItemsByInventoryItemId: Record<string, ListingPhotoItem[]>;
-  entryPhotoPilotEnabled: boolean;
   editPriceSummariesByOfferingId?: Record<
     string,
     {
@@ -208,7 +206,6 @@ export function BirdOfferingsCard({
                 key={row.offering.id}
                 breedMediaItemsByProfileId={breedMediaItemsByProfileId}
                 entryMediaItemsByInventoryItemId={entryMediaItemsByInventoryItemId}
-                entryPhotoPilotEnabled={entryPhotoPilotEnabled}
                 editPriceSummary={editPriceSummariesByOfferingId[row.offering.id]}
                 editCurrentAgeLabel={editCurrentAgeLabel}
                 breedOptions={breedOptions}
@@ -296,7 +293,6 @@ export function BirdOfferingsCard({
 function ExpandedOfferingCard({
   breedMediaItemsByProfileId,
   entryMediaItemsByInventoryItemId,
-  entryPhotoPilotEnabled,
   editPriceSummary,
   editCurrentAgeLabel,
   breedOptions,
@@ -326,7 +322,6 @@ function ExpandedOfferingCard({
 }: {
   breedMediaItemsByProfileId: Record<string, ListingPhotoItem[]>;
   entryMediaItemsByInventoryItemId: Record<string, ListingPhotoItem[]>;
-  entryPhotoPilotEnabled: boolean;
   editPriceSummary?: {
     after: string;
     current: string;
@@ -461,26 +456,22 @@ function ExpandedOfferingCard({
         </div>
       </div>
 
-      {entryPhotoPilotEnabled ? (
-        // Sunshine Mesa Farm production pilot: the entry-photo system remains global,
-        // but only this seller UI is limited for now. Remove this gate to enable it for all sellers.
-        <div className="border-b border-stone-100 px-4 py-3">
-          <EntryPhotoControl
-            inventoryItemId={offering.inventoryItemId}
-            mediaItems={
-              offering.inventoryItemId
-                ? entryMediaItemsByInventoryItemId[offering.inventoryItemId] ?? []
-                : []
-            }
-            onReload={onEntryPhotosChanged}
-            onPendingPhotoChange={onPendingEntryPhotoChange}
-            onPendingPhotoRemove={onPendingEntryPhotoRemove}
-            onPendingPhotoUploaded={onPendingEntryPhotoRemove}
-            pendingPhoto={pendingEntryPhoto}
-            storeId={storeId}
-          />
-        </div>
-      ) : null}
+      <div className="border-b border-stone-100 px-4 py-3">
+        <EntryPhotoControl
+          inventoryItemId={offering.inventoryItemId}
+          mediaItems={
+            offering.inventoryItemId
+              ? entryMediaItemsByInventoryItemId[offering.inventoryItemId] ?? []
+              : []
+          }
+          onReload={onEntryPhotosChanged}
+          onPendingPhotoChange={onPendingEntryPhotoChange}
+          onPendingPhotoRemove={onPendingEntryPhotoRemove}
+          onPendingPhotoUploaded={onPendingEntryPhotoRemove}
+          pendingPhoto={pendingEntryPhoto}
+          storeId={storeId}
+        />
+      </div>
 
       <div
         className={`grid gap-0 px-4 py-5 sm:gap-4 sm:px-4 sm:py-4 ${

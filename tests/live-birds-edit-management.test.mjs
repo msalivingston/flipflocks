@@ -153,8 +153,9 @@ test("Edit Automatic Price Changes omits the range helper bar", () => {
   assert.doesNotMatch(page, /Next adjustment:/);
 });
 
-test("Edit retains the shared entry-photo component and Sunshine pilot gate", () => {
-  assert.match(page, /seller\?\.store_id === sunshineMesaFarmStoreId/);
+test("Edit retains the shared entry-photo component for all stores", () => {
+  assert.doesNotMatch(page, /sunshineMesaFarmStoreId|entryPhotoPilotEnabled/);
+  assert.doesNotMatch(offerings, /Sunshine Mesa Farm|entryPhotoPilotEnabled/);
   assert.match(offerings, /<EntryPhotoControl/);
   assert.match(page, /uploadPendingEntryPhotos/);
 });

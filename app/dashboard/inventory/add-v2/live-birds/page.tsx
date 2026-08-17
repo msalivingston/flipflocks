@@ -130,7 +130,6 @@ type PendingEntryPhoto = {
   previewUrl: string;
 };
 
-const sunshineMesaFarmStoreId = "3017ade8-686d-42de-a802-4208ed7ff6f7";
 
 type CreateDraftResult = {
   listing_batch_id: string;
@@ -2896,9 +2895,6 @@ export function LiveBirdsListingForm({
                 addOffering={addOffering}
                 breedMediaItemsByProfileId={breedMediaItemsByProfileId}
                 entryMediaItemsByInventoryItemId={groupEntryMediaByInventoryItemId(entryMediaItems)}
-                entryPhotoPilotEnabled={
-                  seller?.store_id === sunshineMesaFarmStoreId
-                }
                 editCurrentAgeLabel={editCurrentAgeLabel}
                 editPriceSummariesByOfferingId={editPriceSummariesByOfferingId}
                 breedOptions={breedOptions}

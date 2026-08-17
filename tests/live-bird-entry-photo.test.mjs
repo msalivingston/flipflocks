@@ -68,17 +68,16 @@ test("pending entry photos can match rows after either draft save or direct publ
   assert.doesNotMatch(uploadPendingSource, /mode: "create"/);
 });
 
-test("only Sunshine Mesa Farm receives the seller entry-photo pilot control", () => {
+test("all stores receive the seller entry-photo control", () => {
   const page = read("app/dashboard/inventory/add-v2/live-birds/page.tsx");
   const card = read(
     "app/dashboard/inventory/add-v2/live-birds/BirdOfferingsCard.tsx",
   );
 
-  assert.match(page, /sunshineMesaFarmStoreId = "3017ade8-686d-42de-a802-4208ed7ff6f7"/);
-  assert.match(page, /seller\?\.store_id === sunshineMesaFarmStoreId/);
-  assert.match(card, /entryPhotoPilotEnabled \? \(/);
-  assert.match(card, /Sunshine Mesa Farm production pilot/);
-  assert.match(card, /Remove this gate to enable it for all sellers/);
+  assert.doesNotMatch(page, /sunshineMesaFarmStoreId|entryPhotoPilotEnabled/);
+  assert.doesNotMatch(card, /Sunshine Mesa Farm|entryPhotoPilotEnabled/);
+  assert.match(card, /<EntryPhotoControl/);
+  assert.match(card, /entityMediaItemsByInventoryItemId|entryMediaItemsByInventoryItemId/);
 });
 
 test("purchase details conditionally renders inventory-entry photos without affecting eggs", () => {
