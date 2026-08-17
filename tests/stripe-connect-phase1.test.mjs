@@ -39,12 +39,21 @@ test("connected Checkout retrieval passes account context as Stripe request opti
   );
 });
 
+test("connected Checkout expiration passes account context as third-argument request options", () => {
+  const connectedExpire = /checkout\.sessions\.expire\(\s*[^,]+,\s*\{\},\s*\{\s*stripeAccount:\s*[^}]+\}\s*,?\s*\)/g;
+  assert.equal(checkout.match(connectedExpire)?.length, 5);
+  assert.doesNotMatch(
+    checkout,
+    /checkout\.sessions\.expire\(\s*[^,]+,\s*\{\s*stripeAccount:/,
+  );
+});
+
 test("inventory is held only after Session creation and URL stays private until reservation succeeds", () => {
   const createPosition = checkout.indexOf("stripe.checkout.sessions.create");
   const reservePosition = checkout.indexOf('service.rpc("reserve_storefront_card_checkout"');
   const exposePosition = checkout.indexOf("{ checkout_url: session.url }");
   assert.ok(createPosition > 0 && reservePosition > createPosition && exposePosition > reservePosition);
-  assert.match(checkout, /if \(reserveError\)[\s\S]*checkout\.sessions\.expire\(session\.id, \{ stripeAccount: accountId \}\)/);
+  assert.match(checkout, /if \(reserveError\)[\s\S]*checkout\.sessions\.expire\(session\.id, \{\}, \{ stripeAccount: accountId \}\)/);
 });
 
 test("reservation covers every inventory type and expiration restores each one", () => {
@@ -78,7 +87,8 @@ test("buyer cancellation expires only an open Session and reuses idempotent sett
   assert.match(cancel, /if \(session\.status === "open"\)[\s\S]*checkout\.sessions\.expire/);
   assert.match(cancel, /if \(session\.status === "expired"\)[\s\S]*settle\(session, reservation\.stripe_account_id, "expired"\)/);
   assert.match(cancel, /session\.status === "complete" && session\.payment_status === "paid"[\s\S]*settle\(session, reservation\.stripe_account_id, "paid"\)/);
-  assert.match(cancel, /return json\(200, \{ status: "pending" \}/);
+  assert.match(cancel, /if \(session\.status === "complete"\) \{[\s\S]*return json\(200, \{ status: "pending" \}/);
+  assert.match(cancel, /return json\(503, \{ error: "checkout_cancellation_unavailable" \}/);
   assert.match(checkoutRoute, /cardCheckoutCancellationId=[\s\S]*card_checkout === "canceled"[\s\S]*query\.reservation_id/);
   assert.match(checkoutPage, /action: "cancel"[\s\S]*reservation_id: cardCheckoutCancellationId/);
   assert.match(checkoutPage, /data\?\.status === "canceled"[\s\S]*window\.location\.assign\(continueHref\)/);

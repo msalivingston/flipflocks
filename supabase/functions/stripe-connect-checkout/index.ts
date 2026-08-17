@@ -191,7 +191,11 @@ async function cleanStale(storeId: string) {
         { stripeAccount: reservation.stripe_account_id },
       );
       if (session.status === "open") {
-        session = await stripe.checkout.sessions.expire(session.id, { stripeAccount: reservation.stripe_account_id });
+        session = await stripe.checkout.sessions.expire(
+          session.id,
+          {},
+          { stripeAccount: reservation.stripe_account_id },
+        );
       }
       if (session.status === "expired") await settle(session, reservation.stripe_account_id, "expired");
       else if (session.status === "complete" && session.payment_status === "paid") await settle(session, reservation.stripe_account_id, "paid");
@@ -275,9 +279,11 @@ Deno.serve(async (request) => {
 
       if (session.status === "open") {
         try {
-          session = await stripe.checkout.sessions.expire(session.id, {
-            stripeAccount: reservation.stripe_account_id,
-          });
+          session = await stripe.checkout.sessions.expire(
+            session.id,
+            {},
+            { stripeAccount: reservation.stripe_account_id },
+          );
         } catch {
           // The Session can complete or expire between retrieval and expiration.
           session = await stripe.checkout.sessions.retrieve(
@@ -299,7 +305,10 @@ Deno.serve(async (request) => {
           currency: result?.currency ?? null,
         } }, cors.headers);
       }
-      return json(200, { status: "pending" }, cors.headers);
+      if (session.status === "complete") {
+        return json(200, { status: "pending" }, cors.headers);
+      }
+      return json(503, { error: "checkout_cancellation_unavailable" }, cors.headers);
     } catch (error) {
       console.error("connected checkout cancellation failed", error instanceof Error ? error.message : "unknown");
       return json(503, { error: "checkout_cancellation_unavailable" }, cors.headers);
@@ -426,7 +435,7 @@ Deno.serve(async (request) => {
     session.amount_total !== amountTotal || session.currency !== currency ||
     session.metadata?.reservation_id !== reservationId || session.metadata?.store_id !== storeId) {
     if (session.status === "open") {
-      try { await stripe.checkout.sessions.expire(session.id, { stripeAccount: accountId }); } catch { /* best effort */ }
+      try { await stripe.checkout.sessions.expire(session.id, {}, { stripeAccount: accountId }); } catch { /* best effort */ }
     }
     return json(503, { error: "stripe_checkout_unavailable" }, cors.headers);
   }
@@ -444,11 +453,11 @@ Deno.serve(async (request) => {
     p_delivery_option_id: start.delivery_option_id ?? null,
   });
   if (reserveError) {
-    try { await stripe.checkout.sessions.expire(session.id, { stripeAccount: accountId }); } catch { /* unseen Session; log only */ }
+    try { await stripe.checkout.sessions.expire(session.id, {}, { stripeAccount: accountId }); } catch { /* unseen Session; log only */ }
     return json(409, { error: "checkout_unavailable", message: "One or more items are no longer available." }, cors.headers);
   }
   if (typeof session.url !== "string" || !session.url.startsWith("https://checkout.stripe.com/")) {
-    try { await stripe.checkout.sessions.expire(session.id, { stripeAccount: accountId }); } catch { /* best effort */ }
+    try { await stripe.checkout.sessions.expire(session.id, {}, { stripeAccount: accountId }); } catch { /* best effort */ }
     await settle({ ...session, status: "expired", amount_total: amountTotal, currency }, accountId, "expired");
     return json(503, { error: "stripe_checkout_unavailable" }, cors.headers);
   }
