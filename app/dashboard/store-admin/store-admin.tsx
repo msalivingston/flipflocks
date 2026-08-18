@@ -2775,6 +2775,10 @@ function StorefrontTab({
 
         {embedLink ? (
           <div className="grid gap-3">
+            <StorefrontNote>
+              Add at least one inventory item before using or testing your
+              embed link.
+            </StorefrontNote>
             <ReadOnlyCopyField
               buttonLabel="Copy embed link"
               helper="Add this link to your website using an ‘Embed a Site,’ iframe, or custom embed tool. Your inventory will update automatically whenever you make changes in FlockFront."

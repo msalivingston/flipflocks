@@ -1,4 +1,5 @@
 export type CheckoutFulfillmentMethod = "pickup" | "delivery";
+export type CheckoutPaymentMethod = "pay_at_pickup" | "stripe_checkout";
 
 export type CheckoutValidationValues = {
   buyerEmail: string;
@@ -36,12 +37,19 @@ const requiredAddressFields: Array<keyof CheckoutValidationValues> = [
   "postalCode",
 ];
 
+const requiredPayAtPickupAddressFields: Array<keyof CheckoutValidationValues> = [
+  "city",
+  "postalCode",
+];
+
 export function validateCheckout({
   form,
+  paymentMethod,
   requirePickupOption,
   scope,
 }: {
   form: CheckoutValidationValues;
+  paymentMethod: CheckoutPaymentMethod;
   requirePickupOption: boolean;
   scope: CheckoutValidationScope;
 }): CheckoutValidationIssue | null {
@@ -83,7 +91,11 @@ export function validateCheckout({
       };
     }
 
-    const missingAddressField = requiredAddressFields.find(
+    const addressFields =
+      paymentMethod === "pay_at_pickup"
+        ? requiredPayAtPickupAddressFields
+        : requiredAddressFields;
+    const missingAddressField = addressFields.find(
       (field) => !form[field].trim(),
     );
 
@@ -91,9 +103,9 @@ export function validateCheckout({
       return {
         field: missingAddressField,
         message:
-          form.fulfillmentMethod === "delivery"
-            ? "Please complete your delivery address."
-            : "Please complete your pickup contact address.",
+          paymentMethod === "pay_at_pickup"
+            ? "Please enter your city and ZIP Code."
+            : "Please complete your billing address.",
         step: "fulfillment",
       };
     }

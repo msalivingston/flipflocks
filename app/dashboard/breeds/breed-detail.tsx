@@ -822,7 +822,7 @@ export function BreedDetail({ breedProfileId }: { breedProfileId: string }) {
             <label className="mt-4 grid gap-1 text-sm font-semibold text-stone-700">
               <span className="sr-only">Breed Description</span>
               <textarea
-                className="seller-form-field min-h-44 resize-y py-3"
+                className="seller-form-field min-h-72 resize-y py-3"
                 maxLength={breedDescriptionMaxLength}
                 value={draft.sellerDescription}
                 onChange={(event) =>

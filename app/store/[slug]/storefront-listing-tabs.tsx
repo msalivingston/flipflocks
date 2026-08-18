@@ -193,6 +193,13 @@ export function StorefrontListingTabs({
     priceFilter !== "all" ||
     query.trim() !== "" ||
     speciesFilter !== "all";
+  const hasActivePanelFilters =
+    ageFilter !== "all" ||
+    availabilityFilter !== "all" ||
+    breedFilter !== "all" ||
+    eggColorFilter !== "all" ||
+    priceFilter !== "all" ||
+    speciesFilter !== "all";
   const pagination = useMemo(
     () => paginateStorefrontListingCards(filteredCards, requestedPage),
     [filteredCards, requestedPage],
@@ -218,7 +225,9 @@ export function StorefrontListingTabs({
     showSpeciesFilter,
     species: speciesFilter,
   });
-  const activeFilterCount = activeFilterLabels.length;
+  const activeFilterCount = activeFilterLabels.filter(
+    (label) => !label.startsWith("Search:"),
+  ).length;
   const closeCategoryMenu = useCallback(() => {
     setIsCategoryMenuOpen(false);
     window.requestAnimationFrame(() => categoryTriggerRef.current?.focus());
@@ -315,13 +324,13 @@ export function StorefrontListingTabs({
     }
   }
 
-  function resetFilters() {
+  function resetFilters({ preserveQuery = false } = {}) {
     setAgeFilter("all");
     setAvailabilityFilter("all");
     setBreedFilter("all");
     setEggColorFilter("all");
     setPriceFilter("all");
-    setQuery("");
+    if (!preserveQuery) setQuery("");
     setRequestedPage(1);
     setSpeciesFilter("all");
   }
@@ -339,6 +348,10 @@ export function StorefrontListingTabs({
   function changeBreedFilter(value: string) {
     setBreedFilter(value);
     setRequestedPage(1);
+  }
+
+  function resetPanelFilters() {
+    resetFilters({ preserveQuery: true });
   }
 
   function changeEggColorFilter(value: string) {
@@ -531,6 +544,16 @@ export function StorefrontListingTabs({
                 : "contents",
             )}
           >
+            <label className="grid min-w-0 flex-1 gap-1 text-xs font-semibold text-stone-800">
+              Search
+              <input
+                className="storefront-primary-focus h-[2.625rem] min-w-0 w-full rounded-md border border-[#ddd5c7] bg-white px-2.5 text-sm font-medium text-stone-950 outline-none transition placeholder:text-stone-400"
+                onChange={(event) => changeQuery(event.target.value)}
+                placeholder="Search listings"
+                type="search"
+                value={query}
+              />
+            </label>
             <button
               aria-controls="mobile-storefront-filter-panel"
               aria-expanded={isFilterPanelOpen}
@@ -551,7 +574,7 @@ export function StorefrontListingTabs({
               <Funnel aria-hidden="true" className="size-4" strokeWidth={2.25} />
               Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
             </button>
-            <p className="ml-auto shrink-0 self-center text-right text-[0.78rem] font-semibold leading-tight text-stone-500">
+            <p className="ml-auto shrink-0 self-center text-right hidden text-[0.78rem] font-semibold leading-tight text-stone-500 min-[480px]:block">
               {filteredCards.length}{" "}
               {filteredCards.length === 1 ? "listing" : "listings"}
             </p>
@@ -585,7 +608,7 @@ export function StorefrontListingTabs({
                   categoryOptions={categoryOptions}
                   condition={breedFilter}
                   conditionOptions={conditionOptions}
-                  hasActiveFilters={hasActiveFilters}
+                  hasActiveFilters={hasActivePanelFilters}
                   price={priceFilter}
                   query={query}
                   species={speciesFilter}
@@ -596,14 +619,15 @@ export function StorefrontListingTabs({
                   onEggColorChange={changeEggColorFilter}
                   onPriceChange={changePriceFilter}
                   onQueryChange={changeQuery}
-                  onReset={resetFilters}
+                  onReset={resetPanelFilters}
                   onSpeciesChange={changeSpeciesFilter}
+                  showSearch={false}
                   className="border-0 p-0 shadow-none"
                 />
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <button
                     className="min-h-11 rounded-md border border-[#ddd5c7] bg-white px-3 text-sm font-bold text-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-                    onClick={resetFilters}
+                    onClick={resetPanelFilters}
                     type="button"
                   >
                     Reset
@@ -637,7 +661,7 @@ export function StorefrontListingTabs({
             ) : null}
             <button
               className="storefront-primary-color rounded-full px-2 py-1 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:ring-offset-2"
-              onClick={resetFilters}
+              onClick={() => resetFilters()}
               type="button"
             >
               Reset all
@@ -1035,6 +1059,7 @@ function ListingFilters({
   showCategoryFilter,
   showConditionFilter,
   showSpeciesFilter,
+  showSearch = true,
   species,
   speciesOptions,
 }: {
@@ -1067,6 +1092,7 @@ function ListingFilters({
   showCategoryFilter: boolean;
   showConditionFilter: boolean;
   showSpeciesFilter: boolean;
+  showSearch?: boolean;
   species: string;
   speciesOptions: string[];
 }) {
@@ -1078,17 +1104,19 @@ function ListingFilters({
       )}
     >
       <div className="grid min-w-0 gap-2.5">
-        <label className="grid min-w-0 gap-1 text-xs font-semibold text-stone-800">
-          Search
-          <input
-            className="storefront-primary-focus min-h-10 min-w-0 w-full rounded-md border border-[#ddd5c7] bg-white px-2.5 text-sm font-medium normal-case tracking-normal text-stone-950 outline-none transition placeholder:text-stone-400 lg:min-h-8 lg:text-xs"
-            id="storefront-search"
-            onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Search listings"
-            type="search"
-            value={query}
-          />
-        </label>
+        {showSearch ? (
+          <label className="grid min-w-0 gap-1 text-xs font-semibold text-stone-800">
+            Search
+            <input
+              className="storefront-primary-focus min-h-10 min-w-0 w-full rounded-md border border-[#ddd5c7] bg-white px-2.5 text-sm font-medium normal-case tracking-normal text-stone-950 outline-none transition placeholder:text-stone-400 lg:min-h-8 lg:text-xs"
+              id="storefront-search"
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="Search listings"
+              type="search"
+              value={query}
+            />
+          </label>
+        ) : null}
 
         <div className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-stone-800">
           <Funnel

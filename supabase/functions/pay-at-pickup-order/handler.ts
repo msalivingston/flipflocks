@@ -46,10 +46,10 @@ type OrderRequest = {
   city?: string | null;
   state?: string | null;
   country?: string | null;
-  delivery_address_line1: string;
+  delivery_address_line1?: string | null;
   delivery_address_line2?: string | null;
   delivery_city: string;
-  delivery_state: string;
+  delivery_state?: string | null;
   delivery_postal_code: string;
   delivery_country?: string | null;
   buyer_notes?: string | null;
@@ -490,6 +490,8 @@ function parseOrderRequest(body: unknown): OrderRequest {
     throw new Error("Buyer email is invalid.");
   }
 
+  const fulfillmentMethod = optionalFulfillmentMethod(record);
+
   return {
     store_slug: storeSlug,
     idempotency_key: idempotencyKey,
@@ -501,20 +503,16 @@ function parseOrderRequest(body: unknown): OrderRequest {
     city: optionalText(record, "city", 120),
     state: optionalText(record, "state", 120),
     country: optionalText(record, "country", 80),
-    delivery_address_line1: requiredText(
-      record,
-      "delivery_address_line1",
-      200,
-    ),
+    delivery_address_line1: optionalText(record, "delivery_address_line1", 200),
     delivery_address_line2: optionalText(record, "delivery_address_line2", 200),
     delivery_city: requiredText(record, "delivery_city", 120),
-    delivery_state: requiredText(record, "delivery_state", 120),
+    delivery_state: optionalText(record, "delivery_state", 120),
     delivery_postal_code: requiredText(record, "delivery_postal_code", 40),
     delivery_country: optionalText(record, "delivery_country", 80),
     buyer_notes: optionalText(record, "buyer_notes", 2000),
     pickup_note: optionalText(record, "pickup_note", 1000),
     pickup_option_id: optionalUuid(record, "pickup_option_id"),
-    fulfillment_method: optionalFulfillmentMethod(record),
+    fulfillment_method: fulfillmentMethod,
     delivery_option_id: optionalUuid(record, "delivery_option_id"),
     items: normalizeItems(record.items),
   };

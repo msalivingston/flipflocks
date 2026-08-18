@@ -83,19 +83,23 @@ export function createPickupSummaryPdf(reportData: PickupSummaryReportData) {
 function buildPullSheetPdfPages(reportData: PickupSummaryReportData) {
   return buildTablePdfPages({
     columns: [
-      { align: "left", label: "Breed / Variety", width: 240 },
-      { align: "center", label: "Sex", width: 95 },
-      { align: "center", label: "Qty", width: 86 },
+      { align: "left", label: "Breed", width: 190 },
+      { align: "center", label: "Quantity", width: 66 },
+      { align: "center", label: "Age", width: 90 },
+      { align: "center", label: "Sex", width: 90 },
+      { align: "left", label: "Barn Location", width: 120 },
     ],
     dateLabel: reportData.generatedDateLabel,
     layout: portraitPdfPage,
     rows: reportData.pullSheetRows.map((row) => [
       row.breedOrVariety,
-      row.sex,
       row.quantity,
+      row.age,
+      row.sex,
+      row.barnLocation,
     ]),
     title: "PULL SHEET",
-    totals: ["TOTAL BIRDS", "", reportData.pullSheetTotalBirds],
+    totals: ["TOTAL BIRDS", reportData.pullSheetTotalBirds, "", "", ""],
   });
 }
 
@@ -399,33 +403,39 @@ function buildPullSheetWorksheet(
   const rows = [
     {
       cells: [
-        stringCell("Breed / Variety", 1),
+        stringCell("Breed", 1),
+        stringCell("Quantity", 1),
+        stringCell("Age", 1),
         stringCell("Sex", 1),
-        stringCell("Qty", 1),
+        stringCell("Barn Location", 1),
       ],
     },
     ...reportData.pullSheetRows.map((row) => ({
       cells: [
         stringCell(row.breedOrVariety, 2),
-        stringCell(row.sex, 2),
         numberCell(row.quantity, 3),
+        stringCell(row.age, 2),
+        stringCell(row.sex, 2),
+        stringCell(row.barnLocation, 2),
       ],
     })),
     {
       cells: [
         stringCell("TOTAL BIRDS", 5),
-        stringCell("", 5),
         numberCell(reportData.pullSheetTotalBirds, 6),
+        stringCell("", 5),
+        stringCell("", 5),
+        stringCell("", 5),
       ],
     },
   ];
 
   return {
-    columns: [26, 18, 10],
+    columns: [30, 12, 16, 18, 24],
     name: "Pull Sheet",
     path: `xl/worksheets/sheet${sheetId}.xml`,
     relId: `rId${sheetId}`,
-    xml: buildWorksheetXml(rows, [26, 18, 10]),
+    xml: buildWorksheetXml(rows, [30, 12, 16, 18, 24]),
   };
 }
 

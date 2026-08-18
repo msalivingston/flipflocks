@@ -106,6 +106,8 @@ type SellerOrderItemRow = {
   hatch_date_snapshot: string | null;
   available_date_snapshot: string | null;
   age_at_sale_days_snapshot: number | null;
+  barn_location: string | null;
+  feather_condition_snapshot: string | null;
   order_item_source: string | null;
   custom_item_name_snapshot: string | null;
   product_type_snapshot: string | null;
@@ -116,6 +118,11 @@ type SellerOrderItemRow = {
   fulfilled_quantity: number;
   remaining_unfulfilled_quantity: number;
   line_subtotal: number | null;
+};
+
+type SellerInventoryLocationRow = {
+  barn_location: string | null;
+  inventory_item_id: string;
 };
 
 type OrderFilterCountRow = {
@@ -344,7 +351,7 @@ export function OrdersList() {
         const itemResult = await supabase
           .from("seller_order_item_detail")
           .select(
-            "order_id, order_item_id, inventory_item_id, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, batch_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
+            "order_id, order_item_id, inventory_item_id, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, batch_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, feather_condition_snapshot, order_item_source, custom_item_name_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
           )
           .eq("store_id", seller.store_id)
           .in("order_id", orderIds)
@@ -359,7 +366,48 @@ export function OrdersList() {
           return;
         }
 
-        nextItemsByOrderId = groupOrderItemsByOrderId(itemResult.data ?? []);
+        const loadedItems = itemResult.data ?? [];
+        const inventoryItemIds = Array.from(
+          new Set(
+            loadedItems
+              .map((item) => item.inventory_item_id)
+              .filter((id): id is string => Boolean(id)),
+          ),
+        );
+        let barnLocationByInventoryId = new Map<string, string>();
+
+        if (inventoryItemIds.length > 0) {
+          const locationResult = await supabase
+            .from("seller_inventory_management")
+            .select("inventory_item_id, barn_location")
+            .eq("store_id", seller.store_id)
+            .in("inventory_item_id", inventoryItemIds)
+            .returns<SellerInventoryLocationRow[]>();
+
+          if (!isMounted) return;
+
+          if (locationResult.error) {
+            setError(locationResult.error.message);
+            setIsLoading(false);
+            return;
+          }
+
+          barnLocationByInventoryId = new Map(
+            (locationResult.data ?? []).map((item) => [
+              item.inventory_item_id,
+              item.barn_location?.trim() ?? "",
+            ]),
+          );
+        }
+
+        nextItemsByOrderId = groupOrderItemsByOrderId(
+          loadedItems.map((item) => ({
+            ...item,
+            barn_location: item.inventory_item_id
+              ? barnLocationByInventoryId.get(item.inventory_item_id) ?? null
+              : null,
+          })),
+        );
       }
 
       setOrders(nextOrders);
@@ -2319,6 +2367,11 @@ function getPickupSummaryLines(orders: PickupSummaryOrder[]) {
         item.line_subtotal ?? (item.unit_price_snapshot ?? 0) * quantity;
 
       return {
+        age:
+          item.age_at_sale_days_snapshot == null
+            ? ""
+            : formatAgeAtSale(item.age_at_sale_days_snapshot),
+        barnLocation: item.barn_location?.trim() ?? "",
         breedOrVariety: summary.title,
         customerEmail: order.buyer_email_snapshot,
         customerName: formatCustomerName(order),
@@ -2330,6 +2383,9 @@ function getPickupSummaryLines(orders: PickupSummaryOrder[]) {
         quantity,
         readyDate: item.available_date_snapshot,
         sex: formatPickupSummarySex(item),
+        featherCondition: formatPickupSummaryFeatherCondition(
+          item.feather_condition_snapshot,
+        ),
       };
     }),
   );
@@ -2346,6 +2402,14 @@ function formatPickupSummarySex(item: SellerOrderItemRow) {
   });
 
   return formatSellerItemDetail(label);
+}
+
+function formatPickupSummaryFeatherCondition(value: string | null) {
+  if (value === "excellent") return "Excellent";
+  if (value === "good") return "Good";
+  if (value === "rough") return "Rough";
+  if (value === "very_rough") return "Very Rough";
+  return null;
 }
 
 function isReadyForPickupSummary(value: string | null) {

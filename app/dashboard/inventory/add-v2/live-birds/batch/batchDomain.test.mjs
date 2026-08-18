@@ -134,7 +134,7 @@ test("Remove Row removes only the requested stable row", () => {
   assert.deepEqual(remaining.map((row) => row.id), ["row-b"]);
 });
 
-test("Duplicate Row copies the allowed values and clears quantity and barn", () => {
+test("Duplicate Row copies the allowed values including barn and clears quantity", () => {
   const source = completeRow("row-a", {
     barnLocation: "Barn A",
     breedingHistory: "breeder",
@@ -155,7 +155,7 @@ test("Duplicate Row copies the allowed values and clears quantity and barn", () 
   assert.equal(duplicate.breedingHistory, "breeder");
   assert.equal(duplicate.featherCondition, "good");
   assert.equal(duplicate.quantity, "");
-  assert.equal(duplicate.barnLocation, "");
+  assert.equal(duplicate.barnLocation, "Barn A");
 });
 
 test("semantic duplicate Breed and Sold As rows remain valid and separate", () => {

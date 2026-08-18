@@ -2,6 +2,8 @@ export type PickupSummaryExportFormat = "pdf" | "xlsx";
 export type PickupSummaryReport = "pull_sheet" | "order_summary";
 
 export type PickupSummaryLine = {
+  age?: string;
+  barnLocation?: string;
   breedOrVariety: string;
   customerEmail: string | null;
   customerName: string;
@@ -13,6 +15,7 @@ export type PickupSummaryLine = {
   quantity: number;
   readyDate: string | null;
   sex: string | null;
+  featherCondition?: string | null;
 };
 
 export type PickupSummaryPayload = {
@@ -41,6 +44,8 @@ export type PickupSummaryPayload = {
 };
 
 export type PickupSummaryPullSheetRow = {
+  age: string;
+  barnLocation: string;
   breedOrVariety: string;
   quantity: number;
   sex: string;
@@ -129,7 +134,20 @@ function buildPullSheetRows(lines: PickupSummaryLine[]) {
 
   lines.forEach((line) => {
     const sex = line.sex?.trim() || "Not specified";
-    const key = `${line.breedOrVariety.toLocaleLowerCase()}::${sex.toLocaleLowerCase()}`;
+    const featherCondition = line.featherCondition?.trim() || "";
+    const age = line.age?.trim() || "";
+    const barnLocation = line.barnLocation?.trim() || "";
+    const breedOrVariety = featherCondition
+      ? `${line.breedOrVariety} - ${featherCondition}`
+      : line.breedOrVariety;
+    const key = [
+      breedOrVariety,
+      sex,
+      age,
+      barnLocation,
+    ]
+      .map((value) => value.toLocaleLowerCase())
+      .join("::");
     const existing = rows.get(key);
 
     if (existing) {
@@ -138,7 +156,9 @@ function buildPullSheetRows(lines: PickupSummaryLine[]) {
     }
 
     rows.set(key, {
-      breedOrVariety: line.breedOrVariety,
+      age,
+      barnLocation,
+      breedOrVariety,
       quantity: line.quantity,
       sex,
     });
@@ -147,7 +167,11 @@ function buildPullSheetRows(lines: PickupSummaryLine[]) {
   return Array.from(rows.values()).sort((a, b) => {
     const breedSort = a.breedOrVariety.localeCompare(b.breedOrVariety);
     if (breedSort !== 0) return breedSort;
-    return a.sex.localeCompare(b.sex);
+    const sexSort = a.sex.localeCompare(b.sex);
+    if (sexSort !== 0) return sexSort;
+    const ageSort = a.age.localeCompare(b.age);
+    if (ageSort !== 0) return ageSort;
+    return a.barnLocation.localeCompare(b.barnLocation);
   });
 }
 

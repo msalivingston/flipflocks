@@ -195,14 +195,9 @@ test("a complete delivery checkout reaches the existing order RPC", async () => 
   assert.equal(orderCall.args.p_fulfillment_method, "delivery");
 });
 
-test("pickup and delivery reject missing required address data before database activity", async () => {
+test("pickup and delivery require only City and ZIP before database activity", async () => {
   for (const fulfillmentMethod of ["pickup", "delivery"]) {
-    for (const field of [
-      "delivery_address_line1",
-      "delivery_city",
-      "delivery_state",
-      "delivery_postal_code",
-    ]) {
+    for (const field of ["delivery_city", "delivery_postal_code"]) {
       const harness = createHarness();
       const payload = {
         ...validPayload(`${fulfillmentMethod}-${field}`),
@@ -381,6 +376,24 @@ test("production origins receive an empty successful preflight without database 
     assert.deepEqual(harness.calls, []);
     assert.equal(harness.emailWorkerCalls, 0);
   }
+});
+
+test("Pay at Pickup accepts blank address line and state", async () => {
+  const harness = createHarness();
+  const response = await harness.handler(
+    requestFor({
+      ...validPayload("optional-address-fields"),
+      delivery_address_line1: " ",
+      delivery_state: " ",
+    }),
+  );
+
+  assert.equal(response.status, 201);
+  const orderCall = harness.calls.find(
+    (call) => call.name === "create_pay_at_pickup_order_v2",
+  );
+  assert.equal(orderCall.args.p_delivery_address_line1, null);
+  assert.equal(orderCall.args.p_delivery_state, null);
 });
 
 test("production POST success and validation errors reflect the requesting origin", async () => {

@@ -164,6 +164,10 @@ export function Step4StorefrontDetailsForm({
       <p className="mt-2 text-sm font-medium leading-6 text-stone-600">
         Personalize the public introduction customers will see on your store.
       </p>
+      <p className="mt-1.5 text-xs leading-5 text-stone-500">
+        Planning to embed your storefront? These fields already have defaults,
+        so you can click Next without customizing them.
+      </p>
 
       <form className="mt-4 space-y-4" onSubmit={handleSubmit} noValidate>
         <fieldset className="space-y-3">

@@ -87,7 +87,6 @@ export function duplicateBatchRow(
     ...source,
     id: duplicateId,
     quantity: "",
-    barnLocation: "",
     breedResolutionMessage: null,
   };
 

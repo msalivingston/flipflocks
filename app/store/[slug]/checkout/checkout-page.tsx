@@ -178,6 +178,8 @@ export function CheckoutPage({
   const [isChecking, setIsChecking] = useState(false);
   const [isLoadingPickupOptions, setIsLoadingPickupOptions] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPayAtPickupConfirmationOpen, setIsPayAtPickupConfirmationOpen] =
+    useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [success, setSuccess] = useState<SuccessState | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
@@ -538,6 +540,7 @@ export function CheckoutPage({
   function validateCheckoutPath(scope: CheckoutValidationScope) {
     const issue = validateCheckout({
       form,
+      paymentMethod,
       requirePickupOption: usesManualPickupOptions,
       scope,
     });
@@ -578,7 +581,27 @@ export function CheckoutPage({
       fulfillment: true,
       review: true,
     }));
+    if (paymentMethod === "pay_at_pickup") {
+      setIsPayAtPickupConfirmationOpen(true);
+      return;
+    }
+
     void submitOrder();
+  }
+
+  function cancelPayAtPickupConfirmation() {
+    setIsPayAtPickupConfirmationOpen(false);
+    window.setTimeout(() => {
+      const selectedPaymentMethod =
+        document.querySelector<HTMLInputElement>(
+          'input[name="paymentMethod"]:checked',
+        );
+      selectedPaymentMethod?.focus();
+      selectedPaymentMethod?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 0);
   }
 
   async function submitOrder() {
@@ -968,14 +991,11 @@ export function CheckoutPage({
               <div className="grid gap-3">
                 <div>
                   <p className="text-sm font-bold text-stone-900">
-                    {form.fulfillmentMethod === "delivery"
-                      ? "Delivery address"
-                      : "Pickup contact address"}
+                    Billing Address
                   </p>
                   {form.fulfillmentMethod === "pickup" ? (
                     <p className="mt-1 text-sm leading-5 text-stone-600">
-                      This is your contact address. Pickup will follow the
-                      seller&apos;s pickup details.
+                      For Pay at Pickup, only City and ZIP Code are required.
                     </p>
                   ) : null}
                 </div>
@@ -984,6 +1004,7 @@ export function CheckoutPage({
                   label="Address line 1"
                   name="addressLine1"
                   onChange={(value) => updateField("addressLine1", value)}
+                  required={paymentMethod === "stripe_checkout"}
                   value={form.addressLine1}
                 />
                 <TextField
@@ -1008,11 +1029,12 @@ export function CheckoutPage({
                     maxLength={40}
                     name="state"
                     onChange={(value) => updateField("state", value)}
+                    required={paymentMethod === "stripe_checkout"}
                     value={form.state}
                   />
                   <TextField
                     autoComplete="postal-code"
-                    label="ZIP"
+                    label="ZIP Code"
                     maxLength={20}
                     name="postalCode"
                     onChange={(value) => updateField("postalCode", value)}
@@ -1251,9 +1273,7 @@ export function CheckoutPage({
               ) : null}
 
               <h2 className="border-t border-[#eee5d6] pt-3 text-lg font-semibold text-stone-950">
-                {form.fulfillmentMethod === "delivery"
-                  ? "Delivery details"
-                  : "Pickup details"}
+                Billing Address
               </h2>
               {form.fulfillmentMethod === "pickup" &&
               usesManualPickupOptions ? (
@@ -1322,6 +1342,7 @@ export function CheckoutPage({
                 label="Address line 1"
                 name="addressLine1"
                 onChange={(value) => updateField("addressLine1", value)}
+                required={paymentMethod === "stripe_checkout"}
                 value={form.addressLine1}
               />
               <TextField
@@ -1344,10 +1365,11 @@ export function CheckoutPage({
                     maxLength={40}
                     name="state"
                     onChange={(value) => updateField("state", value)}
+                    required={paymentMethod === "stripe_checkout"}
                     value={form.state}
                   />
                   <TextField
-                    label="ZIP"
+                    label="ZIP Code"
                     maxLength={20}
                     name="postalCode"
                     onChange={(value) => updateField("postalCode", value)}
@@ -1508,6 +1530,15 @@ export function CheckoutPage({
             </StorefrontSummaryCard>
           </aside>
         </div>
+          {isPayAtPickupConfirmationOpen ? (
+            <PayAtPickupConfirmationDialog
+              onCancel={cancelPayAtPickupConfirmation}
+              onConfirm={() => {
+                setIsPayAtPickupConfirmationOpen(false);
+                void submitOrder();
+              }}
+            />
+          ) : null}
         </>
       )}
     </StorefrontPage>
@@ -1994,6 +2025,50 @@ function PaymentChoice({
         ) : null}
       </div>
     </fieldset>
+  );
+}
+
+function PayAtPickupConfirmationDialog({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      aria-labelledby="pay-at-pickup-confirmation-title"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/50 px-4"
+      role="dialog"
+    >
+      <div className="w-full max-w-sm rounded-lg border border-[#ded7c8] bg-white p-4 shadow-xl">
+        <h2
+          className="text-lg font-semibold text-stone-950"
+          id="pay-at-pickup-confirmation-title"
+        >
+          Confirm Pay at Pickup
+        </h2>
+        <p className="mt-2 text-sm leading-5 text-stone-600">
+          Your payment will be due when you pick up your chickens.
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <StorefrontButton
+            className="min-h-10 px-3 text-sm"
+            onClick={onCancel}
+            variant="secondary"
+          >
+            Cancel
+          </StorefrontButton>
+          <StorefrontButton
+            className="min-h-10 px-3 text-sm"
+            onClick={onConfirm}
+          >
+            Confirm
+          </StorefrontButton>
+        </div>
+      </div>
+    </div>
   );
 }
 

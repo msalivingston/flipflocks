@@ -620,7 +620,7 @@ export function MobileBreedsLibrary({
                       Storefront description
                       <textarea
                         aria-label={`Storefront description for ${profile.display_name}`}
-                        className="min-h-32 w-full resize-y rounded-lg border border-stone-300 bg-white px-3 py-3 text-base font-normal leading-6 text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                        className="min-h-56 w-full resize-y rounded-lg border border-stone-300 bg-white px-3 py-3 text-base font-normal leading-6 text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
                         maxLength={breedDescriptionMaxLength}
                         onChange={(event) => {
                           setDescriptionDraft(event.target.value);

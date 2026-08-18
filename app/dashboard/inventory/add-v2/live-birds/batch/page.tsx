@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
@@ -85,6 +86,7 @@ type ReviewState = {
 };
 
 export default function BatchAddLiveBirdsPage() {
+  const router = useRouter();
   const { error: sellerError, isLoading: sellerLoading, seller } =
     useSellerContext();
   const plan = getPlanCapabilities(seller?.plan_key);
@@ -126,6 +128,9 @@ export default function BatchAddLiveBirdsPage() {
   const [priceAdjustments, setPriceAdjustments] = useState<
     Record<string, PriceAdjustmentState>
   >({});
+  const [pendingNavigationHref, setPendingNavigationHref] = useState<
+    string | null
+  >(null);
   const hatchGroups = useMemo(() => groupBatchRows(rows), [rows]);
   const hasUnsavedChanges = useMemo(
     () =>
@@ -260,9 +265,10 @@ export default function BatchAddLiveBirdsPage() {
         return;
       }
 
-      if (!window.confirm("Leave Batch Add? Your entered rows will be lost.")) {
-        event.preventDefault();
-      }
+      event.preventDefault();
+      setPendingNavigationHref(
+        `${destination.pathname}${destination.search}${destination.hash}`,
+      );
     }
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -759,7 +765,62 @@ export default function BatchAddLiveBirdsPage() {
           ) : null}
         </div>
       </DashboardPageContent>
+      {pendingNavigationHref ? (
+        <BatchExitDialog
+          onCancel={() => setPendingNavigationHref(null)}
+          onConfirm={() => {
+            const href = pendingNavigationHref;
+            setPendingNavigationHref(null);
+            router.push(href);
+          }}
+        />
+      ) : null}
     </>
+  );
+}
+
+function BatchExitDialog({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      aria-labelledby="batch-exit-dialog-title"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 px-4 py-6"
+      role="dialog"
+    >
+      <section className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-5 shadow-[0_22px_60px_rgba(46,39,25,0.2)]">
+        <h2
+          className="text-lg font-bold text-stone-950"
+          id="batch-exit-dialog-title"
+        >
+          Leave Batch Add?
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-stone-700">
+          Your entered rows have not been saved and will be lost if you leave.
+        </p>
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <button
+            className="seller-secondary-button min-h-10 rounded-md"
+            onClick={onCancel}
+            type="button"
+          >
+            Keep editing
+          </button>
+          <button
+            className="seller-primary-button min-h-10 rounded-md"
+            onClick={onConfirm}
+            type="button"
+          >
+            Leave page
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 

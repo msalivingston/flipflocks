@@ -30,6 +30,7 @@ for (const fulfillmentMethod of ["pickup", "delivery"]) {
     assert.equal(
       validateCheckout({
         form,
+        paymentMethod: "stripe_checkout",
         requirePickupOption: false,
         scope: "all",
       }),
@@ -49,15 +50,13 @@ for (const fulfillmentMethod of ["pickup", "delivery"]) {
       assert.deepEqual(
         validateCheckout({
           form,
+          paymentMethod: "stripe_checkout",
           requirePickupOption: false,
           scope: "all",
         }),
         {
           field,
-          message:
-            fulfillmentMethod === "delivery"
-              ? "Please complete your delivery address."
-              : "Please complete your pickup contact address.",
+          message: "Please complete your billing address.",
           step: "fulfillment",
         },
       );
@@ -75,6 +74,7 @@ for (const field of [
     assert.deepEqual(
       validateCheckout({
         form: { ...completeForm, [field]: "" },
+        paymentMethod: "stripe_checkout",
         requirePickupOption: false,
         scope: "all",
       }),
@@ -91,6 +91,7 @@ test("fulfillment scope applies the same address contract without rechecking con
   assert.equal(
     validateCheckout({
       form: { ...completeForm, buyerEmail: "" },
+      paymentMethod: "stripe_checkout",
       requirePickupOption: false,
       scope: "fulfillment",
     }),
@@ -99,6 +100,7 @@ test("fulfillment scope applies the same address contract without rechecking con
   assert.equal(
     validateCheckout({
       form: { ...completeForm, addressLine1: "" },
+      paymentMethod: "stripe_checkout",
       requirePickupOption: false,
       scope: "contact",
     }),
@@ -110,6 +112,7 @@ test("fulfillment options are validated before the shared address fields", () =>
   assert.deepEqual(
     validateCheckout({
       form: { ...completeForm, pickupOptionId: "", addressLine1: "" },
+      paymentMethod: "stripe_checkout",
       requirePickupOption: true,
       scope: "fulfillment",
     }),
@@ -128,6 +131,7 @@ test("fulfillment options are validated before the shared address fields", () =>
         deliveryOptionId: "",
         addressLine1: "",
       },
+      paymentMethod: "stripe_checkout",
       requirePickupOption: false,
       scope: "fulfillment",
     }),
@@ -139,7 +143,35 @@ test("fulfillment options are validated before the shared address fields", () =>
   );
 });
 
-test("mobile pickup renders contact-address fields and all checkout paths share validation", () => {
+test("Pay at Pickup requires only City and ZIP Code", () => {
+  assert.equal(
+    validateCheckout({
+      form: { ...completeForm, addressLine1: "", state: "" },
+      paymentMethod: "pay_at_pickup",
+      requirePickupOption: false,
+      scope: "all",
+    }),
+    null,
+  );
+
+  for (const field of ["city", "postalCode"]) {
+    assert.deepEqual(
+      validateCheckout({
+        form: { ...completeForm, addressLine1: "", state: "", [field]: "" },
+        paymentMethod: "pay_at_pickup",
+        requirePickupOption: false,
+        scope: "all",
+      }),
+      {
+        field,
+        message: "Please enter your city and ZIP Code.",
+        step: "fulfillment",
+      },
+    );
+  }
+});
+
+test("mobile checkout renders Billing Address and all checkout paths share validation", () => {
   const source = readFileSync(
     resolve(import.meta.dirname, "checkout-page.tsx"),
     "utf8",
@@ -149,10 +181,10 @@ test("mobile pickup renders contact-address fields and all checkout paths share 
     source.indexOf('title="Review your order"'),
   );
 
-  assert.match(mobileFulfillment, /"Pickup contact address"/);
+  assert.match(mobileFulfillment, /Billing Address/);
   assert.match(
     mobileFulfillment,
-    /Pickup will follow the\s+seller&apos;s pickup details\./,
+    /only City and ZIP Code are required\./,
   );
   assert.doesNotMatch(mobileFulfillment, /Pickup delivery address/);
   for (const field of ["addressLine1", "city", "state", "postalCode"]) {
@@ -169,7 +201,7 @@ test("mobile pickup renders contact-address fields and all checkout paths share 
   );
   assert.match(
     source,
-    /handleReviewSubmit\(\)[\s\S]*validateCheckoutPath\("all"\)[\s\S]*void submitOrder\(\)/,
+    /handleReviewSubmit\(\)[\s\S]*validateCheckoutPath\("all"\)[\s\S]*setIsPayAtPickupConfirmationOpen\(true\)/,
   );
   assert.match(
     source,

@@ -568,11 +568,11 @@ function ExpandedOfferingCard({
             >
               {desktopPanelMode
                 ? "Breed Photo and Description"
-                : "Photo and description"}
+                : "Breed Photo & Description"}
             </span>
             {desktopPanelMode ? (
               <span className="text-base font-bold text-stone-950 sm:hidden">
-                Photo and description
+                Breed Photo &amp; Description
               </span>
             ) : null}
             <span
