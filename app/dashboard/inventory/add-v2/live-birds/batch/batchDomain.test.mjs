@@ -51,6 +51,9 @@ const payload = loadTypeScriptModule(
 const persistence = loadTypeScriptModule(
   "app/dashboard/inventory/add-v2/live-birds/batch/batchPersistence.ts",
 );
+const advancedAttributes = loadTypeScriptModule(
+  "lib/live-bird-advanced-attributes.ts",
+);
 
 const chicken = { id: "species-chicken", label: "Chicken", slug: "chicken" };
 const barredRock = {
@@ -134,6 +137,8 @@ test("Remove Row removes only the requested stable row", () => {
 test("Duplicate Row copies the allowed values and clears quantity and barn", () => {
   const source = completeRow("row-a", {
     barnLocation: "Barn A",
+    breedingHistory: "breeder",
+    featherCondition: "good",
     quantity: "5",
     price: "19.50",
   });
@@ -147,6 +152,8 @@ test("Duplicate Row copies the allowed values and clears quantity and barn", () 
   assert.deepEqual(duplicate.breed, source.breed);
   assert.equal(duplicate.soldAs, source.soldAs);
   assert.equal(duplicate.price, source.price);
+  assert.equal(duplicate.breedingHistory, "breeder");
+  assert.equal(duplicate.featherCondition, "good");
   assert.equal(duplicate.quantity, "");
   assert.equal(duplicate.barnLocation, "");
 });
@@ -202,6 +209,80 @@ test("row validation covers dates, quantity, price, and Barn Location", () => {
   assert.match(errors.quantity, /whole number/i);
   assert.match(errors.price, /up to 2 decimals/i);
   assert.match(errors.barnLocation, /200 characters/i);
+});
+
+test("advanced attribute controls use only allowed values and reject unknown state", () => {
+  assert.deepEqual(
+    advancedAttributes.breedingHistoryOptions.map((option) => option.value),
+    ["", "never_bred", "breeder"],
+  );
+  assert.deepEqual(
+    advancedAttributes.featherConditionOptions.map((option) => option.value),
+    ["", "excellent", "good", "rough", "very_rough"],
+  );
+
+  const errors = domain.validateBatchRow(
+    completeRow("row-a", {
+      breedingHistory: "unknown",
+      featherCondition: "damaged",
+    }),
+  );
+  assert.match(errors.breedingHistory, /valid Breeding History/i);
+  assert.match(errors.featherCondition, /valid Feather Condition/i);
+});
+
+test("buyer details preserve Sex when empty and render every natural combination", () => {
+  assert.equal(advancedAttributes.getLiveBirdDetailsColumnLabel([{}]), "Sex");
+  assert.equal(
+    advancedAttributes.getLiveBirdDetailsColumnLabel([
+      { breedingHistory: "breeder" },
+    ]),
+    "Bird details",
+  );
+  assert.equal(
+    advancedAttributes.formatLiveBirdAdvancedDetails({
+      breedingHistory: "never_bred",
+      featherCondition: "excellent",
+    }),
+    "Never Bred · Excellent feathers",
+  );
+  assert.equal(
+    advancedAttributes.formatLiveBirdAdvancedDetails({
+      breedingHistory: "breeder",
+      featherCondition: "good",
+    }),
+    "Breeder · Good feathers",
+  );
+  assert.equal(
+    advancedAttributes.formatLiveBirdAdvancedDetails({
+      featherCondition: "very_rough",
+    }),
+    "Very rough feathers",
+  );
+  assert.equal(
+    advancedAttributes.formatLiveBirdAdvancedDetails({
+      featherCondition: "rough",
+    }),
+    "Rough feathers",
+  );
+  assert.equal(
+    advancedAttributes.formatLiveBirdAdvancedDetails({
+      breedingHistory: "never_bred",
+    }),
+    "Never Bred",
+  );
+});
+
+test("desktop and mobile purchase options share Bird details presentation", () => {
+  const source = readFileSync(
+    resolve(
+      root,
+      "app/store/[slug]/products/[productId]/product-order-options.tsx",
+    ),
+    "utf8",
+  );
+  assert.ok((source.match(/<BirdDetails option=\{option\} \/>/g) ?? []).length >= 2);
+  assert.match(source, /showAdvancedBirdDetails/);
 });
 
 test("normal Add and Batch Add share breed search and catalog profile creation", () => {
@@ -263,7 +344,13 @@ test("review summary reports totals across hatch groups", () => {
 
 test("atomic payload keeps row tokens and derives the lowest group base price", () => {
   const rows = [
-    completeRow("row-a", { quantity: "5", price: "18.00", barnLocation: " Barn A " }),
+    completeRow("row-a", {
+      quantity: "5",
+      price: "18.00",
+      barnLocation: " Barn A ",
+      breedingHistory: "never_bred",
+      featherCondition: "excellent",
+    }),
     completeRow("row-b", { quantity: "20", price: "8.00", barnLocation: "Barn B" }),
   ];
   const groups = domain.groupBatchRows(rows);
@@ -281,6 +368,13 @@ test("atomic payload keeps row tokens and derives the lowest group base price", 
   assert.deepEqual(
     request[0].breed_groups[0].inventory_items.map((item) => item.barn_location),
     ["Barn A", "Barn B"],
+  );
+  assert.deepEqual(
+    request[0].breed_groups[0].inventory_items.map((item) => [
+      item.breeding_history,
+      item.feather_condition,
+    ]),
+    [["never_bred", "excellent"], [null, null]],
   );
 });
 

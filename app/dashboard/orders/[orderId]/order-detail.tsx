@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { formatLiveBirdAdvancedDetails } from "@/lib/live-bird-advanced-attributes";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../../_components/seller-context";
 import {
@@ -101,6 +102,8 @@ type SellerOrderItemRow = {
   breed_display_name_snapshot: string;
   inventory_type_snapshot: string;
   custom_inventory_label_snapshot: string | null;
+  breeding_history_snapshot: string | null;
+  feather_condition_snapshot: string | null;
   hatch_date_snapshot: string | null;
   available_date_snapshot: string | null;
   age_at_sale_days_snapshot: number | null;
@@ -210,7 +213,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         supabase
           .from("seller_order_item_detail")
           .select(
-            "order_item_id, inventory_item_id, listing_batch_id, listing_batch_breed_id, seller_breed_profile_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, batch_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
+            "order_item_id, inventory_item_id, listing_batch_id, listing_batch_breed_id, seller_breed_profile_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, batch_type_snapshot, custom_inventory_label_snapshot, breeding_history_snapshot, feather_condition_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
           )
           .eq("store_id", seller.store_id)
           .eq("order_id", orderId)
@@ -1327,6 +1330,10 @@ function OrderItemRow({
       : isCustomItem
         ? []
         : [item.species_name_snapshot];
+  const advancedBirdDetails = formatLiveBirdAdvancedDetails({
+    breedingHistory: item.breeding_history_snapshot,
+    featherCondition: item.feather_condition_snapshot,
+  });
 
   const details = [
     categoryLabel,
@@ -1340,6 +1347,7 @@ function OrderItemRow({
     item.age_at_sale_days_snapshot != null
       ? formatAgeAtAvailability(item.age_at_sale_days_snapshot)
       : null,
+    category === "live_birds" ? advancedBirdDetails : null,
   ].filter(Boolean);
 
   return (

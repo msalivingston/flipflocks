@@ -120,8 +120,8 @@ select jsonb_build_array(
         jsonb_build_object(
           'seller_breed_profile_id', 'e2000000-0000-4000-8000-000000000020',
           'inventory_items', jsonb_build_array(
-            jsonb_build_object('client_row_token', 'row-a', 'inventory_type', 'female', 'quantity_available', 5, 'starting_price', 18, 'barn_location', ' Barn A '),
-            jsonb_build_object('client_row_token', 'row-b', 'inventory_type', 'female', 'quantity_available', 20, 'starting_price', 8, 'barn_location', 'Barn B')
+            jsonb_build_object('client_row_token', 'row-a', 'inventory_type', 'female', 'quantity_available', 5, 'starting_price', 18, 'barn_location', ' Barn A ', 'breeding_history', 'never_bred', 'feather_condition', 'excellent'),
+            jsonb_build_object('client_row_token', 'row-b', 'inventory_type', 'female', 'quantity_available', 20, 'starting_price', 8, 'barn_location', 'Barn B', 'breeding_history', 'breeder', 'feather_condition', 'good')
           )
         )
       )
@@ -168,6 +168,25 @@ select is(
   2::bigint, 'Barn Location values are trimmed and persist independently'
 );
 select is(
+  (select breeding_history from public.inventory_items where barn_location = 'Barn A'),
+  'never_bred', 'Breeding History persists independently per Batch Add row'
+);
+select is(
+  (select feather_condition from public.inventory_items where barn_location = 'Barn B'),
+  'good', 'Feather Condition persists independently per Batch Add row'
+);
+select is(
+  (select breeding_history || ':' || feather_condition
+   from public.seller_inventory_management where barn_location = 'Barn A'),
+  'never_bred:excellent', 'seller-private inventory projection includes both advanced values'
+);
+select ok(
+  (select bool_or(breeding_history is null and feather_condition is null)
+   from public.inventory_items
+   where store_id = 'e2000000-0000-4000-8000-000000000010'),
+  'both advanced attributes remain optional'
+);
+select is(
   (select min(base_price) from public.listing_batches where store_id = 'e2000000-0000-4000-8000-000000000010'),
   8.00::numeric, 'lowest Starting Price becomes the deterministic base price'
 );
@@ -204,6 +223,53 @@ select is(
   (select count(*) from public.inventory_items where store_id = 'e2000000-0000-4000-8000-000000000010'),
   3::bigint, 'idempotent replay creates no duplicate inventory'
 );
+select is(
+  (select breeding_history || ':' || feather_condition
+   from public.inventory_items where barn_location = 'Barn A'),
+  'never_bred:excellent', 'idempotent replay preserves the original advanced values'
+);
+
+reset role;
+select lives_ok(
+  $$update public.inventory_items set breeding_history = 'never_bred' where barn_location = 'Barn A'$$,
+  'database accepts never_bred'
+);
+select lives_ok(
+  $$update public.inventory_items set breeding_history = 'breeder' where barn_location = 'Barn A'$$,
+  'database accepts breeder'
+);
+select throws_ok(
+  $$update public.inventory_items set breeding_history = 'unknown' where barn_location = 'Barn A'$$,
+  '23514', null, 'database rejects unknown Breeding History'
+);
+select lives_ok(
+  $$update public.inventory_items set feather_condition = 'excellent' where barn_location = 'Barn A'$$,
+  'database accepts excellent feather condition'
+);
+select lives_ok(
+  $$update public.inventory_items set feather_condition = 'good' where barn_location = 'Barn A'$$,
+  'database accepts good feather condition'
+);
+select lives_ok(
+  $$update public.inventory_items set feather_condition = 'rough' where barn_location = 'Barn A'$$,
+  'database accepts rough feather condition'
+);
+select lives_ok(
+  $$update public.inventory_items set feather_condition = 'very_rough' where barn_location = 'Barn A'$$,
+  'database accepts very_rough feather condition'
+);
+select throws_ok(
+  $$update public.inventory_items set feather_condition = 'unknown' where barn_location = 'Barn A'$$,
+  '23514', null, 'database rejects unknown Feather Condition'
+);
+select lives_ok(
+  $$update public.inventory_items set breeding_history = null, feather_condition = null where barn_location = 'Barn A'$$,
+  'database permits both advanced attributes to be null'
+);
+update public.inventory_items
+set breeding_history = 'never_bred', feather_condition = 'excellent'
+where barn_location = 'Barn A';
+set local role authenticated;
 
 create temporary table invalid_result on commit drop as
 select * from public.seller_create_live_bird_batches(
@@ -255,6 +321,30 @@ select * from public.seller_create_live_bird_batches(
 );
 select is((select error_code from cross_store_result), 'breed_profile_error', 'cross-store Breed Library IDs are rejected');
 
+create temporary table invalid_attribute_result on commit drop as
+select * from public.seller_create_live_bird_batches(
+  'e2000000-0000-4000-8000-000000000010',
+  'e2000000-0000-4000-8000-000000000104',
+  jsonb_build_array(jsonb_build_object(
+    'client_hatch_group_token', 'invalid-attribute',
+    'species_id', (select id from public.species where slug = 'chicken'),
+    'hatch_date', '2026-09-01', 'available_date', '2026-10-01', 'base_price', 10,
+    'automatic_pricing', jsonb_build_object('enabled', false),
+    'breed_groups', jsonb_build_array(jsonb_build_object(
+      'seller_breed_profile_id', 'e2000000-0000-4000-8000-000000000020',
+      'inventory_items', jsonb_build_array(jsonb_build_object(
+        'client_row_token', 'invalid-attribute-row', 'inventory_type', 'female',
+        'quantity_available', 1, 'starting_price', 10,
+        'breeding_history', 'unknown'
+      ))
+    ))
+  ))
+);
+select is(
+  (select error_code from invalid_attribute_result),
+  'row_validation_error', 'Batch Add rejects unknown controlled attribute values'
+);
+
 create temporary table limit_result on commit drop as
 select * from public.seller_create_live_bird_batches(
   'e2000000-0000-4000-8000-000000000012',
@@ -284,6 +374,84 @@ select is(
   ) and column_name = 'barn_location'),
   0::bigint, 'public buyer projections continue to omit Barn Location'
 );
+select is(
+  (select count(*) from information_schema.columns
+   where table_schema = 'public'
+     and table_name in (
+       'public_storefront_breed_inventory', 'public_storefront_inventory',
+       'public_storefront_item_detail'
+     )
+     and column_name in ('breeding_history', 'feather_condition')),
+  6::bigint, 'buyer-safe Live Birds projections expose only the advanced buyer attributes'
+);
+select is(
+  (select breeding_history || ':' || feather_condition
+   from public.public_storefront_inventory
+   where inventory_item_id = (
+     select id from public.inventory_items where barn_location = 'Barn A'
+   )),
+  'never_bred:excellent', 'public storefront rows carry the buyer-safe values'
+);
+
+reset role;
+insert into public.customers (
+  id, store_id, first_name, last_name, email
+) values (
+  'e2000000-0000-4000-8000-000000000200',
+  'e2000000-0000-4000-8000-000000000010',
+  'Snapshot', 'Buyer', 'snapshot-buyer@example.test'
+);
+insert into public.orders (
+  id, store_id, customer_id, order_number, order_status,
+  payment_method, payment_status, buyer_email_snapshot,
+  buyer_first_name_snapshot, buyer_last_name_snapshot,
+  subtotal_amount, total_amount
+) values (
+  'e2000000-0000-4000-8000-000000000201',
+  'e2000000-0000-4000-8000-000000000010',
+  'e2000000-0000-4000-8000-000000000200',
+  'ADV-SNAPSHOT-1', 'pending', 'pay_at_pickup', 'pay_at_pickup',
+  'snapshot-buyer@example.test', 'Snapshot', 'Buyer', 18, 18
+);
+insert into public.order_items (
+  id, order_id, store_id, inventory_item_id, listing_batch_id,
+  listing_batch_breed_id, seller_breed_profile_id, species_id,
+  species_name_snapshot, species_slug_snapshot, breed_display_name_snapshot,
+  inventory_type_snapshot, batch_type_snapshot, available_date_snapshot,
+  unit_price_snapshot,
+  quantity, line_subtotal, order_item_source, inventory_debited_quantity
+)
+select
+  'e2000000-0000-4000-8000-000000000202',
+  'e2000000-0000-4000-8000-000000000201', inventory_items.store_id,
+  inventory_items.id, inventory_items.listing_batch_id,
+  inventory_items.listing_batch_breed_id,
+  listing_batch_breeds.seller_breed_profile_id, listing_batches.species_id,
+  species.common_name, species.slug, seller_breed_profiles.display_name,
+  inventory_items.inventory_type, listing_batches.batch_type,
+  listing_batches.available_date, 18,
+  1, 18, 'listing_inventory', 0
+from public.inventory_items
+join public.listing_batches on listing_batches.id = inventory_items.listing_batch_id
+join public.listing_batch_breeds on listing_batch_breeds.id = inventory_items.listing_batch_breed_id
+join public.seller_breed_profiles on seller_breed_profiles.id = listing_batch_breeds.seller_breed_profile_id
+join public.species on species.id = listing_batches.species_id
+where inventory_items.barn_location = 'Barn A';
+
+select is(
+  (select breeding_history_snapshot || ':' || feather_condition_snapshot
+   from public.order_items where id = 'e2000000-0000-4000-8000-000000000202'),
+  'never_bred:excellent', 'order line snapshots capture the purchased advanced values'
+);
+update public.inventory_items
+set breeding_history = 'breeder', feather_condition = 'very_rough'
+where barn_location = 'Barn A';
+select is(
+  (select breeding_history_snapshot || ':' || feather_condition_snapshot
+   from public.order_items where id = 'e2000000-0000-4000-8000-000000000202'),
+  'never_bred:excellent', 'later inventory changes do not alter historical order snapshots'
+);
+set local role authenticated;
 
 select * from finish();
 rollback;

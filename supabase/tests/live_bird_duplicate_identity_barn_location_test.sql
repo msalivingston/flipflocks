@@ -187,6 +187,13 @@ select results_eq(
   'seller-private inventory management exposes each barn location'
 );
 
+reset role;
+update public.inventory_items
+set breeding_history = 'breeder', feather_condition = 'rough'
+where listing_batch_id = (select listing_batch_id from duplicate_creation)
+  and barn_location = 'Barn A';
+set local role authenticated;
+
 select public.seller_update_inventory_item(
   (
     select id from public.inventory_items
@@ -197,14 +204,15 @@ select public.seller_update_inventory_item(
 );
 
 select results_eq(
-  $$select quantity_available, price_override, inventory_type, barn_location
+  $$select quantity_available, price_override, inventory_type, barn_location,
+      breeding_history, feather_condition
     from public.inventory_items
     where listing_batch_id = (select listing_batch_id from duplicate_creation)
     order by quantity_available$$,
   $$values
-      (5, 19.00::numeric, 'male'::text, 'Barn A'::text),
-      (20, 16.00::numeric, 'female'::text, 'Barn B'::text)$$,
-  'editing one duplicate price and Sold As changes only that UUID and preserves hidden barn data'
+      (5, 19.00::numeric, 'male'::text, 'Barn A'::text, 'breeder'::text, 'rough'::text),
+      (20, 16.00::numeric, 'female'::text, 'Barn B'::text, null::text, null::text)$$,
+  'standard edits change only the UUID and preserve hidden barn and buyer attribute data'
 );
 
 select public.seller_update_inventory_item(

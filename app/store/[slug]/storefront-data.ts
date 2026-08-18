@@ -101,6 +101,8 @@ export type StorefrontInventoryItem = {
   inventory_item_id: string;
   inventory_type: string;
   custom_inventory_label: string | null;
+  breeding_history: string | null;
+  feather_condition: string | null;
   quantity_available: number;
   buyer_availability_code: "ready_now" | "reserve_now" | "sold_out" | string;
   buyer_availability_label: string;
@@ -211,6 +213,8 @@ export type StorefrontPurchaseOption = {
   ageLabel: string;
   ageFilterDays: number | null;
   typeLabel: string;
+  breedingHistory: string | null;
+  featherCondition: string | null;
   quantityAvailable: number;
   buyerAvailabilityCode: string;
   buyerAvailabilityLabel: string;
@@ -724,6 +728,8 @@ export function toPurchaseOption(
     ageLabel,
     ageFilterDays: getPurchaseOptionAgeFilterDays(item),
     typeLabel,
+    breedingHistory: item.breeding_history,
+    featherCondition: item.feather_condition,
     quantityAvailable: item.quantity_available,
     buyerAvailabilityCode: item.buyer_availability_code,
     buyerAvailabilityLabel: item.buyer_availability_label,
@@ -750,6 +756,8 @@ export function toHatchingEggPurchaseOption(
     ageLabel: "Hatching eggs",
     ageFilterDays: null,
     typeLabel: "Hatching Eggs",
+    breedingHistory: null,
+    featherCondition: null,
     quantityAvailable: item.quantity_available,
     buyerAvailabilityCode: item.buyer_availability_code,
     buyerAvailabilityLabel: item.buyer_availability_label,

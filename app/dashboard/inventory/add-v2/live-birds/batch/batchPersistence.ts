@@ -27,6 +27,8 @@ export type BatchCreatePayload = {
       custom_inventory_label: string | null;
       quantity_available: number;
       starting_price: number;
+      breeding_history: string | null;
+      feather_condition: string | null;
       barn_location: string | null;
     }>;
   }>;
@@ -118,6 +120,8 @@ export function buildBatchCreatePayload({
             custom_inventory_label: getCustomInventoryLabelForSoldAs(row.soldAs),
             quantity_available: Number(row.quantity),
             starting_price: Number(row.price),
+            breeding_history: row.breedingHistory || null,
+            feather_condition: row.featherCondition || null,
             barn_location: row.barnLocation.trim() || null,
           })),
         }),

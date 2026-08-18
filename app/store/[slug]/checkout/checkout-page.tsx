@@ -51,6 +51,7 @@ import {
   buildEmbeddedOrderModeHref,
   type EmbeddedOrderModeContext,
 } from "@/lib/embedded-order-mode";
+import { formatLiveBirdAdvancedDetails } from "@/lib/live-bird-advanced-attributes";
 import {
   resolveBuyerPaymentAvailability,
   type StorefrontPaymentMethod,
@@ -1104,6 +1105,7 @@ export function CheckoutPage({
                         {item.quantity} x {item.optionLabel} ·{" "}
                         {formatCurrency(item.unitPrice)} each
                       </p>
+                      <CartAdvancedDetails item={item} />
                     </div>
                   ))}
                 </div>
@@ -1404,6 +1406,7 @@ export function CheckoutPage({
                     <p className="mt-0.5 text-xs text-stone-600">
                       {item.quantity} x {item.optionLabel}
                     </p>
+                    <CartAdvancedDetails item={item} />
                     <p className="mt-0.5 text-xs text-stone-500">
                       {formatCartAvailability(item.availableDate)}
                     </p>
@@ -1647,6 +1650,7 @@ function MobileOrderSummary({
               <p className="text-stone-600">
                 {item.quantity} x {item.optionLabel}
               </p>
+              <CartAdvancedDetails item={item} />
             </div>
           ))}
           <Link
@@ -1659,6 +1663,17 @@ function MobileOrderSummary({
       ) : null}
     </section>
   );
+}
+
+function CartAdvancedDetails({ item }: { item: StorefrontCartItem }) {
+  const details = formatLiveBirdAdvancedDetails({
+    breedingHistory: item.breedingHistory,
+    featherCondition: item.featherCondition,
+  });
+
+  return details ? (
+    <p className="mt-0.5 text-xs font-medium text-stone-500">{details}</p>
+  ) : null;
 }
 
 const MobileCheckoutStep = forwardRef<

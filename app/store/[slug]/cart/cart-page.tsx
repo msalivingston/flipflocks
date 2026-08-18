@@ -26,6 +26,7 @@ import {
   buildEmbeddedOrderModeHref,
   type EmbeddedOrderModeContext,
 } from "@/lib/embedded-order-mode";
+import { formatLiveBirdAdvancedDetails } from "@/lib/live-bird-advanced-attributes";
 
 const emptyItems: StorefrontCart["items"] = [];
 
@@ -141,6 +142,17 @@ export function CartPage({
                     <p className="mt-0.5 break-words text-sm leading-5 text-stone-600">
                       {item.optionLabel}
                     </p>
+                    {formatLiveBirdAdvancedDetails({
+                      breedingHistory: item.breedingHistory,
+                      featherCondition: item.featherCondition,
+                    }) ? (
+                      <p className="mt-0.5 text-xs font-medium leading-5 text-stone-500">
+                        {formatLiveBirdAdvancedDetails({
+                          breedingHistory: item.breedingHistory,
+                          featherCondition: item.featherCondition,
+                        })}
+                      </p>
+                    ) : null}
                     <p className="mt-0.5 text-xs leading-5 text-stone-600 sm:mt-1">
                       {formatCartAvailability(item.availableDate)} -{" "}
                       {formatCurrency(item.unitPrice)} each -{" "}

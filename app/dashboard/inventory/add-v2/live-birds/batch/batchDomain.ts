@@ -1,5 +1,9 @@
 import { mapSoldAsToInventoryType } from "../payloadPreview";
 import type { BreedOption, SpeciesOption } from "../types";
+import {
+  isBreedingHistory,
+  isFeatherCondition,
+} from "../../../../../../lib/live-bird-advanced-attributes";
 
 export type BatchRowField =
   | "species"
@@ -9,6 +13,8 @@ export type BatchRowField =
   | "soldAs"
   | "quantity"
   | "price"
+  | "breedingHistory"
+  | "featherCondition"
   | "barnLocation";
 
 export type BatchBreedResolution = "idle" | "resolving" | "error";
@@ -22,6 +28,8 @@ export type BatchBirdRow = {
   soldAs: string;
   quantity: string;
   price: string;
+  breedingHistory: string;
+  featherCondition: string;
   barnLocation: string;
   breedResolution: BatchBreedResolution;
   breedResolutionMessage: string | null;
@@ -53,6 +61,8 @@ export function createBatchRow(
     soldAs: "",
     quantity: "",
     price: "",
+    breedingHistory: "",
+    featherCondition: "",
     barnLocation: "",
     breedResolution: "idle",
     breedResolutionMessage: null,
@@ -158,6 +168,14 @@ export function validateBatchRow(row: BatchBirdRow): BatchRowErrors {
     errors.barnLocation = "Barn Location must be 200 characters or fewer.";
   }
 
+  if (!isBreedingHistory(row.breedingHistory)) {
+    errors.breedingHistory = "Choose a valid Breeding History value.";
+  }
+
+  if (!isFeatherCondition(row.featherCondition)) {
+    errors.featherCondition = "Choose a valid Feather Condition value.";
+  }
+
   return errors;
 }
 
@@ -174,6 +192,8 @@ export function isBatchRowUntouched(row: BatchBirdRow) {
     !row.soldAs &&
     !row.quantity &&
     !row.price &&
+    !row.breedingHistory &&
+    !row.featherCondition &&
     !row.barnLocation
   );
 }

@@ -11,6 +11,10 @@ import {
 import { useAddToCartConfirmation } from "../../_components/use-add-to-cart-confirmation";
 import { StorefrontProduct } from "../../storefront-data";
 import {
+  formatLiveBirdAdvancedDetails,
+  hasLiveBirdAdvancedDetails,
+} from "@/lib/live-bird-advanced-attributes";
+import {
   StorefrontButton,
   StorefrontGlyph,
   cx,
@@ -60,6 +64,9 @@ export function ProductOrderOptions({
   );
   const showEntryPhotoColumn =
     !isHatchingEggProduct && visibleOptions.some((option) => option.entryPhotoUrl);
+  const showAdvancedBirdDetails =
+    !isHatchingEggProduct &&
+    hasLiveBirdAdvancedDetails(visibleOptions);
 
   useEffect(() => {
     if (!entryPhotoDialog) return;
@@ -94,6 +101,8 @@ export function ProductOrderOptions({
           optionLabel: option.label,
           ageLabel: option.ageLabel,
           typeLabel: option.typeLabel,
+          breedingHistory: option.breedingHistory,
+          featherCondition: option.featherCondition,
           availableDate: option.availableDate,
           quantityAvailable: option.quantityAvailable,
           unitPrice: option.unitPrice,
@@ -172,7 +181,13 @@ export function ProductOrderOptions({
                   </TableHeading>
                 ) : null}
                 <TableHeading>{isHatchingEggProduct ? "Item" : "Current age"}</TableHeading>
-                <TableHeading>{isHatchingEggProduct ? "Type" : "Sex"}</TableHeading>
+                <TableHeading>
+                  {isHatchingEggProduct
+                    ? "Type"
+                    : showAdvancedBirdDetails
+                      ? "Bird details"
+                      : "Sex"}
+                </TableHeading>
                 <TableHeading>Ready Date</TableHeading>
                 <TableHeading>Available</TableHeading>
                 <TableHeading>Price</TableHeading>
@@ -225,7 +240,7 @@ export function ProductOrderOptions({
                       {option.ageLabel}
                     </TableCell>
                     <TableCell>
-                      <SexLabel label={option.typeLabel} />
+                      <BirdDetails option={option} />
                     </TableCell>
                     <TableCell>
                       <ReadyPill option={option} />
@@ -320,7 +335,7 @@ export function ProductOrderOptions({
                       {option.ageLabel}
                     </h3>
                     <p className="mt-0.5 truncate text-[0.84rem] font-semibold text-stone-700">
-                      <SexLabel label={option.typeLabel} />
+                      <BirdDetails option={option} />
                     </p>
                   </div>
                   <ReadyPill option={option} />
@@ -707,8 +722,26 @@ function QuantityStepper({
   );
 }
 
-function SexLabel({ label }: { label: string }) {
-  return <span>{label}</span>;
+function BirdDetails({
+  option,
+}: {
+  option: StorefrontProduct["options"][number];
+}) {
+  const details = formatLiveBirdAdvancedDetails({
+    breedingHistory: option.breedingHistory,
+    featherCondition: option.featherCondition,
+  });
+
+  return (
+    <span className="block">
+      <span className="block font-medium text-stone-950">{option.typeLabel}</span>
+      {details ? (
+        <span className="mt-0.5 block text-xs font-medium leading-5 text-stone-500">
+          {details}
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 function ReadyPill({ option }: { option: StorefrontProduct["options"][number] }) {

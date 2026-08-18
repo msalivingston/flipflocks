@@ -1,5 +1,6 @@
 "use client";
 
+import { formatLiveBirdAdvancedDetails } from "@/lib/live-bird-advanced-attributes";
 import {
   formatCurrency,
   formatInventoryLabel,
@@ -40,6 +41,8 @@ export type PrintableOrderItem = {
   breed_display_name_snapshot: string | null;
   inventory_type_snapshot: string | null;
   custom_inventory_label_snapshot: string | null;
+  breeding_history_snapshot?: string | null;
+  feather_condition_snapshot?: string | null;
   hatch_date_snapshot: string | null;
   age_at_sale_days_snapshot: number | null;
   order_item_source: string | null;
@@ -271,6 +274,10 @@ function getPrintableItemDetails(item: PrintableOrderItem) {
     custom_inventory_label: item.custom_inventory_label_snapshot,
     inventory_type: item.inventory_type_snapshot,
   });
+  const advancedBirdDetails = formatLiveBirdAdvancedDetails({
+    breedingHistory: item.breeding_history_snapshot,
+    featherCondition: item.feather_condition_snapshot,
+  });
 
   if (isCustomItem) return ["Custom item"];
 
@@ -282,6 +289,7 @@ function getPrintableItemDetails(item: PrintableOrderItem) {
   return [
     item.species_name_snapshot,
     formatSellerItemDetail(label),
+    advancedBirdDetails,
     formatPrintAge(item.age_at_sale_days_snapshot),
     item.hatch_date_snapshot
       ? `Hatched ${formatShortDate(item.hatch_date_snapshot)}`

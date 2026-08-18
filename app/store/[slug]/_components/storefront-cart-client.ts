@@ -14,6 +14,8 @@ export type StorefrontCartItem = {
   optionLabel: string;
   ageLabel: string | null;
   typeLabel: string;
+  breedingHistory?: string | null;
+  featherCondition?: string | null;
   availableDate: string;
   quantityAvailable: number;
   unitPrice: number;
@@ -223,6 +225,10 @@ function normalizeCartItem(
       typeof item.optionLabel === "string" ? item.optionLabel : "Option",
     ageLabel: typeof item.ageLabel === "string" ? item.ageLabel : null,
     typeLabel: typeof item.typeLabel === "string" ? item.typeLabel : "Option",
+    breedingHistory:
+      typeof item.breedingHistory === "string" ? item.breedingHistory : null,
+    featherCondition:
+      typeof item.featherCondition === "string" ? item.featherCondition : null,
     availableDate:
       typeof item.availableDate === "string" ? item.availableDate : "",
     quantityAvailable,

@@ -4,6 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
+import {
+  breedingHistoryOptions,
+  featherConditionOptions,
+  formatLiveBirdAdvancedDetails,
+} from "@/lib/live-bird-advanced-attributes";
 import { useSellerContext } from "../../../../_components/seller-context";
 import {
   DashboardPageContent,
@@ -75,6 +80,7 @@ type TouchedFields = Record<string, Partial<Record<BatchRowField, boolean>>>;
 type ReviewState = {
   hatchGroups: BatchCreatePayload[];
   requestKey: string;
+  rows: BatchBirdRow[];
   summary: BatchReviewSummary;
 };
 
@@ -433,6 +439,7 @@ export default function BatchAddLiveBirdsPage() {
         priceAdjustments,
       }),
       requestKey: crypto.randomUUID(),
+      rows: rows.map((row) => ({ ...row })),
       summary,
     });
     setReviewMessage("Review the totals below, then add all inventory together.");
@@ -614,7 +621,7 @@ export default function BatchAddLiveBirdsPage() {
             </div>
 
             <div className="hidden xl:block">
-              <div className="grid grid-cols-[8rem_9rem_9rem_minmax(13rem,1.4fr)_9rem_8.5rem_9rem_minmax(10rem,1fr)_9rem] gap-2 border-b border-stone-200 bg-stone-100/80 px-3 py-2 text-xs font-bold uppercase tracking-wide text-stone-600">
+              <div className="grid grid-cols-[7rem_8.5rem_8.5rem_minmax(12rem,1.3fr)_8rem_7.5rem_8.5rem_9rem_9rem_minmax(9rem,1fr)_8rem] gap-2 border-b border-stone-200 bg-stone-100/80 px-3 py-2 text-xs font-bold uppercase tracking-wide text-stone-600">
                 <GridHeading label="Species" />
                 <GridHeading label="Hatch Date" />
                 <GridHeading label="Available Date" />
@@ -622,6 +629,8 @@ export default function BatchAddLiveBirdsPage() {
                 <GridHeading label="Sold As" />
                 <GridHeading label="Quantity Available" />
                 <GridHeading label="Starting Price" />
+                <GridHeading label="Breeding History" />
+                <GridHeading label="Feather Condition" />
                 <GridHeading label="Barn Location" />
                 <GridHeading label="Actions" />
               </div>
@@ -797,6 +806,37 @@ function BatchReview({
           </div>
         ))}
       </dl>
+      <div className="mt-4 overflow-hidden rounded-md border border-stone-200 bg-white">
+        <div className="divide-y divide-stone-200">
+          {state.rows.map((row) => {
+            const advancedDetails = formatLiveBirdAdvancedDetails({
+              breedingHistory: row.breedingHistory,
+              featherCondition: row.featherCondition,
+            });
+
+            return (
+              <div
+                className="grid gap-1 px-4 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4"
+                key={row.id}
+              >
+                <div className="min-w-0">
+                  <p className="font-bold text-stone-950">
+                    {row.breed?.label} · {row.soldAs}
+                  </p>
+                  {advancedDetails ? (
+                    <p className="mt-0.5 text-xs font-medium text-stone-600">
+                      {advancedDetails}
+                    </p>
+                  ) : null}
+                </div>
+                <p className="font-semibold text-stone-700">
+                  {row.quantity} birds · {formatPriceRange(Number(row.price), Number(row.price))}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
       <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <button
           className="seller-secondary-button"
@@ -991,6 +1031,46 @@ function BatchRowEditor({
         </span>
       </BatchField>
       <BatchField
+        label="Breeding History"
+        error={
+          showError("breedingHistory") ? errors.breedingHistory : null
+        }
+      >
+        <select
+          aria-label={`Row ${index + 1} Breeding History`}
+          className={`${inputClass} appearance-none`}
+          value={row.breedingHistory}
+          onBlur={() => onTouch("breedingHistory")}
+          onChange={(event) => onUpdate({ breedingHistory: event.target.value })}
+        >
+          {breedingHistoryOptions.map((option) => (
+            <option key={option.value || "unspecified"} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </BatchField>
+      <BatchField
+        label="Feather Condition"
+        error={
+          showError("featherCondition") ? errors.featherCondition : null
+        }
+      >
+        <select
+          aria-label={`Row ${index + 1} Feather Condition`}
+          className={`${inputClass} appearance-none`}
+          value={row.featherCondition}
+          onBlur={() => onTouch("featherCondition")}
+          onChange={(event) => onUpdate({ featherCondition: event.target.value })}
+        >
+          {featherConditionOptions.map((option) => (
+            <option key={option.value || "unspecified"} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </BatchField>
+      <BatchField
         label="Barn Location"
         error={showError("barnLocation") ? errors.barnLocation : null}
       >
@@ -1015,7 +1095,7 @@ function BatchRowEditor({
   if (mode === "grid") {
     return (
       <div
-        className="grid grid-cols-[8rem_9rem_9rem_minmax(13rem,1.4fr)_9rem_8.5rem_9rem_minmax(10rem,1fr)_9rem] items-start gap-2 px-3 py-3"
+        className="grid grid-cols-[7rem_8.5rem_8.5rem_minmax(12rem,1.3fr)_8rem_7.5rem_8.5rem_9rem_9rem_minmax(9rem,1fr)_8rem] items-start gap-2 px-3 py-3"
         data-batch-row-id={row.id}
       >
         {fields}
@@ -1025,7 +1105,7 @@ function BatchRowEditor({
           onRemove={onRemove}
         />
         {serverError ? (
-          <p className="col-span-9 rounded-md bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">
+          <p className="col-span-11 rounded-md bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">
             {serverError}
           </p>
         ) : null}
