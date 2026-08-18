@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { ArrowUpDown, ChevronDown } from "lucide-react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
+import { formatBirdAgeInDays } from "@/lib/bird-age";
 import { useSellerContext } from "../_components/seller-context";
 import {
   EmptyState,
@@ -3650,10 +3651,7 @@ function formatSellerItemDetail(value: string | null) {
 }
 
 function formatAgeAtSale(days: number) {
-  if (days < 7) return `${days} day${days === 1 ? "" : "s"} old`;
-
-  const weeks = Math.floor(days / 7);
-  return `${weeks} week${weeks === 1 ? "" : "s"} old`;
+  return formatBirdAgeInDays(days, { includeOld: true }) ?? "";
 }
 
 function formatShortDate(value: string | null) {

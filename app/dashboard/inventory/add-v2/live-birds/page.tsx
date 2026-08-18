@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { formatBreedDisplayName } from "@/lib/breed-identity";
+import { formatBirdAgeInDays } from "@/lib/bird-age";
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { playDustySuccessSound } from "@/lib/success-sound";
 import {
@@ -5057,9 +5058,7 @@ function formatAgeFromHatchDate(value: string) {
   const today = parseDateValue(getTodayDateInputValue());
   if (!hatch || !today || hatch > today) return null;
   const days = Math.floor((today.getTime() - hatch.getTime()) / (24 * 60 * 60 * 1000));
-  if (days < 14) return `${days} day${days === 1 ? "" : "s"}`;
-  const weeks = Math.floor(days / 7);
-  return `${weeks} week${weeks === 1 ? "" : "s"}`;
+  return formatBirdAgeInDays(days, { minimumDaysForWeeks: 14 });
 }
 
 function formatDateForDisplay(value: string) {

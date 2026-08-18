@@ -1,4 +1,5 @@
 import { publicSupabase } from "@/lib/public-supabase";
+import { formatBirdAgeInDays } from "@/lib/bird-age";
 import { normalizeHatchingEggBreedName } from "@/lib/hatching-egg-breed-name";
 import type { StorefrontHeroPresentation } from "@/lib/storefront-hero-presentation";
 import type { StorefrontCropMetadata } from "./storefront-ui";
@@ -851,22 +852,12 @@ export function formatAgeLabel(item: {
 }
 
 export function formatBirdAgeLabel(days: number | null | undefined) {
-  if (days === null || days === undefined || !Number.isFinite(days)) {
-    return "Age not listed";
-  }
-
-  const wholeDays = Math.floor(days);
-
-  if (wholeDays < 0) return "Age not listed";
-  if (wholeDays === 0) return "Hatch day";
-
-  if (wholeDays < 7) {
-    return wholeDays === 1 ? "1 day old" : `${wholeDays} days old`;
-  }
-
-  const weeks = Math.floor(wholeDays / 7);
-
-  return weeks === 1 ? "1 week old" : `${weeks} weeks old`;
+  return (
+    formatBirdAgeInDays(days, {
+      includeOld: true,
+      zeroLabel: "Hatch day",
+    }) ?? "Age not listed"
+  );
 }
 
 function formatCurrentBirdAgeLabel(item: {
@@ -876,15 +867,7 @@ function formatCurrentBirdAgeLabel(item: {
 }) {
   const currentAgeDays = getCurrentBirdAgeDays(item);
 
-  if (currentAgeDays === null) return "Age not listed";
-
-  if (currentAgeDays < 7) {
-    return currentAgeDays === 1 ? "1 day old" : `${currentAgeDays} days old`;
-  }
-
-  const weeks = Math.max(0, Math.floor(currentAgeDays / 7));
-
-  return weeks === 1 ? "1 week old" : `${weeks} weeks old`;
+  return formatBirdAgeLabel(currentAgeDays);
 }
 
 function getCurrentBirdAgeDays(item: {

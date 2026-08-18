@@ -1,3 +1,5 @@
+import { formatBirdAgeInDays } from "@/lib/bird-age";
+
 export function calculateAgeAtAvailabilityDays(
   originDate: string,
   availableDate: string,
@@ -13,34 +15,21 @@ export function calculateAgeAtAvailabilityDays(
 }
 
 export function formatAgeAtAvailability(days: number | null | undefined) {
-  if (days == null) return "Not set";
-  if (days < 0) return "Not set";
-  if (days === 0) return "At hatch";
-
-  const weeks = Math.floor(days / 7);
-  const remainingDays = days % 7;
-  const parts: string[] = [];
-
-  if (weeks > 0) {
-    parts.push(`${weeks} week${weeks === 1 ? "" : "s"}`);
-  }
-
-  if (remainingDays > 0) {
-    parts.push(`${remainingDays} day${remainingDays === 1 ? "" : "s"}`);
-  }
-
-  return parts.join(" + ");
+  return (
+    formatBirdAgeInDays(days, {
+      includeRemainingDays: true,
+      zeroLabel: "At hatch",
+    }) ?? "Not set"
+  );
 }
 
 export function formatInventoryAgeLabel(days: number | null | undefined) {
-  if (days == null) return "Not set";
-  if (days < 0) return "Not set";
-  if (days === 0) return "Hatch day";
-  if (days < 7) return days === 1 ? "1 day old" : `${days} days old`;
-
-  const weeks = Math.floor(days / 7);
-
-  return weeks === 1 ? "1 week old" : `${weeks} weeks old`;
+  return (
+    formatBirdAgeInDays(days, {
+      includeOld: true,
+      zeroLabel: "Hatch day",
+    }) ?? "Not set"
+  );
 }
 
 export function formatInventoryAgeLabelFromDates(

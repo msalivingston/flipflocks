@@ -1,6 +1,7 @@
 "use client";
 
 import { formatLiveBirdAdvancedDetails } from "@/lib/live-bird-advanced-attributes";
+import { formatBirdAgeInDays } from "@/lib/bird-age";
 import {
   formatCurrency,
   formatInventoryLabel,
@@ -290,7 +291,7 @@ function getPrintableItemDetails(item: PrintableOrderItem) {
     item.species_name_snapshot,
     formatSellerItemDetail(label),
     advancedBirdDetails,
-    formatPrintAge(item.age_at_sale_days_snapshot),
+    formatBirdAgeInDays(item.age_at_sale_days_snapshot),
     item.hatch_date_snapshot
       ? `Hatched ${formatShortDate(item.hatch_date_snapshot)}`
       : null,
@@ -310,15 +311,6 @@ function formatSellerItemDetail(value: string | null) {
   if (lower === "unknown") return "Unknown";
 
   return normalized;
-}
-
-function formatPrintAge(days: number | null | undefined) {
-  if (days == null || days < 0) return null;
-  if (days < 7) return `${days} day${days === 1 ? "" : "s"}`;
-
-  const weeks = Math.floor(days / 7);
-
-  return `${weeks} week${weeks === 1 ? "" : "s"}`;
 }
 
 function formatPrintOrderNumber(value: string) {

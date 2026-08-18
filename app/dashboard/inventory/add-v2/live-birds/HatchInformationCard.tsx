@@ -323,7 +323,7 @@ function formatMobileDate(value: string) {
 function formatCompactAgeMessage(message: string) {
   return message
     .replace(/^These birds will be /, "")
-    .replace(/ when available\.$/, " old at pickup");
+    .replace(/ when available\.$/, " at pickup");
 }
 
 function SpeciesField({

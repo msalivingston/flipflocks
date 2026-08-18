@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.0";
+import { formatBirdAgeInDays } from "../../../lib/bird-age.ts";
 import {
   deliverPostmarkMessage,
   PostmarkDeliveryError,
@@ -1703,11 +1704,7 @@ function formatShortDate(value: string) {
 }
 
 function formatPrintAge(days: number) {
-  if (!Number.isFinite(days) || days < 0) return null;
-  if (days < 7) return `${days} ${days === 1 ? "day" : "days"}`;
-
-  const weeks = Math.floor(days / 7);
-  return `${weeks} ${weeks === 1 ? "week" : "weeks"}`;
+  return formatBirdAgeInDays(days);
 }
 
 function formatAddress(parts: Array<string | null | undefined>) {
