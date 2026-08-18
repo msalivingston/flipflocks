@@ -235,6 +235,15 @@ select results_eq(
   'creation writes one canonical active non-custom catalog row using defaults'
 );
 
+update public.breeds
+set image_url = '/catalog/test/source-silkie-white.webp'
+where breed_slug = 'codex-admin-test-silkie-white';
+
+create temporary table duplicate_source_before as
+select to_jsonb(breeds) as source_row
+from public.breeds
+where breed_slug = 'codex-admin-test-silkie-white';
+
 select lives_ok(
   $$select public.admin_create_catalog_breed(
     (select id from public.species where slug = 'chicken'),
@@ -246,6 +255,30 @@ select lives_ok(
     null
   )$$,
   'a different Variety is a distinct catalog identity'
+);
+
+select isnt(
+  (
+    select id
+    from public.breeds
+    where breed_slug = 'codex-admin-test-silkie-white'
+  ),
+  (
+    select id
+    from public.breeds
+    where breed_slug = 'codex-admin-test-silkie-black'
+  ),
+  'changing Variety creates a new catalog row with a new UUID'
+);
+
+select is(
+  (
+    select image_url
+    from public.breeds
+    where breed_slug = 'codex-admin-test-silkie-black'
+  ),
+  null::text,
+  'the source catalog photo is not copied to the new breed'
 );
 
 select throws_ok(
@@ -261,6 +294,16 @@ select throws_ok(
   '23505',
   'A catalog breed with this Breed and Variety already exists for the selected species.',
   'duplicate identity comparison is exact after case and whitespace normalization'
+);
+
+select is(
+  (
+    select to_jsonb(breeds)
+    from public.breeds
+    where breed_slug = 'codex-admin-test-silkie-white'
+  ),
+  (select source_row from duplicate_source_before),
+  'creating a new Variety and receiving a duplicate error leave the source breed unchanged'
 );
 
 select lives_ok(

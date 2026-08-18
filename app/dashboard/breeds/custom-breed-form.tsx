@@ -36,6 +36,7 @@ type CustomBreedFormProps = {
   onDraftChange: (draft: CustomBreedDraft) => void;
   species: BreedSpecies[];
   speciesLocked?: boolean;
+  varietyInputRef?: RefObject<HTMLInputElement | null>;
 };
 
 export function createBlankCustomBreedDraft(
@@ -159,6 +160,7 @@ export function CustomBreedForm({
   onDraftChange,
   species,
   speciesLocked = false,
+  varietyInputRef,
 }: CustomBreedFormProps) {
   const isMobile = layout === "mobile";
   const isChicken = isChickenSpecies(draft.speciesId, species);
@@ -223,6 +225,7 @@ export function CustomBreedForm({
           disabled={disabled}
           maxLength={breedVarietyMaxLength}
           placeholder="Example: Black"
+          ref={varietyInputRef}
           value={draft.variety}
           onChange={(event) => updateDraft({ variety: event.target.value })}
         />

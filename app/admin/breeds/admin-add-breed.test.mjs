@@ -60,7 +60,8 @@ test("Admin modal reuses the shared form with catalog-specific copy", () => {
   assert.match(modalSource, /descriptionLabel="Catalog description"/);
   assert.match(modalSource, /chickenBreedCategoryRequired/);
   assert.match(modalSource, /requireChickenBreedCategory: true/);
-  assert.match(modalSource, />\s*Create Breed\s*</);
+  assert.match(modalSource, /mode = "create"/);
+  assert.match(modalSource, /isDuplicate \? "Duplicate Breed" : "Create Breed"/);
   assert.doesNotMatch(modalSource, /Choose from Breed Library|Add to My Breeds|seller-media/);
 });
 

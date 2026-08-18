@@ -17,20 +17,29 @@ type CreatedCatalogBreed = {
 };
 
 export function AdminAddBreedModal({
+  initialDraft,
+  mode = "create",
   onClose,
   species,
 }: {
+  initialDraft?: CustomBreedDraft;
+  mode?: "create" | "duplicate";
   onClose: () => void;
   species: BreedSpecies[];
 }) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const varietyInputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState<CustomBreedDraft>(() =>
-    createBlankCustomBreedDraft(species[0]?.id ?? ""),
+    initialDraft
+      ? { ...initialDraft }
+      : createBlankCustomBreedDraft(species[0]?.id ?? ""),
   );
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const isDuplicate = mode === "duplicate";
+  const modalTitle = isDuplicate ? "Duplicate Breed" : "Create Breed";
 
   useEffect(() => {
     previousFocusRef.current =
@@ -41,6 +50,10 @@ export function AdminAddBreedModal({
     document.body.style.overflow = "hidden";
 
     window.requestAnimationFrame(() => {
+      if (isDuplicate) {
+        varietyInputRef.current?.focus();
+        return;
+      }
       dialogRef.current?.querySelector<HTMLInputElement>("input")?.focus();
     });
 
@@ -48,7 +61,7 @@ export function AdminAddBreedModal({
       document.body.style.overflow = previousOverflow;
       previousFocusRef.current?.focus();
     };
-  }, []);
+  }, [isDuplicate]);
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape" && !isCreating) {
@@ -109,7 +122,11 @@ export function AdminAddBreedModal({
     );
 
     if (createError) {
-      setError(createError.message);
+      setError(
+        createError.code === "23505"
+          ? "This breed and variety already exist for this species."
+          : createError.message,
+      );
       setIsCreating(false);
       return;
     }
@@ -141,15 +158,16 @@ export function AdminAddBreedModal({
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
           <div>
             <h2 className="text-xl font-semibold text-stone-950" id="admin-add-breed-title">
-              Create Breed
+              {modalTitle}
             </h2>
             <p className="mt-1 text-sm leading-6 text-stone-600">
-              Add a canonical breed to FlockFront&apos;s global Breed Catalog.
-              You can add its catalog photo after creation.
+              {isDuplicate
+                ? "Use this breed as a starting point for a new global catalog record. Its catalog photo will not be copied."
+                : "Add a canonical breed to FlockFront's global Breed Catalog. You can add its catalog photo after creation."}
             </p>
           </div>
           <button
-            aria-label="Close Create Breed"
+            aria-label={`Close ${modalTitle}`}
             className="rounded-md px-2 py-1 text-2xl leading-none text-stone-500 hover:bg-stone-100 hover:text-stone-950"
             disabled={isCreating}
             onClick={onClose}
@@ -177,6 +195,7 @@ export function AdminAddBreedModal({
             draft={draft}
             onDraftChange={setDraft}
             species={species}
+            varietyInputRef={varietyInputRef}
           />
 
           <div className="flex flex-col-reverse gap-2 border-t border-stone-200 pt-4 sm:flex-row sm:justify-end">
@@ -193,7 +212,13 @@ export function AdminAddBreedModal({
               disabled={isCreating}
               type="submit"
             >
-              {isCreating ? "Creating Breed" : "Create Breed"}
+              {isCreating
+                ? isDuplicate
+                  ? "Creating Duplicate"
+                  : "Creating Breed"
+                : isDuplicate
+                  ? "Create Duplicate"
+                  : "Create Breed"}
             </button>
           </div>
         </form>

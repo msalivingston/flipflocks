@@ -9,6 +9,8 @@ import {
 } from "@/lib/chicken-metadata-options";
 import { supabase } from "@/lib/supabase";
 import { formatBreedDisplayName } from "@/lib/breed-identity";
+import type { BreedSpecies } from "@/app/dashboard/breeds/breed-data";
+import type { CustomBreedDraft } from "@/app/dashboard/breeds/custom-breed-form";
 import type {
   AdminCatalogBreedDetailRow,
   AdminCatalogBreedListRow,
@@ -22,6 +24,7 @@ import {
   AdminStatusBadge,
   isAdminAuthorizationError,
 } from "./admin-ui";
+import { AdminAddBreedModal } from "./admin-add-breed-modal";
 
 type UploadResponse = {
   breed?: {
@@ -67,6 +70,7 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [breed, setBreed] = useState<AdminCatalogBreedDetailRow | null>(null);
+  const [species, setSpecies] = useState<BreedSpecies[]>([]);
   const [missingBreeds, setMissingBreeds] = useState<AdminCatalogBreedListRow[]>(
     [],
   );
@@ -86,6 +90,7 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
   const [isSavingDetails, setIsSavingDetails] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDuplicateBreedOpen, setIsDuplicateBreedOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -106,16 +111,24 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
         return;
       }
 
-      const [detailResult, listResult] = await Promise.all([
+      const [detailResult, listResult, speciesResult] = await Promise.all([
         supabase.rpc("admin_catalog_breed_detail", {
           p_breed_id: breedId,
         }),
         supabase.rpc("admin_catalog_breed_list"),
+        supabase
+          .from("species")
+          .select("id, common_name, slug, sort_order")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true })
+          .order("common_name", { ascending: true })
+          .returns<BreedSpecies[]>(),
       ]);
 
       if (!isMounted) return;
 
-      const firstError = detailResult.error ?? listResult.error;
+      const firstError =
+        detailResult.error ?? listResult.error ?? speciesResult.error;
 
       if (firstError) {
         setError(firstError.message);
@@ -128,6 +141,7 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
       const breedList = (listResult.data ?? []) as AdminCatalogBreedListRow[];
 
       setBreed(currentBreed);
+      setSpecies(speciesResult.data ?? []);
       setManualImageUrl(currentBreed?.image_url ?? "");
       setDetailsForm(toDetailsForm(currentBreed));
       setMissingBreeds(breedList.filter((item) => !item.has_image));
@@ -355,9 +369,19 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
         }
         description="Upload or replace the default catalog image for this breed. Seller-uploaded images are not changed."
         action={
-          <Link className="seller-secondary-button" href="/admin/breeds">
-            Back to Breeds
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              className="seller-secondary-button"
+              disabled={!breed || species.length === 0}
+              onClick={() => setIsDuplicateBreedOpen(true)}
+              type="button"
+            >
+              Duplicate Breed
+            </button>
+            <Link className="seller-secondary-button" href="/admin/breeds">
+              Back to Breeds
+            </Link>
+          </div>
         }
       />
 
@@ -753,6 +777,15 @@ export function AdminBreedImageManager({ breedId }: { breedId: string }) {
           </>
         ) : null}
       </div>
+
+      {isDuplicateBreedOpen && breed ? (
+        <AdminAddBreedModal
+          initialDraft={toDuplicateDraft(breed)}
+          mode="duplicate"
+          onClose={() => setIsDuplicateBreedOpen(false)}
+          species={species}
+        />
+      ) : null}
     </>
   );
 }
@@ -781,6 +814,20 @@ function toDetailsForm(
     egg_color: breed.egg_color ?? "",
     image_prompt: breed.image_prompt ?? "",
     temperament: breed.temperament ?? "",
+    variety: breed.variety ?? "",
+  };
+}
+
+function toDuplicateDraft(
+  breed: AdminCatalogBreedDetailRow,
+): CustomBreedDraft {
+  return {
+    annualEggProduction: breed.annual_egg_production ?? "",
+    breedCategory: breed.category ?? "",
+    description: breed.description ?? "",
+    eggColor: breed.egg_color ?? "",
+    name: breed.breed_name,
+    speciesId: breed.species_id,
     variety: breed.variety ?? "",
   };
 }
