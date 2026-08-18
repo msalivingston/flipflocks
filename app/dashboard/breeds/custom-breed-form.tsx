@@ -9,6 +9,7 @@ import type { RefObject } from "react";
 import type { BreedSpecies } from "./breed-data";
 
 export const breedDescriptionMaxLength = 1500;
+export const breedVarietyMaxLength = 120;
 
 export type CustomBreedDraft = {
   annualEggProduction: string;
@@ -25,6 +26,9 @@ export type CustomBreedValidationResult =
   | { ok: false; message: string };
 
 type CustomBreedFormProps = {
+  chickenBreedCategoryRequired?: boolean;
+  descriptionLabel?: string;
+  descriptionPlaceholder?: string;
   draft: CustomBreedDraft;
   disabled?: boolean;
   layout?: "desktop" | "mobile";
@@ -70,9 +74,11 @@ export function sanitizeCustomBreedDraft({
 
 export function validateCustomBreedDraft({
   draft,
+  requireChickenBreedCategory = false,
   species,
 }: {
   draft: CustomBreedDraft;
+  requireChickenBreedCategory?: boolean;
   species: BreedSpecies[];
 }): CustomBreedValidationResult {
   const nextDraft = sanitizeCustomBreedDraft({ draft, species });
@@ -83,6 +89,13 @@ export function validateCustomBreedDraft({
 
   if (!nextDraft.name) {
     return { ok: false, message: "Add a breed name." };
+  }
+
+  if (nextDraft.variety.length > breedVarietyMaxLength) {
+    return {
+      ok: false,
+      message: `Variety must be ${breedVarietyMaxLength} characters or less.`,
+    };
   }
 
   if (nextDraft.description.length > breedDescriptionMaxLength) {
@@ -99,6 +112,14 @@ export function validateCustomBreedDraft({
     )
   ) {
     return { ok: false, message: "Choose a supported Breed Category." };
+  }
+
+  if (
+    requireChickenBreedCategory &&
+    isChickenSpecies(nextDraft.speciesId, species) &&
+    !nextDraft.breedCategory
+  ) {
+    return { ok: false, message: "Choose a Breed Category for this chicken breed." };
   }
 
   if (
@@ -128,6 +149,9 @@ export function isChickenSpecies(speciesId: string, species: BreedSpecies[]) {
 }
 
 export function CustomBreedForm({
+  chickenBreedCategoryRequired = false,
+  descriptionLabel = "Storefront description",
+  descriptionPlaceholder = "Add the description buyers should see.",
   disabled = false,
   draft,
   layout = "desktop",
@@ -197,6 +221,7 @@ export function CustomBreedForm({
         <input
           className={fieldClass}
           disabled={disabled}
+          maxLength={breedVarietyMaxLength}
           placeholder="Example: Black"
           value={draft.variety}
           onChange={(event) => updateDraft({ variety: event.target.value })}
@@ -207,9 +232,13 @@ export function CustomBreedForm({
         <>
           <label className={labelClass}>
             Breed Category
+            {chickenBreedCategoryRequired ? (
+              <span className="font-normal text-stone-500">(required)</span>
+            ) : null}
             <select
               className={fieldClass}
               disabled={disabled}
+              required={chickenBreedCategoryRequired}
               value={draft.breedCategory}
               onChange={(event) =>
                 updateDraft({ breedCategory: event.target.value })
@@ -263,12 +292,12 @@ export function CustomBreedForm({
       ) : null}
 
       <label className={fullWidthLabelClass}>
-        Storefront description
+        {descriptionLabel}
         <textarea
           className={textareaClass}
           disabled={disabled}
           maxLength={breedDescriptionMaxLength}
-          placeholder="Add the description buyers should see."
+          placeholder={descriptionPlaceholder}
           value={draft.description}
           onChange={(event) => updateDraft({ description: event.target.value })}
         />

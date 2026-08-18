@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { formatBreedDisplayName } from "@/lib/breed-identity";
+import type { BreedSpecies } from "@/app/dashboard/breeds/breed-data";
 import type { AdminCatalogBreedListRow } from "../_lib/admin-types";
+import { AdminAddBreedModal } from "./admin-add-breed-modal";
 import {
   AdminAccessState,
   AdminCard,
@@ -27,6 +29,7 @@ export function AdminBreedsList({
   initialImageFilter?: ImageFilter;
 }) {
   const [breeds, setBreeds] = useState<AdminCatalogBreedListRow[]>([]);
+  const [species, setSpecies] = useState<BreedSpecies[]>([]);
   const [query, setQuery] = useState("");
   const [speciesFilter, setSpeciesFilter] = useState("all");
   const [imageFilter, setImageFilter] =
@@ -35,6 +38,7 @@ export function AdminBreedsList({
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [deletingBreedId, setDeletingBreedId] = useState<string | null>(null);
+  const [isAddBreedOpen, setIsAddBreedOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -53,19 +57,29 @@ export function AdminBreedsList({
         return;
       }
 
-      const { data, error: breedsError } = await supabase.rpc(
-        "admin_catalog_breed_list",
-      );
+      const [breedsResult, speciesResult] = await Promise.all([
+        supabase.rpc("admin_catalog_breed_list"),
+        supabase
+          .from("species")
+          .select("id, common_name, slug, sort_order")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true })
+          .order("common_name", { ascending: true })
+          .returns<BreedSpecies[]>(),
+      ]);
 
       if (!isMounted) return;
 
-      if (breedsError) {
-        setError(breedsError.message);
+      const loadError = breedsResult.error ?? speciesResult.error;
+
+      if (loadError) {
+        setError(loadError.message);
         setIsLoading(false);
         return;
       }
 
-      setBreeds((data ?? []) as AdminCatalogBreedListRow[]);
+      setBreeds((breedsResult.data ?? []) as AdminCatalogBreedListRow[]);
+      setSpecies(speciesResult.data ?? []);
       setIsLoading(false);
     }
 
@@ -164,6 +178,16 @@ export function AdminBreedsList({
   return (
     <>
       <AdminPageHeader
+        action={
+          <button
+            className="seller-primary-button"
+            disabled={isLoading || Boolean(error) || species.length === 0}
+            onClick={() => setIsAddBreedOpen(true)}
+            type="button"
+          >
+            Add Breed
+          </button>
+        }
         eyebrow="Platform Admin"
         title="Breed Catalog Images"
         description="Upload and replace default catalog breed images. Seller-uploaded images are not changed."
@@ -271,6 +295,13 @@ export function AdminBreedsList({
           </>
         ) : null}
       </div>
+
+      {isAddBreedOpen ? (
+        <AdminAddBreedModal
+          onClose={() => setIsAddBreedOpen(false)}
+          species={species}
+        />
+      ) : null}
     </>
   );
 }
