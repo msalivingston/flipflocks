@@ -289,3 +289,27 @@ test("Store Admin presents conditional Website URL guidance without changing vis
   assert.match(source, /seller_update_store_visibility/);
   assert.doesNotMatch(source, /getPlanCapabilities[\s\S]{0,500}storefront_visibility/);
 });
+
+test("embed-only visibility normalizes the legacy private storefront mode", async () => {
+  const migration = await readFile(
+    new URL(
+      "../supabase/migrations/20260821160000_fix_embed_only_legacy_storefront_mode.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(
+    migration,
+    /p_visibility = 'embed_only' and stores\.storefront_mode = 'private'[\s\S]*then 'embedded'/,
+  );
+  assert.match(
+    migration,
+    /where storefront_visibility = 'embed_only'[\s\S]*and storefront_mode = 'private'/,
+  );
+  assert.match(migration, /stores_embed_only_not_private_mode_check/);
+  assert.doesNotMatch(
+    migration,
+    /storefront_enabled\s*=|store_status\s*=|store_has_active_entitlement/,
+  );
+});
