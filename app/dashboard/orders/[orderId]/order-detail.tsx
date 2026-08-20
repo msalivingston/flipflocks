@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { formatLiveBirdAdvancedDetails } from "@/lib/live-bird-advanced-attributes";
 import { supabase } from "@/lib/supabase";
+import { formatCustomerDisplayName } from "@/lib/customer-display";
 import { useSellerContext } from "../../_components/seller-context";
 import {
   EmptyState,
@@ -1703,11 +1704,12 @@ function BackToOrdersLink() {
 }
 
 function formatCustomerName(order: SellerOrderDetailRow) {
-  return (
-    [order.buyer_first_name_snapshot, order.buyer_last_name_snapshot]
-      .filter(Boolean)
-      .join(" ") || "Buyer"
-  );
+  return formatCustomerDisplayName({
+    first_name: order.buyer_first_name_snapshot,
+    last_name: order.buyer_last_name_snapshot,
+    email: order.buyer_email_snapshot,
+    phone: order.buyer_phone_snapshot,
+  });
 }
 
 function runOrderPrint(bodyClassName: string, onCleanup?: () => void) {

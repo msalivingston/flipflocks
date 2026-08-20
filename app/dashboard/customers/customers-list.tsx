@@ -5,6 +5,10 @@ import Link from "next/link";
 import { ArrowUpDown, ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  formatCustomerDisplayInitials,
+  formatCustomerDisplayName,
+} from "@/lib/customer-display";
 import { useSellerContext } from "../_components/seller-context";
 import { EmptyState, ErrorState, LoadingState } from "../_components/seller-ui";
 import { formatCurrency } from "../orders/order-formatters";
@@ -688,25 +692,10 @@ function getOrderTime(value: string | null) {
   return Number.isNaN(time) ? null : time;
 }
 
-function formatCustomerName(customer: {
-  first_name: string | null;
-  last_name: string | null;
-}) {
-  return (
-    [customer.first_name, customer.last_name].filter(Boolean).join(" ") ||
-    "Customer"
-  );
-}
+const formatCustomerName = formatCustomerDisplayName;
 
 function formatCustomerInitials(customer: SellerCustomerSummaryRow) {
-  const initials = [customer.first_name, customer.last_name]
-    .filter(Boolean)
-    .map((value) => value?.trim().charAt(0))
-    .join("");
-
-  if (initials) return initials.slice(0, 2).toUpperCase();
-
-  return customer.email?.slice(0, 2).toUpperCase() || "CU";
+  return formatCustomerDisplayInitials(customer);
 }
 
 function formatDate(value: string | null) {

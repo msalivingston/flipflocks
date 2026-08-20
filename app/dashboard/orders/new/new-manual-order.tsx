@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { formatCustomerDisplayName } from "@/lib/customer-display";
 import { useSellerContext } from "../../_components/seller-context";
 import {
   AddCustomerButton,
@@ -991,6 +992,12 @@ function validateOrderForCreate({
 
   if (customerMode === "new") {
     if (!newCustomer.firstName.trim()) errors.push("Add the customer name.");
+    if (
+      newCustomer.firstName.trim() &&
+      !parseFullName(newCustomer.firstName).lastName
+    ) {
+      errors.push("Add the customer’s last name for this order.");
+    }
     if (!isEmail(newCustomer.email)) errors.push("Add a valid customer email.");
   }
 
@@ -1028,15 +1035,7 @@ function filterCustomers(customers: CustomerRow[], query: string) {
   );
 }
 
-function formatCustomerName(customer: {
-  first_name: string | null;
-  last_name: string | null;
-}) {
-  return (
-    [customer.first_name, customer.last_name].filter(Boolean).join(" ") ||
-    "Customer"
-  );
-}
+const formatCustomerName = formatCustomerDisplayName;
 
 function formatCustomerSummary(customer: CustomerRow) {
   return [
@@ -1056,7 +1055,7 @@ function parseFullName(fullName: string) {
   }
 
   if (parts.length === 1) {
-    return { firstName: parts[0], lastName: "Customer" };
+    return { firstName: parts[0], lastName: "" };
   }
 
   return {

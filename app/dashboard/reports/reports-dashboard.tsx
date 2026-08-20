@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { formatCustomerDisplayName } from "@/lib/customer-display";
 import { useSellerContext } from "../_components/seller-context";
 import {
   EmptyState,
@@ -2101,20 +2102,21 @@ function matchesSearchTerm(values: string[], search: string) {
 function formatCustomerName(customer: {
   buyer_first_name_snapshot?: string | null;
   buyer_last_name_snapshot?: string | null;
+  buyer_email_snapshot?: string | null;
+  buyer_phone_snapshot?: string | null;
   business_name?: string | null;
+  email?: string | null;
   first_name?: string | null;
   last_name?: string | null;
+  phone?: string | null;
 }) {
-  return (
-    customer.business_name ||
-    [
-      customer.first_name ?? customer.buyer_first_name_snapshot,
-      customer.last_name ?? customer.buyer_last_name_snapshot,
-    ]
-      .filter(Boolean)
-      .join(" ") ||
-    "Customer"
-  );
+  return formatCustomerDisplayName({
+    first_name: customer.first_name ?? customer.buyer_first_name_snapshot,
+    last_name: customer.last_name ?? customer.buyer_last_name_snapshot,
+    business_name: customer.business_name,
+    email: customer.email ?? customer.buyer_email_snapshot,
+    phone: customer.phone ?? customer.buyer_phone_snapshot,
+  });
 }
 
 function formatShortDate(value: string | null) {

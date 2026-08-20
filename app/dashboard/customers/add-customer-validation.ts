@@ -12,7 +12,7 @@ export type AddCustomerValues = {
 };
 
 export type AddCustomerErrors = Partial<
-  Record<"firstName" | "lastName" | "phone" | "email", string>
+  Record<"identifier" | "phone" | "email", string>
 >;
 
 export type CustomerDuplicateMatch = {
@@ -23,12 +23,16 @@ export type CustomerDuplicateMatch = {
 export function validateAddCustomer(values: AddCustomerValues) {
   const errors: AddCustomerErrors = {};
 
-  if (!values.firstName.trim()) {
-    errors.firstName = "Enter the customer’s first name.";
-  }
-
-  if (!values.lastName.trim()) {
-    errors.lastName = "Enter the customer’s last name.";
+  if (
+    ![
+      values.firstName,
+      values.lastName,
+      values.businessName,
+      values.email,
+      values.phone,
+    ].some((value) => value.trim())
+  ) {
+    errors.identifier = "Enter a name, business name, email, or phone number.";
   }
 
   const phoneDigits = normalizePhone(values.phone);

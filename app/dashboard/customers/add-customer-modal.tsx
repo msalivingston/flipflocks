@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { supabase } from "@/lib/supabase";
+import { formatCustomerDisplayName } from "@/lib/customer-display";
 import { useSellerContext } from "../_components/seller-context";
 import {
   type AddCustomerErrors,
@@ -48,8 +49,8 @@ type DuplicateCustomer = {
 
 type EditableCustomerResult = {
   id: string;
-  first_name: string;
-  last_name: string;
+  first_name: string | null;
+  last_name: string | null;
   business_name: string | null;
   email: string | null;
   phone: string | null;
@@ -63,8 +64,8 @@ type EditableCustomerResult = {
 
 export type CreatedCustomer = {
   customer_id: string;
-  first_name: string;
-  last_name: string;
+  first_name: string | null;
+  last_name: string | null;
   business_name: string | null;
   email: string | null;
   phone: string | null;
@@ -142,7 +143,7 @@ export function EditCustomerButton({
     <>
       <button
         ref={triggerRef}
-        aria-label={`Edit ${customer.first_name} ${customer.last_name}`}
+        aria-label={`Edit ${formatCustomerDisplayName(customer)}`}
         className={className}
         title="Edit customer"
         type="button"
@@ -185,8 +186,8 @@ function CustomerModal({
   const [values, setValues] = useState<AddCustomerValues>(() =>
     customer
       ? {
-          firstName: customer.first_name,
-          lastName: customer.last_name,
+          firstName: customer.first_name ?? "",
+          lastName: customer.last_name ?? "",
           businessName: customer.business_name ?? "",
           phone: formatPhoneNumber(customer.phone ?? ""),
           email: customer.email ?? "",
@@ -264,7 +265,7 @@ function CustomerModal({
     }
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
-      if (nextErrors.firstName) nameRef.current?.focus();
+      if (nextErrors.identifier) nameRef.current?.focus();
       return;
     }
 
@@ -433,14 +434,9 @@ function CustomerModal({
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 pb-32 lg:px-6 lg:pb-6">
             <div className="grid gap-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  label="First Name"
-                  required
-                  error={errors.firstName}
-                >
+                <Field label="First Name">
                   <input
                     ref={nameRef}
-                    aria-invalid={Boolean(errors.firstName)}
                     autoComplete="given-name"
                     className="seller-form-field min-h-12"
                     value={values.firstName}
@@ -449,13 +445,8 @@ function CustomerModal({
                     }
                   />
                 </Field>
-                <Field
-                  label="Last Name"
-                  required
-                  error={errors.lastName}
-                >
+                <Field label="Last Name">
                   <input
-                    aria-invalid={Boolean(errors.lastName)}
                     autoComplete="family-name"
                     className="seller-form-field min-h-12"
                     value={values.lastName}
@@ -465,6 +456,11 @@ function CustomerModal({
                   />
                 </Field>
               </div>
+              {errors.identifier ? (
+                <p className="text-sm font-medium text-rose-700" role="alert">
+                  {errors.identifier}
+                </p>
+              ) : null}
               <Field label="Farm or Business Name">
                 <input
                   autoComplete="organization"
@@ -585,10 +581,7 @@ function CustomerModal({
                   </div>
                   <div className="mt-3 grid gap-2">
                     {duplicates.map((duplicate) => {
-                      const duplicateName =
-                        [duplicate.first_name, duplicate.last_name]
-                          .filter(Boolean)
-                          .join(" ") || "Existing customer";
+                      const duplicateName = formatCustomerDisplayName(duplicate);
 
                       return (
                         <div

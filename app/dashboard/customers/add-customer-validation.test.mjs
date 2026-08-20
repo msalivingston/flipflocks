@@ -22,27 +22,27 @@ const blankValues = {
   notes: "",
 };
 
-test("first and last name are required", () => {
+test("a customer needs one meaningful identifier, not a personal name", () => {
   assert.deepEqual(validateAddCustomer(blankValues), {
-    firstName: "Enter the customer’s first name.",
-    lastName: "Enter the customer’s last name.",
+    identifier: "Enter a name, business name, email, or phone number.",
   });
-  assert.deepEqual(
-    validateAddCustomer({
-      ...blankValues,
-      firstName: "Sam",
-      lastName: "Miller",
-    }),
-    {},
-  );
+
+  for (const values of [
+    { ...blankValues, email: "email-only@example.test" },
+    { ...blankValues, phone: "9707658099" },
+    { ...blankValues, businessName: "Whiting Farms" },
+    { ...blankValues, lastName: "Solo" },
+    { ...blankValues, firstName: "Sam", lastName: "Miller" },
+  ]) {
+    assert.deepEqual(validateAddCustomer(values), {});
+  }
 });
 
 test("optional phone and email validate only when entered", () => {
   assert.deepEqual(
     validateAddCustomer({
       ...blankValues,
-      firstName: "Sam",
-      lastName: "Miller",
+      email: "valid@example.test",
       phone: "555",
       email: "not-an-email",
     }),

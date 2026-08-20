@@ -9,6 +9,7 @@ import {
   storeSetupSuccessSoundKey,
 } from "@/lib/success-sound";
 import { supabase } from "@/lib/supabase";
+import { formatCustomerDisplayName } from "@/lib/customer-display";
 import { useSellerContext } from "./seller-context";
 import {
   EmptyState,
@@ -490,10 +491,12 @@ function OrderRow({
   isExpanded: boolean;
   onToggle: () => void;
 }) {
-  const customerName =
-    [order.buyer_first_name_snapshot, order.buyer_last_name_snapshot]
-      .filter(Boolean)
-      .join(" ") || "Customer";
+  const customerName = formatCustomerDisplayName({
+    first_name: order.buyer_first_name_snapshot,
+    last_name: order.buyer_last_name_snapshot,
+    email: order.buyer_email_snapshot,
+    phone: order.buyer_phone_snapshot,
+  });
   const itemCount = order.total_item_quantity ?? order.item_count ?? 0;
   const detailsId = `order-details-${order.order_id}`;
 

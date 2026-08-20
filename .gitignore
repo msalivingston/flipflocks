@@ -42,3 +42,7 @@ breed-image-secrets.env.txt
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+tmp/
+
+outputs/

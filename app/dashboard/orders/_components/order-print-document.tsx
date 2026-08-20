@@ -2,6 +2,7 @@
 
 import { formatLiveBirdAdvancedDetails } from "@/lib/live-bird-advanced-attributes";
 import { formatBirdAgeInDays } from "@/lib/bird-age";
+import { formatCustomerDisplayName } from "@/lib/customer-display";
 import {
   formatCurrency,
   formatInventoryLabel,
@@ -230,11 +231,12 @@ export function OrderPrintDocument({
 }
 
 export function formatCustomerName(order: PrintableOrder) {
-  return (
-    [order.buyer_first_name_snapshot, order.buyer_last_name_snapshot]
-      .filter(Boolean)
-      .join(" ") || "Buyer"
-  );
+  return formatCustomerDisplayName({
+    first_name: order.buyer_first_name_snapshot,
+    last_name: order.buyer_last_name_snapshot,
+    email: order.buyer_email_snapshot,
+    phone: order.buyer_phone_snapshot,
+  });
 }
 
 export function formatBuyerAddress(order: PrintableOrder) {

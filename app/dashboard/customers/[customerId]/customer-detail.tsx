@@ -15,6 +15,10 @@ import {
 } from "react";
 import { supabase } from "@/lib/supabase";
 import {
+  formatCustomerDisplayInitials,
+  formatCustomerDisplayName,
+} from "@/lib/customer-display";
+import {
   EditCustomerButton,
   type EditableCustomer,
 } from "../add-customer-modal";
@@ -1761,25 +1765,10 @@ function formatDateInputValue(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function formatCustomerName(customer: {
-  first_name: string | null;
-  last_name: string | null;
-}) {
-  return (
-    [customer.first_name, customer.last_name].filter(Boolean).join(" ") ||
-    "Customer"
-  );
-}
+const formatCustomerName = formatCustomerDisplayName;
 
 function formatCustomerInitials(customer: SellerCustomerDetailRow) {
-  const initials = [customer.first_name, customer.last_name]
-    .filter(Boolean)
-    .map((value) => value?.trim().charAt(0))
-    .join("");
-
-  if (initials) return initials.slice(0, 2).toUpperCase();
-
-  return customer.email?.slice(0, 2).toUpperCase() || "CU";
+  return formatCustomerDisplayInitials(customer);
 }
 
 function formatPickupLocation(customer: SellerCustomerDetailRow) {

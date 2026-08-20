@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { formatCustomerDisplayName } from "@/lib/customer-display";
 import { useSellerContext } from "../../../_components/seller-context";
 import {
   ErrorState,
@@ -1363,19 +1364,15 @@ function filterCustomers(customers: CustomerRow[], query: string) {
   );
 }
 
-function formatCustomerName(customer: CustomerRow) {
-  return (
-    [customer.first_name, customer.last_name].filter(Boolean).join(" ") ||
-    "Customer"
-  );
-}
+const formatCustomerName = formatCustomerDisplayName;
 
 function formatOrderCustomerName(order: EditableOrderRow) {
-  return (
-    [order.buyer_first_name_snapshot, order.buyer_last_name_snapshot]
-      .filter(Boolean)
-      .join(" ") || "Customer"
-  );
+  return formatCustomerDisplayName({
+    first_name: order.buyer_first_name_snapshot,
+    last_name: order.buyer_last_name_snapshot,
+    email: order.buyer_email_snapshot,
+    phone: order.buyer_phone_snapshot,
+  });
 }
 
 function formatOrderNumber(value: string) {

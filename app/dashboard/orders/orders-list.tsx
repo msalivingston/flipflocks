@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { ArrowUpDown, ChevronDown } from "lucide-react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
+import { formatCustomerDisplayName } from "@/lib/customer-display";
 import { formatBirdAgeInDays } from "@/lib/bird-age";
 import { useSellerContext } from "../_components/seller-context";
 import {
@@ -3557,11 +3558,12 @@ function dateValue(value: string | null | undefined) {
 }
 
 function formatCustomerName(order: SellerOrderRow) {
-  return (
-    [order.buyer_first_name_snapshot, order.buyer_last_name_snapshot]
-      .filter(Boolean)
-      .join(" ") || "Buyer"
-  );
+  return formatCustomerDisplayName({
+    first_name: order.buyer_first_name_snapshot,
+    last_name: order.buyer_last_name_snapshot,
+    email: order.buyer_email_snapshot,
+    phone: order.buyer_phone_snapshot,
+  });
 }
 
 function formatOrderItems(order: SellerOrderRow) {
