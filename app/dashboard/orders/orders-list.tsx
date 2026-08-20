@@ -3565,7 +3565,7 @@ function formatCustomerName(order: SellerOrderRow) {
 }
 
 function formatOrderItems(order: SellerOrderRow) {
-  const itemCount = order.item_count ?? 0;
+  const itemCount = order.total_item_quantity ?? 0;
 
   return `${itemCount} item${itemCount === 1 ? "" : "s"}`;
 }

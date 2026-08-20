@@ -41,6 +41,12 @@ export function calculateOrderSubtotal(lines: OrderLine[]) {
     .reduce((total, line) => total + calculateLineSubtotal(line), 0);
 }
 
+export function calculateOrderItemQuantity(lines: OrderLine[]) {
+  return lines
+    .filter(isActiveLine)
+    .reduce((total, line) => total + Number(line.quantity || 0), 0);
+}
+
 export function calculateDeliveryFee({
   deliveryFee,
   fulfillmentMethod,

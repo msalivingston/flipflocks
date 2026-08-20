@@ -10,7 +10,10 @@ import {
   formatInventoryMetadata,
   getBrowseInventoryRows,
 } from "../_lib/order-form-inventory";
-import { isPositiveWholeNumber } from "../_lib/order-form-calculations";
+import {
+  calculateOrderItemQuantity,
+  isPositiveWholeNumber,
+} from "../_lib/order-form-calculations";
 import type {
   BrowseInventoryFilter,
   InventorySearchRow,
@@ -54,12 +57,19 @@ export function OrderItemsEditor({
   onRemoveLine: (lineId: string) => void;
   onUpdateLine: (lineId: string, updates: Partial<OrderLine>) => void;
 }) {
+  const totalItemQuantity = calculateOrderItemQuantity(lines);
+
   return (
     <>
       <SellerCard className="min-w-0 overflow-hidden rounded-2xl p-4 shadow-[0_12px_30px_rgba(46,39,25,0.045)] lg:rounded-lg lg:p-3 lg:shadow-sm">
-        <h2 className="text-xl font-bold text-stone-950 lg:text-lg lg:font-semibold">
-          Order Items
-        </h2>
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-xl font-bold text-stone-950 lg:text-lg lg:font-semibold">
+            Order Items
+          </h2>
+          <span className="shrink-0 text-sm font-semibold text-stone-500 lg:text-xs">
+            {totalItemQuantity} item{totalItemQuantity === 1 ? "" : "s"}
+          </span>
+        </div>
         <div className="mt-3 grid gap-3 lg:mt-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-2">
           <label className="sr-only" htmlFor="manual-order-inventory-search">
             Search inventory by breed, type, or age
