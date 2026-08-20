@@ -3,21 +3,20 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpDown, ChevronDown } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../_components/seller-context";
 import { EmptyState, ErrorState, LoadingState } from "../_components/seller-ui";
 import { formatCurrency } from "../orders/order-formatters";
-
-const CUSTOMERS_PER_PAGE = 6;
-
-type CustomerSortOption =
-  | "last-order-newest"
-  | "last-order-oldest"
-  | "name-az"
-  | "name-za"
-  | "most-orders"
-  | "highest-lifetime-value";
+import {
+  buildCustomerSearchFilter,
+  CUSTOMERS_PER_PAGE,
+  getCustomerPageRange,
+  getCustomerSortOrders,
+  getCustomerTotalPages,
+  getLastValidCustomerPage,
+  type CustomerSortOption,
+} from "./customers-list-query";
 
 const customerSortOptions: { label: string; value: CustomerSortOption }[] = [
   { label: "Last order: Newest", value: "last-order-newest" },
@@ -75,6 +74,7 @@ export function CustomersList({
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<CustomerSortOption>("last-order-newest");
   const [page, setPage] = useState(1);
+  const [totalCustomers, setTotalCustomers] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -87,18 +87,27 @@ export function CustomersList({
       setIsLoading(true);
       setError(null);
 
-      const result = await supabase
+      const searchFilter = buildCustomerSearchFilter(query);
+      const { from, to } = getCustomerPageRange(page);
+      let customerQuery = supabase
         .from("seller_customer_summary")
         .select(
           "customer_id, email, first_name, last_name, phone, business_name, order_count, lifetime_order_total, latest_order_created_at, created_at",
+          { count: "exact" },
         )
-        .eq("store_id", seller.store_id)
-        .order("latest_order_created_at", {
-          ascending: false,
-          nullsFirst: false,
-        })
-        .order("created_at", { ascending: false })
-        .limit(200)
+        .eq("store_id", seller.store_id);
+
+      if (searchFilter) customerQuery = customerQuery.or(searchFilter);
+
+      for (const order of getCustomerSortOrders(sort)) {
+        customerQuery = customerQuery.order(order.column, {
+          ascending: order.ascending,
+          nullsFirst: order.nullsFirst,
+        });
+      }
+
+      const result = await customerQuery
+        .range(from, to)
         .returns<SellerCustomerSummaryBaseRow[]>();
 
       if (!isMounted) return;
@@ -107,6 +116,15 @@ export function CustomersList({
         console.error("seller_customer_summary query failed", result.error);
         setError(result.error.message);
         setIsLoading(false);
+        return;
+      }
+
+      const nextTotalCustomers = result.count ?? 0;
+      const lastValidPage = getLastValidCustomerPage(page, nextTotalCustomers);
+
+      if (lastValidPage !== page) {
+        setTotalCustomers(nextTotalCustomers);
+        setPage(lastValidPage);
         return;
       }
 
@@ -124,6 +142,7 @@ export function CustomersList({
           latest_order_total: latestOrderTotals.get(customer.customer_id) ?? null,
         })),
       );
+      setTotalCustomers(nextTotalCustomers);
       setIsLoading(false);
     }
 
@@ -132,39 +151,11 @@ export function CustomersList({
     return () => {
       isMounted = false;
     };
-  }, [seller]);
+  }, [page, query, seller, sort]);
 
-  const visibleCustomers = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-
-    const matchedCustomers = normalizedQuery
-      ? customers.filter((customer) =>
-          [
-            formatCustomerName(customer),
-            customer.business_name,
-            customer.email,
-            customer.phone,
-          ]
-            .filter(Boolean)
-            .some((value) => value?.toLowerCase().includes(normalizedQuery)),
-        )
-      : customers;
-
-    return [...matchedCustomers].sort((left, right) =>
-      compareCustomers(left, right, sort),
-    );
-  }, [customers, query, sort]);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(visibleCustomers.length / CUSTOMERS_PER_PAGE),
-  );
-  const currentPage = Math.min(page, totalPages);
+  const totalPages = getCustomerTotalPages(totalCustomers);
+  const currentPage = getLastValidCustomerPage(page, totalCustomers);
   const pageStart = (currentPage - 1) * CUSTOMERS_PER_PAGE;
-  const pageCustomers = visibleCustomers.slice(
-    pageStart,
-    pageStart + CUSTOMERS_PER_PAGE,
-  );
 
   if (isLoading) {
     return <LoadingState label="Loading customers" />;
@@ -275,13 +266,13 @@ export function CustomersList({
 
       <p className="text-sm font-medium text-stone-600">
         Total customers:{" "}
-        <span className="font-bold text-emerald-800">{customers.length}</span>
+        <span className="font-bold text-emerald-800">{totalCustomers}</span>
       </p>
 
-      {visibleCustomers.length > 0 ? (
+      {customers.length > 0 ? (
         <>
           <div className="space-y-3 lg:hidden">
-            {pageCustomers.map((customer, index) => (
+            {customers.map((customer, index) => (
               <MobileCustomerCard
                 customer={customer}
                 index={pageStart + index}
@@ -316,7 +307,7 @@ export function CustomersList({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-200">
-                  {pageCustomers.map((customer, index) => (
+                  {customers.map((customer, index) => (
                     <CustomerRow
                       customer={customer}
                       index={pageStart + index}
@@ -331,7 +322,7 @@ export function CustomersList({
           <Pagination
             currentPage={currentPage}
             pageStart={pageStart}
-            totalCustomers={visibleCustomers.length}
+            totalCustomers={totalCustomers}
             totalPages={totalPages}
             onPageChange={setPage}
           />
@@ -339,12 +330,12 @@ export function CustomersList({
       ) : (
         <EmptyState
           title={
-            customers.length > 0
+            query.trim()
               ? "No customers match that search"
               : "No customers yet"
           }
           description={
-            customers.length > 0
+            query.trim()
               ? "Try a different name, email, phone number, or farm name."
               : "Customers will appear after storefront or seller-created orders are placed."
           }
@@ -622,70 +613,6 @@ function getPaginationPages(currentPage: number, totalPages: number) {
   pages.push(totalPages);
 
   return pages;
-}
-
-function compareCustomers(
-  left: SellerCustomerSummaryRow,
-  right: SellerCustomerSummaryRow,
-  sort: CustomerSortOption,
-) {
-  const nameComparison = compareCustomerNames(left, right);
-
-  if (sort === "name-az") return nameComparison;
-  if (sort === "name-za") return -nameComparison;
-
-  if (sort === "most-orders") {
-    return (
-      (right.order_count ?? 0) - (left.order_count ?? 0) ||
-      nameComparison
-    );
-  }
-
-  if (sort === "highest-lifetime-value") {
-    return (
-      (right.lifetime_order_total ?? 0) - (left.lifetime_order_total ?? 0) ||
-      nameComparison
-    );
-  }
-
-  const dateComparison = compareLastOrderDates(left, right);
-
-  return sort === "last-order-oldest" ? dateComparison : -dateComparison;
-}
-
-function compareLastOrderDates(
-  left: SellerCustomerSummaryRow,
-  right: SellerCustomerSummaryRow,
-) {
-  const leftTime = getOrderTime(left.latest_order_created_at);
-  const rightTime = getOrderTime(right.latest_order_created_at);
-
-  if (leftTime == null && rightTime == null) {
-    return compareCustomerNames(left, right);
-  }
-
-  if (leftTime == null) return 1;
-  if (rightTime == null) return -1;
-
-  return leftTime - rightTime || compareCustomerNames(left, right);
-}
-
-function compareCustomerNames(
-  left: SellerCustomerSummaryRow,
-  right: SellerCustomerSummaryRow,
-) {
-  return formatCustomerName(left).localeCompare(formatCustomerName(right), undefined, {
-    numeric: true,
-    sensitivity: "base",
-  });
-}
-
-function getOrderTime(value: string | null) {
-  if (!value) return null;
-
-  const time = new Date(value).getTime();
-
-  return Number.isNaN(time) ? null : time;
 }
 
 function formatCustomerName(customer: {
