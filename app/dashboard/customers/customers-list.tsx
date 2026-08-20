@@ -79,7 +79,8 @@ export function CustomersList({
   const [sort, setSort] = useState<CustomerSortOption>("last-order-newest");
   const [page, setPage] = useState(1);
   const [totalCustomers, setTotalCustomers] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -97,7 +98,7 @@ export function CustomersList({
     async function loadCustomers() {
       if (!seller) return;
 
-      setIsLoading(true);
+      setIsRefreshing(true);
       setError(null);
 
       const searchFilter = buildCustomerSearchFilter(debouncedQuery);
@@ -128,7 +129,8 @@ export function CustomersList({
       if (result.error) {
         console.error("seller_customer_summary query failed", result.error);
         setError(result.error.message);
-        setIsLoading(false);
+        setIsInitialLoading(false);
+        setIsRefreshing(false);
         return;
       }
 
@@ -156,7 +158,8 @@ export function CustomersList({
         })),
       );
       setTotalCustomers(nextTotalCustomers);
-      setIsLoading(false);
+      setIsInitialLoading(false);
+      setIsRefreshing(false);
     }
 
     void loadCustomers();
@@ -174,19 +177,6 @@ export function CustomersList({
   const totalPages = getCustomerTotalPages(totalCustomers);
   const currentPage = getLastValidCustomerPage(page, totalCustomers);
   const pageStart = (currentPage - 1) * CUSTOMERS_PER_PAGE;
-
-  if (isLoading) {
-    return <LoadingState label="Loading customers" />;
-  }
-
-  if (error) {
-    return (
-      <ErrorState
-        title="Customers could not load"
-        message="Please refresh the page and try again."
-      />
-    );
-  }
 
   return (
     <div className="min-w-0 space-y-4">
@@ -279,9 +269,21 @@ export function CustomersList({
       <p className="text-sm font-medium text-stone-600">
         Total customers:{" "}
         <span className="font-bold text-emerald-800">{totalCustomers}</span>
+        {isRefreshing ? (
+          <span aria-live="polite" className="ml-2 text-stone-500">
+            Updating customers…
+          </span>
+        ) : null}
       </p>
 
-      {customers.length > 0 ? (
+      {error ? (
+        <ErrorState
+          title="Customers could not load"
+          message="Please refresh the page and try again."
+        />
+      ) : isInitialLoading ? (
+        <LoadingState label="Loading customers" />
+      ) : customers.length > 0 ? (
         <>
           <div className="space-y-3 lg:hidden">
             {customers.map((customer, index) => (
