@@ -8,6 +8,7 @@ import {
   AddCustomerButton,
   type CreatedCustomer,
 } from "../../customers/add-customer-modal";
+import { buildCustomerSearchFilter } from "../../customers/customers-list-query";
 import {
   ErrorState,
   LoadingState,
@@ -84,11 +85,15 @@ type ManualOrderEmailStatus = "queued" | "failed" | "no_email" | "unknown";
 type CustomerMode = "existing" | "new";
 
 const manualOrderSuccessStorageKey = "flockfront:manual-order-success";
+const CUSTOMER_SEARCH_DEBOUNCE_MS = 275;
+const CUSTOMER_SEARCH_RESULT_LIMIT = 8;
 
 export function NewManualOrder() {
   const { seller } = useSellerContext();
   const router = useRouter();
-  const [customers, setCustomers] = useState<CustomerRow[]>([]);
+  const [customerSearchResults, setCustomerSearchResults] = useState<
+    CustomerRow[]
+  >([]);
   const [inventory, setInventory] = useState<InventorySearchRow[]>([]);
   const [pickupMethod, setPickupMethod] = useState<PickupMethod>("notes");
   const [deliveryEnabled, setDeliveryEnabled] = useState(false);
@@ -98,7 +103,14 @@ export function NewManualOrder() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [customerMode, setCustomerMode] = useState<CustomerMode>("existing");
   const [customerQuery, setCustomerQuery] = useState("");
-  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState<
+    CustomerRow | undefined
+  >(undefined);
+  const selectedCustomerId = selectedCustomer?.customer_id ?? "";
+  const [isCustomerSearchLoading, setIsCustomerSearchLoading] = useState(false);
+  const [customerSearchError, setCustomerSearchError] = useState<string | null>(
+    null,
+  );
   const [inventoryQuery, setInventoryQuery] = useState("");
   const [isBrowseOpen, setIsBrowseOpen] = useState(false);
   const [browseFilter, setBrowseFilter] = useState<BrowseInventoryFilter>("all");
@@ -144,7 +156,6 @@ export function NewManualOrder() {
       setLoadError(null);
 
       const [
-        customerResult,
         inventoryResult,
         equipmentResult,
         hatchingEggResult,
@@ -153,17 +164,6 @@ export function NewManualOrder() {
         pickupOptionsResult,
         deliveryOptionsResult,
       ] = await Promise.all([
-        supabase
-          .from("seller_customer_summary")
-          .select("customer_id, email, first_name, last_name, phone, business_name")
-          .eq("store_id", seller.store_id)
-          .order("latest_order_created_at", {
-            ascending: false,
-            nullsFirst: false,
-          })
-          .order("created_at", { ascending: false })
-          .limit(200)
-          .returns<CustomerRow[]>(),
         supabase
           .from("seller_inventory_management")
           .select(
@@ -233,7 +233,6 @@ export function NewManualOrder() {
       if (!isMounted) return;
 
       const firstError =
-        customerResult.error ??
         inventoryResult.error ??
         hatchingEggResult.error ??
         equipmentResult.error ??
@@ -248,7 +247,6 @@ export function NewManualOrder() {
         return;
       }
 
-      setCustomers(customerResult.data ?? []);
       setInventory(
         normalizeSellableInventoryRows({
           equipmentRows: equipmentResult.data ?? [],
@@ -274,6 +272,54 @@ export function NewManualOrder() {
       isMounted = false;
     };
   }, [seller]);
+
+  useEffect(() => {
+    const normalizedQuery = customerQuery.trim();
+    const storeId = seller?.store_id;
+
+    if (!storeId || normalizedQuery.length < 2) return;
+
+    let isMounted = true;
+
+    const timeoutId = window.setTimeout(() => {
+      async function searchCustomers() {
+        const searchFilter = buildCustomerSearchFilter(normalizedQuery);
+        if (!searchFilter) return;
+
+        const { data, error } = await supabase
+          .from("seller_customer_summary")
+          .select("customer_id, email, first_name, last_name, phone, business_name")
+          .eq("store_id", storeId)
+          .or(searchFilter)
+          .order("latest_order_created_at", {
+            ascending: false,
+            nullsFirst: false,
+          })
+          .order("created_at", { ascending: false })
+          .limit(CUSTOMER_SEARCH_RESULT_LIMIT)
+          .returns<CustomerRow[]>();
+
+        if (!isMounted) return;
+
+        if (error) {
+          console.error("manual order customer search failed", error);
+          setCustomerSearchError(error.message);
+          setIsCustomerSearchLoading(false);
+          return;
+        }
+
+        setCustomerSearchResults(data ?? []);
+        setIsCustomerSearchLoading(false);
+      }
+
+      void searchCustomers();
+    }, CUSTOMER_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      isMounted = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [customerQuery, seller?.store_id]);
 
   const usesConfiguredPickupOptions = pickupMethod === "manual_options";
   const canUseDelivery = deliveryEnabled && deliveryOptions.length > 0;
@@ -343,9 +389,6 @@ export function NewManualOrder() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [isBrowseOpen]);
 
-  const selectedCustomer = customers.find(
-    (customer) => customer.customer_id === selectedCustomerId,
-  );
   const buyerConfirmationEmail = getCreatedCustomerEmail(
     customerMode,
     selectedCustomer,
@@ -441,24 +484,25 @@ export function NewManualOrder() {
     setSaveError(null);
   }
 
-  function selectCustomer(customerId: string) {
-    setSelectedCustomerId(customerId);
+  function updateCustomerQuery(nextQuery: string) {
+    setCustomerQuery(nextQuery);
+    setCustomerSearchResults([]);
+    setCustomerSearchError(null);
+    setIsCustomerSearchLoading(nextQuery.trim().length >= 2);
+  }
+
+  function selectCustomer(customer: CustomerRow) {
+    setSelectedCustomer(customer);
     setCustomerMode("existing");
-    setCustomerQuery("");
+    updateCustomerQuery("");
     setValidationErrors([]);
     setSaveError(null);
   }
 
   function selectCreatedCustomer(customer: CreatedCustomer) {
-    setCustomers((current) => [
-      customer,
-      ...current.filter(
-        (existing) => existing.customer_id !== customer.customer_id,
-      ),
-    ]);
-    setSelectedCustomerId(customer.customer_id);
+    setSelectedCustomer(customer);
     setCustomerMode("existing");
-    setCustomerQuery("");
+    updateCustomerQuery("");
     setValidationErrors([]);
     setSaveError(null);
   }
@@ -647,15 +691,17 @@ export function NewManualOrder() {
       <div className="grid min-w-0 gap-3">
         <CustomerSection
           customerMode={customerMode}
-          customers={customers}
+          customerSearchError={customerSearchError}
+          customerSearchResults={customerSearchResults}
+          isCustomerSearchLoading={isCustomerSearchLoading}
           query={customerQuery}
           selectedCustomer={selectedCustomer}
           selectedCustomerId={selectedCustomerId}
           onCustomerCreated={selectCreatedCustomer}
           setCustomerMode={setCustomerMode}
-          setQuery={setCustomerQuery}
+          setQuery={updateCustomerQuery}
           selectCustomer={selectCustomer}
-          setSelectedCustomerId={setSelectedCustomerId}
+          clearSelectedCustomer={() => setSelectedCustomer(undefined)}
         />
 
         <OrderItemsEditor
@@ -807,7 +853,9 @@ export function NewManualOrder() {
 
 function CustomerSection({
   customerMode,
-  customers,
+  customerSearchError,
+  customerSearchResults,
+  isCustomerSearchLoading,
   query,
   selectedCustomer,
   selectedCustomerId,
@@ -815,23 +863,22 @@ function CustomerSection({
   setCustomerMode,
   setQuery,
   selectCustomer,
-  setSelectedCustomerId,
+  clearSelectedCustomer,
 }: {
   customerMode: CustomerMode;
-  customers: CustomerRow[];
+  customerSearchError: string | null;
+  customerSearchResults: CustomerRow[];
+  isCustomerSearchLoading: boolean;
   query: string;
   selectedCustomer: CustomerRow | undefined;
   selectedCustomerId: string;
   onCustomerCreated: (customer: CreatedCustomer) => void;
   setCustomerMode: (mode: CustomerMode) => void;
   setQuery: (query: string) => void;
-  selectCustomer: (customerId: string) => void;
-  setSelectedCustomerId: (customerId: string) => void;
+  selectCustomer: (customer: CustomerRow) => void;
+  clearSelectedCustomer: () => void;
 }) {
   const canShowResults = query.trim().length >= 2;
-  const visibleCustomers = canShowResults
-    ? filterCustomers(customers, query).slice(0, 6)
-    : [];
   const selectedCustomerLabel =
     customerMode === "existing" && selectedCustomer
       ? formatCustomerSummary(selectedCustomer)
@@ -871,13 +918,21 @@ function CustomerSection({
           className="mt-2 overflow-hidden rounded-md border border-stone-200 bg-white shadow-sm"
           id="manual-order-customer-results"
         >
-          {visibleCustomers.length > 0 ? (
-            visibleCustomers.map((customer) => (
+          {isCustomerSearchLoading ? (
+            <div className="px-3 py-2 text-sm text-stone-600">
+              Searching customers…
+            </div>
+          ) : customerSearchError ? (
+            <div className="px-3 py-2 text-sm text-stone-600">
+              Customer search could not load. Try again.
+            </div>
+          ) : customerSearchResults.length > 0 ? (
+            customerSearchResults.map((customer) => (
               <button
                 className="flex min-h-10 w-full items-center justify-between gap-3 border-b border-stone-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none"
                 key={customer.customer_id}
                 type="button"
-                onClick={() => selectCustomer(customer.customer_id)}
+                onClick={() => selectCustomer(customer)}
               >
                 <span className="truncate font-semibold text-stone-950">
                   {formatCustomerSummary(customer)}
@@ -914,7 +969,7 @@ function CustomerSection({
             type="button"
             onClick={() => {
               setCustomerMode("existing");
-              setSelectedCustomerId("");
+              clearSelectedCustomer();
             }}
           >
             Remove
@@ -1009,23 +1064,6 @@ function validateOrderForCreate({
       usesConfiguredPickupOptions,
     }),
   ];
-}
-
-function filterCustomers(customers: CustomerRow[], query: string) {
-  const normalized = query.trim().toLowerCase();
-
-  if (!normalized) return customers;
-
-  return customers.filter((customer) =>
-    [
-      formatCustomerName(customer),
-      customer.email,
-      customer.phone,
-      customer.business_name,
-    ]
-      .filter(Boolean)
-      .some((value) => value?.toLowerCase().includes(normalized)),
-  );
 }
 
 function formatCustomerName(customer: {
