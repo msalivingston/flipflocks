@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpDown, ChevronDown } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../_components/seller-context";
 import { EmptyState, ErrorState, LoadingState } from "../_components/seller-ui";
@@ -26,6 +26,8 @@ const customerSortOptions: { label: string; value: CustomerSortOption }[] = [
   { label: "Most orders", value: "most-orders" },
   { label: "Highest lifetime value", value: "highest-lifetime-value" },
 ];
+
+const CUSTOMER_SEARCH_DEBOUNCE_MS = 350;
 
 const avatarTones = [
   "bg-emerald-100 text-emerald-900",
@@ -72,11 +74,22 @@ export function CustomersList({
   const { seller } = useSellerContext();
   const [customers, setCustomers] = useState<SellerCustomerSummaryRow[]>([]);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const latestQueryRef = useRef(query);
   const [sort, setSort] = useState<CustomerSortOption>("last-order-newest");
   const [page, setPage] = useState(1);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setPage(1);
+      setDebouncedQuery(query);
+    }, CUSTOMER_SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [query]);
 
   useEffect(() => {
     let isMounted = true;
@@ -87,7 +100,7 @@ export function CustomersList({
       setIsLoading(true);
       setError(null);
 
-      const searchFilter = buildCustomerSearchFilter(query);
+      const searchFilter = buildCustomerSearchFilter(debouncedQuery);
       const { from, to } = getCustomerPageRange(page);
       let customerQuery = supabase
         .from("seller_customer_summary")
@@ -110,7 +123,7 @@ export function CustomersList({
         .range(from, to)
         .returns<SellerCustomerSummaryBaseRow[]>();
 
-      if (!isMounted) return;
+      if (!isMounted || latestQueryRef.current !== debouncedQuery) return;
 
       if (result.error) {
         console.error("seller_customer_summary query failed", result.error);
@@ -134,7 +147,7 @@ export function CustomersList({
         customerRows.map((customer) => customer.customer_id),
       );
 
-      if (!isMounted) return;
+      if (!isMounted || latestQueryRef.current !== debouncedQuery) return;
 
       setCustomers(
         customerRows.map((customer) => ({
@@ -151,7 +164,12 @@ export function CustomersList({
     return () => {
       isMounted = false;
     };
-  }, [page, query, seller, sort]);
+  }, [debouncedQuery, page, seller, sort]);
+
+  function handleQueryChange(value: string) {
+    latestQueryRef.current = value;
+    setQuery(value);
+  }
 
   const totalPages = getCustomerTotalPages(totalCustomers);
   const currentPage = getLastValidCustomerPage(page, totalCustomers);
@@ -198,10 +216,7 @@ export function CustomersList({
             style={{ paddingLeft: "3.5rem" }}
             type="search"
             value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setPage(1);
-            }}
+            onChange={(event) => handleQueryChange(event.target.value)}
           />
         </label>
 
@@ -222,10 +237,7 @@ export function CustomersList({
             placeholder="Search by name, email, phone, or farm name..."
             type="search"
             value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setPage(1);
-            }}
+            onChange={(event) => handleQueryChange(event.target.value)}
           />
         </label>
 

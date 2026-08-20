@@ -71,6 +71,23 @@ test("the customer component applies count, store scope, range, and criteria res
   assert.match(source, /customerQuery = customerQuery\.or\(searchFilter\)/);
   assert.match(source, /\.range\(from, to\)/);
   assert.doesNotMatch(source, /\.limit\(200\)/);
-  assert.equal(source.match(/setPage\(1\)/g)?.length, 3);
-  assert.match(source, /\[page, query, seller, sort\]/);
+  assert.equal(source.match(/setPage\(1\)/g)?.length, 2);
+  assert.match(source, /\[debouncedQuery, page, seller, sort\]/);
+});
+
+test("customer search debounces raw input before querying and guards stale results", async () => {
+  const source = await readFile(
+    new URL("./customers-list.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /CUSTOMER_SEARCH_DEBOUNCE_MS = 350/);
+  assert.match(
+    source,
+    /setTimeout\(\(\) => \{[\s\S]*setPage\(1\);[\s\S]*setDebouncedQuery\(query\);[\s\S]*CUSTOMER_SEARCH_DEBOUNCE_MS/,
+  );
+  assert.match(source, /buildCustomerSearchFilter\(debouncedQuery\)/);
+  assert.doesNotMatch(source, /buildCustomerSearchFilter\(query\)/);
+  assert.match(source, /latestQueryRef\.current !== debouncedQuery/);
+  assert.match(source, /onChange=\{\(event\) => handleQueryChange\(event\.target\.value\)\}/);
 });
