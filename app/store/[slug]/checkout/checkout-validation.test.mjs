@@ -108,6 +108,18 @@ test("fulfillment scope applies the same address contract without rechecking con
   );
 });
 
+test("checkout phone formatting does not change the existing required-only contract", () => {
+  assert.equal(
+    validateCheckout({
+      form: { ...completeForm, buyerPhone: "+44 20 7946 0958" },
+      paymentMethod: "stripe_checkout",
+      requirePickupOption: false,
+      scope: "contact",
+    }),
+    null,
+  );
+});
+
 test("fulfillment options are validated before the shared address fields", () => {
   assert.deepEqual(
     validateCheckout({

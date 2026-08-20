@@ -481,7 +481,8 @@ function CustomerModal({
                   autoComplete="tel"
                   className="seller-form-field min-h-12"
                   inputMode="tel"
-                  placeholder="(555) 555-5555"
+                  placeholder="555-555-5555"
+                  type="tel"
                   value={values.phone}
                   onChange={(event) =>
                     updateValue("phone", formatPhoneNumber(event.target.value))

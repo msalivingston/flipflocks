@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatPhoneInput, isPhoneInputValid } from "@/lib/phone-input";
 import { supabase } from "@/lib/supabase";
 
 type Step2Errors = {
@@ -45,7 +46,9 @@ export function Step2FarmBasicsForm({
   initialValues,
   onComplete,
 }: Step2FormProps) {
-  const [phone, setPhone] = useState(formatPhoneNumber(initialValues?.phone ?? ""));
+  const [phone, setPhone] = useState(
+    formatPhoneInput(initialValues?.phone ?? ""),
+  );
   const [billingAddress, setBillingAddress] = useState(
     initialValues?.billingAddress ?? "",
   );
@@ -133,11 +136,10 @@ export function Step2FarmBasicsForm({
           <Field
             autoComplete="tel"
             error={errors.phone}
-            helperText="Use a 10-digit US phone number."
+            helperText="Use a 10-digit US/Canada number, or begin an international number with +."
             id="phone"
             label="Phone number *"
-            maxLength={14}
-            onChange={(value) => setPhone(formatPhoneNumber(value))}
+            onChange={(value) => setPhone(formatPhoneInput(value))}
             type="tel"
             value={phone}
           />
@@ -297,8 +299,9 @@ function validateFarmBasics({
 
   if (!phone.trim()) {
     nextErrors.phone = "Enter your phone number.";
-  } else if (getUsPhoneDigits(phone).length !== 10) {
-    nextErrors.phone = "Enter a 10-digit US phone number.";
+  } else if (!isPhoneInputValid(phone, { required: true })) {
+    nextErrors.phone =
+      "Enter a 10-digit US/Canada phone number or begin an international number with +.";
   }
   if (!storeName.trim()) nextErrors.storeName = "Enter your farm or seller name.";
   if (!billingAddress.trim()) nextErrors.billingAddress = "Enter your billing address.";
@@ -314,17 +317,4 @@ function friendlyRpcError(message: string) {
     return "That store name is already in use. Try adding your town or farm initials.";
   }
   return message || "We could not save your farm basics. Please try again.";
-}
-
-function getUsPhoneDigits(value: string) {
-  const digits = value.replace(/\D/g, "");
-  if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
-  return digits.slice(0, 10);
-}
-
-function formatPhoneNumber(value: string) {
-  const digits = getUsPhoneDigits(value);
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }

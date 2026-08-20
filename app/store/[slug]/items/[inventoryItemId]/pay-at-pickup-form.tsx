@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { publicSupabase } from "@/lib/public-supabase";
+import { formatPhoneInput } from "@/lib/phone-input";
 import { formatCurrency } from "../../storefront-ui";
 
 type PayAtPickupFormProps = {
@@ -251,7 +252,9 @@ export function PayAtPickupForm({
         <TextField
           label="Phone"
           name="buyerPhone"
-          onChange={(value) => updateField("buyerPhone", value)}
+          onChange={(value) =>
+            updateField("buyerPhone", formatPhoneInput(value))
+          }
           type="tel"
           value={form.buyerPhone}
         />

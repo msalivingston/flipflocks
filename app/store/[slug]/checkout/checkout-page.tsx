@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { publicSupabase } from "@/lib/public-supabase";
+import { formatPhoneInput } from "@/lib/phone-input";
 import {
   StorefrontCart,
   cartItemKey,
@@ -867,7 +868,9 @@ export function CheckoutPage({
                 autoComplete="tel"
                 label="Phone"
                 name="buyerPhone"
-                onChange={(value) => updateField("buyerPhone", value)}
+                onChange={(value) =>
+                  updateField("buyerPhone", formatPhoneInput(value))
+                }
                 type="tel"
                 value={form.buyerPhone}
               />
@@ -1243,9 +1246,12 @@ export function CheckoutPage({
                 value={form.buyerEmail}
               />
               <TextField
+                autoComplete="tel"
                 label="Phone"
                 name="buyerPhone"
-                onChange={(value) => updateField("buyerPhone", value)}
+                onChange={(value) =>
+                  updateField("buyerPhone", formatPhoneInput(value))
+                }
                 type="tel"
                 value={form.buyerPhone}
               />

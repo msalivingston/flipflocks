@@ -1,3 +1,9 @@
+import {
+  formatPhoneInput,
+  getNanpPhoneDigits,
+  isPhoneInputValid,
+} from "../../../lib/phone-input.ts";
+
 export type AddCustomerValues = {
   firstName: string;
   lastName: string;
@@ -31,9 +37,9 @@ export function validateAddCustomer(values: AddCustomerValues) {
     errors.lastName = "Enter the customer’s last name.";
   }
 
-  const phoneDigits = normalizePhone(values.phone);
-  if (values.phone.trim() && phoneDigits.length !== 10) {
-    errors.phone = "Enter a 10-digit phone number.";
+  if (!isPhoneInputValid(values.phone)) {
+    errors.phone =
+      "Enter a 10-digit US/Canada phone number or begin an international number with +.";
   }
 
   if (values.email.trim() && !isValidEmail(values.email)) {
@@ -48,19 +54,11 @@ export function normalizeEmail(value: string | null | undefined) {
 }
 
 export function normalizePhone(value: string | null | undefined) {
-  const digits = value?.replace(/\D/g, "") ?? "";
-  return digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  return getNanpPhoneDigits(value);
 }
 
 export function formatPhoneNumber(value: string) {
-  const digits = normalizePhone(value).slice(0, 10);
-
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) {
-    return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-  }
-
-  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return formatPhoneInput(value);
 }
 
 export function customerDuplicateMatchLabel(match: CustomerDuplicateMatch) {

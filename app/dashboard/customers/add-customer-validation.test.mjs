@@ -47,14 +47,24 @@ test("optional phone and email validate only when entered", () => {
       email: "not-an-email",
     }),
     {
-      phone: "Enter a 10-digit phone number.",
+      phone:
+        "Enter a 10-digit US/Canada phone number or begin an international number with +.",
       email: "Enter a valid email address.",
     },
   );
 });
 
 test("phone formatting is supported", () => {
-  assert.equal(formatPhoneNumber("9707658099"), "(970) 765-8099");
+  assert.equal(formatPhoneNumber("9707658099"), "970-765-8099");
+});
+
+test("customer phone validation accepts international intent and rejects overflow", () => {
+  const base = { ...blankValues, firstName: "Sam", lastName: "Miller" };
+  assert.deepEqual(validateAddCustomer({ ...base, phone: "+44 20 7946 0958" }), {});
+  assert.deepEqual(validateAddCustomer({ ...base, phone: "97076580990" }), {
+    phone:
+      "Enter a 10-digit US/Canada phone number or begin an international number with +.",
+  });
 });
 
 test("duplicate lookup inputs normalize email and phone consistently", () => {

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { formatPhoneInput } from "@/lib/phone-input";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../_components/seller-context";
 import { ErrorState, LoadingState } from "../_components/seller-ui";
@@ -115,7 +116,7 @@ export function SellerAccount() {
       setContactForm({
         email: nextUser.email ?? "",
         name: nextUser.name ?? "",
-        phone: seller.public_phone ?? "",
+        phone: formatPhoneInput(seller.public_phone ?? ""),
         storeName: seller.store_name,
       });
       setBillingForm({
@@ -315,7 +316,7 @@ export function SellerAccount() {
     setContactForm({
       email: accountUser.email ?? "",
       name: accountUser.name ?? "",
-      phone: seller.public_phone ?? "",
+      phone: formatPhoneInput(seller.public_phone ?? ""),
       storeName: seller.store_name,
     });
     setBillingForm({
@@ -377,10 +378,15 @@ export function SellerAccount() {
                 }
               />
               <TextField
+                autoComplete="tel"
                 label="Phone number"
+                type="tel"
                 value={contactForm.phone}
                 onChange={(value) =>
-                  setContactForm((current) => ({ ...current, phone: value }))
+                  setContactForm((current) => ({
+                    ...current,
+                    phone: formatPhoneInput(value),
+                  }))
                 }
               />
               <TextField
@@ -668,19 +674,25 @@ function BillingEmptyState({ onAdd }: { onAdd: () => void }) {
 }
 
 function TextField({
+  autoComplete,
   label,
   onChange,
+  type = "text",
   value,
 }: {
+  autoComplete?: string;
   label: string;
   onChange: (value: string) => void;
+  type?: "email" | "tel" | "text";
   value: string;
 }) {
   return (
     <label className="grid gap-1 text-sm font-semibold text-stone-700">
       {label}
       <input
+        autoComplete={autoComplete}
         className="min-h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+        type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
