@@ -167,7 +167,7 @@ export function NewManualOrder() {
         supabase
           .from("seller_inventory_management")
           .select(
-            "inventory_item_id, listing_batch_id, breed_display_name, batch_type, inventory_type, custom_inventory_label, origin_date, available_date, quantity_available, effective_unit_price, inventory_visibility_status, inventory_moderation_status, listing_batch_visibility_status, listing_batch_moderation_status, operational_availability_status",
+            "inventory_item_id, listing_batch_id, breed_display_name, batch_type, inventory_type, custom_inventory_label, feather_condition, origin_date, available_date, quantity_available, effective_unit_price, inventory_visibility_status, inventory_moderation_status, listing_batch_visibility_status, listing_batch_moderation_status, operational_availability_status",
           )
           .eq("store_id", seller.store_id)
           .neq("inventory_visibility_status", "archived")

@@ -5,6 +5,7 @@ export type ListingInventoryRow = {
   batch_type: string;
   inventory_type: string;
   custom_inventory_label: string | null;
+  feather_condition: string | null;
   origin_date: string | null;
   available_date: string;
   quantity_available: number | null;
@@ -76,6 +77,7 @@ export type InventorySearchRow = {
   title: string;
   category: InventoryCategory;
   detailLabel: string;
+  featherConditionLabel?: string | null;
   quantity_available: number;
   effective_unit_price: number;
   operational_availability_status: string;

@@ -2,6 +2,7 @@ import {
   formatAgeAtAvailabilityFromDates,
   formatInventoryTypeLabel,
 } from "../../_lib/listing-formatters";
+import { formatFeatherCondition } from "@/lib/live-bird-advanced-attributes";
 import { formatCurrency } from "../order-formatters";
 import { isPositiveWholeNumber } from "./order-form-calculations";
 import { formatOrderItemCategoryLabel } from "./order-item-category";
@@ -85,6 +86,10 @@ export function normalizeListingInventoryRow(
     operational_availability_status: row.operational_availability_status,
     quantity_available: row.quantity_available ?? 0,
     title: row.breed_display_name,
+    featherConditionLabel:
+      category === "poultry"
+        ? formatFeatherCondition(row.feather_condition)
+        : null,
   };
 }
 
@@ -235,7 +240,11 @@ export function getManualOrderPayloadItemType(line: OrderLine) {
 }
 
 export function formatInventoryMetadata(item: InventorySearchRow) {
-  return [formatInventoryCategoryLabel(item.category), item.detailLabel]
+  return [
+    formatInventoryCategoryLabel(item.category),
+    item.detailLabel,
+    item.featherConditionLabel,
+  ]
     .filter(Boolean)
     .join(" · ");
 }
