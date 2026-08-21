@@ -11,12 +11,6 @@ const landscapePdfPage = {
   width: 792,
 };
 
-const portraitPdfPage = {
-  height: 792,
-  margin: 28,
-  width: 612,
-};
-
 type PdfPageLayout = typeof landscapePdfPage;
 
 type PdfPage = PdfPageLayout & {
@@ -25,35 +19,37 @@ type PdfPage = PdfPageLayout & {
 
 export async function downloadPickupSummaryReports(
   payload: PickupSummaryPayload,
+  generatedAt?: Date,
 ) {
-  const reportData = createPickupSummaryReportData(payload);
-  const filename = getPickupSummaryFilename(
-    reportData.fileDate,
-    payload.exportFormat,
-    payload.reports,
-  );
-  const blob =
-    payload.exportFormat === "pdf"
-      ? createPickupSummaryPdf(reportData)
-      : createPickupSummaryWorkbook(reportData);
+  for (const report of payload.reports) {
+    const reportData = createPickupSummaryReportData(
+      { ...payload, reports: [report] },
+      generatedAt,
+    );
+    const filename = getPickupSummaryFilename(
+      reportData.fileDate,
+      payload.exportFormat,
+      report,
+    );
+    const blob =
+      payload.exportFormat === "pdf"
+        ? createPickupSummaryPdf(reportData)
+        : createPickupSummaryWorkbook(reportData);
 
-  downloadBlob(blob, filename);
+    downloadBlob(blob, filename);
+  }
 }
 
 function getPickupSummaryFilename(
   fileDate: string,
   exportFormat: "pdf" | "xlsx",
-  reports: PickupSummaryReport[],
+  report: PickupSummaryReport,
 ) {
   const extension = exportFormat === "pdf" ? "pdf" : "xlsx";
 
-  if (reports.length !== 1) {
-    return `pickup-summary-${fileDate}.${extension}`;
-  }
-
-  return reports[0] === "pull_sheet"
-    ? `pull-sheet-${fileDate}.${extension}`
-    : `order-summary-${fileDate}.${extension}`;
+  return report === "pull_sheet"
+    ? `${fileDate} Pull Sheet.${extension}`
+    : `${fileDate} Order Summary.${extension}`;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -83,23 +79,27 @@ export function createPickupSummaryPdf(reportData: PickupSummaryReportData) {
 function buildPullSheetPdfPages(reportData: PickupSummaryReportData) {
   return buildTablePdfPages({
     columns: [
-      { align: "left", label: "Breed", width: 190 },
-      { align: "center", label: "Quantity", width: 66 },
-      { align: "center", label: "Age", width: 90 },
-      { align: "center", label: "Sex", width: 90 },
-      { align: "left", label: "Barn Location", width: 120 },
+      { align: "left", label: "Breed", width: 210 },
+      { align: "center", label: "Qty", width: 55 },
+      { align: "center", label: "Age", width: 60 },
+      { align: "center", label: "Sex", width: 65 },
+      { align: "left", label: "Feather\nCondition", width: 85 },
+      { align: "center", label: "Breeder\nStatus", width: 80 },
+      { align: "left", label: "Barn\nLocation", width: 105 },
     ],
     dateLabel: reportData.generatedDateLabel,
-    layout: portraitPdfPage,
+    layout: landscapePdfPage,
     rows: reportData.pullSheetRows.map((row) => [
       row.breedOrVariety,
       row.quantity,
       row.age,
       row.sex,
+      row.featherCondition,
+      row.breederStatus,
       row.barnLocation,
     ]),
     title: "PULL SHEET",
-    totals: ["TOTAL BIRDS", reportData.pullSheetTotalBirds, "", "", ""],
+    totals: ["TOTAL BIRDS", reportData.pullSheetTotalBirds, "", "", "", "", ""],
   });
 }
 
@@ -156,7 +156,7 @@ function buildTablePdfPages({
 }) {
   const pages: PdfPage[] = [];
   const rowHeight = 25;
-  const headerHeight = 28;
+  const headerHeight = 38;
   const startX = layout.margin;
   const tableWidth = columns.reduce((total, column) => total + column.width, 0);
   const bottomY = layout.margin + rowHeight;
@@ -257,24 +257,29 @@ function drawPdfTableRow({
       drawPdfLine(commands, x, y, x, y - rowHeight);
     }
 
-    const value = String(row[index] ?? "");
-    const fontSize = 12;
-    const textWidth = estimatePdfTextWidth(value, fontSize);
-    const textX =
-      column.align === "right"
-        ? x + column.width - textWidth - 12
-        : column.align === "center"
-          ? x + (column.width - textWidth) / 2
-          : x + 12;
+    const lines = String(row[index] ?? "").split("\n");
+    const fontSize = bold && lines.length > 1 ? 10 : 12;
+    const firstLineY = y - rowHeight / 2 + (lines.length - 1) * 5 - 4;
 
-    drawPdfText(
-      commands,
-      value,
-      textX,
-      y - rowHeight + 8,
-      fontSize,
-      bold ? "bold" : "regular",
-    );
+    lines.forEach((line, lineIndex) => {
+      const value = fitPdfText(line, column.width - 24, fontSize);
+      const textWidth = estimatePdfTextWidth(value, fontSize);
+      const textX =
+        column.align === "right"
+          ? x + column.width - textWidth - 12
+          : column.align === "center"
+            ? x + (column.width - textWidth) / 2
+            : x + 12;
+
+      drawPdfText(
+        commands,
+        value,
+        textX,
+        firstLineY - lineIndex * 10,
+        fontSize,
+        bold ? "bold" : "regular",
+      );
+    });
     x += column.width;
   });
 }
@@ -383,6 +388,16 @@ function estimatePdfTextWidth(value: string, fontSize: number) {
   return value.length * fontSize * 0.52;
 }
 
+function fitPdfText(value: string, maxWidth: number, fontSize: number) {
+  const maxCharacters = Math.max(
+    1,
+    Math.floor(maxWidth / (fontSize * 0.52)),
+  );
+
+  if (value.length <= maxCharacters) return value;
+  return `${value.slice(0, Math.max(1, maxCharacters - 3)).trimEnd()}...`;
+}
+
 export function createPickupSummaryWorkbook(reportData: PickupSummaryReportData) {
   const sheets = reportData.reports.map((report, index) =>
     report === "pull_sheet"
@@ -407,6 +422,8 @@ function buildPullSheetWorksheet(
         stringCell("Quantity", 1),
         stringCell("Age", 1),
         stringCell("Sex", 1),
+        stringCell("Feather Condition", 1),
+        stringCell("Breeder Status", 1),
         stringCell("Barn Location", 1),
       ],
     },
@@ -416,6 +433,8 @@ function buildPullSheetWorksheet(
         numberCell(row.quantity, 3),
         stringCell(row.age, 2),
         stringCell(row.sex, 2),
+        stringCell(row.featherCondition, 2),
+        stringCell(row.breederStatus, 2),
         stringCell(row.barnLocation, 2),
       ],
     })),
@@ -426,16 +445,18 @@ function buildPullSheetWorksheet(
         stringCell("", 5),
         stringCell("", 5),
         stringCell("", 5),
+        stringCell("", 5),
+        stringCell("", 5),
       ],
     },
   ];
 
   return {
-    columns: [30, 12, 16, 18, 24],
+    columns: [28, 11, 10, 14, 18, 16, 24],
     name: "Pull Sheet",
     path: `xl/worksheets/sheet${sheetId}.xml`,
     relId: `rId${sheetId}`,
-    xml: buildWorksheetXml(rows, [30, 12, 16, 18, 24]),
+    xml: buildWorksheetXml(rows, [28, 11, 10, 14, 18, 16, 24]),
   };
 }
 

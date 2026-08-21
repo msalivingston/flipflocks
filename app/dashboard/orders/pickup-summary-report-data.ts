@@ -2,8 +2,9 @@ export type PickupSummaryExportFormat = "pdf" | "xlsx";
 export type PickupSummaryReport = "pull_sheet" | "order_summary";
 
 export type PickupSummaryLine = {
-  age?: string;
+  ageDays?: number | null;
   barnLocation?: string;
+  breederStatus?: string | null;
   breedOrVariety: string;
   customerEmail: string | null;
   customerName: string;
@@ -46,7 +47,9 @@ export type PickupSummaryPayload = {
 export type PickupSummaryPullSheetRow = {
   age: string;
   barnLocation: string;
+  breederStatus: string;
   breedOrVariety: string;
+  featherCondition: string;
   quantity: number;
   sex: string;
 };
@@ -135,15 +138,16 @@ function buildPullSheetRows(lines: PickupSummaryLine[]) {
   lines.forEach((line) => {
     const sex = line.sex?.trim() || "Not specified";
     const featherCondition = line.featherCondition?.trim() || "";
-    const age = line.age?.trim() || "";
+    const age = formatPullSheetAge(line.ageDays);
     const barnLocation = line.barnLocation?.trim() || "";
-    const breedOrVariety = featherCondition
-      ? `${line.breedOrVariety} - ${featherCondition}`
-      : line.breedOrVariety;
+    const breederStatus = line.breederStatus?.trim() || "Not specified";
+    const breedOrVariety = line.breedOrVariety;
     const key = [
       breedOrVariety,
-      sex,
       age,
+      sex,
+      featherCondition,
+      breederStatus,
       barnLocation,
     ]
       .map((value) => value.toLocaleLowerCase())
@@ -158,21 +162,52 @@ function buildPullSheetRows(lines: PickupSummaryLine[]) {
     rows.set(key, {
       age,
       barnLocation,
+      breederStatus,
       breedOrVariety,
+      featherCondition,
       quantity: line.quantity,
       sex,
     });
   });
 
   return Array.from(rows.values()).sort((a, b) => {
-    const breedSort = a.breedOrVariety.localeCompare(b.breedOrVariety);
+    const barnLocationSort = a.barnLocation.localeCompare(b.barnLocation, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+    if (barnLocationSort !== 0) return barnLocationSort;
+    const breedSort = a.breedOrVariety.localeCompare(b.breedOrVariety, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
     if (breedSort !== 0) return breedSort;
     const sexSort = a.sex.localeCompare(b.sex);
     if (sexSort !== 0) return sexSort;
     const ageSort = a.age.localeCompare(b.age);
     if (ageSort !== 0) return ageSort;
-    return a.barnLocation.localeCompare(b.barnLocation);
+    const featherConditionSort = a.featherCondition.localeCompare(
+      b.featherCondition,
+      undefined,
+      { numeric: true, sensitivity: "base" },
+    );
+    if (featherConditionSort !== 0) return featherConditionSort;
+    return a.breederStatus.localeCompare(b.breederStatus, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
   });
+}
+
+export function formatPullSheetAge(days: number | null | undefined) {
+  if (days == null || !Number.isFinite(days)) return "";
+
+  const wholeDays = Math.floor(days);
+  if (wholeDays < 0) return "";
+
+  const weeks = Math.floor(wholeDays / 7);
+  if (weeks > 26) return `${Math.floor((weeks * 12) / 52)} mo`;
+  if (wholeDays < 7) return `${wholeDays} d`;
+  return `${weeks} wk`;
 }
 
 function toFileDate(value: Date) {

@@ -108,6 +108,7 @@ type SellerOrderItemRow = {
   available_date_snapshot: string | null;
   age_at_sale_days_snapshot: number | null;
   barn_location: string | null;
+  breeding_history_snapshot: string | null;
   feather_condition_snapshot: string | null;
   order_item_source: string | null;
   custom_item_name_snapshot: string | null;
@@ -352,7 +353,7 @@ export function OrdersList() {
         const itemResult = await supabase
           .from("seller_order_item_detail")
           .select(
-            "order_id, order_item_id, inventory_item_id, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, batch_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, feather_condition_snapshot, order_item_source, custom_item_name_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
+            "order_id, order_item_id, inventory_item_id, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, batch_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, breeding_history_snapshot, feather_condition_snapshot, order_item_source, custom_item_name_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
           )
           .eq("store_id", seller.store_id)
           .in("order_id", orderIds)
@@ -1903,6 +1904,9 @@ function PickupSummaryModal({
   });
   const [exportFormat, setExportFormat] =
     useState<PickupSummaryExportFormat>("pdf");
+  const [reportDate, setReportDate] = useState(() =>
+    toDateInputValue(new Date()),
+  );
   const [isGenerating, setIsGenerating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -1976,6 +1980,12 @@ function PickupSummaryModal({
       return;
     }
 
+    const generatedAt = parseReportDate(reportDate);
+    if (!generatedAt) {
+      setMessage("Choose a valid report date.");
+      return;
+    }
+
     const payload = buildPickupSummaryPayload({
       exportFormat,
       includedLines,
@@ -1985,7 +1995,7 @@ function PickupSummaryModal({
     try {
       setIsGenerating(true);
       setMessage(null);
-      await downloadPickupSummaryReports(payload);
+      await downloadPickupSummaryReports(payload, generatedAt);
       setMessage(
         `Reports downloaded: ${payload.overallBirdTotal} birds from ${payload.includedOrders.length} orders.`,
       );
@@ -2186,6 +2196,22 @@ function PickupSummaryModal({
                 onChange={() => toggleReport("order_summary")}
               />
             </div>
+            <label className="mt-4 grid gap-1.5 text-sm font-semibold text-stone-800">
+              Pickup Date
+              <input
+                className="seller-form-field min-h-10 px-3 text-base sm:text-sm"
+                disabled={isGenerating}
+                type="date"
+                value={reportDate}
+                onChange={(event) => {
+                  setReportDate(event.target.value);
+                  setMessage(null);
+                }}
+              />
+              <span className="text-xs font-normal text-stone-600">
+                Shown on the Pull Sheet and used in the download filename.
+              </span>
+            </label>
           </fieldset>
 
           <fieldset className="md:pl-6">
@@ -2368,11 +2394,11 @@ function getPickupSummaryLines(orders: PickupSummaryOrder[]) {
         item.line_subtotal ?? (item.unit_price_snapshot ?? 0) * quantity;
 
       return {
-        age:
-          item.age_at_sale_days_snapshot == null
-            ? ""
-            : formatAgeAtSale(item.age_at_sale_days_snapshot),
+        ageDays: item.age_at_sale_days_snapshot,
         barnLocation: item.barn_location?.trim() ?? "",
+        breederStatus: formatPickupSummaryBreederStatus(
+          item.breeding_history_snapshot,
+        ),
         breedOrVariety: summary.title,
         customerEmail: order.buyer_email_snapshot,
         customerName: formatCustomerName(order),
@@ -2411,6 +2437,27 @@ function formatPickupSummaryFeatherCondition(value: string | null) {
   if (value === "rough") return "Rough";
   if (value === "very_rough") return "Very Rough";
   return null;
+}
+
+function formatPickupSummaryBreederStatus(value: string | null) {
+  if (value === "breeder") return "Breeder";
+  if (value === "never_bred") return "Not bred";
+  return null;
+}
+
+function toDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function parseReportDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function isReadyForPickupSummary(value: string | null) {
