@@ -935,6 +935,11 @@ function NumberField({
           step={prefix ? "0.01" : "1"}
           type="number"
           value={value}
+          onKeyDown={(event) => {
+            if (prefix && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+              event.preventDefault();
+            }
+          }}
           onChange={(event) => onChange(event.target.value)}
         />
       </span>

@@ -374,6 +374,11 @@ function NumberField({
           step={label === "Every" ? "1" : "0.01"}
           type="number"
           value={value}
+          onKeyDown={(event) => {
+            if (label !== "Every" && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+              event.preventDefault();
+            }
+          }}
           onChange={(event) => onChange(event.target.value)}
         />
         {suffix ? (

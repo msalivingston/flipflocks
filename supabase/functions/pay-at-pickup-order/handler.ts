@@ -677,6 +677,13 @@ export function createPayAtPickupHandler(
     }, corsHeaders);
   }
 
+  if (orderRequest.store_slug === "meadowgate-poultry") {
+    return jsonResponse(409, {
+      error: "demo_store_checkout_disabled",
+      message: "Demo store — orders cannot be submitted.",
+    }, corsHeaders);
+  }
+
   const storeId = storefrontStatus.storefront.store_id;
 
   if (typeof storeId !== "string" || !uuidPattern.test(storeId)) {

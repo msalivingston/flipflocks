@@ -14,6 +14,24 @@ export function calculateAgeAtAvailabilityDays(
   return Math.round((availableTime - originTime) / 86_400_000);
 }
 
+export function calculateCurrentBirdAgeDays(
+  hatchDate: string | null | undefined,
+  asOfDate = new Date(),
+) {
+  if (!hatchDate) return null;
+
+  const hatchTime = Date.parse(`${hatchDate}T00:00:00`);
+  if (Number.isNaN(hatchTime)) return null;
+
+  const currentDay = new Date(
+    asOfDate.getFullYear(),
+    asOfDate.getMonth(),
+    asOfDate.getDate(),
+  ).getTime();
+
+  return Math.floor((currentDay - hatchTime) / 86_400_000);
+}
+
 export function formatAgeAtAvailability(days: number | null | undefined) {
   return (
     formatBirdAgeInDays(days, {

@@ -146,6 +146,7 @@ const initialForm: BuyerForm = {
 };
 
 const emptyCartItems: StorefrontCart["items"] = [];
+const demoStoreSlug = "meadowgate-poultry";
 
 export function CheckoutPage({
   cardPaymentsEnabled,
@@ -403,6 +404,7 @@ export function CheckoutPage({
   });
   const paymentUnavailable =
     cardAvailabilityChecked && paymentAvailability.checkoutBlocked;
+  const isDemoStore = store.store_slug === demoStoreSlug;
   const activeStepActionLabel =
     activeStep === "contact"
       ? "Continue to pickup"
@@ -418,6 +420,7 @@ export function CheckoutPage({
         ? handleFulfillmentContinue
         : handleReviewSubmit;
   const activeStepDisabled =
+    isDemoStore ||
     isSubmitting ||
     isChecking ||
     isLoadingPickupOptions ||
@@ -574,6 +577,10 @@ export function CheckoutPage({
 
   function handleReviewSubmit() {
     setErrorMessage(null);
+    if (isDemoStore) {
+      setErrorMessage("Demo store — orders cannot be submitted.");
+      return;
+    }
     if (!validateCheckoutPath("all")) return;
 
     setCompletedSteps((current) => ({
@@ -607,6 +614,11 @@ export function CheckoutPage({
 
   async function submitOrder() {
     setErrorMessage(null);
+
+    if (isDemoStore) {
+      setErrorMessage("Demo store — orders cannot be submitted.");
+      return;
+    }
 
     if (checkoutItems.length === 0) {
       setErrorMessage("Your cart is empty.");
@@ -1162,6 +1174,11 @@ export function CheckoutPage({
               {paymentUnavailable ? (
                 <MobileError>{paymentAvailability.unavailableMessage}</MobileError>
               ) : null}
+              {isDemoStore ? (
+                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
+                  Demo store — orders cannot be submitted.
+                </p>
+              ) : null}
               <div className="rounded-lg bg-[#f3f8ef] p-3 text-sm leading-6 text-stone-700">
                 {paymentUnavailable ? (
                   <>
@@ -1480,9 +1497,15 @@ export function CheckoutPage({
                   {paymentAvailability.unavailableMessage}
                 </p>
               ) : null}
+              {isDemoStore ? (
+                <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
+                  Demo store — orders cannot be submitted.
+                </p>
+              ) : null}
               <StorefrontButton
                 className="mt-3 min-h-10 w-full"
                 disabled={
+                  isDemoStore ||
                   isSubmitting ||
                   isChecking ||
                   isLoadingPickupOptions ||

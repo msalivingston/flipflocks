@@ -226,6 +226,9 @@ Deno.serve(async (request) => {
   if (storefront?.is_publicly_available !== true || typeof storefrontData?.store_id !== "string") {
     return json(storefront?.store_exists ? 409 : 404, { error: "storefront_unavailable" }, cors.headers);
   }
+  if (slug === "meadowgate-poultry" && (body.action === "start" || body.action === "availability")) {
+    return json(409, { error: "demo_store_checkout_disabled", message: "Demo store — orders cannot be submitted." }, cors.headers);
+  }
   const storeId = storefrontData.store_id;
   await cleanStale(storeId);
 

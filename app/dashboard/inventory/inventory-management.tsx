@@ -32,7 +32,8 @@ import {
 } from "../_lib/poultry-product-share-text";
 import {
   calculateAgeAtAvailabilityDays,
-  formatInventoryAgeLabelFromDates,
+  calculateCurrentBirdAgeDays,
+  formatInventoryAgeLabel,
   formatInventoryTypeLabel,
 } from "../_lib/listing-formatters";
 import { buildPublicListingPath } from "../_lib/public-listing-url";
@@ -279,7 +280,7 @@ type InventoryShareDialogState = LivePoultryShareProduct;
 const unsavedWarning =
   "You have unsaved inventory changes. Save or discard before leaving.";
 const ageTooltipText =
-  "Age shows the first available age until the available date arrives, then updates to the bird’s current age.";
+  "Age is calculated from the hatch date and updates daily. It is shown in weeks through 26 weeks, then in whole months.";
 const reservedTooltipText =
   "Reserved inventory has been sold but not picked up or fulfilled yet.";
 const liveBirdInventorySelect =
@@ -4355,8 +4356,9 @@ function calculateInventoryAgeDays(row: InventoryRow) {
 }
 
 function formatInventoryAge(row: InventoryRow) {
-  return formatInventoryAgeLabelFromDates(row.origin_date, row.available_date)
-    .replace(/ old$/, "");
+  return formatInventoryAgeLabel(
+    calculateCurrentBirdAgeDays(row.origin_date),
+  ).replace(/ old$/, "");
 }
 
 function matchesAgeFilter(row: InventoryRow, ageFilter: AgeFilter) {

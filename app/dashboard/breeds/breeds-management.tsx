@@ -1461,6 +1461,9 @@ function BreedLibraryPanel({
 }) {
   const [query, setQuery] = useState("");
   const [speciesFilter, setSpeciesFilter] = useState("all");
+  const [selectedBreed, setSelectedBreed] = useState<BreedLibraryItem | null>(
+    null,
+  );
   const hasSearchQuery = query.trim().length > 0;
   const hasSpeciesFilter = speciesFilter !== "all";
   const filteredBreeds = useMemo(() => {
@@ -1488,7 +1491,8 @@ function BreedLibraryPanel({
     : "Try a different species or create a custom breed.";
 
   return (
-    <section
+    <>
+      <section
       aria-labelledby="library-tab"
       className="space-y-2"
       id="library-panel"
@@ -1557,7 +1561,16 @@ function BreedLibraryPanel({
               return (
                 <article
                   key={breed.id}
-                  className="flex min-h-32 flex-col rounded-lg border border-stone-200 bg-white p-3 shadow-sm"
+                  className="flex min-h-32 cursor-pointer flex-col rounded-lg border border-stone-200 bg-white p-3 shadow-sm transition hover:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+                  onClick={() => setSelectedBreed(breed)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedBreed(breed);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                 >
                   <div className="flex items-start gap-2.5">
                     <BreedThumbnail
@@ -1592,7 +1605,10 @@ function BreedLibraryPanel({
                           : "seller-small-button min-h-8 w-full rounded-md border-emerald-200 px-3 text-emerald-900 hover:bg-emerald-50 sm:w-auto"
                       }
                       disabled={isAdded || addingBreedId === breed.id}
-                      onClick={() => onAdd(breed)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onAdd(breed);
+                      }}
                       type="button"
                     >
                       {isAdded
@@ -1608,7 +1624,119 @@ function BreedLibraryPanel({
           </div>
         )}
       </SellerCard>
-    </section>
+      </section>
+      {selectedBreed ? (
+        <BreedLibraryDetailsDialog
+          addingBreedId={addingBreedId}
+          breed={selectedBreed}
+          isAdded={existingBreedIds.has(selectedBreed.id)}
+          speciesName={speciesById.get(selectedBreed.species_id) ?? "Species"}
+          onAdd={() => onAdd(selectedBreed)}
+          onClose={() => setSelectedBreed(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function BreedLibraryDetailsDialog({
+  addingBreedId,
+  breed,
+  isAdded,
+  onAdd,
+  onClose,
+  speciesName,
+}: {
+  addingBreedId: string | null;
+  breed: BreedLibraryItem;
+  isAdded: boolean;
+  onAdd: () => void;
+  onClose: () => void;
+  speciesName: string;
+}) {
+  const title = formatBreedDisplayName(breed.breed_name, breed.variety);
+  const details = [
+    ["Category", breed.category],
+    ["Egg production", breed.annual_egg_production],
+    ["Egg color", breed.egg_color],
+  ].filter((detail): detail is [string, string] => Boolean(detail[1]?.trim()));
+
+  useEffect(() => {
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-stone-950/60 px-3 py-4 sm:items-center"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        aria-labelledby="breed-library-details-title"
+        aria-modal="true"
+        className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+        role="dialog"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-emerald-800">{speciesName}</p>
+            <h2 className="mt-0.5 text-xl font-semibold text-stone-950" id="breed-library-details-title">
+              {title}
+            </h2>
+          </div>
+          <button
+            aria-label="Close breed details"
+            className="rounded-md px-2 py-1 text-2xl leading-none text-stone-500 hover:bg-stone-100 hover:text-stone-950"
+            onClick={onClose}
+            type="button"
+          >
+            ×
+          </button>
+        </div>
+        <div className="min-h-0 space-y-5 overflow-y-auto px-5 py-4">
+          {breed.image_url ? (
+            <BreedThumbnail imageUrls={[breed.image_url]} name={title} />
+          ) : null}
+          {breed.description?.trim() ? (
+            <section>
+              <h3 className="text-sm font-semibold text-stone-950">Description</h3>
+              <p className="mt-1.5 whitespace-pre-line text-sm leading-6 text-stone-700">
+                {breed.description}
+              </p>
+            </section>
+          ) : null}
+          {details.length > 0 ? (
+            <dl className="grid gap-3 sm:grid-cols-2">
+              {details.map(([label, value]) => (
+                <div className="rounded-md bg-stone-50 px-3 py-2" key={label}>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-stone-500">{label}</dt>
+                  <dd className="mt-1 text-sm text-stone-800">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+        </div>
+        <div className="flex flex-col-reverse gap-2 border-t border-stone-200 bg-stone-50 px-5 py-4 sm:flex-row sm:justify-end">
+          <button className="seller-secondary-button" onClick={onClose} type="button">
+            Close
+          </button>
+          <button
+            className="seller-primary-button"
+            disabled={isAdded || addingBreedId === breed.id}
+            onClick={onAdd}
+            type="button"
+          >
+            {isAdded ? "Already in Catalog" : addingBreedId === breed.id ? "Adding" : "Add to Catalog"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

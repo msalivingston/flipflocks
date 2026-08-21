@@ -1086,6 +1086,11 @@ function BatchRowEditor({
             step="0.01"
             type="number"
             value={row.price}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                event.preventDefault();
+              }
+            }}
             onBlur={() => onTouch("price")}
             onChange={(event) => onUpdate({ price: event.target.value })}
           />
@@ -1451,6 +1456,11 @@ function PricingNumberField({
           step={suffix ? "1" : "0.01"}
           type="number"
           value={value}
+          onKeyDown={(event) => {
+            if (!suffix && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+              event.preventDefault();
+            }
+          }}
           onChange={(event) => onChange(event.target.value)}
         />
         {suffix ? (

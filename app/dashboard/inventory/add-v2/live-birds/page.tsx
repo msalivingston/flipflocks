@@ -3822,7 +3822,7 @@ function getEditSaveDisabledReason({
 }) {
   if (!isEditMode) return null;
   if (draftLoading) return "Listing is still loading.";
-  if (saveStatus === "saving") return "Save is already in progress.";
+  if (saveStatus === "saving") return null;
   if (!hasMeaningfulUnsavedChanges) return "No unsaved changes.";
 
   return blockingIssues[0] ?? null;
@@ -5162,9 +5162,7 @@ function getPublishDisabledReason({
 }) {
   if (isPublished) return "Published to storefront.";
 
-  if (saveDraftStatus === "saving") {
-    return "Save is already in progress.";
-  }
+  if (saveDraftStatus === "saving") return null;
 
   if (loadedDraftSpeciesDisabledReason) {
     return loadedDraftSpeciesDisabledReason;
