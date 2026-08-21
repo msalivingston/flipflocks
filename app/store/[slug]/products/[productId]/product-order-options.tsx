@@ -489,13 +489,16 @@ export function ProductOrderOptions({
               Subtotal {formatCurrency(addedSummary.subtotal)}
             </p>
             <div className="flex flex-wrap gap-2">
-              <button
+              <StorefrontButton
                 className="storefront-primary-border storefront-primary-color min-h-10 rounded-md border bg-white/60 px-4 text-sm font-semibold hover:bg-white"
-                onClick={() => setAddedItems(null)}
-                type="button"
+                href={buildEmbeddedOrderModeHref(
+                  `/store/${product.storeSlug}`,
+                  orderMode,
+                )}
+                variant="secondary"
               >
                 Continue shopping
-              </button>
+              </StorefrontButton>
               <StorefrontButton
                 className="min-h-10 hover:bg-white"
                 href={buildEmbeddedOrderModeHref(

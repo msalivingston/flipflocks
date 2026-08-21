@@ -227,6 +227,28 @@ test("focused detail routes cover all listing families while ordinary chrome rem
   }
 });
 
+test("the post-add confirmation explicitly returns each listing type to its storefront root", async () => {
+  const optionPaths = [
+    "app/store/[slug]/products/[productId]/product-order-options.tsx",
+    "app/store/[slug]/equipment/[equipmentItemId]/equipment-order-options.tsx",
+    "app/store/[slug]/processed-poultry/[processedPoultryItemId]/processed-poultry-order-options.tsx",
+  ];
+
+  for (const optionPath of optionPaths) {
+    const source = await read(optionPath);
+    const confirmation = source.slice(
+      source.indexOf('<h3 className="font-semibold text-emerald-950">Added to cart</h3>'),
+      source.indexOf("View cart", source.indexOf('<h3 className="font-semibold text-emerald-950">Added to cart</h3>')),
+    );
+
+    assert.match(confirmation, /Continue shopping/);
+    assert.match(confirmation, /buildEmbeddedOrderModeHref\(/);
+    assert.match(confirmation, /`\/store\/\$\{(?:product\.storeSlug|item\.store_slug)\}`/);
+    assert.match(confirmation, /orderMode/);
+    assert.doesNotMatch(confirmation, /setAddedItem\(null\)|setAddedItems\(null\)/);
+  }
+});
+
 test("focused chrome is compact and omits ordinary navigation and footer", async () => {
   const [source, cartLink] = await Promise.all([
     read("app/store/[slug]/storefront-shell-components.tsx"),
