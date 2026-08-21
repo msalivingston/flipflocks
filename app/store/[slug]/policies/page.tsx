@@ -15,9 +15,9 @@ import { storefrontSerifClass } from "../storefront-fonts";
 import { StorefrontChrome } from "../storefront-shell-components";
 import {
   loadStorefrontAccess,
-  type StorefrontCustomPolicy,
   type StorefrontHome,
 } from "../storefront-data";
+import { buildStorefrontPolicySections } from "../storefront-policies";
 import { NOINDEX_ROBOTS } from "@/lib/seo-config";
 import {
   buildPublicMetadata,
@@ -129,7 +129,8 @@ export default async function StorefrontPoliciesPage({
   if (visibilityDecision.action === "redirect") redirect(visibilityDecision.url);
   if (visibilityDecision.action === "deny") notFound();
 
-  const policySections = buildPolicySections({
+  const policySections = buildStorefrontPolicySections({
+    cancellationPolicy: store.cancellation_policy,
     customPolicies: store.custom_policies,
     otherPolicies: store.other_policies,
     pickupPolicy: store.pickup_policy,
@@ -281,51 +282,4 @@ function InfoCard({
       </div>
     </section>
   );
-}
-
-function buildPolicySections({
-  customPolicies,
-  otherPolicies,
-  pickupPolicy,
-}: {
-  customPolicies?: StorefrontCustomPolicy[] | null;
-  otherPolicies?: string | null;
-  pickupPolicy: string | null;
-}) {
-  const sections: Array<{ body: string; title: string }> = [];
-
-  addSection(sections, "Pickup policy", pickupPolicy);
-  addSection(sections, "Other policies", otherPolicies);
-
-  for (const policy of normalizeCustomPolicies(customPolicies)) {
-    addSection(sections, policy.title, policy.body);
-  }
-
-  return sections;
-}
-
-function addSection(
-  sections: Array<{ body: string; title: string }>,
-  title: string,
-  body: string | null | undefined,
-) {
-  const trimmed = body?.trim();
-
-  if (!trimmed) return;
-
-  sections.push({ body: trimmed, title });
-}
-
-function normalizeCustomPolicies(
-  policies: StorefrontCustomPolicy[] | null | undefined,
-) {
-  if (!Array.isArray(policies)) return [];
-
-  return policies
-    .map((policy) => ({
-      body: policy.body?.trim() ?? "",
-      title: policy.title?.trim() ?? "",
-    }))
-    .filter((policy) => policy.title && policy.body)
-    .slice(0, 4);
 }

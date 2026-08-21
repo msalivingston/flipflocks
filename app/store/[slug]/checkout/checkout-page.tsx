@@ -29,6 +29,10 @@ import {
   type StorefrontPickupOption,
 } from "../storefront-data";
 import {
+  buildStorefrontPolicySections,
+  type StorefrontPolicySection,
+} from "../storefront-policies";
+import {
   StorefrontButton,
   StorefrontCard,
   StorefrontInput,
@@ -732,6 +736,24 @@ export function CheckoutPage({
     handleReviewSubmit();
   }
 
+  const policySections = buildStorefrontPolicySections({
+    cancellationPolicy: store.cancellation_policy,
+    customPolicies: store.custom_policies,
+    otherPolicies: store.other_policies,
+    pickupPolicy: store.pickup_policy,
+  });
+  const checkoutPolicySections = policySections.some(
+    (section) => section.title === "Pickup policy",
+  )
+    ? policySections
+    : [
+        {
+          body: "Pickup details coming soon.",
+          title: "Pickup policy",
+        },
+        ...policySections,
+      ];
+
   if (isConfirmingCardPayment) {
     const isCancelingCardCheckout = Boolean(cardCheckoutCancellationId);
     return (
@@ -1073,12 +1095,7 @@ export function CheckoutPage({
                 <summary className="cursor-pointer font-bold text-stone-900">
                   View policies
                 </summary>
-                <div className="mt-2 grid gap-2 whitespace-pre-line">
-                  <p>{store.pickup_policy || "Pickup details coming soon."}</p>
-                  {store.cancellation_policy ? (
-                    <p>{store.cancellation_policy}</p>
-                  ) : null}
-                </div>
+                <CheckoutPolicyContent policySections={checkoutPolicySections} />
               </details>
 
               {pickupOptionsError ? (
@@ -1550,12 +1567,10 @@ export function CheckoutPage({
               <h2 className="text-base font-semibold text-stone-950">
                 Pickup and policies
               </h2>
-              <div className="mt-2 grid gap-1.5 whitespace-pre-line text-xs leading-5 text-stone-600">
-                <p>{store.pickup_policy || "Pickup details coming soon."}</p>
-                {store.cancellation_policy ? (
-                  <p>{store.cancellation_policy}</p>
-                ) : null}
-              </div>
+              <CheckoutPolicyContent
+                compact
+                policySections={checkoutPolicySections}
+              />
             </StorefrontSummaryCard>
           </aside>
         </div>
@@ -1571,6 +1586,29 @@ export function CheckoutPage({
         </>
       )}
     </StorefrontPage>
+  );
+}
+
+function CheckoutPolicyContent({
+  compact = false,
+  policySections,
+}: {
+  compact?: boolean;
+  policySections: StorefrontPolicySection[];
+}) {
+  return (
+    <div
+      className={`mt-2 grid whitespace-pre-line text-stone-600 ${
+        compact ? "gap-2 text-xs leading-5" : "gap-3 text-sm leading-5"
+      }`}
+    >
+      {policySections.map((section) => (
+        <div className="grid gap-0.5" key={`${section.title}:${section.body}`}>
+          <p className="font-semibold text-stone-900">{section.title}</p>
+          <p>{section.body}</p>
+        </div>
+      ))}
+    </div>
   );
 }
 

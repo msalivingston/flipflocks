@@ -56,8 +56,9 @@ test("storefront and checkout use pickup_policy only", () => {
   assert.match(sources[2], /showPickup: Boolean\(store\.pickup_policy\)/);
   assert.match(
     sources[3],
-    /store\.pickup_policy \|\| "Pickup details coming soon\."/,
+    /pickupPolicy: store\.pickup_policy/,
   );
+  assert.match(sources[3], /body: "Pickup details coming soon\."/);
 });
 
 test("order emails use policy and preserve order-specific notes", () => {
