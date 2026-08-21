@@ -8,6 +8,7 @@ import { isCurrentUserPlatformAdmin } from "../_lib/admin-auth";
 
 const adminNavItems = [
   { label: "Stores", href: "/admin/stores" },
+  { label: "Webinars", href: "/admin/webinars" },
   { label: "FAQs", href: "/admin/faqs" },
   { label: "Breeds", href: "/admin/breeds" },
   { label: "Breed Images", href: "/admin/breed-images" },

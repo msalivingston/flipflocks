@@ -143,3 +143,28 @@ export type AdminSiteFaqRow = {
   created_at: string;
   updated_at: string;
 };
+
+export type AdminWebinarRow = {
+  id: string;
+  title: string;
+  slug: string;
+  short_description: string;
+  starts_at: string;
+  timezone: string;
+  join_url: string;
+  status: "draft" | "open" | "closed" | "completed";
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminWebinarRegistrationRow = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  business_type: string;
+  annual_birds_sold: string;
+  referral_source: string | null;
+  attended: boolean;
+  created_at: string;
+};

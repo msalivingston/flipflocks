@@ -1,0 +1,11 @@
+"use client";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import type { AdminWebinarRow } from "../_lib/admin-types";
+import { AdminCard, AdminErrorState, AdminLoadingState, AdminPageHeader, AdminStatusBadge, formatDateTime } from "./admin-ui";
+
+export function AdminWebinarsList() { const [rows, setRows] = useState<AdminWebinarRow[]>([]); const [counts, setCounts] = useState<Record<string, number>>({}); const [error, setError] = useState<string | null>(null); const [loading, setLoading] = useState(true);
+  useEffect(() => { (async () => { const result = await supabase.from("webinars").select("*").order("starts_at", { ascending: false }); if (result.error) { setError(result.error.message); setLoading(false); return; } const webinars = (result.data ?? []) as AdminWebinarRow[]; const countResults = await Promise.all(webinars.map((row) => supabase.from("webinar_registrations").select("id", { count: "exact", head: true }).eq("webinar_id", row.id))); setRows(webinars); setCounts(Object.fromEntries(webinars.map((row, index) => [row.id, countResults[index].count ?? 0]))); setLoading(false); })(); }, []);
+  return <><AdminPageHeader eyebrow="Platform Admin" title="Webinars" description="Create and manage reusable FlockFront webinar registration pages." action={<Link className="seller-primary-button" href="/admin/webinars/new">Create webinar</Link>} /><div className="mx-auto w-full max-w-7xl px-5 py-5 sm:px-7">{loading ? <AdminLoadingState label="Loading webinars" /> : error ? <AdminErrorState message={error} /> : <AdminCard>{rows.length ? <div className="divide-y divide-stone-200">{rows.map((row) => <Link className="grid gap-2 p-4 transition hover:bg-[#f7faf8] md:grid-cols-[1fr_auto_auto] md:items-center" href={`/admin/webinars/${row.id}`} key={row.id}><div><h2 className="font-bold text-stone-950">{row.title}</h2><p className="mt-1 text-sm text-stone-600">{formatDateTime(row.starts_at)} · /webinars/{row.slug}</p></div><AdminStatusBadge value={row.status} /><p className="text-sm font-semibold text-stone-700">{counts[row.id] ?? 0} registrations</p></Link>)}</div> : <p className="p-5 text-sm text-stone-600">No webinars yet.</p>}</AdminCard>}</div></>;
+}
