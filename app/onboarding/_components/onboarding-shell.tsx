@@ -90,14 +90,14 @@ export function OnboardingShell({
             }`}
           >
             <Image
-              src="/onboarding/farm-chickens-golden-hour.png"
+              src="/onboarding/IMG_6175.jpeg"
               alt=""
               fill
               priority
               sizes="(max-width: 1024px) 100vw, 72vw"
-              className="-scale-x-100 object-cover object-[center_78%] lg:object-[center_82%]"
+              className="object-cover object-[left_74%] lg:object-[left_78%]"
             />
-            <div className="absolute inset-0 bg-linear-to-b from-[#fff9ed]/58 via-[#fff7e7]/12 to-[#261807]/2" />
+            <div className="absolute inset-0 bg-linear-to-b from-[#fff9ed]/96 via-[#fff7e7]/12 to-[#261807]/2" />
           </div>
 
           <div
@@ -133,7 +133,7 @@ export function OnboardingShell({
                 {subhead}
               </p>
               <p
-                className={`max-w-sm font-normal text-stone-950 ${
+                className={`max-w-sm font-bold text-stone-950 ${
                   compactOnMobile
                     ? "mt-2 text-base leading-6 lg:mt-2.5 lg:leading-7"
                     : "mt-2.5 text-base leading-7"

@@ -118,8 +118,8 @@ export default async function AboutPage() {
         </header>
       </div>
 
-      <section className="relative overflow-hidden border-y border-[#eee4d4] bg-[#f7f1e6]">
-        <div className="absolute inset-y-0 left-1/2 w-full max-w-[1916px] -translate-x-1/2">
+      <section className="relative mx-auto max-w-[1350px] overflow-hidden border-y border-[#eee4d4] bg-[#f7f1e6]">
+        <div className="absolute inset-y-0 left-1/2 w-full max-w-[1350px] -translate-x-1/2">
           <Image
             src="/about-page/about-banner-goose-20260714-1406.png"
             alt="White goose standing in grass on the farm"
@@ -149,14 +149,14 @@ export default async function AboutPage() {
       </section>
 
       <section className="px-5 py-[25px] max-[899px]:px-4 md:px-8 md:py-[33px]">
-        <div className="mx-auto max-w-3xl">
-          <p className="font-serif text-[1.35rem] leading-[1.5] text-[#123d27] md:text-[1.55rem]">
+        <div className="mx-auto grid max-w-5xl items-center gap-8 md:grid-cols-[1.1fr_0.9fr]">
+          <p className="font-serif text-[1.35rem] leading-[1.5] text-[#123d27] md:col-span-2 md:text-[1.55rem]">
             After ten years of selling poultry, I have learned that a good
             online storefront sells more birds and saves a huge amount
             of time.
           </p>
-
-          <div className="mt-7 space-y-6 text-[1.05rem] leading-[1.5] text-[#243027]">
+          <div className="md:order-3">
+            <div className="space-y-6 text-[1.05rem] leading-[1.5] text-[#243027]">
             <p>
               Poultry sellers deal with a very particular kind of chaos. Birds
               grow, prices change, availability changes, Facebook posts
@@ -180,6 +180,16 @@ export default async function AboutPage() {
               families raise their own food and supporting a more humane
               alternative to industrial poultry production.
             </p>
+            </div>
+          </div>
+          <div className="relative order-last min-h-[300px] overflow-hidden rounded-lg shadow-[0_8px_24px_rgb(39_31_18/0.08)] md:order-2 md:min-h-[540px]">
+            <Image
+              src="/about-page/IMG_9840.jpg"
+              alt="A poultry keeper with chickens at sunset"
+              fill
+              sizes="(min-width: 768px) 400px, 100vw"
+              className="object-cover object-[center_20%]"
+            />
           </div>
         </div>
       </section>

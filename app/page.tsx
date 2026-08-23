@@ -19,7 +19,7 @@ export const metadata: Metadata = buildPublicMetadata({
   image: {
     alt: "Chickens in a pasture near a barn at golden hour",
     height: 724,
-    url: "/landing-page/hero-image.png",
+    url: "/landing-page/IMG_0538.jpeg",
     width: 2172,
   },
   largeImage: true,
@@ -167,12 +167,12 @@ export default async function Home() {
       />
       <section className="relative isolate min-h-[500px] overflow-hidden text-white max-[899px]:min-h-[390px] md:min-h-[560px]">
         <Image
-          src="/landing-page/hero-image.png"
+          src="/landing-page/IMG_0538.jpeg"
           alt="Chickens in a pasture near a barn at golden hour"
           fill
           priority
           sizes="100vw"
-          className="object-cover object-[78%_center] brightness-105"
+          className="object-cover object-[78%_45%] brightness-105"
         />
         <div className="absolute inset-0 bg-[#160f08]/28" />
         <div className="absolute inset-0 bg-linear-to-b from-black/46 via-black/20 to-black/34" />
