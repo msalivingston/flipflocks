@@ -1,6 +1,6 @@
 "use client";
 
-import { formatLiveBirdAdvancedDetails } from "@/lib/live-bird-advanced-attributes";
+import { formatFeatherCondition } from "@/lib/live-bird-advanced-attributes";
 import { formatBirdAgeInDays } from "@/lib/bird-age";
 import {
   formatCurrency,
@@ -42,6 +42,7 @@ export type PrintableOrderItem = {
   breed_display_name_snapshot: string | null;
   inventory_type_snapshot: string | null;
   custom_inventory_label_snapshot: string | null;
+  barn_location?: string | null;
   breeding_history_snapshot?: string | null;
   feather_condition_snapshot?: string | null;
   hatch_date_snapshot: string | null;
@@ -266,18 +267,17 @@ function getPrintableItemTitle(item: PrintableOrderItem) {
   return item.custom_item_name_snapshot || item.breed_display_name_snapshot;
 }
 
-function getPrintableItemDetails(item: PrintableOrderItem) {
+export function getPrintableItemDetails(item: PrintableOrderItem) {
   const isCustomItem = item.order_item_source === "custom";
   const isEquipmentItem = item.order_item_source === "equipment_inventory";
   const isProcessedPoultryItem =
     item.order_item_source === "processed_poultry_inventory";
+  const isLiveBirdItem =
+    item.order_item_source === "listing_inventory" ||
+    item.order_item_source === "inventory";
   const label = formatInventoryLabel({
     custom_inventory_label: item.custom_inventory_label_snapshot,
     inventory_type: item.inventory_type_snapshot,
-  });
-  const advancedBirdDetails = formatLiveBirdAdvancedDetails({
-    breedingHistory: item.breeding_history_snapshot,
-    featherCondition: item.feather_condition_snapshot,
   });
 
   if (isCustomItem) return ["Custom item"];
@@ -287,15 +287,36 @@ function getPrintableItemDetails(item: PrintableOrderItem) {
       .filter((detail): detail is string => Boolean(detail));
   }
 
+  if (isLiveBirdItem) {
+    return [
+      item.species_name_snapshot,
+      formatSellerItemDetail(label),
+      formatBirdAgeInDays(item.age_at_sale_days_snapshot),
+      formatFeatherCondition(item.feather_condition_snapshot),
+      formatBarnLocation(item.barn_location),
+      formatBreedingStatus(item.breeding_history_snapshot),
+    ].filter((detail): detail is string => Boolean(detail));
+  }
+
   return [
     item.species_name_snapshot,
     formatSellerItemDetail(label),
-    advancedBirdDetails,
     formatBirdAgeInDays(item.age_at_sale_days_snapshot),
     item.hatch_date_snapshot
       ? `Hatched ${formatShortDate(item.hatch_date_snapshot)}`
       : null,
   ].filter((detail): detail is string => Boolean(detail));
+}
+
+function formatBarnLocation(value: string | null | undefined) {
+  const location = value?.trim();
+  return location ? `Barn: ${location}` : null;
+}
+
+function formatBreedingStatus(value: string | null | undefined) {
+  if (value === "never_bred") return "Not bred";
+  if (value === "breeder") return "Breeder";
+  return null;
 }
 
 function formatSellerItemDetail(value: string | null) {

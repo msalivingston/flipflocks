@@ -102,6 +102,7 @@ type SellerOrderItemRow = {
   breed_display_name_snapshot: string;
   inventory_type_snapshot: string;
   custom_inventory_label_snapshot: string | null;
+  barn_location: string | null;
   breeding_history_snapshot: string | null;
   feather_condition_snapshot: string | null;
   hatch_date_snapshot: string | null;
@@ -134,6 +135,11 @@ type SellerMediaRow = {
   moderation_status: string;
   asset_status: string;
   visibility_status: string;
+};
+
+type SellerInventoryLocationRow = {
+  barn_location: string | null;
+  inventory_item_id: string;
 };
 
 type OrderDetailState = {
@@ -241,7 +247,45 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         return;
       }
 
-      const items = itemResult.data ?? [];
+      const sourceItems = itemResult.data ?? [];
+      const inventoryItemIds = sourceItems
+        .map((item) => item.inventory_item_id)
+        .filter((id): id is string => Boolean(id));
+      let items: SellerOrderItemRow[] = sourceItems.map((item) => ({
+        ...item,
+        barn_location: null,
+      }));
+
+      if (inventoryItemIds.length > 0) {
+        const locationResult = await supabase
+          .from("seller_inventory_management")
+          .select("inventory_item_id, barn_location")
+          .eq("store_id", seller.store_id)
+          .in("inventory_item_id", inventoryItemIds)
+          .returns<SellerInventoryLocationRow[]>();
+
+        if (!isMounted) return;
+
+        if (locationResult.error) {
+          setError(locationResult.error.message);
+          setIsLoading(false);
+          return;
+        }
+
+        const barnLocationByInventoryId = new Map(
+          (locationResult.data ?? []).map((item) => [
+            item.inventory_item_id,
+            item.barn_location,
+          ]),
+        );
+        items = items.map((item) => ({
+          ...item,
+          barn_location: item.inventory_item_id
+            ? barnLocationByInventoryId.get(item.inventory_item_id) ?? null
+            : null,
+        }));
+      }
+
       const mediaByItemId = await loadOrderItemMedia(items, seller.store_id);
 
       if (!isMounted) return;

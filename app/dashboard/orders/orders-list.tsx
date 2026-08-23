@@ -608,12 +608,19 @@ export function OrdersList() {
       supabase
         .from("seller_order_item_detail")
         .select(
-          "order_id, order_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, line_subtotal",
+          "order_id, order_item_id, inventory_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, breeding_history_snapshot, feather_condition_snapshot, hatch_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, line_subtotal",
         )
         .eq("store_id", seller.store_id)
         .in("order_id", orderIds)
         .order("created_at", { ascending: true })
-        .returns<Array<PrintableOrderItem & { order_id: string }>>(),
+        .returns<
+          Array<
+            PrintableOrderItem & {
+              inventory_item_id: string | null;
+              order_id: string;
+            }
+          >
+        >(),
       supabase
         .from("orders")
         .select(
@@ -640,6 +647,38 @@ export function OrdersList() {
       return;
     }
 
+    const printableItems = itemResult.data ?? [];
+    const inventoryItemIds = Array.from(
+      new Set(
+        printableItems
+          .map((item) => item.inventory_item_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+    let barnLocationByInventoryId = new Map<string, string | null>();
+
+    if (inventoryItemIds.length > 0) {
+      const locationResult = await supabase
+        .from("seller_inventory_management")
+        .select("inventory_item_id, barn_location")
+        .eq("store_id", seller.store_id)
+        .in("inventory_item_id", inventoryItemIds)
+        .returns<SellerInventoryLocationRow[]>();
+
+      if (locationResult.error) {
+        setBulkPrintError("One or more selected orders could not be loaded for printing.");
+        setIsBulkPrintLoading(false);
+        return;
+      }
+
+      barnLocationByInventoryId = new Map(
+        (locationResult.data ?? []).map((item) => [
+          item.inventory_item_id,
+          item.barn_location,
+        ]),
+      );
+    }
+
     const fulfillmentById = new Map(
       (fulfillmentResult.data ?? []).map((row) => [row.id, row]),
     );
@@ -659,7 +698,14 @@ export function OrdersList() {
         ];
       }),
     );
-    const itemsByOrderId = groupPrintableItemsByOrderId(itemResult.data ?? []);
+    const itemsByOrderId = groupPrintableItemsByOrderId(
+      printableItems.map((item) => ({
+        ...item,
+        barn_location: item.inventory_item_id
+          ? barnLocationByInventoryId.get(item.inventory_item_id) ?? null
+          : null,
+      })),
+    );
     const missingOrder = orderIds.find((orderId) => !ordersById.has(orderId));
 
     if (missingOrder) {
@@ -3280,7 +3326,12 @@ function groupOrderItemsByOrderId(items: SellerOrderItemRow[]) {
 }
 
 function groupPrintableItemsByOrderId(
-  items: Array<PrintableOrderItem & { order_id: string }>,
+  items: Array<
+    PrintableOrderItem & {
+      inventory_item_id: string | null;
+      order_id: string;
+    }
+  >,
 ) {
   return items.reduce<Record<string, PrintableOrderItem[]>>((groups, item) => {
     const { order_id: orderId, ...printableItem } = item;
