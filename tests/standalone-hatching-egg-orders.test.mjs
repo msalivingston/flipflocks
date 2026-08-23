@@ -101,12 +101,15 @@ test("shows standalone eggs only in All and Hatching eggs", () => {
   }
 });
 
-test("does not offer zero-quantity standalone eggs", () => {
+test("seller manual inventory keeps valid zero-quantity standalone eggs selectable", () => {
   const row = inventoryModule.normalizeHatchingEggInventoryRow({
     ...standaloneEgg,
     quantity_available: 0,
   });
-  assert.deepEqual(inventoryModule.getBrowseInventoryRows([row], "all", ""), []);
+  const results = inventoryModule.getBrowseInventoryRows([row], "all", "");
+
+  assert.deepEqual(results.map((item) => item.id), ["egg-1"]);
+  assert.equal(results[0]?.allowInventoryOverride, true);
 });
 
 test("storefront purchase options preserve the public view can_checkout value", () => {

@@ -378,11 +378,13 @@ function OrderItemRow({
     : line.savedItemDetail || line.search;
   const quantity = Number(line.quantity || 0);
   const unitPrice = Number(line.unitPrice || 0);
+  const trackedInventory =
+    (selectedItem?.quantity_available ?? 0) + inventoryQuantityCredit;
   const exceedsAvailable =
     line.type === "inventory" &&
     selectedItem != null &&
     isPositiveWholeNumber(line.quantity) &&
-    quantity > selectedItem.quantity_available + inventoryQuantityCredit;
+    quantity > trackedInventory;
 
   return (
     <div className="py-3 lg:px-1 lg:py-2">
@@ -419,7 +421,8 @@ function OrderItemRow({
               </p>
               {exceedsAvailable ? (
                 <p className="mt-1 text-xs font-semibold text-amber-800">
-                  Quantity exceeds available inventory and cannot be saved.
+                  Tracked inventory: {trackedInventory}. This order uses {quantity}.
+                  Inventory will be reduced to 0.
                 </p>
               ) : null}
             </>

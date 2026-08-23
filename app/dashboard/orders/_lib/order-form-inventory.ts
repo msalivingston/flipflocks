@@ -49,7 +49,7 @@ export function normalizeHatchingEggInventoryRow(
     : null;
 
   return {
-    allowInventoryOverride: false,
+    allowInventoryOverride: true,
     available_date: row.available_date,
     category: "hatching_eggs",
     detailLabel: [row.species_name, availability]
@@ -100,7 +100,7 @@ export function normalizeEquipmentInventoryRow(
   row: EquipmentInventoryRow,
 ): InventorySearchRow {
   return {
-    allowInventoryOverride: false,
+    allowInventoryOverride: true,
     category: "equipment",
     detailLabel: [row.category, row.condition].filter(Boolean).join(" · "),
     effective_unit_price: row.price ?? 0,
@@ -116,7 +116,7 @@ export function normalizeProcessedPoultryInventoryRow(
   row: ProcessedPoultryInventoryRow,
 ): InventorySearchRow {
   return {
-    allowInventoryOverride: false,
+    allowInventoryOverride: true,
     category: "processed_poultry",
     detailLabel: [row.product_type, row.poultry_type, row.package_size]
       .filter(Boolean)
@@ -134,7 +134,6 @@ export function filterInventory(inventory: InventorySearchRow[], query: string) 
   const normalized = query.trim().toLowerCase();
 
   return inventory.filter((item) => {
-    if ((item.quantity_available ?? 0) <= 0) return false;
     if (!normalized) return false;
 
     return [
@@ -155,7 +154,6 @@ export function getBrowseInventoryRows(
 
   return inventory
     .filter((item) => {
-      if ((item.quantity_available ?? 0) <= 0) return false;
       if (filter !== "all" && getBrowseInventoryCategory(item) !== filter) {
         return false;
       }

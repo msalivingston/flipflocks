@@ -6,6 +6,22 @@ const migrationPath = new URL(
   "../supabase/migrations/20260730200000_unified_order_inventory_reconciliation.sql",
   import.meta.url,
 );
+const sellerOversellMigrationPath = new URL(
+  "../supabase/migrations/20260823100000_seller_manual_inventory_oversell.sql",
+  import.meta.url,
+);
+const sellerOversellFixMigrationPath = new URL(
+  "../supabase/migrations/20260823110000_fix_seller_oversell_uuid_aggregate.sql",
+  import.meta.url,
+);
+const sellerOversellStagingFixMigrationPath = new URL(
+  "../supabase/migrations/20260823120000_fix_seller_edit_oversell_staging_update.sql",
+  import.meta.url,
+);
+const sellerQuantityOversellMigrationPath = new URL(
+  "../supabase/migrations/20260823130000_simplify_seller_manual_inventory_oversell.sql",
+  import.meta.url,
+);
 const manualOrderPath = new URL(
   "../app/dashboard/orders/new/new-manual-order.tsx",
   import.meta.url,
@@ -224,7 +240,7 @@ test("historical and unversioned unsafe overloads remain uncallable", async () =
   );
 });
 
-test("order UIs no longer submit inventory-authority flags or expose opt-outs", async () => {
+test("seller order UIs allow intentional tracked-inventory overrides", async () => {
   const [manual, editSave, editor, editOrder] = await Promise.all([
     readFile(manualOrderPath, "utf8"),
     readFile(editSavePath, "utf8"),
@@ -234,14 +250,99 @@ test("order UIs no longer submit inventory-authority flags or expose opt-outs", 
 
   assert.doesNotMatch(manual, /allow_inventory_override/);
   assert.doesNotMatch(editSave, /change_inventory/);
-  assert.doesNotMatch(editSave, /allowInventoryOversell:\s*true/);
+  assert.match(editSave, /allowInventoryOversell:\s*true/);
   assert.doesNotMatch(editor, /allowInventoryOversell/);
   assert.doesNotMatch(editor, /InventoryAdjustmentCheckbox/);
   assert.doesNotMatch(editOrder, /inventoryAdjustmentChoices/);
+  assert.match(editor, /Tracked inventory:/);
+  assert.match(editor, /Inventory will be reduced to 0\./);
+  assert.match(manual, /allowInventoryOversell:\s*true/);
+});
+
+test("seller-only oversell migration floors stock and records actual debits", async () => {
+  const source = await readFile(sellerOversellMigrationPath, "utf8");
+
+  for (const itemType of [
+    "listing_inventory",
+    "equipment_inventory",
+    "processed_poultry_inventory",
+    "hatching_egg_inventory",
+  ]) {
+    assert.match(source, new RegExp(itemType));
+  }
+
+  assert.match(source, /actual_debit = least\(before_quantity, requested_quantity\)/);
+  assert.match(source, /inventory_debited_quantity = coalesce\(source\.actual_debit, 0\)/);
+  assert.match(source, /when requested_quantity >= prior_quantity[\s\S]*least\(before_quantity, requested_quantity - prior_quantity\)/);
+  assert.match(source, /else least\(prior_debit, requested_quantity\) - prior_debit/);
+  assert.match(source, /seller_create_manual_order_batch_d_internal/);
+  assert.match(source, /seller_edit_order_strict_wrapper/);
+  assert.doesNotMatch(source, /grant execute on function public\.reconcile_order_inventory/);
+});
+
+test("seller oversell UUID corrective migration selects a deterministic UUID", async () => {
+  const source = await readFile(sellerOversellFixMigrationPath, "utf8");
+
+  assert.match(source, /create or replace function public\.seller_edit_order/);
+  assert.doesNotMatch(source, /\bmin\s*\(\s*oi\.id\s*\)/);
+  assert.doesNotMatch(source, /\bmax\s*\(\s*oi\.id\s*\)/);
+  assert.match(source, /\(array_agg\(oi\.id order by oi\.id\)\)\[1\]/);
+});
+
+test("seller edit oversell staging update is explicitly scoped", async () => {
+  const source = await readFile(sellerOversellStagingFixMigrationPath, "utf8");
+  const deltaUpdate = source.match(
+    /update pg_temp\.seller_edit_oversell_sources\s+set actual_delta = case[\s\S]*?;/,
+  )?.[0];
+
+  assert.match(source, /create or replace function public\.seller_edit_order/);
+  assert.ok(deltaUpdate);
   assert.match(
-    editor,
-    /Quantity exceeds available inventory and cannot be saved\./,
+    deltaUpdate,
+    /end\s+where source_id is not null;/,
   );
+  assert.match(source, /\(array_agg\(oi\.id order by oi\.id\)\)\[1\]/);
+});
+
+test("final seller oversell migration uses ordered quantity and floors physical stock", async () => {
+  const source = await readFile(sellerQuantityOversellMigrationPath, "utf8");
+
+  for (const itemType of [
+    "listing_inventory",
+    "equipment_inventory",
+    "processed_poultry_inventory",
+    "hatching_egg_inventory",
+  ]) {
+    assert.match(source, new RegExp(itemType));
+  }
+
+  assert.match(
+    source,
+    /set inventory_debited_quantity = oi\.quantity[\s\S]*oi\.order_item_source <> 'custom'/,
+  );
+  assert.match(
+    source,
+    /set inventory_debited_quantity =[\s\S]*case when requested\.item_type = 'custom' then 0 else requested\.quantity end/,
+  );
+  assert.match(
+    source,
+    /greatest\(source\.before_quantity - source\.requested_quantity, 0\)/,
+  );
+  assert.match(source, /requested\.quantity - existing\.quantity/);
+  assert.match(source, /-existing\.quantity/);
+  assert.match(
+    source,
+    /if p_operation = 'order_edited'[\s\S]*v_effective_delta := least\(v_before_quantity, v_source\.quantity_delta\)[\s\S]*v_effective_delta := v_source\.quantity_delta/,
+  );
+  assert.match(source, /seller_create_manual_order_batch_d_internal/);
+  assert.match(source, /seller_edit_order_batch_d_internal/);
+  assert.match(source, /'physical_quantity_delta'/);
+  assert.match(source, /'seller_override_quantity'/);
+  assert.doesNotMatch(source, /seller_edit_oversell_sources/);
+  assert.doesNotMatch(source, /\bactual_delta\b/);
+  assert.doesNotMatch(source, /\bprior_debit\b/);
+  assert.doesNotMatch(source, /\bmin\s*\([^)]*\.id\s*\)/);
+  assert.doesNotMatch(source, /\bmax\s*\([^)]*\.id\s*\)/);
 });
 
 test("the checkout Edge handler remains on the secured V2 creation path", async () => {

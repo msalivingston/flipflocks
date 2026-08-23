@@ -2211,7 +2211,7 @@ select is(
   'the edited line debit ledger follows the persisted final quantity'
 );
 
-select throws_ok(
+select lives_ok(
   $test$
     select pg_temp.test_edit_order(
       (
@@ -2242,9 +2242,7 @@ select throws_ok(
       )
     )
   $test$,
-  'P0001',
-  'Insufficient inventory quantity available.',
-  'an edit shortage is rejected instead of clamping inventory to zero'
+  'a seller edit may exceed tracked equipment inventory'
 );
 
 select is(
@@ -2258,11 +2256,92 @@ select is(
         and idempotency_key = 'editable-equipment-order'
     )
   ),
-  3,
-  'a failed edit leaves the persisted order-line quantity unchanged'
+  999,
+  'an oversold seller edit retains the requested order quantity'
 );
 
-select throws_ok(
+select is(
+  (
+    select inventory_debited_quantity
+    from public.order_items
+    where order_id = (
+      select order_id from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'editable-equipment-order'
+    )
+  ),
+  999,
+  'an oversold seller edit keeps ordered quantity in the compatibility ledger'
+);
+
+create temporary table seller_oversold_edit_before (
+  quantity_available integer not null
+) on commit drop;
+
+insert into seller_oversold_edit_before
+select quantity_available
+from public.equipment_inventory_items
+where id = 'a1000000-0000-4000-8000-000000000050';
+
+select lives_ok(
+  $test$
+    select pg_temp.test_edit_order(
+      (
+        select order_id
+        from public.order_idempotency_keys
+        where store_id = 'a1000000-0000-4000-8000-000000000010'
+          and idempotency_key = 'editable-equipment-order'
+      ),
+      jsonb_build_array(
+        jsonb_build_object(
+          'order_item_id',
+          (
+            select id
+            from public.order_items
+            where order_id = (
+              select order_id
+              from public.order_idempotency_keys
+              where store_id = 'a1000000-0000-4000-8000-000000000010'
+                and idempotency_key = 'editable-equipment-order'
+            )
+          ),
+          'item_type', 'equipment_inventory',
+          'item_id', 'a1000000-0000-4000-8000-000000000050',
+          'quantity', 2,
+          'unit_price', 20.00
+        )
+      )
+    )
+  $test$,
+  'decreasing an oversold seller line restores the full ordered decrease'
+);
+
+select is(
+  (
+    select quantity_available
+    from public.equipment_inventory_items
+    where id = 'a1000000-0000-4000-8000-000000000050'
+  ),
+  (select quantity_available + 997 from seller_oversold_edit_before),
+  'oversold quantity decrease restores ordered units without reconstructing physical debit'
+);
+
+select is(
+  (
+    select inventory_debited_quantity
+    from public.order_items
+    where order_id = (
+      select order_id
+      from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'editable-equipment-order'
+    )
+  ),
+  2,
+  'decreased seller line compatibility ledger equals its new ordered quantity'
+);
+
+select lives_ok(
   $test$
     select *
     from public.seller_create_manual_order(
@@ -2282,20 +2361,30 @@ select throws_ok(
       p_customer_last_name => 'Inventory'
     )
   $test$,
-  'P0001',
-  'Insufficient inventory quantity available.',
-  'manual allow_inventory_override cannot authorize overselling'
+  'a seller manual Live Bird order may exceed tracked inventory'
 );
 
 select is(
   (
-    select count(*)::integer
-    from public.order_idempotency_keys
-    where store_id = 'a1000000-0000-4000-8000-000000000010'
-      and idempotency_key = 'manual-oversell-rejected'
+    select quantity_available from public.inventory_items
+    where id = 'a1000000-0000-4000-8000-000000000040'
   ),
   0,
-  'a rejected manual oversell leaves no order or idempotency record'
+  'an oversold manual Live Bird order floors inventory at zero'
+);
+
+select is(
+  (
+    select inventory_debited_quantity
+    from public.order_items
+    where order_id = (
+      select order_id from public.order_idempotency_keys
+      where store_id = 'a1000000-0000-4000-8000-000000000010'
+        and idempotency_key = 'manual-oversell-rejected'
+    )
+  ),
+  999,
+  'an oversold manual Live Bird order keeps ordered quantity in the compatibility ledger'
 );
 
 select lives_ok(

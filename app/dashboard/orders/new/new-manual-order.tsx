@@ -1052,6 +1052,7 @@ function validateOrderForCreate({
   return [
     ...errors,
     ...validateSharedOrderForm({
+      allowInventoryOversell: true,
       canUseDelivery,
       deliveryAddress,
       deliveryOptionId,

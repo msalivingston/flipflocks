@@ -200,7 +200,7 @@ export function validateEditOrderForm({
   });
 
   return validateSharedOrderForm({
-    allowInventoryOversell: false,
+    allowInventoryOversell: true,
     allowMissingSavedInventory: true,
     canUseDelivery,
     deliveryAddress,
