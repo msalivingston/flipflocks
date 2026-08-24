@@ -103,7 +103,7 @@ const stateMatrix = [
       bulkMarkPaid: false,
       bulkUnarchive: false,
       cancel: false,
-      edit: true,
+      edit: false,
       fulfill: true,
       markPaid: false,
       markUnpaid: false,
