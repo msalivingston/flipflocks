@@ -5,7 +5,7 @@ import test from "node:test";
 
 const root = resolve(import.meta.dirname, "..");
 const read = (file) => readFileSync(resolve(root, file), "utf8");
-const migration = read("supabase/migrations/20260820120000_webinars.sql");
+const migration = read("supabase/migrations/20260821170000_webinars.sql");
 
 test("webinar schema enforces public registration boundaries and duplicate emails", () => {
   assert.match(migration, /create table public\.webinars/);
@@ -28,4 +28,13 @@ test("admin attendance and public registration surfaces exist", () => {
   assert.match(read("app/admin/_components/admin-webinar-detail.tsx"), /attended/);
   assert.match(read("app/webinars/[slug]/registration-form.tsx"), /webinar-register/);
   assert.match(read("supabase/functions/webinar-register/index.ts"), /register_for_webinar/);
+});
+
+test("the admin webinar edit page loads through the authenticated browser client", () => {
+  const editPage = read("app/admin/webinars/[webinarId]/edit/page.tsx");
+
+  assert.match(editPage, /^"use client";/);
+  assert.match(editPage, /useParams<\{ webinarId: string \}>\(\)/);
+  assert.match(editPage, /supabase\.from\("webinars"\)\.select\("\*"\)\.eq\("id", webinarId\)\.single\(\)/);
+  assert.doesNotMatch(editPage, /notFound/);
 });
