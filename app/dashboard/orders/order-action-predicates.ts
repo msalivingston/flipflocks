@@ -81,6 +81,10 @@ export function canResendOrderConfirmation(order: OrderActionSnapshot) {
   return !isCanceledOrder(order);
 }
 
+export function canOfferRestoreOrder(order: OrderActionSnapshot) {
+  return isCanceledOrder(order);
+}
+
 export function canBulkMarkOrderFulfilled(order: OrderActionSnapshot) {
   return !order.archived_at && canMarkOrderFulfilled(order);
 }

@@ -4,7 +4,15 @@ import { ArrowLeft } from "lucide-react";
 import { SellerPageHeader } from "../../_components/seller-ui";
 import { NewManualOrder } from "./new-manual-order";
 
-export default function NewManualOrderPage() {
+export default async function NewManualOrderPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ restore_from?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const restoreFromOrderId =
+    typeof params.restore_from === "string" ? params.restore_from : null;
+
   return (
     <>
       <div className="hidden lg:block">
@@ -38,7 +46,7 @@ export default function NewManualOrderPage() {
         </h1>
       </header>
       <div className="mx-auto w-full max-w-7xl px-3 py-3 sm:px-5 lg:px-7 lg:py-4">
-        <NewManualOrder />
+        <NewManualOrder restoreFromOrderId={restoreFromOrderId} />
       </div>
     </>
   );

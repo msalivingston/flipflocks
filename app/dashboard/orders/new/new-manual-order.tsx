@@ -47,6 +47,7 @@ import type {
   FulfillmentMethod,
   HatchingEggInventoryRow,
   InventorySearchRow,
+  InventoryItemType,
   ListingInventoryRow,
   OrderLine,
   PickupMethod,
@@ -84,11 +85,49 @@ type ManualOrderEmailStatus = "queued" | "failed" | "no_email" | "unknown";
 
 type CustomerMode = "existing" | "new";
 
+type RestoreDraftReason = {
+  code: string;
+  message: string;
+};
+
+type RestoreDraftItem = {
+  line_key: string;
+  item_type: InventoryItemType | "custom";
+  source_id: string | null;
+  quantity: number;
+  unit_price: number;
+  item_name: string;
+};
+
+type RestoreDraft = {
+  can_restore: boolean;
+  reasons: RestoreDraftReason[];
+  source_order_id: string;
+  customer: CustomerRow | null;
+  items: RestoreDraftItem[];
+  buyer_notes: string | null;
+  pickup_note: string | null;
+  pickup_option_id: string | null;
+  fulfillment_method: FulfillmentMethod | null;
+  delivery_address: {
+    line1: string | null;
+    line2: string | null;
+    city: string | null;
+    state: string | null;
+    postal_code: string | null;
+    country: string | null;
+  };
+};
+
 const manualOrderSuccessStorageKey = "flockfront:manual-order-success";
 const CUSTOMER_SEARCH_DEBOUNCE_MS = 275;
 const CUSTOMER_SEARCH_RESULT_LIMIT = 8;
 
-export function NewManualOrder() {
+export function NewManualOrder({
+  restoreFromOrderId = null,
+}: {
+  restoreFromOrderId?: string | null;
+}) {
   const { seller } = useSellerContext();
   const router = useRouter();
   const [customerSearchResults, setCustomerSearchResults] = useState<
@@ -163,6 +202,7 @@ export function NewManualOrder() {
         defaultsResult,
         pickupOptionsResult,
         deliveryOptionsResult,
+        restoreDraftResult,
       ] = await Promise.all([
         supabase
           .from("seller_inventory_management")
@@ -228,6 +268,11 @@ export function NewManualOrder() {
           .order("sort_order", { ascending: true })
           .order("name", { ascending: true })
           .returns<DeliveryOption[]>(),
+        restoreFromOrderId
+          ? supabase.rpc("seller_get_order_restore_draft", {
+              p_source_order_id: restoreFromOrderId,
+            })
+          : Promise.resolve({ data: null, error: null }),
       ]);
 
       if (!isMounted) return;
@@ -239,7 +284,8 @@ export function NewManualOrder() {
         processedPoultryResult.error ??
         defaultsResult.error ??
         pickupOptionsResult.error ??
-        deliveryOptionsResult.error;
+        deliveryOptionsResult.error ??
+        restoreDraftResult.error;
 
       if (firstError) {
         setLoadError(firstError.message);
@@ -247,22 +293,120 @@ export function NewManualOrder() {
         return;
       }
 
-      setInventory(
-        normalizeSellableInventoryRows({
-          equipmentRows: equipmentResult.data ?? [],
-          hatchingEggRows: hatchingEggResult.data ?? [],
-          listingRows: inventoryResult.data ?? [],
-          processedPoultryRows: processedPoultryResult.data ?? [],
-        }),
-      );
-      setPickupMethod(
+      const normalizedInventory = normalizeSellableInventoryRows({
+        equipmentRows: equipmentResult.data ?? [],
+        hatchingEggRows: hatchingEggResult.data ?? [],
+        listingRows: inventoryResult.data ?? [],
+        processedPoultryRows: processedPoultryResult.data ?? [],
+      });
+      const nextPickupMethod: PickupMethod =
         defaultsResult.data?.pickup_method === "manual_options"
           ? "manual_options"
-          : "notes",
-      );
-      setDeliveryEnabled(Boolean(defaultsResult.data?.delivery_enabled));
+          : "notes";
+      const nextDeliveryEnabled = Boolean(defaultsResult.data?.delivery_enabled);
+      const nextDeliveryOptions = deliveryOptionsResult.data ?? [];
+
+      setInventory(normalizedInventory);
+      setPickupMethod(nextPickupMethod);
+      setDeliveryEnabled(nextDeliveryEnabled);
       setPickupOptions(pickupOptionsResult.data ?? []);
-      setDeliveryOptions(deliveryOptionsResult.data ?? []);
+      setDeliveryOptions(nextDeliveryOptions);
+
+      if (restoreFromOrderId) {
+        const draft = restoreDraftResult.data as RestoreDraft | null;
+        const unavailableReason = draft?.reasons?.[0]?.message;
+
+        if (!draft?.can_restore) {
+          setLoadError(
+            unavailableReason ??
+              "This canceled order is no longer available to restore.",
+          );
+          setIsLoading(false);
+          return;
+        }
+
+        const unavailableItem = draft.items.find(
+          (draftItem) =>
+            draftItem.item_type !== "custom" &&
+            (!draftItem.source_id ||
+              !normalizedInventory.some(
+                (item) =>
+                  item.id === draftItem.source_id &&
+                  item.itemType === draftItem.item_type,
+              )),
+        );
+
+        if (unavailableItem) {
+          setLoadError(
+            `${unavailableItem.item_name} is no longer available from its original inventory source.`,
+          );
+          setIsLoading(false);
+          return;
+        }
+
+        const restoredLines = draft.items.map((draftItem): OrderLine => {
+          if (draftItem.item_type === "custom") {
+            return {
+              ...customLine(),
+              id: draftItem.line_key,
+              customItemName: draftItem.item_name,
+              quantity: String(draftItem.quantity),
+              unitPrice: formatMoneyInput(draftItem.unit_price),
+            };
+          }
+
+          const inventoryItem = normalizedInventory.find(
+            (item) =>
+              item.id === draftItem.source_id &&
+              item.itemType === draftItem.item_type,
+          );
+
+          if (!inventoryItem || !draftItem.source_id) return emptyLine();
+
+          return {
+            ...emptyLine(),
+            id: draftItem.line_key,
+            inventoryItemId: draftItem.source_id,
+            inventoryItemType: draftItem.item_type,
+            search: formatInventorySearchLabel(inventoryItem),
+            quantity: String(draftItem.quantity),
+            unitPrice: formatMoneyInput(draftItem.unit_price),
+          };
+        });
+
+        setLines(restoredLines);
+        setSelectedCustomer(draft.customer ?? undefined);
+        setCustomerMode("existing");
+        setBuyerNotes(draft.buyer_notes ?? "");
+        setPickupNote(
+          nextPickupMethod === "notes" ? draft.pickup_note ?? "" : "",
+        );
+        setPickupOptionId(
+          nextPickupMethod === "manual_options"
+            ? draft.pickup_option_id ?? ""
+            : "",
+        );
+
+        const canRestoreDelivery =
+          draft.fulfillment_method === "delivery" &&
+          nextDeliveryEnabled &&
+          nextDeliveryOptions.length > 0;
+        setFulfillmentMethod(canRestoreDelivery ? "delivery" : "pickup");
+        setDeliveryOptionId("");
+
+        if (canRestoreDelivery) {
+          setDeliveryAddress({
+            line1: draft.delivery_address.line1 ?? "",
+            line2: draft.delivery_address.line2 ?? "",
+            city: draft.delivery_address.city ?? "",
+            state: draft.delivery_address.state ?? "",
+            postalCode: draft.delivery_address.postal_code ?? "",
+            country: draft.delivery_address.country ?? "US",
+          });
+          setDeliveryAddressCustomerId(draft.customer?.customer_id ?? null);
+          setHasEditedDeliveryAddress(true);
+        }
+      }
       setIsLoading(false);
     }
 
@@ -271,7 +415,7 @@ export function NewManualOrder() {
     return () => {
       isMounted = false;
     };
-  }, [seller]);
+  }, [restoreFromOrderId, seller]);
 
   useEffect(() => {
     const normalizedQuery = customerQuery.trim();
@@ -681,7 +825,7 @@ export function NewManualOrder() {
     return (
       <ErrorState
         title="New order could not load"
-        message="Refresh the page and try again. Inventory or customer lookup may need attention."
+        message={loadError}
       />
     );
   }

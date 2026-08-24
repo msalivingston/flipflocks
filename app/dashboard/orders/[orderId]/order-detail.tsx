@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -32,6 +33,7 @@ import {
   canArchiveOrder,
   canCancelOrder,
   canEditOrder,
+  canOfferRestoreOrder,
   canMarkOrderFulfilled,
   canMarkOrderPaid,
   canMarkOrderUnpaid,
@@ -149,6 +151,21 @@ type OrderDetailState = {
   storeLogo: SellerMediaRow | null;
 };
 
+type RestoreEligibilityReason = {
+  code: string;
+  message: string;
+};
+
+type RestoreDraftResponse = {
+  can_restore: boolean;
+  reasons: RestoreEligibilityReason[];
+};
+
+type RestoreEligibilityState =
+  | { status: "idle" | "checking" }
+  | { status: "eligible" }
+  | { status: "unavailable"; reason: string };
+
 const orderDetailButtonClass =
   "inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-emerald-700 bg-white px-3.5 text-base font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:min-h-9 sm:text-sm";
 const orderDetailBackButtonClass =
@@ -162,6 +179,7 @@ const requestedItemsGridClass =
  */
 export function OrderDetail({ orderId }: { orderId: string }) {
   const { seller } = useSellerContext();
+  const router = useRouter();
   const [data, setData] = useState<OrderDetailState>({
     items: [],
     mediaByItemId: {},
@@ -194,7 +212,10 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [showResendConfirmationDialog, setShowResendConfirmationDialog] =
     useState(false);
   const [showUnarchiveDialog, setShowUnarchiveDialog] = useState(false);
+  const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
+  const [restoreEligibility, setRestoreEligibility] =
+    useState<RestoreEligibilityState>({ status: "idle" });
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -353,6 +374,51 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const canResendConfirmationAction = Boolean(
     order && buyerHasEmail && canResendOrderConfirmation(order),
   );
+
+  const showRestoreAction = canOfferRestoreOrder(orderActionSnapshot);
+
+  useEffect(() => {
+    if (!seller || !order || !showRestoreAction) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadRestoreEligibility() {
+      const result = await supabase.rpc("seller_get_order_restore_draft", {
+        p_source_order_id: orderId,
+      });
+
+      if (!isMounted) return;
+
+      if (result.error) {
+        setRestoreEligibility({
+          status: "unavailable",
+          reason: "Restore availability could not be checked.",
+        });
+        return;
+      }
+
+      const restoreDraft = result.data as RestoreDraftResponse | null;
+      if (restoreDraft?.can_restore) {
+        setRestoreEligibility({ status: "eligible" });
+        return;
+      }
+
+      setRestoreEligibility({
+        status: "unavailable",
+        reason:
+          restoreDraft?.reasons?.[0]?.message ??
+          "This canceled order is not available to restore.",
+      });
+    }
+
+    void loadRestoreEligibility();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [order, orderId, seller, showRestoreAction]);
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -906,6 +972,8 @@ export function OrderDetail({ orderId }: { orderId: string }) {
             canMarkUnpaid={canMarkOrderUnpaid(orderActionSnapshot)}
             canResendConfirmation={canResendConfirmationAction}
             canUnarchive={canUnarchiveOrder(orderActionSnapshot)}
+            showRestore={showRestoreAction}
+            restoreEligibility={restoreEligibility}
             editHref={
               canEditOrder(orderActionSnapshot)
                 ? `/dashboard/orders/${order.order_id}/edit`
@@ -953,6 +1021,10 @@ export function OrderDetail({ orderId }: { orderId: string }) {
             onOpenChange={setIsActionsMenuOpen}
             onPrint={printOrder}
             onResendConfirmation={openResendConfirmationDialog}
+            onRestore={() => {
+              setIsActionsMenuOpen(false);
+              setShowRestoreDialog(true);
+            }}
             onUnarchive={openUnarchiveDialog}
             summaryClassName="min-h-11 rounded-lg !border-emerald-800 !bg-emerald-800 px-3 text-sm !text-white hover:!border-emerald-900 hover:!bg-emerald-900 hover:!text-white sm:min-h-11"
           />
@@ -1024,6 +1096,8 @@ export function OrderDetail({ orderId }: { orderId: string }) {
               canMarkUnpaid={canMarkOrderUnpaid(orderActionSnapshot)}
               canResendConfirmation={canResendConfirmationAction}
               canUnarchive={canUnarchiveOrder(orderActionSnapshot)}
+              showRestore={showRestoreAction}
+              restoreEligibility={restoreEligibility}
               isBusy={isSaving || isCanceling || isResendingConfirmation || isArchiving}
               isOpen={isActionsMenuOpen}
               onArchive={openArchiveDialog}
@@ -1064,6 +1138,10 @@ export function OrderDetail({ orderId }: { orderId: string }) {
               onMarkUnpaid={() => void markOrderUnpaid()}
               onOpenChange={setIsActionsMenuOpen}
               onResendConfirmation={openResendConfirmationDialog}
+              onRestore={() => {
+                setIsActionsMenuOpen(false);
+                setShowRestoreDialog(true);
+              }}
               onUnarchive={openUnarchiveDialog}
             />
           </div>
@@ -1146,6 +1224,18 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           onEmailCancellationChange={setEmailCancellationToBuyer}
           onReasonChange={setCancelReason}
           onRestoreInventoryChange={setRestoreInventoryOnCancel}
+        />
+      ) : null}
+
+      {showRestoreDialog ? (
+        <RestoreOrderDialog
+          onCancel={() => setShowRestoreDialog(false)}
+          onContinue={() => {
+            setShowRestoreDialog(false);
+            router.push(
+              `/dashboard/orders/new?restore_from=${encodeURIComponent(orderId)}`,
+            );
+          }}
         />
       ) : null}
 
@@ -2097,6 +2187,8 @@ function QuickActionsMenu({
   canMarkUnpaid,
   canResendConfirmation,
   canUnarchive,
+  showRestore,
+  restoreEligibility,
   editHref,
   isBusy,
   isOpen,
@@ -2112,6 +2204,7 @@ function QuickActionsMenu({
   onOpenChange,
   onPrint,
   onResendConfirmation,
+  onRestore,
   onUnarchive,
 }: {
   canArchive: boolean;
@@ -2122,6 +2215,8 @@ function QuickActionsMenu({
   canMarkUnpaid: boolean;
   canResendConfirmation: boolean;
   canUnarchive: boolean;
+  showRestore: boolean;
+  restoreEligibility: RestoreEligibilityState;
   editHref?: string;
   isBusy: boolean;
   isOpen: boolean;
@@ -2137,6 +2232,7 @@ function QuickActionsMenu({
   onOpenChange: (isOpen: boolean) => void;
   onPrint?: () => void;
   onResendConfirmation: () => void;
+  onRestore: () => void;
   onUnarchive: () => void;
 }) {
   return (
@@ -2213,6 +2309,22 @@ function QuickActionsMenu({
             onClick={onResendConfirmation}
           />
         ) : null}
+        {showRestore ? (
+          <QuickActionButton
+            description={
+              restoreEligibility.status === "checking" ||
+              restoreEligibility.status === "idle"
+                ? "Checking availability..."
+                : restoreEligibility.status === "unavailable"
+                  ? `Unavailable — ${restoreEligibility.reason}`
+                  : undefined
+            }
+            disabled={isBusy || restoreEligibility.status !== "eligible"}
+            glyph="/glyphs/shopping-bag.png"
+            label="Restore Order"
+            onClick={onRestore}
+          />
+        ) : null}
         {canArchive ? (
           <QuickActionButton
             disabled={isBusy}
@@ -2246,12 +2358,14 @@ function QuickActionsMenu({
 }
 
 function QuickActionButton({
+  description,
   disabled = false,
   glyph,
   label,
   onClick,
   title,
 }: {
+  description?: string;
   disabled?: boolean;
   glyph: string;
   label: string;
@@ -2267,8 +2381,61 @@ function QuickActionButton({
       onClick={onClick}
     >
       <Image src={glyph} alt="" width={18} height={18} />
-      {label}
+      <span>
+        <span className="block">{label}</span>
+        {description ? (
+          <span className="mt-0.5 block text-xs font-medium leading-4 text-stone-600">
+            {description}
+          </span>
+        ) : null}
+      </span>
     </button>
+  );
+}
+
+function RestoreOrderDialog({
+  onCancel,
+  onContinue,
+}: {
+  onCancel: () => void;
+  onContinue: () => void;
+}) {
+  return (
+    <div
+      aria-labelledby="restore-order-dialog-title"
+      aria-modal="true"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-stone-950/30 px-4 py-6"
+      role="dialog"
+    >
+      <section className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-5 shadow-[0_22px_60px_rgba(46,39,25,0.2)]">
+        <h2
+          className="text-lg font-bold text-stone-950"
+          id="restore-order-dialog-title"
+        >
+          Restore Order?
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-stone-700">
+          A new order will be created from this canceled order. The original
+          order will remain canceled.
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            className={orderDetailBackButtonClass}
+            type="button"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          <button
+            className="inline-flex min-h-12 items-center justify-center rounded-md bg-emerald-800 px-4 text-base font-bold text-white transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700/30 sm:min-h-9 sm:text-sm"
+            type="button"
+            onClick={onContinue}
+          >
+            Continue
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 
