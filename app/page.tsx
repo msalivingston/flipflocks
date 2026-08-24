@@ -233,12 +233,20 @@ export default async function Home() {
               FlockFront gives independent poultry sellers their own simple storefront and
               order tool&mdash;so you can stop chasing messages and get back to your birds.
             </p>
-            <PlaceholderLink
-              className="mt-5 inline-flex min-h-11 items-center justify-center rounded-md bg-white px-6 text-[17px] font-bold text-[#0e4a2d] shadow-sm shadow-black/15 transition hover:bg-[#f5f1e8] md:mt-6"
-              href={demoStoreHref}
-            >
-              Demo Store
-            </PlaceholderLink>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row md:mt-6">
+              <PlaceholderLink
+                className="inline-flex min-h-11 items-center justify-center rounded-md bg-white px-6 text-[17px] font-bold text-[#0e4a2d] shadow-sm shadow-black/15 transition hover:bg-[#f5f1e8]"
+                href={demoStoreHref}
+              >
+                Demo Store
+              </PlaceholderLink>
+              <PlaceholderLink
+                className="inline-flex min-h-11 items-center justify-center rounded-md bg-[#075f38] px-6 text-[17px] font-bold text-white shadow-sm shadow-black/15 transition hover:bg-[#064a2d]"
+                href="https://www.flockfront.com/webinars/a-better-way-to-sell-poultry"
+              >
+                Register for Live Demo
+              </PlaceholderLink>
+            </div>
           </div>
         </div>
       </section>
