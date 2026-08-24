@@ -148,29 +148,32 @@ export default async function AboutPage() {
         </div>
       </section>
 
-      <section className="px-5 py-[25px] max-[899px]:px-4 md:px-8 md:py-[33px]">
-        <div className="mx-auto grid max-w-5xl items-center gap-8 md:grid-cols-[1.1fr_0.9fr]">
-          <p className="font-serif text-[1.35rem] leading-[1.5] text-[#123d27] md:col-span-2 md:text-[1.55rem]">
-            After ten years of selling poultry, I have learned that a good
-            online storefront sells more birds and saves a huge amount
-            of time.
-          </p>
-          <div className="md:order-3">
-            <div className="space-y-6 text-[1.05rem] leading-[1.5] text-[#243027]">
+      <section className="bg-[#f7f1e6] px-5 py-5 max-[899px]:px-4 md:px-8 md:py-8">
+        <div className="mx-auto max-w-5xl rounded-2xl border border-[#dfd3c1] bg-[#fffdf8] px-6 py-7 shadow-[0_10px_30px_rgb(39_31_18/0.07)] md:px-12 md:py-10">
+          <div aria-hidden="true" className="mb-4 flex justify-center">
+            <Image
+              src="/glyphs/farmhouse.png"
+              alt=""
+              width={64}
+              height={64}
+              className="h-16 w-16 opacity-70"
+            />
+          </div>
+          <div className="space-y-6 text-[1.175rem] leading-[1.5] text-[#243027]">
             <p>
               Poultry sellers deal with a very particular kind of chaos. Birds
-              grow, prices change, availability changes, Facebook posts
-              disappear into the void, and buyers still ask what you have five
-              minutes after you posted it. Phone calls and texts can take up
-              hours of time. No-shows can disrupt a whole day.
+              grow quickly, prices change, availability changes, Facebook posts
+              disappear into the void. Phone calls and texts can take up hours
+              of time. No-shows can disrupt a whole day.
             </p>
             <p>
               FlockFront puts the important pieces in one place. Sellers can
-              show what is currently available, adjust prices as birds age,
-              collect orders, keep customer details organized, and give buyers
-              clear information. Buyers get an easy way to shop and order, while
-              sellers spend less time repeating themselves, sorting through
-              messages, and answering the same questions.
+              show what is currently available, and age adjusts automatically as
+              your birds get older. With FlockFront, you can manage orders, keep
+              customer details organized, and give buyers clear information.
+              Buyers get an easy way to shop and order, while sellers spend less
+              time repeating themselves, sorting through messages, and answering
+              the same questions.
             </p>
             <p>
               There is a bigger purpose behind FlockFront too. I believe raising
@@ -180,21 +183,11 @@ export default async function AboutPage() {
               families raise their own food and supporting a more humane
               alternative to industrial poultry production.
             </p>
-            </div>
-          </div>
-          <div className="relative order-last min-h-[300px] overflow-hidden rounded-lg shadow-[0_8px_24px_rgb(39_31_18/0.08)] md:order-2 md:min-h-[540px]">
-            <Image
-              src="/about-page/IMG_9840.jpg"
-              alt="A poultry keeper with chickens at sunset"
-              fill
-              sizes="(min-width: 768px) 400px, 100vw"
-              className="object-cover object-[center_20%]"
-            />
           </div>
         </div>
       </section>
 
-      <section className="relative overflow-hidden bg-[#f4f0e8] px-5 py-[25px] max-[899px]:px-4 md:px-8 md:py-[33px]">
+      <section className="relative overflow-hidden bg-[#f4f0e8] px-5 py-5 max-[899px]:px-4 md:px-8 md:py-7">
         <Image
           src="/about-page/farm-gate-sketch.png"
           alt=""

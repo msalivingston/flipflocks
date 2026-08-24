@@ -364,10 +364,10 @@ export default async function Home() {
           />
           <div>
             <h2 className="font-serif text-[1.7rem] font-bold leading-tight text-[#0e4a2d] md:whitespace-nowrap md:text-[1.95rem]">
-              Ready to simplify how you sell?
+              Ready to make selling easier?
             </h2>
             <p className="mt-1 text-[16px] text-[#303830]">
-              Give customers one simple place to order.
+              Give customers one clear place to browse and order.
             </p>
             <PublicSignupCta
               className="mt-3 inline-flex min-h-11 items-center justify-center gap-3 rounded-md bg-[#08633c] px-7 text-[17px] font-bold text-white shadow-sm transition hover:bg-[#064b2f]"

@@ -263,7 +263,8 @@ export function PricingPageClient({
             <p className="max-w-2xl text-[13px] leading-5 text-[#1f2c24] md:text-[14px] md:leading-6">
               Both plans include the storefront, checkout, manual orders,
               customer records, pickup setup, seller policies, and core order
-              emails.
+              emails. Need something special? We can also customize a solution
+              for your farm. Reach out for pricing information.
             </p>
           </div>
         </section>
