@@ -124,6 +124,11 @@ type EditOrderState = {
   pickupOptions: PickupOption[];
 };
 
+type ConfiguredPickupOption = PickupOption & {
+  is_active: boolean;
+  archived_at: string | null;
+};
+
 const savedDeliveryOptionId = "__saved_delivery_option__";
 
 export function EditOrder({ orderId }: { orderId: string }) {
@@ -277,12 +282,11 @@ export function EditOrder({ orderId }: { orderId: string }) {
           .returns<StoreDefaults>(),
         supabase
           .from("store_pickup_options")
-          .select("id, label, description")
+          .select("id, label, description, is_active, archived_at")
           .eq("store_id", seller.store_id)
-          .eq("is_active", true)
           .order("sort_order", { ascending: true })
           .order("label", { ascending: true })
-          .returns<PickupOption[]>(),
+          .returns<ConfiguredPickupOption[]>(),
         supabase
           .from("store_delivery_options")
           .select("id, name, price_amount")
@@ -323,7 +327,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
       const currentFulfillmentMethod =
         order?.fulfillment_method === "delivery" ? "delivery" : "pickup";
       const nextPickupOptions = includeSavedPickupOption(
-        pickupOptionsResult.data ?? [],
+        getEditablePickupOptions(pickupOptionsResult.data ?? [], order),
         order,
       );
       const nextDeliveryOptions = includeSavedDeliveryOption(
@@ -1199,6 +1203,24 @@ function includeSavedPickupOption(
     },
     ...options,
   ];
+}
+
+function getEditablePickupOptions(
+  options: ConfiguredPickupOption[],
+  order: EditableOrderRow | null,
+) {
+  const archivedCutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+
+  return options.filter((option) => {
+    if (option.id === order?.pickup_option_id) return true;
+    if (option.is_active && !option.archived_at) return true;
+
+    return Boolean(
+      !option.is_active &&
+        option.archived_at &&
+        new Date(option.archived_at).getTime() >= archivedCutoff,
+    );
+  });
 }
 
 function includeSavedDeliveryOption(

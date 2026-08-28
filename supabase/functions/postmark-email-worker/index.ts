@@ -1057,7 +1057,12 @@ function renderOrderDocumentEmail(
     ]
     : [
       fact("Method", "Pickup"),
-      fact("Pickup option", order.pickup_option_label_snapshot || order.pickup_note),
+      fact(
+        "Pickup option",
+        context.pickupOption?.label ||
+          order.pickup_option_label_snapshot ||
+          order.pickup_note,
+      ),
       options.recipientType === "seller"
         ? fact("Pickup details", context.pickupOption?.description)
         : null,

@@ -86,6 +86,7 @@ type PickupOptionDraft = {
   description: string;
   sort_order: number;
   is_active: boolean;
+  archived_at: string | null;
   isNew?: boolean;
 };
 
@@ -546,12 +547,14 @@ function PickupChoiceRow({
           value={option.label}
         />
         <button
-          aria-label="Remove pickup choice"
+          aria-label={
+            option.isNew ? "Remove pickup choice" : "Archive pickup choice"
+          }
           className="col-span-2 inline-flex min-h-11 items-center justify-center rounded-md border border-stone-200 bg-stone-100 px-3 text-sm font-semibold text-red-700 transition hover:border-red-200 hover:bg-red-50 sm:col-auto sm:min-h-10 sm:text-stone-700 sm:hover:text-red-700"
           onClick={onRemove}
           type="button"
         >
-          Remove
+          {option.isNew ? "Remove" : "Archive"}
         </button>
       </div>
       {option.label !== option.label.trim() ? (

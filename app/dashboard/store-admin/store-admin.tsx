@@ -183,6 +183,7 @@ type PickupOption = {
   description: string | null;
   sort_order: number;
   is_active: boolean;
+  archived_at: string | null;
 };
 
 type PickupOptionDraft = {
@@ -191,6 +192,7 @@ type PickupOptionDraft = {
   description: string;
   sort_order: number;
   is_active: boolean;
+  archived_at: string | null;
   isNew?: boolean;
 };
 
@@ -537,7 +539,9 @@ export function StoreAdmin() {
             .returns<StoreDefaults>(),
           supabase
             .from("store_pickup_options")
-            .select("id, store_id, label, description, sort_order, is_active")
+            .select(
+              "id, store_id, label, description, sort_order, is_active, archived_at",
+            )
             .eq("store_id", seller.store_id)
             .order("sort_order", { ascending: true })
             .order("label", { ascending: true })
@@ -1525,7 +1529,13 @@ export function StoreAdmin() {
       current
         .filter((option) => !(option.id === optionId && option.isNew))
         .map((option) =>
-          option.id === optionId ? { ...option, is_active: false } : option,
+          option.id === optionId
+            ? {
+                ...option,
+                is_active: false,
+                archived_at: new Date().toISOString(),
+              }
+            : option,
         ),
     );
     if (form.default_pickup_option_id === optionId) {
@@ -1567,6 +1577,7 @@ export function StoreAdmin() {
         description: "",
         sort_order: getVisiblePickupOptions(current).length,
         is_active: true,
+        archived_at: null,
         isNew: true,
       },
     ]);
@@ -5257,6 +5268,7 @@ function toPickupOptionDraft(option: PickupOption): PickupOptionDraft {
     description: option.description ?? "",
     sort_order: option.sort_order,
     is_active: option.is_active,
+    archived_at: option.archived_at,
   };
 }
 
@@ -5277,6 +5289,7 @@ function normalizePickupOptionDrafts(options: PickupOptionDraft[]) {
     description: option.description.trim(),
     sort_order: option.sort_order,
     is_active: option.is_active,
+    archived_at: option.archived_at,
     isNew: option.isNew ?? false,
   }));
 }

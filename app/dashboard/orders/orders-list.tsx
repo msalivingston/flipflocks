@@ -61,6 +61,11 @@ type PickupOption = {
   label: string;
 };
 
+type OpenOrderPickupOptionRow = {
+  pickup_option_id: string | null;
+  pickup_option_label_snapshot: string | null;
+};
+
 type StoreDefaults = {
   pickup_method: "notes" | "manual_options" | null;
 };
@@ -325,13 +330,10 @@ export function OrdersList() {
             .eq("store_id", seller.store_id)
             .maybeSingle<StoreDefaults>(),
           supabase
-            .from("store_pickup_options")
-            .select("id, label")
+            .from("seller_dashboard_attention_orders")
+            .select("pickup_option_id, pickup_option_label_snapshot")
             .eq("store_id", seller.store_id)
-            .eq("is_active", true)
-            .order("sort_order", { ascending: true })
-            .order("label", { ascending: true })
-            .returns<PickupOption[]>(),
+            .returns<OpenOrderPickupOptionRow[]>(),
         ]);
 
       if (!isMounted) return;
@@ -415,7 +417,9 @@ export function OrdersList() {
       setOrders(nextOrders);
       setOrderItemsByOrderId(nextItemsByOrderId);
       setPickupMethod(defaultsResult.data?.pickup_method ?? "notes");
-      setPickupOptions(pickupOptionsResult.data ?? []);
+      setPickupOptions(
+        getOpenOrderPickupOptions(pickupOptionsResult.data ?? []),
+      );
       setPickupOptionFilter("__all__");
       setExpandedOrderId(null);
       setExpandedBuyerOrderId(null);
@@ -3278,6 +3282,23 @@ function matchesPickupOptionFilter(
   filter: PickupOptionFilter,
 ) {
   return filter === "__all__" || order.pickup_option_id === filter;
+}
+
+function getOpenOrderPickupOptions(rows: OpenOrderPickupOptionRow[]) {
+  const optionsById = new Map<string, PickupOption>();
+
+  for (const row of rows) {
+    const id = row.pickup_option_id;
+    const label = row.pickup_option_label_snapshot?.trim();
+
+    if (!id || !label || optionsById.has(id)) continue;
+
+    optionsById.set(id, { id, label });
+  }
+
+  return Array.from(optionsById.values()).sort((first, second) =>
+    first.label.localeCompare(second.label),
+  );
 }
 
 function matchesSearch(
