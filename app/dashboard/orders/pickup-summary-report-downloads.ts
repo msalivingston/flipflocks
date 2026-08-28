@@ -7,14 +7,28 @@ import {
 
 const landscapePdfPage = {
   height: 612,
-  margin: 28,
+  horizontalMargin: 28,
+  verticalMargin: 28,
   width: 792,
+};
+
+const pullSheetPdfPage = {
+  ...landscapePdfPage,
+  verticalMargin: 36,
 };
 
 type PdfPageLayout = typeof landscapePdfPage;
 
 type PdfPage = PdfPageLayout & {
   content: string;
+};
+
+type PdfTableColumn = {
+  align: "center" | "left" | "right";
+  bodyBold?: boolean;
+  bodyFontSize?: number;
+  label: string;
+  width: number;
 };
 
 export async function downloadPickupSummaryReports(
@@ -80,15 +94,27 @@ function buildPullSheetPdfPages(reportData: PickupSummaryReportData) {
   return buildTablePdfPages({
     columns: [
       { align: "left", label: "Breed", width: 210 },
-      { align: "center", label: "Qty", width: 55 },
+      {
+        align: "center",
+        bodyBold: true,
+        bodyFontSize: 15,
+        label: "Qty",
+        width: 55,
+      },
       { align: "center", label: "Age", width: 60 },
       { align: "center", label: "Sex", width: 65 },
       { align: "left", label: "Feather\nCondition", width: 85 },
       { align: "center", label: "Breeder\nStatus", width: 80 },
-      { align: "left", label: "Barn\nLocation", width: 105 },
+      {
+        align: "left",
+        bodyBold: true,
+        bodyFontSize: 15,
+        label: "Barn\nLocation",
+        width: 105,
+      },
     ],
     dateLabel: reportData.generatedDateLabel,
-    layout: landscapePdfPage,
+    layout: pullSheetPdfPage,
     rows: reportData.pullSheetRows.map((row) => [
       row.breedOrVariety,
       row.quantity,
@@ -143,11 +169,7 @@ function buildTablePdfPages({
   title,
   totals,
 }: {
-  columns: Array<{
-    align: "center" | "left" | "right";
-    label: string;
-    width: number;
-  }>;
+  columns: PdfTableColumn[];
   dateLabel: string;
   layout: PdfPageLayout;
   rows: Array<Array<number | string>>;
@@ -157,20 +179,20 @@ function buildTablePdfPages({
   const pages: PdfPage[] = [];
   const rowHeight = 25;
   const headerHeight = 38;
-  const startX = layout.margin;
+  const startX = layout.horizontalMargin;
   const tableWidth = columns.reduce((total, column) => total + column.width, 0);
-  const bottomY = layout.margin + rowHeight;
+  const bottomY = layout.verticalMargin + rowHeight;
   let rowIndex = 0;
 
   do {
     const commands: string[] = [];
-    let y = layout.height - layout.margin;
+    let y = layout.height - layout.verticalMargin;
 
     drawPdfText(commands, title, startX, y, 22, "bold");
     drawPdfText(
       commands,
       `Date:  ${dateLabel}`,
-      layout.width - layout.margin - 190,
+      layout.width - layout.horizontalMargin - 190,
       y,
       18,
       "regular",
@@ -237,11 +259,7 @@ function drawPdfTableRow({
   y,
 }: {
   bold: boolean;
-  columns: Array<{
-    align: "center" | "left" | "right";
-    label: string;
-    width: number;
-  }>;
+  columns: PdfTableColumn[];
   commands: string[];
   row: Array<number | string>;
   rowHeight: number;
@@ -258,7 +276,9 @@ function drawPdfTableRow({
     }
 
     const lines = String(row[index] ?? "").split("\n");
-    const fontSize = bold && lines.length > 1 ? 10 : 12;
+    const fontSize =
+      bold && lines.length > 1 ? 10 : (column.bodyFontSize ?? 12);
+    const fontWeight = bold || column.bodyBold ? "bold" : "regular";
     const firstLineY = y - rowHeight / 2 + (lines.length - 1) * 5 - 4;
 
     lines.forEach((line, lineIndex) => {
@@ -277,7 +297,7 @@ function drawPdfTableRow({
         textX,
         firstLineY - lineIndex * 10,
         fontSize,
-        bold ? "bold" : "regular",
+        fontWeight,
       );
     });
     x += column.width;
@@ -430,18 +450,18 @@ function buildPullSheetWorksheet(
     ...reportData.pullSheetRows.map((row) => ({
       cells: [
         stringCell(row.breedOrVariety, 2),
-        numberCell(row.quantity, 3),
+        numberCell(row.quantity, 9),
         stringCell(row.age, 2),
         stringCell(row.sex, 2),
         stringCell(row.featherCondition, 2),
         stringCell(row.breederStatus, 2),
-        stringCell(row.barnLocation, 2),
+        stringCell(row.barnLocation, 8),
       ],
     })),
     {
       cells: [
         stringCell("TOTAL BIRDS", 5),
-        numberCell(reportData.pullSheetTotalBirds, 6),
+        numberCell(reportData.pullSheetTotalBirds, 9),
         stringCell("", 5),
         stringCell("", 5),
         stringCell("", 5),
@@ -658,11 +678,11 @@ function columnName(index: number) {
 const workbookStylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <numFmts count="2"><numFmt numFmtId="164" formatCode="$#,##0.00"/><numFmt numFmtId="165" formatCode="0"/></numFmts>
-<fonts count="2"><font><name val="Arial"/><family val="2"/><sz val="11"/></font><font><b/><name val="Arial"/><family val="2"/><sz val="11"/></font></fonts>
+<fonts count="3"><font><name val="Arial"/><family val="2"/><sz val="11"/></font><font><b/><name val="Arial"/><family val="2"/><sz val="11"/></font><font><b/><name val="Arial"/><family val="2"/><sz val="14"/></font></fonts>
 <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
 <borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border></borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="8">
+<cellXfs count="10">
 <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
 <xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/>
 <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>
@@ -671,6 +691,8 @@ const workbookStylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"
 <xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/>
 <xf numFmtId="165" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyNumberFormat="1" applyBorder="1"/>
 <xf numFmtId="164" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyNumberFormat="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/>
+<xf numFmtId="165" fontId="2" fillId="0" borderId="1" xfId="0" applyFont="1" applyNumberFormat="1" applyBorder="1"/>
 </cellXfs>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>`;

@@ -107,12 +107,53 @@ test("seller-selected report date is used only for the generated document", asyn
     /createPickupSummaryReportData\([\s\S]*?\{ \.\.\.payload, reports: \[report\] \},[\s\S]*?generatedAt/,
   );
   assert.match(downloadsSource, /label: "Feather\\nCondition", width: 85/);
-  assert.match(downloadsSource, /label: "Barn\\nLocation", width: 105/);
+  assert.match(downloadsSource, /label: "Barn\\nLocation",[\s\S]*?width: 105/);
   assert.match(downloadsSource, /label: "Breed", width: 210/);
   assert.match(downloadsSource, /label: "Age", width: 60/);
-  assert.match(downloadsSource, /label: "Qty", width: 55/);
+  assert.match(downloadsSource, /label: "Qty",[\s\S]*?width: 55/);
   assert.match(downloadsSource, /function fitPdfText/);
   assert.match(downloadsSource, /trimEnd\(\)\}\.{3}/);
+});
+
+test("Pull Sheet emphasizes quantity and barn location for barn visibility", async () => {
+  const source = await readFile(
+    new URL("app/dashboard/orders/pickup-summary-report-downloads.ts", root),
+    "utf8",
+  );
+
+  assert.match(
+    source,
+    /\{[^}]*bodyBold: true,[^}]*bodyFontSize: 15,[^}]*label: "Qty"[^}]*\}/,
+  );
+  assert.match(
+    source,
+    /\{[^}]*bodyBold: true,[^}]*bodyFontSize: 15,[^}]*label: "Barn\\nLocation"[^}]*\}/,
+  );
+  assert.match(source, /numberCell\(row\.quantity, 9\)/);
+  assert.match(source, /numberCell\(reportData\.pullSheetTotalBirds, 9\)/);
+  assert.match(source, /stringCell\(row\.barnLocation, 8\)/);
+  assert.match(source, /<b\/><name val="Arial"\/><family val="2"\/><sz val="14"\/>/);
+
+  assert.match(source, /const fontWeight = bold \|\| column\.bodyBold/);
+  assert.match(
+    source,
+    /bold && lines\.length > 1 \? 10 : \(column\.bodyFontSize \?\? 12\)/,
+  );
+});
+
+test("Pull Sheet PDF uses half-inch top and bottom margins", async () => {
+  const source = await readFile(
+    new URL("app/dashboard/orders/pickup-summary-report-downloads.ts", root),
+    "utf8",
+  );
+
+  assert.match(
+    source,
+    /const pullSheetPdfPage = \{[\s\S]*?verticalMargin: 36,[\s\S]*?\}/,
+  );
+  assert.match(source, /layout: pullSheetPdfPage/);
+  assert.match(source, /layout\.height - layout\.verticalMargin/);
+  assert.match(source, /layout\.verticalMargin \+ rowHeight/);
 });
 
 test("each selected report downloads with its selected-date report name", async () => {
