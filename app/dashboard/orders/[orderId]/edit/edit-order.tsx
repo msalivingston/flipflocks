@@ -40,8 +40,14 @@ import {
 } from "../../_lib/order-form-fulfillment";
 import {
   formatInventorySearchLabel,
-  normalizeSellableInventoryRows,
 } from "../../_lib/order-form-inventory";
+import {
+  loadOrderInventoryForLines,
+  mergeOrderInventoryRows,
+  ORDER_INVENTORY_BROWSE_RESULT_LIMIT,
+  ORDER_INVENTORY_QUICK_RESULT_LIMIT,
+  useOrderInventorySearch,
+} from "../../_lib/order-inventory-search";
 import {
   mapEditableOrderItemsToLines,
   type EditableOrderItemRow,
@@ -52,15 +58,11 @@ import type {
   DeliveryAddress,
   DeliveryOption,
   DiscountType,
-  EquipmentInventoryRow,
   FulfillmentMethod,
-  HatchingEggInventoryRow,
   InventorySearchRow,
-  ListingInventoryRow,
   OrderLine,
   PickupMethod,
   PickupOption,
-  ProcessedPoultryInventoryRow,
   StoreDefaults,
 } from "../../_lib/order-form-types";
 import {
@@ -195,6 +197,20 @@ export function EditOrder({ orderId }: { orderId: string }) {
   const [emailUpdatedOrderOverride, setEmailUpdatedOrderOverride] = useState<
     boolean | null
   >(null);
+  const inventorySearch = useOrderInventorySearch({
+    enabled: inventoryQuery.trim().length >= 2,
+    filter: "all",
+    limit: ORDER_INVENTORY_QUICK_RESULT_LIMIT,
+    query: inventoryQuery,
+    storeId: seller?.store_id,
+  });
+  const browseInventorySearch = useOrderInventorySearch({
+    enabled: isBrowseOpen,
+    filter: browseFilter,
+    limit: ORDER_INVENTORY_BROWSE_RESULT_LIMIT,
+    query: browseQuery,
+    storeId: seller?.store_id,
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -208,10 +224,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
       const [
         orderResult,
         itemResult,
-        listingResult,
-        equipmentResult,
-        hatchingEggResult,
-        processedPoultryResult,
         defaultsResult,
         pickupOptionsResult,
         deliveryOptionsResult,
@@ -233,48 +245,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
           .eq("order_id", orderId)
           .order("created_at", { ascending: true })
           .returns<EditableOrderItemRow[]>(),
-        supabase
-          .from("seller_inventory_management")
-          .select(
-            "inventory_item_id, listing_batch_id, breed_display_name, batch_type, inventory_type, custom_inventory_label, origin_date, available_date, quantity_available, effective_unit_price, inventory_visibility_status, inventory_moderation_status, listing_batch_visibility_status, listing_batch_moderation_status, operational_availability_status",
-          )
-          .eq("store_id", seller.store_id)
-          .neq("inventory_visibility_status", "archived")
-          .neq("listing_batch_visibility_status", "archived")
-          .eq("inventory_moderation_status", "normal")
-          .eq("listing_batch_moderation_status", "normal")
-          .order("breed_display_name", { ascending: true })
-          .returns<ListingInventoryRow[]>(),
-        supabase
-          .from("seller_equipment_inventory_management")
-          .select(
-            "equipment_inventory_item_id, item_name, category, condition, quantity_available, price, visibility_status, moderation_status, operational_availability_status",
-          )
-          .eq("store_id", seller.store_id)
-          .neq("visibility_status", "archived")
-          .eq("moderation_status", "normal")
-          .order("item_name", { ascending: true })
-          .returns<EquipmentInventoryRow[]>(),
-        supabase
-          .from("seller_hatching_egg_inventory_management")
-          .select(
-            "hatching_egg_inventory_item_id, item_name, species_name, description, quantity_available, price, available_date, minimum_order_quantity, visibility_status, moderation_status, operational_availability_status",
-          )
-          .eq("store_id", seller.store_id)
-          .neq("visibility_status", "archived")
-          .eq("moderation_status", "normal")
-          .order("item_name", { ascending: true })
-          .returns<HatchingEggInventoryRow[]>(),
-        supabase
-          .from("seller_processed_poultry_inventory_management")
-          .select(
-            "processed_poultry_inventory_item_id, product_name, poultry_type, product_type, package_size, quantity_available, price, visibility_status, moderation_status, operational_availability_status",
-          )
-          .eq("store_id", seller.store_id)
-          .neq("visibility_status", "archived")
-          .eq("moderation_status", "normal")
-          .order("product_name", { ascending: true })
-          .returns<ProcessedPoultryInventoryRow[]>(),
         supabase
           .from("seller_store_defaults")
           .select("pickup_method, delivery_enabled")
@@ -303,10 +273,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
       const firstError =
         orderResult.error ??
         itemResult.error ??
-        listingResult.error ??
-        hatchingEggResult.error ??
-        equipmentResult.error ??
-        processedPoultryResult.error ??
         defaultsResult.error ??
         pickupOptionsResult.error ??
         deliveryOptionsResult.error;
@@ -340,6 +306,13 @@ export function EditOrder({ orderId }: { orderId: string }) {
       }
 
       const mappedItems = mapEditableOrderItemsToLines(itemResult.data ?? []);
+      const existingInventory = await loadOrderInventoryForLines(
+        seller.store_id,
+        mappedItems.lines,
+      );
+
+      if (!isMounted) return;
+
       const pickupMethod =
         order?.pickup_option_id ||
         defaultsResult.data?.pickup_method === "manual_options"
@@ -358,12 +331,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
 
       setData({
         deliveryOptions: nextDeliveryOptions,
-        inventory: normalizeSellableInventoryRows({
-          equipmentRows: equipmentResult.data ?? [],
-          hatchingEggRows: hatchingEggResult.data ?? [],
-          listingRows: listingResult.data ?? [],
-          processedPoultryRows: processedPoultryResult.data ?? [],
-        }),
+        inventory: existingInventory,
         hasAdjustedItemQuantities: (itemResult.data ?? []).some(
           (item) =>
             item.fulfilled_quantity > 0 ||
@@ -413,12 +381,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
               pickupOptionId: order.pickup_option_id ?? "",
               taxAmount: order.tax_fee_amount ?? 0,
               total: order.total_amount ?? 0,
-              inventory: normalizeSellableInventoryRows({
-                equipmentRows: equipmentResult.data ?? [],
-                hatchingEggRows: hatchingEggResult.data ?? [],
-                listingRows: listingResult.data ?? [],
-                processedPoultryRows: processedPoultryResult.data ?? [],
-              }),
+              inventory: existingInventory,
             })
           : "",
       );
@@ -426,7 +389,13 @@ export function EditOrder({ orderId }: { orderId: string }) {
       setIsLoading(false);
     }
 
-    void loadOrder();
+    void loadOrder().catch((error: unknown) => {
+      if (!isMounted) return;
+      setLoadError(
+        error instanceof Error ? error.message : "Order could not load.",
+      );
+      setIsLoading(false);
+    });
 
     return () => {
       isMounted = false;
@@ -624,10 +593,12 @@ export function EditOrder({ orderId }: { orderId: string }) {
     resetSaveMessages();
   }
 
-  function addInventoryItem(inventoryItemId: string) {
-    const item = data.inventory.find((row) => row.id === inventoryItemId);
-
-    if (!item) return;
+  function addInventoryItem(item: InventorySearchRow) {
+    const inventoryItemId = item.id;
+    setData((current) => ({
+      ...current,
+      inventory: mergeOrderInventoryRows(current.inventory, [item]),
+    }));
 
     setLines((current) => {
       const existingLine = current.find(
@@ -664,12 +635,12 @@ export function EditOrder({ orderId }: { orderId: string }) {
     resetSaveMessages();
   }
 
-  function addBrowseInventoryItem(inventoryItemId: string) {
-    addInventoryItem(inventoryItemId);
-    setBrowseAddedInventoryItemId(inventoryItemId);
+  function addBrowseInventoryItem(item: InventorySearchRow) {
+    addInventoryItem(item);
+    setBrowseAddedInventoryItemId(item.id);
     window.setTimeout(() => {
       setBrowseAddedInventoryItemId((current) =>
-        current === inventoryItemId ? null : current,
+        current === item.id ? null : current,
       );
     }, 1200);
   }
@@ -1062,8 +1033,14 @@ export function EditOrder({ orderId }: { orderId: string }) {
             <OrderItemsEditor
               browseAddedInventoryItemId={browseAddedInventoryItemId}
               browseFilter={browseFilter}
+              browseInventory={browseInventorySearch.results}
+              browseInventoryError={browseInventorySearch.error}
+              browseInventoryLoading={browseInventorySearch.isLoading}
               browseQuery={browseQuery}
               inventory={data.inventory}
+              inventorySearchError={inventorySearch.error}
+              inventorySearchLoading={inventorySearch.isLoading}
+              inventorySearchResults={inventorySearch.results}
               inventoryQuantityCredits={inventoryQuantityCredits}
               inventoryQuery={inventoryQuery}
               isBrowseOpen={isBrowseOpen}

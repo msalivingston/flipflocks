@@ -4,11 +4,9 @@ import Image from "next/image";
 import { SellerCard } from "../../_components/seller-ui";
 import { formatCurrency } from "../order-formatters";
 import {
-  filterInventory,
   formatBrowseInventoryMetadata,
   formatInventoryCategoryLabel,
   formatInventoryMetadata,
-  getBrowseInventoryRows,
 } from "../_lib/order-form-inventory";
 import {
   calculateOrderItemQuantity,
@@ -23,8 +21,14 @@ import type {
 export function OrderItemsEditor({
   browseAddedInventoryItemId,
   browseFilter,
+  browseInventory,
+  browseInventoryError,
+  browseInventoryLoading,
   browseQuery,
   inventory,
+  inventorySearchError,
+  inventorySearchLoading,
+  inventorySearchResults,
   inventoryQuantityCredits = {},
   inventoryQuery,
   isBrowseOpen,
@@ -41,15 +45,21 @@ export function OrderItemsEditor({
 }: {
   browseAddedInventoryItemId: string | null;
   browseFilter: BrowseInventoryFilter;
+  browseInventory: InventorySearchRow[];
+  browseInventoryError: string | null;
+  browseInventoryLoading: boolean;
   browseQuery: string;
   inventory: InventorySearchRow[];
+  inventorySearchError: string | null;
+  inventorySearchLoading: boolean;
+  inventorySearchResults: InventorySearchRow[];
   inventoryQuantityCredits?: Record<string, number>;
   inventoryQuery: string;
   isBrowseOpen: boolean;
   lines: OrderLine[];
   onAddCustomItem: () => void;
-  onAddInventoryItem: (inventoryItemId: string) => void;
-  onBrowseInventoryItem: (inventoryItemId: string) => void;
+  onAddInventoryItem: (item: InventorySearchRow) => void;
+  onBrowseInventoryItem: (item: InventorySearchRow) => void;
   onBrowseFilterChange: (filter: BrowseInventoryFilter) => void;
   onBrowseOpenChange: (isOpen: boolean | ((current: boolean) => boolean)) => void;
   onBrowseQueryChange: (query: string) => void;
@@ -107,8 +117,10 @@ export function OrderItemsEditor({
         </div>
 
         <InventorySearchResults
-          inventory={inventory}
+          error={inventorySearchError}
+          isLoading={inventorySearchLoading}
           query={inventoryQuery}
+          results={inventorySearchResults}
           onSelect={onAddInventoryItem}
         />
 
@@ -154,9 +166,11 @@ export function OrderItemsEditor({
       {isBrowseOpen ? (
         <BrowseInventoryDialog
           addedInventoryItemId={browseAddedInventoryItemId}
+          error={browseInventoryError}
           filter={browseFilter}
-          inventory={inventory}
+          isLoading={browseInventoryLoading}
           query={browseQuery}
+          rows={browseInventory}
           onClose={() => onBrowseOpenChange(false)}
           onFilterChange={onBrowseFilterChange}
           onQueryChange={onBrowseQueryChange}
@@ -168,27 +182,37 @@ export function OrderItemsEditor({
 }
 
 function InventorySearchResults({
-  inventory,
+  error,
+  isLoading,
   onSelect,
   query,
+  results,
 }: {
-  inventory: InventorySearchRow[];
-  onSelect: (inventoryItemId: string) => void;
+  error: string | null;
+  isLoading: boolean;
+  onSelect: (item: InventorySearchRow) => void;
   query: string;
+  results: InventorySearchRow[];
 }) {
-  const results = filterInventory(inventory, query).slice(0, 7);
-
   if (query.trim().length < 2) return null;
 
   return (
     <div className="mt-2 overflow-hidden rounded-md border border-stone-200 bg-white shadow-sm">
-      {results.length > 0 ? (
+      {isLoading ? (
+        <p className="px-3 py-2 text-sm text-stone-600">
+          Searching inventory…
+        </p>
+      ) : error ? (
+        <p className="px-3 py-2 text-sm text-stone-600">
+          Inventory search could not load. Try again.
+        </p>
+      ) : results.length > 0 ? (
         results.map((item) => (
           <button
             className="grid min-h-10 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-stone-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none"
             key={item.id}
             type="button"
-            onClick={() => onSelect(item.id)}
+            onClick={() => onSelect(item)}
           >
             <span className="min-w-0">
               <span className="block truncate font-semibold text-stone-950">
@@ -212,24 +236,27 @@ function InventorySearchResults({
 
 function BrowseInventoryDialog({
   addedInventoryItemId,
+  error,
   filter,
-  inventory,
+  isLoading,
   onClose,
   onFilterChange,
   onQueryChange,
   onSelect,
   query,
+  rows,
 }: {
   addedInventoryItemId: string | null;
+  error: string | null;
   filter: BrowseInventoryFilter;
-  inventory: InventorySearchRow[];
+  isLoading: boolean;
   onClose: () => void;
   onFilterChange: (filter: BrowseInventoryFilter) => void;
   onQueryChange: (query: string) => void;
-  onSelect: (inventoryItemId: string) => void;
+  onSelect: (item: InventorySearchRow) => void;
   query: string;
+  rows: InventorySearchRow[];
 }) {
-  const rows = getBrowseInventoryRows(inventory, filter, query).slice(0, 60);
   const filters: { label: string; value: BrowseInventoryFilter }[] = [
     { label: "All", value: "all" },
     { label: formatInventoryCategoryLabel("poultry"), value: "poultry" },
@@ -301,7 +328,15 @@ function BrowseInventoryDialog({
         </div>
 
         <div className="min-h-0 overflow-y-auto bg-white">
-          {rows.length > 0 ? (
+          {isLoading ? (
+            <p className="px-4 py-4 text-sm text-stone-600">
+              Loading inventory…
+            </p>
+          ) : error ? (
+            <p className="px-4 py-4 text-sm text-stone-600">
+              Inventory could not load. Try again.
+            </p>
+          ) : rows.length > 0 ? (
             rows.map((item) => {
               const wasAdded = addedInventoryItemId === item.id;
 
@@ -331,7 +366,7 @@ function BrowseInventoryDialog({
                         : "text-emerald-800 hover:bg-emerald-50"
                     }`}
                     type="button"
-                    onClick={() => onSelect(item.id)}
+                    onClick={() => onSelect(item)}
                   >
                     {wasAdded ? "Added" : "Add"}
                   </button>
