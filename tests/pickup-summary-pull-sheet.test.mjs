@@ -78,12 +78,20 @@ test("Pull Sheet uses breeding history status and groups only identical displaye
 });
 
 test("Pull Sheet loads breeder status from the immutable Live Bird order snapshot", async () => {
-  const source = await readFile(
-    new URL("app/dashboard/orders/orders-list.tsx", root),
-    "utf8",
-  );
+  const [source, migration] = await Promise.all([
+    readFile(new URL("app/dashboard/orders/orders-list.tsx", root), "utf8"),
+    readFile(
+      new URL(
+        "supabase/migrations/20260830120000_paginate_seller_orders.sql",
+        root,
+      ),
+      "utf8",
+    ),
+  ]);
 
-  assert.match(source, /age_at_sale_days_snapshot, breeding_history_snapshot, feather_condition_snapshot/);
+  assert.match(migration, /'age_at_sale_days_snapshot', order_items\.age_at_sale_days_snapshot/);
+  assert.match(migration, /'breeding_history_snapshot', order_items\.breeding_history_snapshot/);
+  assert.match(migration, /'feather_condition_snapshot', order_items\.feather_condition_snapshot/);
   assert.match(source, /breederStatus: formatPickupSummaryBreederStatus\(/);
   assert.match(source, /value === "never_bred"\) return "Not bred"/);
   assert.match(source, /value === "breeder"\) return "Breeder"/);

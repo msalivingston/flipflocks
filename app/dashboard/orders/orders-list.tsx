@@ -29,7 +29,6 @@ import {
   formatCurrency,
   formatDateTime,
   formatInventoryLabel,
-  getOrderLifecycleState,
 } from "./order-formatters";
 import {
   canBulkArchiveOrder,
@@ -45,6 +44,16 @@ import {
   type PickupSummaryPayload,
   type PickupSummaryReport,
 } from "./pickup-summary-report-data";
+import {
+  ORDER_SEARCH_DEBOUNCE_MS,
+  ORDERS_PER_PAGE,
+  buildOrderListRpcParams,
+  getLastValidOrderPage,
+  getOrderPageOffset,
+  getOrderPaginationPages,
+  getOrderTotalPages,
+  getSelectedOrderRecords,
+} from "./orders-list-query";
 
 type OrderFilter =
   | "ready_for_pickup"
@@ -59,11 +68,6 @@ type PickupOptionFilter = "__all__" | string;
 type PickupOption = {
   id: string;
   label: string;
-};
-
-type OpenOrderPickupOptionRow = {
-  pickup_option_id: string | null;
-  pickup_option_label_snapshot: string | null;
 };
 
 type StoreDefaults = {
@@ -127,14 +131,12 @@ type SellerOrderItemRow = {
   line_subtotal: number | null;
 };
 
-type SellerInventoryLocationRow = {
-  barn_location: string | null;
-  inventory_item_id: string;
-};
-
-type OrderFilterCountRow = {
-  order_status: string | null;
-  ready_for_pickup_at: string | null;
+type OrderListRpcResponse = {
+  counts: Record<OrderArchiveView | OrderFilter, number>;
+  items: SellerOrderItemRow[];
+  orders: SellerOrderRow[];
+  pickup_options: PickupOption[];
+  total_count: number;
 };
 
 type PickupSummaryOrder = {
@@ -145,6 +147,11 @@ type PickupSummaryOrder = {
 type BulkPrintOrder = {
   items: PrintableOrderItem[];
   order: PrintableOrder;
+};
+
+type BulkPrintRpcResponse = {
+  items: Array<PrintableOrderItem & { order_id: string }>;
+  orders: PrintableOrder[];
 };
 
 type BulkActionDialog =
@@ -246,7 +253,10 @@ export function OrdersList() {
     useState<StoreDefaults["pickup_method"]>("notes");
   const [pickupOptions, setPickupOptions] = useState<PickupOption[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [sort, setSort] = useState<OrderSort>("newest");
+  const [page, setPage] = useState(1);
+  const [totalMatchingOrders, setTotalMatchingOrders] = useState(0);
   const [isPickupSummaryOpen, setIsPickupSummaryOpen] = useState(false);
   const [bulkPrintOrders, setBulkPrintOrders] = useState<BulkPrintOrder[]>([]);
   const [bulkPrintStoreLogo, setBulkPrintStoreLogo] =
@@ -266,6 +276,12 @@ export function OrdersList() {
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [selectedOrderSnapshots, setSelectedOrderSnapshots] = useState<
+    Record<string, SellerOrderRow>
+  >({});
+  const [selectedOrderItems, setSelectedOrderItems] = useState<
+    Record<string, SellerOrderItemRow[]>
+  >({});
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [expandedBuyerOrderId, setExpandedBuyerOrderId] =
     useState<string | null>(null);
@@ -300,6 +316,14 @@ export function OrdersList() {
   }, [bulkPrintOrders]);
 
   useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, ORDER_SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  useEffect(() => {
     let isMounted = true;
 
     async function loadOrders() {
@@ -308,38 +332,30 @@ export function OrdersList() {
       setIsLoading(true);
       setError(null);
 
-      const baseOrderQuery = supabase
-        .from("seller_order_management")
-        .select(
-          "order_id, order_number, order_source, order_status, payment_method, payment_status, payment_provider, created_at, ready_for_pickup_at, fulfilled_at, canceled_at, archived_at, archived_by, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, pickup_note, buyer_notes, total_amount, item_count, total_item_quantity, pickup_option_id, pickup_option_label_snapshot",
-        )
-        .eq("store_id", seller.store_id);
-      const orderQuery =
-        archiveView === "archived"
-          ? baseOrderQuery.not("archived_at", "is", null)
-          : baseOrderQuery.is("archived_at", null);
-      const [orderResult, defaultsResult, pickupOptionsResult] =
-        await Promise.all([
-          orderQuery
-            .order("created_at", { ascending: false })
-            .limit(100)
-            .returns<SellerOrderRow[]>(),
+      const [orderResult, defaultsResult] = await Promise.all([
+          supabase.rpc(
+            "seller_get_order_list_page",
+            buildOrderListRpcParams({
+              archiveView,
+              filter,
+              page,
+              pickupOptionId:
+                pickupOptionFilter === "__all__" ? null : pickupOptionFilter,
+              search: debouncedSearchQuery,
+              sort,
+              storeId: seller.store_id,
+            }),
+          ),
           supabase
             .from("seller_store_defaults")
             .select("pickup_method")
             .eq("store_id", seller.store_id)
             .maybeSingle<StoreDefaults>(),
-          supabase
-            .from("seller_dashboard_attention_orders")
-            .select("pickup_option_id, pickup_option_label_snapshot")
-            .eq("store_id", seller.store_id)
-            .returns<OpenOrderPickupOptionRow[]>(),
         ]);
 
       if (!isMounted) return;
 
-      const firstError =
-        orderResult.error ?? defaultsResult.error ?? pickupOptionsResult.error;
+      const firstError = orderResult.error ?? defaultsResult.error;
 
       if (firstError) {
         setError(firstError.message);
@@ -347,80 +363,32 @@ export function OrdersList() {
         return;
       }
 
-      const nextOrders = orderResult.data ?? [];
-      const orderIds = nextOrders.map((order) => order.order_id);
-      let nextItemsByOrderId: Record<string, SellerOrderItemRow[]> = {};
+      const response = orderResult.data as OrderListRpcResponse | null;
+      const nextOrders = response?.orders ?? [];
+      const totalCount = Number(response?.total_count ?? 0);
+      const lastValidPage = getLastValidOrderPage(page, totalCount);
 
-      if (orderIds.length > 0) {
-        const itemResult = await supabase
-          .from("seller_order_item_detail")
-          .select(
-            "order_id, order_item_id, inventory_item_id, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, batch_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, breeding_history_snapshot, feather_condition_snapshot, order_item_source, custom_item_name_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
-          )
-          .eq("store_id", seller.store_id)
-          .in("order_id", orderIds)
-          .order("created_at", { ascending: true })
-          .returns<SellerOrderItemRow[]>();
-
-        if (!isMounted) return;
-
-        if (itemResult.error) {
-          setError(itemResult.error.message);
-          setIsLoading(false);
-          return;
-        }
-
-        const loadedItems = itemResult.data ?? [];
-        const inventoryItemIds = Array.from(
-          new Set(
-            loadedItems
-              .map((item) => item.inventory_item_id)
-              .filter((id): id is string => Boolean(id)),
-          ),
-        );
-        let barnLocationByInventoryId = new Map<string, string>();
-
-        if (inventoryItemIds.length > 0) {
-          const locationResult = await supabase
-            .from("seller_inventory_management")
-            .select("inventory_item_id, barn_location")
-            .eq("store_id", seller.store_id)
-            .in("inventory_item_id", inventoryItemIds)
-            .returns<SellerInventoryLocationRow[]>();
-
-          if (!isMounted) return;
-
-          if (locationResult.error) {
-            setError(locationResult.error.message);
-            setIsLoading(false);
-            return;
-          }
-
-          barnLocationByInventoryId = new Map(
-            (locationResult.data ?? []).map((item) => [
-              item.inventory_item_id,
-              item.barn_location?.trim() ?? "",
-            ]),
-          );
-        }
-
-        nextItemsByOrderId = groupOrderItemsByOrderId(
-          loadedItems.map((item) => ({
-            ...item,
-            barn_location: item.inventory_item_id
-              ? barnLocationByInventoryId.get(item.inventory_item_id) ?? null
-              : null,
-          })),
-        );
+      if (lastValidPage !== page) {
+        setPage(lastValidPage);
+        return;
       }
+      const nextItemsByOrderId = groupOrderItemsByOrderId(response?.items ?? []);
 
       setOrders(nextOrders);
       setOrderItemsByOrderId(nextItemsByOrderId);
+      setTotalMatchingOrders(totalCount);
+      setOrderArchiveCounts({
+        active: Number(response?.counts.active ?? 0),
+        archived: Number(response?.counts.archived ?? 0),
+      });
+      setActiveFilterCounts({
+        all: Number(response?.counts.all ?? 0),
+        canceled: Number(response?.counts.canceled ?? 0),
+        completed: Number(response?.counts.completed ?? 0),
+        ready_for_pickup: Number(response?.counts.ready_for_pickup ?? 0),
+      });
       setPickupMethod(defaultsResult.data?.pickup_method ?? "notes");
-      setPickupOptions(
-        getOpenOrderPickupOptions(pickupOptionsResult.data ?? []),
-      );
-      setPickupOptionFilter("__all__");
+      setPickupOptions(response?.pickup_options ?? []);
       setExpandedOrderId(null);
       setExpandedBuyerOrderId(null);
       setIsLoading(false);
@@ -431,73 +399,20 @@ export function OrdersList() {
     return () => {
       isMounted = false;
     };
-  }, [archiveView, refreshKey, seller]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadArchiveCounts() {
-      if (!seller) return;
-
-      const [activeCountResult, archivedCountResult, activeLifecycleResult] =
-        await Promise.all([
-          supabase
-            .from("seller_order_management")
-            .select("order_id", { count: "exact", head: true })
-            .eq("store_id", seller.store_id)
-            .is("archived_at", null),
-          supabase
-            .from("seller_order_management")
-            .select("order_id", { count: "exact", head: true })
-            .eq("store_id", seller.store_id)
-            .not("archived_at", "is", null),
-          supabase
-            .from("seller_order_management")
-            .select("order_status, ready_for_pickup_at")
-            .eq("store_id", seller.store_id)
-            .is("archived_at", null)
-            .returns<OrderFilterCountRow[]>(),
-        ]);
-
-      if (!isMounted) return;
-
-      setOrderArchiveCounts({
-        active: activeCountResult.count ?? 0,
-        archived: archivedCountResult.count ?? 0,
-      });
-      setActiveFilterCounts(getFilterCounts(activeLifecycleResult.data ?? []));
-    }
-
-    void loadArchiveCounts();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [refreshKey, seller]);
+  }, [
+    archiveView,
+    debouncedSearchQuery,
+    filter,
+    page,
+    pickupOptionFilter,
+    refreshKey,
+    seller,
+    sort,
+  ]);
 
   const showPickupOptionFilter =
     pickupMethod === "manual_options";
-  const selectedViewOrders = useMemo(
-    () => orders.filter((order) => isOrderInArchiveView(order, archiveView)),
-    [archiveView, orders],
-  );
-  const searchedOrders = useMemo(
-    () =>
-      selectedViewOrders.filter(
-        (order) =>
-          matchesSearch(order, searchQuery, orderItemsByOrderId[order.order_id]) &&
-          matchesPickupOptionFilter(order, pickupOptionFilter),
-      ),
-    [orderItemsByOrderId, pickupOptionFilter, searchQuery, selectedViewOrders],
-  );
-  const visibleOrders = useMemo(
-    () =>
-      sortOrders(
-        searchedOrders.filter((order) => matchesFilter(order, filter)),
-        sort,
-      ),
-    [filter, searchedOrders, sort],
-  );
+  const visibleOrders = orders;
   const visibleOrderIds = useMemo(
     () => visibleOrders.map((order) => order.order_id),
     [visibleOrders],
@@ -505,19 +420,17 @@ export function OrdersList() {
   const selectedVisibleCount = visibleOrderIds.filter((orderId) =>
     selectedOrderIds.has(orderId),
   ).length;
-  const selectedVisibleOrders = useMemo(
-    () => visibleOrders.filter((order) => selectedOrderIds.has(order.order_id)),
-    [selectedOrderIds, visibleOrders],
+  const selectedOrders = useMemo(
+    () => getSelectedOrderRecords(selectedOrderIds, selectedOrderSnapshots),
+    [selectedOrderIds, selectedOrderSnapshots],
   );
   const selectedOrdersForSummary = useMemo(
     () =>
-      orders
-        .filter((order) => selectedOrderIds.has(order.order_id))
-        .map((order) => ({
-          items: orderItemsByOrderId[order.order_id] ?? [],
+      selectedOrders.map((order) => ({
+          items: selectedOrderItems[order.order_id] ?? [],
           order,
         })),
-    [orderItemsByOrderId, orders, selectedOrderIds],
+    [selectedOrderItems, selectedOrders],
   );
   const hasVisibleOrders = visibleOrders.length > 0;
   const allVisibleSelected =
@@ -527,28 +440,47 @@ export function OrdersList() {
 
   function clearSelection() {
     setSelectedOrderIds(new Set());
+    setSelectedOrderSnapshots({});
+    setSelectedOrderItems({});
   }
 
   function updateFilter(nextFilter: OrderFilter) {
     setArchiveView("active");
     setFilter(nextFilter);
+    setPage(1);
     clearSelection();
   }
 
   function updateArchiveView(nextView: OrderArchiveView) {
     setArchiveView(nextView);
     setFilter("all");
+    setPickupOptionFilter("__all__");
+    setPage(1);
     clearSelection();
   }
 
   function updatePickupOptionFilter(nextFilter: string) {
     setPickupOptionFilter(nextFilter);
+    setPage(1);
     clearSelection();
   }
 
   function updateSearchQuery(nextQuery: string) {
     setSearchQuery(nextQuery);
+    setPage(1);
     clearSelection();
+  }
+
+  function updateSort(nextSort: OrderSort) {
+    setSort(nextSort);
+    setPage(1);
+    clearSelection();
+  }
+
+  function updatePage(nextPage: number) {
+    setPage(nextPage);
+    setExpandedOrderId(null);
+    setExpandedBuyerOrderId(null);
   }
 
   function toggleExpandedOrder(orderId: string) {
@@ -560,13 +492,34 @@ export function OrdersList() {
   }
 
   function toggleOrderSelection(orderId: string) {
+    const order = orders.find((candidate) => candidate.order_id === orderId);
+    if (!order) return;
+
     setSelectedOrderIds((current) => {
       const next = new Set(current);
 
       if (next.has(orderId)) {
         next.delete(orderId);
+        setSelectedOrderSnapshots((snapshots) => {
+          const nextSnapshots = { ...snapshots };
+          delete nextSnapshots[orderId];
+          return nextSnapshots;
+        });
+        setSelectedOrderItems((items) => {
+          const nextItems = { ...items };
+          delete nextItems[orderId];
+          return nextItems;
+        });
       } else {
         next.add(orderId);
+        setSelectedOrderSnapshots((snapshots) => ({
+          ...snapshots,
+          [orderId]: order,
+        }));
+        setSelectedOrderItems((items) => ({
+          ...items,
+          [orderId]: orderItemsByOrderId[orderId] ?? [],
+        }));
       }
 
       return next;
@@ -575,9 +528,33 @@ export function OrdersList() {
 
   function toggleSelectAllOnPage() {
     setSelectedOrderIds((current) => {
-      if (allVisibleSelected) return new Set();
+      const next = new Set(current);
 
-      return new Set([...current, ...visibleOrderIds]);
+      if (allVisibleSelected) {
+        for (const orderId of visibleOrderIds) next.delete(orderId);
+        setSelectedOrderSnapshots((snapshots) =>
+          omitOrderKeys(snapshots, visibleOrderIds),
+        );
+        setSelectedOrderItems((items) => omitOrderKeys(items, visibleOrderIds));
+        return next;
+      }
+
+      for (const order of visibleOrders) next.add(order.order_id);
+      setSelectedOrderSnapshots((snapshots) => ({
+        ...snapshots,
+        ...Object.fromEntries(visibleOrders.map((order) => [order.order_id, order])),
+      }));
+      setSelectedOrderItems((items) => ({
+        ...items,
+        ...Object.fromEntries(
+          visibleOrders.map((order) => [
+            order.order_id,
+            orderItemsByOrderId[order.order_id] ?? [],
+          ]),
+        ),
+      }));
+
+      return next;
     });
   }
 
@@ -590,125 +567,33 @@ export function OrdersList() {
   async function printSelectedOrders() {
     if (!seller || selectedOrderIds.size === 0 || isBulkPrintLoading) return;
 
-    const selectedOrdersInVisibleOrder = visibleOrders.filter((order) =>
-      selectedOrderIds.has(order.order_id),
-    );
-    const orderIds = selectedOrdersInVisibleOrder.map((order) => order.order_id);
+    const orderIds = Array.from(selectedOrderIds);
 
     if (orderIds.length === 0) return;
 
     setIsBulkPrintLoading(true);
     setBulkPrintError(null);
 
-    const [orderResult, itemResult, fulfillmentResult, logoResult] = await Promise.all([
-      supabase
-        .from("seller_order_management")
-        .select(
-          "order_id, order_number, order_source, order_status, payment_method, payment_status, created_at, ready_for_pickup_at, fulfilled_at, canceled_at, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, pickup_note, buyer_notes, subtotal_amount, tax_fee_label_snapshot, tax_fee_amount, total_amount, item_count, total_item_quantity, pickup_option_label_snapshot",
-        )
-        .eq("store_id", seller.store_id)
-        .in("order_id", orderIds)
-        .returns<PrintableOrder[]>(),
-      supabase
-        .from("seller_order_item_detail")
-        .select(
-          "order_id, order_item_id, inventory_item_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, breeding_history_snapshot, feather_condition_snapshot, hatch_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, line_subtotal",
-        )
-        .eq("store_id", seller.store_id)
-        .in("order_id", orderIds)
-        .order("created_at", { ascending: true })
-        .returns<
-          Array<
-            PrintableOrderItem & {
-              inventory_item_id: string | null;
-              order_id: string;
-            }
-          >
-        >(),
-      supabase
-        .from("orders")
-        .select(
-          "id, fulfillment_method, delivery_option_name_snapshot, delivery_fee_amount",
-        )
-        .eq("store_id", seller.store_id)
-        .in("id", orderIds)
-        .returns<
-          Array<{
-            delivery_fee_amount: number | null;
-            delivery_option_name_snapshot: string | null;
-            fulfillment_method: "pickup" | "delivery" | string | null;
-            id: string;
-          }>
-        >(),
+    const [printResult, logoResult] = await Promise.all([
+      supabase.rpc("seller_get_orders_for_print", {
+        p_order_ids: orderIds,
+        p_store_id: seller.store_id,
+      }),
       loadStoreLogo(seller.store_id),
     ]);
 
-    const firstError = orderResult.error ?? itemResult.error ?? fulfillmentResult.error;
-
-    if (firstError) {
+    if (printResult.error) {
       setBulkPrintError("One or more selected orders could not be loaded for printing.");
       setIsBulkPrintLoading(false);
       return;
     }
 
-    const printableItems = itemResult.data ?? [];
-    const inventoryItemIds = Array.from(
-      new Set(
-        printableItems
-          .map((item) => item.inventory_item_id)
-          .filter((id): id is string => Boolean(id)),
-      ),
-    );
-    let barnLocationByInventoryId = new Map<string, string | null>();
-
-    if (inventoryItemIds.length > 0) {
-      const locationResult = await supabase
-        .from("seller_inventory_management")
-        .select("inventory_item_id, barn_location")
-        .eq("store_id", seller.store_id)
-        .in("inventory_item_id", inventoryItemIds)
-        .returns<SellerInventoryLocationRow[]>();
-
-      if (locationResult.error) {
-        setBulkPrintError("One or more selected orders could not be loaded for printing.");
-        setIsBulkPrintLoading(false);
-        return;
-      }
-
-      barnLocationByInventoryId = new Map(
-        (locationResult.data ?? []).map((item) => [
-          item.inventory_item_id,
-          item.barn_location,
-        ]),
-      );
-    }
-
-    const fulfillmentById = new Map(
-      (fulfillmentResult.data ?? []).map((row) => [row.id, row]),
-    );
+    const response = printResult.data as BulkPrintRpcResponse | null;
     const ordersById = new Map(
-      (orderResult.data ?? []).map((order) => {
-        const fulfillment = fulfillmentById.get(order.order_id);
-
-        return [
-          order.order_id,
-          {
-            ...order,
-            delivery_fee_amount: fulfillment?.delivery_fee_amount ?? 0,
-            delivery_option_name_snapshot:
-              fulfillment?.delivery_option_name_snapshot ?? null,
-            fulfillment_method: fulfillment?.fulfillment_method ?? "pickup",
-          },
-        ];
-      }),
+      (response?.orders ?? []).map((order) => [order.order_id, order]),
     );
     const itemsByOrderId = groupPrintableItemsByOrderId(
-      printableItems.map((item) => ({
-        ...item,
-        barn_location: item.inventory_item_id
-          ? barnLocationByInventoryId.get(item.inventory_item_id) ?? null
-          : null,
-      })),
+      response?.items ?? [],
     );
     const missingOrder = orderIds.find((orderId) => !ordersById.has(orderId));
 
@@ -729,9 +614,9 @@ export function OrdersList() {
   }
 
   function openBulkFulfillmentDialog() {
-    const eligibleOrders = selectedVisibleOrders.filter((order) =>
+    const eligibleOrders = selectedOrders.filter((order) =>
       canBulkMarkOrderFulfilled(
-        toOrderActionSnapshot(order, orderItemsByOrderId[order.order_id]),
+        toOrderActionSnapshot(order, selectedOrderItems[order.order_id]),
       ),
     );
 
@@ -739,8 +624,8 @@ export function OrdersList() {
       eligibleCount: eligibleOrders.length,
       kind: "fulfill",
       payableCount: eligibleOrders.filter(canBulkMarkOrderPaid).length,
-      selectedCount: selectedVisibleOrders.length,
-      skippedCount: selectedVisibleOrders.length - eligibleOrders.length,
+      selectedCount: selectedOrders.length,
+      skippedCount: selectedOrders.length - eligibleOrders.length,
     });
     setBulkActionError(null);
     setBulkActionMessage(null);
@@ -749,13 +634,13 @@ export function OrdersList() {
   }
 
   function openBulkMarkPaidDialog() {
-    const eligibleOrders = selectedVisibleOrders.filter(canBulkMarkOrderPaid);
+    const eligibleOrders = selectedOrders.filter(canBulkMarkOrderPaid);
 
     setBulkActionDialog({
       eligibleCount: eligibleOrders.length,
       kind: "mark_paid",
-      selectedCount: selectedVisibleOrders.length,
-      skippedCount: selectedVisibleOrders.length - eligibleOrders.length,
+      selectedCount: selectedOrders.length,
+      skippedCount: selectedOrders.length - eligibleOrders.length,
     });
     setBulkActionError(null);
     setBulkActionMessage(null);
@@ -763,7 +648,7 @@ export function OrdersList() {
   }
 
   function openBulkArchiveDialog() {
-    const summary = getBulkArchiveSummary(selectedVisibleOrders);
+    const summary = getBulkArchiveSummary(selectedOrders);
 
     setBulkActionError(null);
     setBulkActionMessage(null);
@@ -779,21 +664,21 @@ export function OrdersList() {
       bothCount: summary.bothCount,
       eligibleCount: summary.eligibleCount,
       kind: "archive",
-      selectedCount: selectedVisibleOrders.length,
-      skippedCount: selectedVisibleOrders.length - summary.eligibleCount,
+      selectedCount: selectedOrders.length,
+      skippedCount: selectedOrders.length - summary.eligibleCount,
       unpaidCount: summary.unpaidCount,
       unfulfilledCount: summary.unfulfilledCount,
     });
   }
 
   function openBulkUnarchiveDialog() {
-    const eligibleOrders = selectedVisibleOrders.filter(canBulkUnarchiveOrder);
+    const eligibleOrders = selectedOrders.filter(canBulkUnarchiveOrder);
 
     setBulkActionDialog({
       eligibleCount: eligibleOrders.length,
       kind: "unarchive",
-      selectedCount: selectedVisibleOrders.length,
-      skippedCount: selectedVisibleOrders.length - eligibleOrders.length,
+      selectedCount: selectedOrders.length,
+      skippedCount: selectedOrders.length - eligibleOrders.length,
     });
     setBulkActionError(null);
     setBulkActionMessage(null);
@@ -820,7 +705,7 @@ export function OrdersList() {
         p_note: bulkFulfillMarkPaid
           ? "Bulk fulfilled and marked eligible orders paid by seller."
           : "Bulk fulfilled by seller.",
-        p_order_ids: getSelectedVisibleOrderIds(selectedVisibleOrders),
+        p_order_ids: getSelectedVisibleOrderIds(selectedOrders),
       },
     );
 
@@ -850,7 +735,7 @@ export function OrdersList() {
 
     const { data, error } = await supabase.rpc("seller_bulk_mark_orders_paid", {
       p_note: "Bulk marked paid by seller.",
-      p_order_ids: getSelectedVisibleOrderIds(selectedVisibleOrders),
+      p_order_ids: getSelectedVisibleOrderIds(selectedOrders),
     });
 
     if (error) {
@@ -865,7 +750,7 @@ export function OrdersList() {
   }
 
   async function archiveSelectedOrders() {
-    if (isBulkActionSaving || selectedVisibleOrders.length === 0) return;
+    if (isBulkActionSaving || selectedOrders.length === 0) return;
 
     setIsBulkActionSaving(true);
     setBulkActionError(null);
@@ -873,7 +758,7 @@ export function OrdersList() {
 
     const { data, error } = await supabase.rpc("seller_bulk_archive_orders", {
       p_note: "Bulk archived by seller.",
-      p_order_ids: getSelectedVisibleOrderIds(selectedVisibleOrders),
+      p_order_ids: getSelectedVisibleOrderIds(selectedOrders),
     });
 
     if (error) {
@@ -902,7 +787,7 @@ export function OrdersList() {
 
     const { data, error } = await supabase.rpc("seller_bulk_unarchive_orders", {
       p_note: "Bulk unarchived by seller.",
-      p_order_ids: getSelectedVisibleOrderIds(selectedVisibleOrders),
+      p_order_ids: getSelectedVisibleOrderIds(selectedOrders),
     });
 
     if (error) {
@@ -994,7 +879,7 @@ export function OrdersList() {
                 <select
                   className="seller-form-field min-h-12 rounded-lg font-medium"
                   value={sort}
-                  onChange={(event) => setSort(event.target.value as OrderSort)}
+                  onChange={(event) => updateSort(event.target.value as OrderSort)}
                 >
                   {orderSortOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -1015,7 +900,7 @@ export function OrdersList() {
               onArchiveViewChange={updateArchiveView}
               onFilterChange={updateFilter}
               onPickupOptionChange={updatePickupOptionFilter}
-              onSortChange={setSort}
+              onSortChange={updateSort}
             />
 
             <div className="hidden items-center gap-3 pb-1 xl:flex">
@@ -1060,8 +945,11 @@ export function OrdersList() {
             isBulkPrintLoading={isBulkPrintLoading}
             itemsByOrderId={orderItemsByOrderId}
             orders={visibleOrders}
+            page={page}
             selectedOrderIds={selectedOrderIds}
+            selectedCount={selectedOrderIds.size}
             selectedVisibleCount={selectedVisibleCount}
+            totalOrders={totalMatchingOrders}
             onBulkActionsOpenChange={setIsBulkActionsMenuOpen}
             onClearSelection={clearSelection}
             onOpenBulkArchive={openBulkArchiveDialog}
@@ -1074,6 +962,7 @@ export function OrdersList() {
             onToggleExpandedOrder={toggleExpandedOrder}
             onToggleOrderSelection={toggleOrderSelection}
             onToggleSelectAll={toggleSelectAllOnPage}
+            onPageChange={updatePage}
           />
         ) : (
           <EmptyState
@@ -1192,8 +1081,11 @@ function OrdersTableCard({
   isBulkPrintLoading,
   itemsByOrderId,
   orders,
+  page,
   selectedOrderIds,
+  selectedCount,
   selectedVisibleCount,
+  totalOrders,
   onBulkActionsOpenChange,
   onClearSelection,
   onOpenBulkArchive,
@@ -1206,6 +1098,7 @@ function OrdersTableCard({
   onToggleExpandedOrder,
   onToggleOrderSelection,
   onToggleSelectAll,
+  onPageChange,
 }: {
   allVisibleSelected: boolean;
   archiveView: OrderArchiveView;
@@ -1219,8 +1112,11 @@ function OrdersTableCard({
   isBulkPrintLoading: boolean;
   itemsByOrderId: Record<string, SellerOrderItemRow[]>;
   orders: SellerOrderRow[];
+  page: number;
   selectedOrderIds: Set<string>;
+  selectedCount: number;
   selectedVisibleCount: number;
+  totalOrders: number;
   onBulkActionsOpenChange: (isOpen: boolean) => void;
   onClearSelection: () => void;
   onOpenBulkArchive: () => void;
@@ -1233,6 +1129,7 @@ function OrdersTableCard({
   onToggleExpandedOrder: (orderId: string) => void;
   onToggleOrderSelection: (orderId: string) => void;
   onToggleSelectAll: () => void;
+  onPageChange: (page: number) => void;
 }) {
   const selectAllRef = useRef<HTMLInputElement>(null);
   const isPartiallySelected =
@@ -1250,19 +1147,19 @@ function OrdersTableCard({
         <div>
           <p className="text-base font-bold text-stone-950">Orders</p>
           <p className="mt-0.5 text-sm text-stone-500">
-            {orders.length} {pluralize(orders.length, "order")}
+            {totalOrders} {pluralize(totalOrders, "order")}
           </p>
         </div>
       </div>
 
-      {selectedVisibleCount > 0 ? (
+      {selectedCount > 0 ? (
         <MobileBulkActions
           allVisibleSelected={allVisibleSelected}
           archiveView={archiveView}
           isBulkActionSaving={isBulkActionSaving}
           isBulkActionsMenuOpen={isBulkActionsMenuOpen}
           isBulkPrintLoading={isBulkPrintLoading}
-          selectedCount={selectedVisibleCount}
+          selectedCount={selectedCount}
           onBulkActionsOpenChange={onBulkActionsOpenChange}
           onOpenBulkArchive={onOpenBulkArchive}
           onOpenBulkFulfillment={onOpenBulkFulfillment}
@@ -1287,13 +1184,13 @@ function OrdersTableCard({
           Select all on this page
         </label>
 
-        {selectedVisibleCount > 0 ? (
+        {selectedCount > 0 ? (
           <BulkActions
             archiveView={archiveView}
             isBulkActionSaving={isBulkActionSaving}
             isBulkActionsMenuOpen={isBulkActionsMenuOpen}
             isBulkPrintLoading={isBulkPrintLoading}
-            selectedCount={selectedVisibleCount}
+            selectedCount={selectedCount}
             onBulkActionsOpenChange={onBulkActionsOpenChange}
             onClearSelection={onClearSelection}
             onOpenBulkArchive={onOpenBulkArchive}
@@ -1349,7 +1246,79 @@ function OrdersTableCard({
           />
         ))}
       </div>
+      <div className="border-t border-stone-200/80 px-4 py-4">
+        <OrdersPagination
+          currentPage={page}
+          totalOrders={totalOrders}
+          onPageChange={onPageChange}
+        />
+      </div>
     </SellerCard>
+  );
+}
+
+function OrdersPagination({
+  currentPage,
+  totalOrders,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalOrders: number;
+  onPageChange: (page: number) => void;
+}) {
+  const totalPages = getOrderTotalPages(totalOrders);
+  const pageStart = getOrderPageOffset(currentPage);
+  const showingStart = totalOrders === 0 ? 0 : pageStart + 1;
+  const showingEnd = Math.min(pageStart + ORDERS_PER_PAGE, totalOrders);
+  const pages = getOrderPaginationPages(currentPage, totalPages);
+
+  return (
+    <div className="flex flex-col gap-3 text-sm text-stone-600 lg:flex-row lg:items-center lg:justify-between">
+      <p className="text-center lg:text-left">
+        Showing {showingStart}-{showingEnd} of {totalOrders} orders
+      </p>
+      <div className="flex w-full items-center gap-2 lg:w-auto lg:flex-wrap">
+        <button
+          className="inline-flex min-h-12 flex-1 items-center justify-center rounded-md border border-stone-200 bg-white px-3 text-base font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-45 lg:min-h-10 lg:flex-none lg:text-sm"
+          disabled={currentPage === 1}
+          type="button"
+          onClick={() => onPageChange(currentPage - 1)}
+        >
+          Previous
+        </button>
+        {pages.map((paginationItem, index) =>
+          paginationItem === "ellipsis" ? (
+            <span
+              className="hidden min-h-10 min-w-10 items-center justify-center text-sm font-bold text-stone-500 lg:inline-flex"
+              key={`ellipsis-${index}`}
+            >
+              ...
+            </span>
+          ) : (
+            <button
+              className={`hidden min-h-10 min-w-10 items-center justify-center rounded-md border px-3 font-semibold shadow-sm transition lg:inline-flex ${
+                paginationItem === currentPage
+                  ? "border-emerald-800 bg-emerald-800 text-white"
+                  : "border-stone-200 bg-white text-stone-950 hover:bg-stone-50"
+              }`}
+              key={paginationItem}
+              type="button"
+              onClick={() => onPageChange(paginationItem)}
+            >
+              {paginationItem}
+            </button>
+          ),
+        )}
+        <button
+          className="inline-flex min-h-12 flex-1 items-center justify-center rounded-md border border-stone-200 bg-white px-3 text-base font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-45 lg:min-h-10 lg:flex-none lg:text-sm"
+          disabled={currentPage === totalPages}
+          type="button"
+          onClick={() => onPageChange(currentPage + 1)}
+        >
+          Next
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -3258,87 +3227,6 @@ function OrderArchivedBadge() {
   );
 }
 
-function matchesFilter(order: SellerOrderRow, filter: OrderFilter) {
-  if (filter === "all") return true;
-
-  const lifecycle = getOrderLifecycleState(order);
-
-  if (filter === "ready_for_pickup") {
-    return lifecycle === "ready_for_pickup" || lifecycle === "needs_attention";
-  }
-
-  return lifecycle === filter;
-}
-
-function isOrderInArchiveView(
-  order: SellerOrderRow,
-  archiveView: OrderArchiveView,
-) {
-  return archiveView === "archived" ? Boolean(order.archived_at) : !order.archived_at;
-}
-
-function matchesPickupOptionFilter(
-  order: SellerOrderRow,
-  filter: PickupOptionFilter,
-) {
-  return filter === "__all__" || order.pickup_option_id === filter;
-}
-
-function getOpenOrderPickupOptions(rows: OpenOrderPickupOptionRow[]) {
-  const optionsById = new Map<string, PickupOption>();
-
-  for (const row of rows) {
-    const id = row.pickup_option_id;
-    const label = row.pickup_option_label_snapshot?.trim();
-
-    if (!id || !label || optionsById.has(id)) continue;
-
-    optionsById.set(id, { id, label });
-  }
-
-  return Array.from(optionsById.values()).sort((first, second) =>
-    first.label.localeCompare(second.label),
-  );
-}
-
-function matchesSearch(
-  order: SellerOrderRow,
-  query: string,
-  items: SellerOrderItemRow[] = [],
-) {
-  const normalizedQuery = normalizeFilterText(query);
-
-  if (!normalizedQuery) return true;
-
-  return getOrderSearchText(order, items).includes(normalizedQuery);
-}
-
-function getOrderSearchText(
-  order: SellerOrderRow,
-  items: SellerOrderItemRow[] = [],
-) {
-  return normalizeFilterText(
-    [
-      order.order_number,
-      formatCustomerName(order),
-      order.buyer_phone_snapshot,
-      order.buyer_email_snapshot,
-      formatOrderItems(order),
-      formatCurrency(order.total_amount),
-      order.pickup_note,
-      order.pickup_option_label_snapshot,
-      order.buyer_notes,
-      ...items.map((item) => getOrderItemSearchText(item)),
-    ]
-      .filter(Boolean)
-      .join(" "),
-  );
-}
-
-function normalizeFilterText(value: string | null | undefined) {
-  return (value ?? "").trim().toLowerCase();
-}
-
 function groupOrderItemsByOrderId(items: SellerOrderItemRow[]) {
   return items.reduce<Record<string, SellerOrderItemRow[]>>((groups, item) => {
     groups[item.order_id] = [...(groups[item.order_id] ?? []), item];
@@ -3346,10 +3234,17 @@ function groupOrderItemsByOrderId(items: SellerOrderItemRow[]) {
   }, {});
 }
 
+function omitOrderKeys<T>(record: Record<string, T>, orderIds: string[]) {
+  const next = { ...record };
+
+  for (const orderId of orderIds) delete next[orderId];
+
+  return next;
+}
+
 function groupPrintableItemsByOrderId(
   items: Array<
     PrintableOrderItem & {
-      inventory_item_id: string | null;
       order_id: string;
     }
   >,
@@ -3426,27 +3321,6 @@ function requestPrintFrame(callback: () => void) {
   window.requestAnimationFrame(() => {
     window.requestAnimationFrame(callback);
   });
-}
-
-function getFilterCounts(orders: OrderFilterCountRow[]) {
-  const counts: Record<OrderFilter, number> = {
-    all: orders.length,
-    canceled: 0,
-    completed: 0,
-    ready_for_pickup: 0,
-  };
-
-  for (const order of orders) {
-    const lifecycle = getOrderLifecycleState(order);
-
-    if (lifecycle === "needs_attention") {
-      counts.ready_for_pickup += 1;
-    } else {
-      counts[lifecycle] += 1;
-    }
-  }
-
-  return counts;
 }
 
 function getCombinedOrderStatus(order: SellerOrderRow): CombinedOrderStatus {
@@ -3653,28 +3527,6 @@ function pluralize(count: number, singular: string) {
   return count === 1 ? singular : `${singular}s`;
 }
 
-function sortOrders(orders: SellerOrderRow[], sort: OrderSort) {
-  return [...orders].sort((first, second) => {
-    if (sort === "oldest") {
-      return dateValue(first.created_at) - dateValue(second.created_at);
-    }
-
-    if (sort === "buyer_name") {
-      return formatCustomerName(first).localeCompare(formatCustomerName(second));
-    }
-
-    if (sort === "order_total") {
-      return (second.total_amount ?? 0) - (first.total_amount ?? 0);
-    }
-
-    return dateValue(second.created_at) - dateValue(first.created_at);
-  });
-}
-
-function dateValue(value: string | null | undefined) {
-  return value ? new Date(value).getTime() : 0;
-}
-
 function formatCustomerName(order: SellerOrderRow) {
   return (
     [order.buyer_first_name_snapshot, order.buyer_last_name_snapshot]
@@ -3739,19 +3591,6 @@ function formatOrderItemSummary(item: SellerOrderItemRow) {
     details,
     title: title || fallbackTitle,
   };
-}
-
-function getOrderItemSearchText(item: SellerOrderItemRow) {
-  const summary = formatOrderItemSummary(item);
-
-  return [
-    summary.title,
-    summary.details,
-    item.product_type_snapshot,
-    item.item_category_snapshot,
-  ]
-    .filter(Boolean)
-    .join(" ");
 }
 
 function formatSellerItemDetail(value: string | null) {
