@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { PasswordInput } from "@/app/_components/password-input";
 import {
   authCallbackUrl,
   friendlyVerificationResendError,
@@ -287,28 +288,68 @@ export function SignupForm({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <Field
+            <label
+              className="text-sm font-bold text-stone-950 sm:text-[13px]"
+              htmlFor="password"
+            >
+              Password *
+            </label>
+            <PasswordInput
+              ariaDescribedBy={errors.password ? "password-error" : undefined}
+              ariaInvalid={Boolean(errors.password)}
               autoComplete="new-password"
-              error={errors.password}
+              className={`mt-1 min-h-12 w-full rounded-md border bg-white px-3 text-base font-medium text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:ring-2 focus:ring-[#246f38]/25 sm:min-h-10 sm:text-[15px] ${
+                errors.password
+                  ? "border-red-400 focus:border-red-500"
+                  : "border-stone-300 focus:border-[#246f38]"
+              }`}
               id="password"
-              label="Password *"
-              onChange={setPassword}
-              type="password"
+              onChange={(event) => setPassword(event.target.value)}
               value={password}
             />
+            {errors.password ? (
+              <p
+                className="mt-1 text-sm font-semibold text-red-700 sm:text-[13px]"
+                id="password-error"
+              >
+                {errors.password}
+              </p>
+            ) : null}
             <p className="mt-1 text-sm font-normal text-stone-600 sm:text-[13px] sm:text-stone-500">
               Use at least 8 characters.
             </p>
           </div>
-          <Field
-            autoComplete="new-password"
-            error={errors.confirmPassword}
-            id="confirm-password"
-            label="Confirm password *"
-            onChange={setConfirmPassword}
-            type="password"
-            value={confirmPassword}
-          />
+          <div>
+            <label
+              className="text-sm font-bold text-stone-950 sm:text-[13px]"
+              htmlFor="confirm-password"
+            >
+              Confirm password *
+            </label>
+            <PasswordInput
+              ariaDescribedBy={
+                errors.confirmPassword ? "confirm-password-error" : undefined
+              }
+              ariaInvalid={Boolean(errors.confirmPassword)}
+              autoComplete="new-password"
+              className={`mt-1 min-h-12 w-full rounded-md border bg-white px-3 text-base font-medium text-stone-950 shadow-sm outline-none transition placeholder:text-stone-400 focus:ring-2 focus:ring-[#246f38]/25 sm:min-h-10 sm:text-[15px] ${
+                errors.confirmPassword
+                  ? "border-red-400 focus:border-red-500"
+                  : "border-stone-300 focus:border-[#246f38]"
+              }`}
+              id="confirm-password"
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              value={confirmPassword}
+            />
+            {errors.confirmPassword ? (
+              <p
+                className="mt-1 text-sm font-semibold text-red-700 sm:text-[13px]"
+                id="confirm-password-error"
+              >
+                {errors.confirmPassword}
+              </p>
+            ) : null}
+          </div>
         </div>
 
         {errors.form ? (

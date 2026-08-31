@@ -4,6 +4,8 @@ import { Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 
 type PasswordInputProps = {
+  ariaDescribedBy?: string;
+  ariaInvalid?: boolean;
   autoComplete?: string;
   className?: string;
   disabled?: boolean;
@@ -13,6 +15,8 @@ type PasswordInputProps = {
 };
 
 export function PasswordInput({
+  ariaDescribedBy,
+  ariaInvalid = false,
   autoComplete = "current-password",
   className = "",
   disabled = false,
@@ -26,6 +30,8 @@ export function PasswordInput({
   return (
     <div className="relative">
       <input
+        aria-describedby={ariaDescribedBy}
+        aria-invalid={ariaInvalid}
         autoComplete={autoComplete}
         className={`${className} pr-12`}
         disabled={disabled}

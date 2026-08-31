@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
+import { isAuthSessionMissingError } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { isCurrentUserPlatformAdmin } from "@/app/admin/_lib/admin-auth";
 import type { SellerContext } from "../_lib/seller-types";
@@ -44,6 +45,11 @@ export function SellerContextProvider({
       if (!isMounted) return;
 
       if (userError) {
+        if (isAuthSessionMissingError(userError)) {
+          router.replace("/login");
+          return;
+        }
+
         setError(userError.message);
         setIsLoading(false);
         return;
