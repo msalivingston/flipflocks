@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpDown, Funnel, MoreHorizontal } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ListingShareDialog } from "../_components/listing-share-dialog";
 import { useSellerContext } from "../_components/seller-context";
@@ -46,7 +46,6 @@ import {
 import {
   getCoopActivationErrorMessage,
   getLiveBirdInventoryManageHref,
-  type LiveBirdListingPublicationState,
 } from "./_lib/live-bird-draft-state";
 
 type InventoryRow = {
@@ -80,13 +79,6 @@ type InventoryRow = {
   inventory_updated_at: string | null;
 };
 
-type ReservedRow = {
-  inventory_item_id: string | null;
-  equipment_inventory_item_id: string | null;
-  processed_poultry_inventory_item_id: string | null;
-  remaining_unfulfilled_quantity: number | null;
-};
-
 type HatchingEggInventoryRow = {
   hatching_egg_inventory_item_id: string;
   hatching_egg_product_id: string | null;
@@ -110,15 +102,35 @@ type HatchingEggInventoryRow = {
   updated_at: string;
 };
 
-type InventoryMediaRow = {
-  entity_id: string;
-  public_url: string | null;
-  alt_text: string | null;
-};
-
 type InventoryPrimaryPhoto = {
   url: string;
   alt: string;
+};
+
+type InventoryPageRow = {
+  primary_photo: InventoryPrimaryPhoto | null;
+  reserved_quantity: number;
+  row: Record<string, unknown>;
+};
+
+type InventoryPageResponse = {
+  category: InventoryProductTab;
+  category_count: number;
+  options: {
+    breed?: Array<{ label: string; value: string }>;
+    condition?: Array<{ label: string; value: string }>;
+    equipment_category?: Array<{ label: string; value: string }>;
+    product_category?: Array<{ label: string; value: string }>;
+    species?: Array<{ label: string; value: string }>;
+    type_sex?: Array<{ label: string; value: string }>;
+  };
+  rows: InventoryPageRow[];
+  summary: {
+    available_quantity: number;
+    inventory_value: number;
+    reserved_quantity: number;
+  };
+  total_count: number;
 };
 
 type InventoryProductTab =
@@ -283,9 +295,6 @@ const ageTooltipText =
   "Age is calculated from the hatch date and updates daily. It is shown in weeks through 26 weeks, then in whole months.";
 const reservedTooltipText =
   "Reserved inventory has been sold but not picked up or fulfilled yet.";
-const liveBirdInventorySelect =
-  "store_id, listing_batch_id, listing_batch_breed_id, inventory_item_id, species_name, species_slug, breed_display_name, batch_type, origin_date, available_date, quantity_available, inventory_type, custom_inventory_label, effective_unit_price, price_override, inventory_item_sort_order, inventory_visibility_status, inventory_moderation_status, listing_batch_breed_visibility_status, listing_batch_visibility_status, listing_batch_moderation_status, operational_availability_status, inventory_seller_notes, internal_batch_label, archived_at, inventory_updated_at";
-
 const ageFilterOptions: { label: string; value: AgeFilter }[] = [
   { label: "All ages", value: "all" },
   { label: "0-6 weeks", value: "0_6" },
@@ -391,6 +400,13 @@ export function InventoryManagement() {
     useState<Record<InventoryProductTab, InventoryTabFilters>>(
       defaultTabFilters,
     );
+  const [pagesByTab, setPagesByTab] = useState<
+    Record<InventoryProductTab, number>
+  >({ equipment: 0, hatching_eggs: 0, live_poultry: 0, processed_poultry: 0 });
+  const [inventoryPage, setInventoryPage] = useState<InventoryPageResponse | null>(
+    null,
+  );
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isArchiveProcessing, setIsArchiveProcessing] = useState(false);
@@ -416,6 +432,9 @@ export function InventoryManagement() {
   const isShareResolvingRef = useRef(false);
   const activeTab =
     inventoryTabParamValues[searchParams.get("tab") ?? ""] ?? "live_poultry";
+  const page = pagesByTab[activeTab];
+  const filtersForQuery = filtersByTab[activeTab];
+  const deferredSearch = useDeferredValue(filtersForQuery.search);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -448,117 +467,86 @@ export function InventoryManagement() {
       setIsLoading(true);
       setLoadError(null);
 
-      const [
-        inventoryResult,
-        publicationStateResult,
-        reservedResult,
-        equipmentResult,
-        processedPoultryResult,
-        hatchingEggResult,
-        hatchingEggMediaResult,
-      ] = await Promise.all([
-        supabase
-          .from("seller_inventory_management")
-          .select(liveBirdInventorySelect)
-          .eq("store_id", seller.store_id)
-          .neq("batch_type", "hatching_eggs")
-          .neq("inventory_type", "hatching_eggs")
-          .eq("inventory_moderation_status", "normal")
-          .eq("listing_batch_moderation_status", "normal")
-          .order("species_name", { ascending: true })
-          .order("breed_display_name", { ascending: true })
-          .returns<InventoryRow[]>(),
-        supabase.rpc("seller_get_live_bird_listing_publication_states", {
-          p_store_id: seller.store_id,
-        }),
-        supabase
-          .from("seller_order_item_detail")
-          .select(
-            "inventory_item_id, equipment_inventory_item_id, processed_poultry_inventory_item_id, remaining_unfulfilled_quantity",
-          )
-          .eq("store_id", seller.store_id)
-          .returns<ReservedRow[]>(),
-        supabase
-          .from("seller_equipment_inventory_management")
-          .select("*")
-          .eq("store_id", seller.store_id)
-          .eq("moderation_status", "normal")
-          .order("updated_at", { ascending: false })
-          .returns<EquipmentInventoryRow[]>(),
-        supabase
-          .from("seller_processed_poultry_inventory_management")
-          .select("*")
-          .eq("store_id", seller.store_id)
-          .eq("moderation_status", "normal")
-          .order("updated_at", { ascending: false })
-          .returns<ProcessedPoultryInventoryRow[]>(),
-        supabase
-          .from("seller_hatching_egg_inventory_management")
-          .select("*")
-          .eq("store_id", seller.store_id)
-          .eq("moderation_status", "normal")
-          .order("updated_at", { ascending: false })
-          .returns<HatchingEggInventoryRow[]>(),
-        supabase
-          .from("seller_media_management")
-          .select("entity_id, public_url, alt_text")
-          .eq("store_id", seller.store_id)
-          .eq("entity_type", "hatching_egg_inventory_item")
-          .eq("display_context", "gallery")
-          .eq("visibility_status", "active")
-          .eq("moderation_status", "normal")
-          .order("is_featured", { ascending: false })
-          .order("sort_order", { ascending: true })
-          .returns<InventoryMediaRow[]>(),
-      ]);
+      const result = await supabase.rpc("seller_get_inventory_management_page", {
+        p_age: filtersForQuery.age,
+        p_availability: filtersForQuery.availability,
+        p_breed: filtersForQuery.breed,
+        p_category: activeTab,
+        p_condition: filtersForQuery.condition,
+        p_equipment_category: filtersForQuery.equipmentCategory,
+        p_limit: 50,
+        p_offset: page * 50,
+        p_product_category: filtersForQuery.productCategory,
+        p_search: deferredSearch,
+        p_sort: filtersForQuery.sortBy,
+        p_species: filtersForQuery.species,
+        p_store_id: seller.store_id,
+        p_type_sex: filtersForQuery.typeSex,
+      });
 
       if (!isMounted) return;
 
-      const firstError =
-        inventoryResult.error ??
-        publicationStateResult.error ??
-        reservedResult.error ??
-        equipmentResult.error ??
-        processedPoultryResult.error ??
-        hatchingEggResult.error ??
-        hatchingEggMediaResult.error;
-
-      if (firstError) {
-        setLoadError(firstError.message);
+      if (result.error) {
+        setLoadError(result.error.message);
         setIsLoading(false);
         return;
       }
 
+      const nextPage = normalizeInventoryPageResponse(result.data);
+
+      if (nextPage.total_count > 0 && page * 50 >= nextPage.total_count) {
+        setPagesByTab((current) => ({
+          ...current,
+          [activeTab]: Math.floor((nextPage.total_count - 1) / 50),
+        }));
+        return;
+      }
+
+      const nextRows = nextPage.rows.map((entry) => entry.row);
+      const reservationMap = Object.fromEntries(
+        nextPage.rows.map((entry) => [
+          getInventoryPageRowId(activeTab, entry.row),
+          Number(entry.reserved_quantity ?? 0),
+        ]),
+      );
+
       setRows(
-        mergeLiveBirdPublicationStates(
-          inventoryResult.data ?? [],
-          Array.isArray(publicationStateResult.data)
-            ? (publicationStateResult.data as LiveBirdListingPublicationState[])
-            : [],
-        ),
+        activeTab === "live_poultry"
+          ? (nextRows as unknown as InventoryRow[])
+          : [],
       );
-      setEquipmentRows(equipmentResult.data ?? []);
-      setProcessedPoultryRows(processedPoultryResult.data ?? []);
-      setHatchingEggRows(hatchingEggResult.data ?? []);
+      setHatchingEggRows(
+        activeTab === "hatching_eggs"
+          ? (nextRows as unknown as HatchingEggInventoryRow[])
+          : [],
+      );
+      setProcessedPoultryRows(
+        activeTab === "processed_poultry"
+          ? (nextRows as unknown as ProcessedPoultryInventoryRow[])
+          : [],
+      );
+      setEquipmentRows(
+        activeTab === "equipment"
+          ? (nextRows as unknown as EquipmentInventoryRow[])
+          : [],
+      );
       setHatchingEggPrimaryPhotos(
-        buildPrimaryPhotoMap(hatchingEggMediaResult.data ?? []),
+        activeTab === "hatching_eggs"
+          ? Object.fromEntries(
+              nextPage.rows
+                .filter((entry) => entry.primary_photo)
+                .map((entry) => [
+                  getInventoryPageRowId(activeTab, entry.row),
+                  entry.primary_photo as InventoryPrimaryPhoto,
+                ]),
+            )
+          : {},
       );
-      setReservedByItemId(
-        buildReservedMap(reservedResult.data ?? [], "inventory_item_id"),
-      );
-      setReservedByEquipmentId(
-        buildReservedMap(
-          reservedResult.data ?? [],
-          "equipment_inventory_item_id",
-        ),
-      );
-      setReservedByProcessedPoultryId(
-        buildReservedMap(
-          reservedResult.data ?? [],
-          "processed_poultry_inventory_item_id",
-        ),
-      );
-      setDraftQuantities({});
+      setReservedByItemId(activeTab === "live_poultry" ? reservationMap : {});
+      setReservedByEquipmentId(activeTab === "equipment" ? reservationMap : {});
+      setReservedByProcessedPoultryId(activeTab === "processed_poultry" ? reservationMap : {});
+      setInventoryPage(nextPage);
+      setSelectedItemIds([]);
       setIsLoading(false);
     }
 
@@ -567,7 +555,22 @@ export function InventoryManagement() {
     return () => {
       isMounted = false;
     };
-  }, [seller]);
+  }, [
+    activeTab,
+    deferredSearch,
+    filtersForQuery.age,
+    filtersForQuery.availability,
+    filtersForQuery.breed,
+    filtersForQuery.condition,
+    filtersForQuery.equipmentCategory,
+    filtersForQuery.productCategory,
+    filtersForQuery.sortBy,
+    filtersForQuery.species,
+    filtersForQuery.typeSex,
+    page,
+    refreshVersion,
+    seller,
+  ]);
 
   const inventoryItems = useMemo(
     () =>
@@ -688,19 +691,9 @@ export function InventoryManagement() {
         : { ...activeFilters, availability: effectiveAvailability },
     [activeFilters, effectiveAvailability],
   );
-  const statusScopedItems = useMemo(
-    () => filterInventoryItemsByStatus(activeTabItems, effectiveAvailability),
-    [activeTabItems, effectiveAvailability],
-  );
   const filterOptions = useMemo(
-    () =>
-      buildFilterOptions(
-        activeTab,
-        activeTabItems,
-        statusScopedItems,
-        effectiveAvailability,
-      ),
-    [activeTab, activeTabItems, effectiveAvailability, statusScopedItems],
+    () => buildInventoryPageFilterOptions(inventoryPage),
+    [inventoryPage],
   );
   const activeSortOptions = useMemo(
     () => getSortOptionsForTab(activeTab),
@@ -713,15 +706,7 @@ export function InventoryManagement() {
     [effectiveActiveFilters, activeTab],
   );
 
-  const filteredItems = useMemo(
-    () =>
-      filterAndSortInventoryItems(
-        statusScopedItems,
-        effectiveActiveFilters,
-        activeTab,
-      ),
-    [activeTab, effectiveActiveFilters, statusScopedItems],
-  );
+  const filteredItems = activeTabItems;
 
   const selectedItems = useMemo(
     () => filteredItems.filter((item) => selectedItemIds.includes(item.id)),
@@ -730,14 +715,21 @@ export function InventoryManagement() {
   const visibleSelectedItemIds = selectedItems.map((item) => item.id);
 
   const summary = useMemo(
-    () => buildInventorySummary(activeTab, statusScopedItems),
-    [activeTab, statusScopedItems],
+    () => buildInventoryPageSummary(activeTab, inventoryPage),
+    [activeTab, inventoryPage],
   );
 
   function updateActiveFilter<TKey extends keyof InventoryTabFilters>(
     key: TKey,
     value: InventoryTabFilters[TKey],
   ) {
+    if (hasUnsavedChanges) {
+      setSaveError("Save or discard your inventory changes before changing filters.");
+      return;
+    }
+
+    setPagesByTab((current) => ({ ...current, [activeTab]: 0 }));
+    setSelectedItemIds([]);
     setFiltersByTab((current) => ({
       ...current,
       [activeTab]: {
@@ -748,6 +740,13 @@ export function InventoryManagement() {
   }
 
   function resetActiveFilters() {
+    if (hasUnsavedChanges) {
+      setSaveError("Save or discard your inventory changes before resetting filters.");
+      return;
+    }
+
+    setPagesByTab((current) => ({ ...current, [activeTab]: 0 }));
+    setSelectedItemIds([]);
     setFiltersByTab((current) => ({
       ...current,
       [activeTab]: defaultTabFilters[activeTab],
@@ -1061,111 +1060,14 @@ export function InventoryManagement() {
     setDraftPrices({});
     setSuccessMessage("Inventory changes saved.");
     setIsSaving(false);
-  }
-
-  async function refetchLiveBirdInventoryRows() {
-    if (!seller) return;
-
-    const [result, publicationStateResult] = await Promise.all([
-      supabase
-        .from("seller_inventory_management")
-        .select(liveBirdInventorySelect)
-        .eq("store_id", seller.store_id)
-        .neq("batch_type", "hatching_eggs")
-        .neq("inventory_type", "hatching_eggs")
-        .eq("inventory_moderation_status", "normal")
-        .eq("listing_batch_moderation_status", "normal")
-        .order("species_name", { ascending: true })
-        .order("breed_display_name", { ascending: true })
-        .returns<InventoryRow[]>(),
-      supabase.rpc("seller_get_live_bird_listing_publication_states", {
-        p_store_id: seller.store_id,
-      }),
-    ]);
-
-    if (result.error || publicationStateResult.error) {
-      throw new Error(result.error?.message ?? publicationStateResult.error?.message);
-    }
-
-    setRows(
-      mergeLiveBirdPublicationStates(
-        result.data ?? [],
-        Array.isArray(publicationStateResult.data)
-          ? (publicationStateResult.data as LiveBirdListingPublicationState[])
-          : [],
-      ),
-    );
-  }
-
-  async function refetchHatchingEggInventoryRows() {
-    if (!seller) return;
-
-    const result = await supabase
-      .from("seller_hatching_egg_inventory_management")
-      .select("*")
-      .eq("store_id", seller.store_id)
-      .eq("moderation_status", "normal")
-      .order("updated_at", { ascending: false })
-      .returns<HatchingEggInventoryRow[]>();
-
-    if (result.error) {
-      throw new Error(result.error.message);
-    }
-
-    setHatchingEggRows(result.data ?? []);
-  }
-
-  async function refetchProcessedPoultryInventoryRows() {
-    if (!seller) return;
-
-    const result = await supabase
-      .from("seller_processed_poultry_inventory_management")
-      .select("*")
-      .eq("store_id", seller.store_id)
-      .eq("moderation_status", "normal")
-      .order("updated_at", { ascending: false })
-      .returns<ProcessedPoultryInventoryRow[]>();
-
-    if (result.error) {
-      throw new Error(result.error.message);
-    }
-
-    setProcessedPoultryRows(result.data ?? []);
-  }
-
-  async function refetchEquipmentInventoryRows() {
-    if (!seller) return;
-
-    const result = await supabase
-      .from("seller_equipment_inventory_management")
-      .select("*")
-      .eq("store_id", seller.store_id)
-      .eq("moderation_status", "normal")
-      .order("updated_at", { ascending: false })
-      .returns<EquipmentInventoryRow[]>();
-
-    if (result.error) {
-      throw new Error(result.error.message);
-    }
-
-    setEquipmentRows(result.data ?? []);
+    setRefreshVersion((current) => current + 1);
   }
 
   async function refetchVisibilityCategories(
     kinds: Set<StoreVisibilityInventoryItem["kind"]>,
   ) {
-    const refetches: Promise<void>[] = [];
-
-    if (kinds.has("bird")) refetches.push(refetchLiveBirdInventoryRows());
-    if (kinds.has("hatching_egg")) {
-      refetches.push(refetchHatchingEggInventoryRows());
-    }
-    if (kinds.has("processed_poultry")) {
-      refetches.push(refetchProcessedPoultryInventoryRows());
-    }
-    if (kinds.has("equipment")) refetches.push(refetchEquipmentInventoryRows());
-
-    await Promise.all(refetches);
+    void kinds;
+    setRefreshVersion((current) => current + 1);
   }
 
   async function setInventoryStoreVisibility(
@@ -1524,7 +1426,7 @@ export function InventoryManagement() {
     setSharingItemId(null);
   }
 
-  if (isLoading) {
+  if (isLoading || inventoryPage?.category !== activeTab) {
     return <LoadingState label="Loading inventory" />;
   }
 
@@ -1887,7 +1789,7 @@ export function InventoryManagement() {
       </SellerCard>
 
       <SellerCard className="overflow-hidden">
-        {activeTabItems.length === 0 ? (
+        {(inventoryPage?.category_count ?? 0) === 0 ? (
           <div className="p-4">
             <EmptyState
               title={getEmptyInventoryTitle(activeTab)}
@@ -1933,6 +1835,20 @@ export function InventoryManagement() {
             updateDraftQuantity={updateDraftQuantity}
           />
         )}
+        {(inventoryPage?.total_count ?? 0) > 50 ? (
+          <InventoryPagination
+            disabled={hasUnsavedChanges}
+            page={page}
+            setPage={(nextPage) => {
+              setSelectedItemIds([]);
+              setPagesByTab((current) => ({
+                ...current,
+                [activeTab]: nextPage,
+              }));
+            }}
+            totalCount={inventoryPage?.total_count ?? 0}
+          />
+        ) : null}
       </SellerCard>
 
       {archiveConfirm ? (
@@ -2268,6 +2184,47 @@ function ArchiveInventoryConfirmModal({
                 : "Archive item"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function InventoryPagination({
+  disabled,
+  page,
+  setPage,
+  totalCount,
+}: {
+  disabled: boolean;
+  page: number;
+  setPage: (value: number) => void;
+  totalCount: number;
+}) {
+  const start = page * 50 + 1;
+  const end = Math.min((page + 1) * 50, totalCount);
+
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-stone-200 px-4 py-3 text-sm text-stone-600 sm:px-5">
+      <span>
+        {start}–{end} of {totalCount}
+      </span>
+      <div className="flex gap-2">
+        <button
+          className="seller-secondary-button min-h-10"
+          disabled={disabled || page === 0}
+          onClick={() => setPage(Math.max(page - 1, 0))}
+          type="button"
+        >
+          Previous
+        </button>
+        <button
+          className="seller-secondary-button min-h-10"
+          disabled={disabled || end >= totalCount}
+          onClick={() => setPage(page + 1)}
+          type="button"
+        >
+          Next
+        </button>
       </div>
     </div>
   );
@@ -3629,6 +3586,117 @@ function getBirdAvailability(
   return { label: "Ready now", value: "available_now" };
 }
 
+function normalizeInventoryPageResponse(value: unknown): InventoryPageResponse {
+  const response = (value ?? {}) as Partial<InventoryPageResponse>;
+
+  return {
+    category: response.category ?? "live_poultry",
+    category_count: Number(response.category_count ?? 0),
+    options: response.options ?? {},
+    rows: Array.isArray(response.rows) ? response.rows : [],
+    summary: {
+      available_quantity: Number(response.summary?.available_quantity ?? 0),
+      inventory_value: Number(response.summary?.inventory_value ?? 0),
+      reserved_quantity: Number(response.summary?.reserved_quantity ?? 0),
+    },
+    total_count: Number(response.total_count ?? 0),
+  };
+}
+
+function getInventoryPageRowId(
+  category: InventoryProductTab,
+  row: Record<string, unknown>,
+) {
+  if (category === "live_poultry") return String(row.inventory_item_id ?? "");
+  if (category === "hatching_eggs") {
+    return String(row.hatching_egg_inventory_item_id ?? "");
+  }
+  if (category === "processed_poultry") {
+    return String(row.processed_poultry_inventory_item_id ?? "");
+  }
+
+  return String(row.equipment_inventory_item_id ?? "");
+}
+
+function buildInventoryPageFilterOptions(page: InventoryPageResponse | null) {
+  const options = page?.options ?? {};
+
+  return {
+    availability: [
+      { label: "Current inventory", value: "current_inventory" },
+      { label: "Ready now", value: "available_now" },
+      { label: "Ready later", value: "coming_soon" },
+      { label: "Sold out", value: "sold_out" },
+      { label: "Hidden", value: "hidden" },
+      { label: "Archived", value: "archived" },
+    ],
+    breed: [{ label: "All breeds", value: "all" }, ...(options.breed ?? [])],
+    condition: [
+      { label: "All conditions", value: "all" },
+      ...(options.condition ?? []),
+    ],
+    equipmentCategory: [
+      { label: "All categories", value: "all" },
+      ...(options.equipment_category ?? []),
+    ],
+    productCategory: [
+      { label: "All categories", value: "all" },
+      ...(options.product_category ?? []),
+    ],
+    species: [
+      { label: "All species", value: "all" },
+      ...(options.species ?? []),
+    ],
+    typeSex: [
+      { label: "All types", value: "all" },
+      ...(options.type_sex ?? []),
+    ],
+  };
+}
+
+function buildInventoryPageSummary(
+  activeTab: InventoryProductTab,
+  page: InventoryPageResponse | null,
+) {
+  const availableValue = page?.summary.available_quantity ?? 0;
+  const reservedValue = page?.summary.reserved_quantity ?? 0;
+  const inventoryValue = page?.summary.inventory_value ?? 0;
+
+  if (activeTab === "live_poultry") {
+    return {
+      availableGlyph: "/glyphs/hen.png",
+      availableLabel: "Available Birds",
+      availableValue,
+      reservedLabel: "Reserved Birds",
+      reservedValue,
+      inventoryValue,
+    };
+  }
+
+  if (activeTab === "hatching_eggs") {
+    return {
+      availableGlyph: "/glyphs/egg.png",
+      availableLabel: "Available Eggs",
+      availableValue,
+      reservedLabel: "Reserved Eggs",
+      reservedValue,
+      inventoryValue,
+    };
+  }
+
+  return {
+    availableGlyph:
+      activeTab === "processed_poultry"
+        ? "/glyphs/chicken-leg.png"
+        : "/glyphs/feed-sack.png",
+    availableLabel: "Available Units",
+    availableValue,
+    reservedLabel: "Reserved Units",
+    reservedValue,
+    inventoryValue,
+  };
+}
+
 function getSimpleInventoryAvailability(row: {
   available_date?: string | null;
   operational_availability_status: string;
@@ -3700,182 +3768,6 @@ function getStandaloneHatchingEggAvailability(
   return { label: "Ready now", value: "available_now" };
 }
 
-function buildFilterOptions(
-  activeTab: InventoryProductTab,
-  allItems: FlatInventoryItem[],
-  scopedItems: FlatInventoryItem[],
-  activeStatus: AvailabilityFilter,
-) {
-  return {
-    species: buildOptions("All species", scopedItems, (item) => [
-      item.speciesFilterValue,
-      item.species,
-    ]),
-    typeSex: buildOptions("All types", scopedItems, (item) =>
-      item.kind === "bird" ? [getTypeFilterValue(item.row), item.typeSex] : null,
-    ),
-    breed: buildOptions("All breeds", scopedItems, (item) => [
-      item.breedFilterValue,
-      item.breedOrItem,
-    ]),
-    productCategory: buildOptions("All categories", scopedItems, (item) =>
-      item.kind === "processed_poultry"
-        ? [item.productCategory, item.productCategory]
-        : null,
-    ),
-    equipmentCategory: buildOptions("All categories", scopedItems, (item) =>
-      item.kind === "equipment"
-        ? [item.equipmentCategory, item.equipmentCategory]
-        : null,
-    ),
-    condition: buildOptions("All conditions", scopedItems, (item) =>
-      item.kind === "equipment" && item.condition
-        ? [item.condition, item.condition]
-        : null,
-    ),
-    availability: buildStatusOptions(
-      allItems,
-      activeStatus,
-      (item) =>
-        activeTab === "equipment" && item.availabilityValue === "coming_soon",
-    ),
-  };
-}
-
-function buildStatusOptions(
-  items: FlatInventoryItem[],
-  activeStatus: AvailabilityFilter,
-  shouldSkip: (item: FlatInventoryItem) => boolean,
-): { label: string; value: AvailabilityFilter }[] {
-  void items;
-  void activeStatus;
-  void shouldSkip;
-
-  return [
-    { label: "Current inventory", value: "current_inventory" },
-    { label: "Ready now", value: "available_now" },
-    { label: "Ready later", value: "coming_soon" },
-    { label: "Sold out", value: "sold_out" },
-    { label: "Hidden", value: "hidden" },
-    { label: "Archived", value: "archived" },
-  ];
-}
-
-function filterInventoryItemsByStatus(
-  items: FlatInventoryItem[],
-  status: AvailabilityFilter,
-) {
-  if (status === "archived") {
-    return items.filter((item) => item.isArchived);
-  }
-
-  if (status === "current_inventory") {
-    return items.filter((item) => !item.isArchived);
-  }
-
-  return items.filter(
-    (item) => !item.isArchived && item.availabilityValue === status,
-  );
-}
-
-function buildOptions(
-  defaultLabel: string,
-  items: FlatInventoryItem[],
-  getOption: (item: FlatInventoryItem) => [string, string] | null,
-) {
-  const uniqueOptions = new Map<string, string>();
-
-  for (const item of items) {
-    const option = getOption(item);
-
-    if (!option) continue;
-
-    const [value, label] = option;
-
-    if (!value || value === "all") continue;
-    uniqueOptions.set(value, label);
-  }
-
-  return [
-    { label: defaultLabel, value: "all" },
-    ...Array.from(uniqueOptions, ([value, label]) => ({ label, value })).sort(
-      (first, second) => first.label.localeCompare(second.label),
-    ),
-  ];
-}
-
-function filterAndSortInventoryItems(
-  items: FlatInventoryItem[],
-  filters: InventoryTabFilters,
-  activeTab: InventoryProductTab,
-) {
-  const normalizedSearch = filters.search.trim().toLowerCase();
-
-  return items
-    .filter((item) => {
-      if (filters.species !== "all" && item.speciesFilterValue !== filters.species) {
-        return false;
-      }
-
-      if (
-        filters.typeSex !== "all" &&
-        (item.kind !== "bird" || getTypeFilterValue(item.row) !== filters.typeSex)
-      ) {
-        return false;
-      }
-
-      if (
-        activeTab === "live_poultry" &&
-        item.kind === "bird" &&
-        !matchesAgeFilter(item.row, filters.age)
-      ) {
-        return false;
-      }
-
-      if (filters.breed !== "all" && item.breedFilterValue !== filters.breed) {
-        return false;
-      }
-
-      if (
-        filters.productCategory !== "all" &&
-        (item.kind !== "processed_poultry" ||
-          item.productCategory !== filters.productCategory)
-      ) {
-        return false;
-      }
-
-      if (
-        filters.equipmentCategory !== "all" &&
-        (item.kind !== "equipment" ||
-          item.equipmentCategory !== filters.equipmentCategory)
-      ) {
-        return false;
-      }
-
-      if (
-        filters.condition !== "all" &&
-        (item.kind !== "equipment" || item.condition !== filters.condition)
-      ) {
-        return false;
-      }
-
-      if (
-        filters.availability !== "current_inventory" &&
-        filters.availability !== "archived" &&
-        item.availabilityValue !== filters.availability
-      ) {
-        return false;
-      }
-
-      if (!normalizedSearch) return true;
-
-      return item.searchText.includes(normalizedSearch);
-    })
-    .sort((first, second) =>
-      compareFlatInventoryItems(first, second, filters.sortBy),
-    );
-}
-
 function getSortOptionsForTab(tab: InventoryProductTab) {
   if (tab === "live_poultry") {
     return [
@@ -3910,139 +3802,6 @@ function getSortOptionsForTab(tab: InventoryProductTab) {
     { label: "Available Quantity", value: "available" },
     { label: "Recently Added", value: "recently_added" },
   ];
-}
-
-function buildInventorySummary(
-  activeTab: InventoryProductTab,
-  items: FlatInventoryItem[],
-) {
-  const availableValue = items.reduce(
-    (total, item) => total + item.availableQuantity,
-    0,
-  );
-  const reservedValue = items.reduce(
-    (total, item) => total + item.reservedQuantity,
-    0,
-  );
-  const inventoryValue = items.reduce(
-    (total, item) => total + item.availableQuantity * (item.price ?? 0),
-    0,
-  );
-
-  if (activeTab === "live_poultry") {
-    return {
-      availableGlyph: "/glyphs/hen.png",
-      availableLabel: "Available Birds",
-      availableValue,
-      reservedLabel: "Reserved Birds",
-      reservedValue,
-      inventoryValue,
-    };
-  }
-
-  if (activeTab === "hatching_eggs") {
-    return {
-      availableGlyph: "/glyphs/egg.png",
-      availableLabel: "Available Eggs",
-      availableValue,
-      reservedLabel: "Reserved Eggs",
-      reservedValue,
-      inventoryValue,
-    };
-  }
-
-  return {
-    availableGlyph:
-      activeTab === "processed_poultry"
-        ? "/glyphs/chicken-leg.png"
-        : "/glyphs/feed-sack.png",
-    availableLabel: "Available Units",
-    availableValue,
-    reservedLabel: "Reserved Units",
-    reservedValue,
-    inventoryValue,
-  };
-}
-
-function compareFlatInventoryItems(
-  left: FlatInventoryItem,
-  right: FlatInventoryItem,
-  sortBy: InventorySort,
-) {
-  if (sortBy === "hatch_date") {
-    const hatchDateComparison = compareNullableDates(
-      left.hatchDate,
-      right.hatchDate,
-    );
-
-    if (hatchDateComparison !== 0) return hatchDateComparison;
-
-    return left.breedOrItem.localeCompare(right.breedOrItem);
-  }
-
-  if (
-    sortBy === "name" ||
-    sortBy === "breed" ||
-    sortBy === "product_name" ||
-    sortBy === "item_name"
-  ) {
-    return left.breedOrItem.localeCompare(right.breedOrItem);
-  }
-
-  if (sortBy === "age") {
-    return compareNullableNumbers(left.ageDays, right.ageDays);
-  }
-
-  if (sortBy === "available") {
-    return right.availableQuantity - left.availableQuantity;
-  }
-
-  if (sortBy === "reserved") {
-    return right.reservedQuantity - left.reservedQuantity;
-  }
-
-  if (sortBy === "price") {
-    return compareNullableNumbers(left.price, right.price);
-  }
-
-  if (sortBy === "recently_added") {
-    return getInventoryItemUpdatedAt(right).localeCompare(
-      getInventoryItemUpdatedAt(left),
-    );
-  }
-
-  const availabilityComparison = left.availabilityLabel.localeCompare(
-    right.availabilityLabel,
-  );
-
-  if (availabilityComparison !== 0) return availabilityComparison;
-
-  return left.breedOrItem.localeCompare(right.breedOrItem);
-}
-
-function compareNullableDates(left: string | null, right: string | null) {
-  if (left && right && left !== right) return left.localeCompare(right);
-  if (left && !right) return -1;
-  if (!left && right) return 1;
-
-  return 0;
-}
-
-function compareNullableNumbers(
-  left: number | null | undefined,
-  right: number | null | undefined,
-) {
-  if (left != null && right != null && left !== right) return left - right;
-  if (left != null && right == null) return -1;
-  if (left == null && right != null) return 1;
-
-  return 0;
-}
-
-function getInventoryItemUpdatedAt(item: FlatInventoryItem) {
-  if (item.kind === "bird") return item.row.inventory_updated_at ?? "";
-
-  return item.row.updated_at;
 }
 
 function getSearchPlaceholder(tab: InventoryProductTab) {
@@ -4222,39 +3981,6 @@ function buildSimpleInventoryShareProduct(
   return null;
 }
 
-function buildPrimaryPhotoMap(rows: InventoryMediaRow[]) {
-  return rows.reduce<Record<string, InventoryPrimaryPhoto>>((photos, row) => {
-    if (!row.public_url || photos[row.entity_id]) return photos;
-
-    photos[row.entity_id] = {
-      url: row.public_url,
-      alt: row.alt_text || "Hatching eggs inventory photo",
-    };
-
-    return photos;
-  }, {});
-}
-
-function buildReservedMap(
-  rows: ReservedRow[],
-  idKey:
-    | "inventory_item_id"
-    | "equipment_inventory_item_id"
-    | "processed_poultry_inventory_item_id",
-) {
-  return rows.reduce<Record<string, number>>((totals, row) => {
-    const itemId = row[idKey];
-
-    if (!itemId) return totals;
-
-    totals[itemId] =
-      (totals[itemId] ?? 0) +
-      Math.max(row.remaining_unfulfilled_quantity ?? 0, 0);
-
-    return totals;
-  }, {});
-}
-
 function isLiveBirdInventoryRow(row: InventoryRow) {
   return (
     row.batch_type !== "hatching_eggs" &&
@@ -4268,10 +3994,6 @@ function getInventoryTypeLabel(row: InventoryRow) {
   }
 
   return formatInventoryTypeLabel(row.inventory_type);
-}
-
-function getTypeFilterValue(row: InventoryRow) {
-  return `${row.inventory_type}:${row.custom_inventory_label ?? ""}`;
 }
 
 function formatInventoryStatus(value: string | null | undefined) {
@@ -4351,31 +4073,17 @@ function formatTableDate(value: string | null) {
   }).format(new Date(`${value}T00:00:00`));
 }
 
-function calculateInventoryAgeDays(row: InventoryRow) {
-  return calculateAgeAtAvailabilityDays(row.origin_date ?? "", row.available_date);
-}
-
 function formatInventoryAge(row: InventoryRow) {
   return formatInventoryAgeLabel(
     calculateCurrentBirdAgeDays(row.origin_date),
   ).replace(/ old$/, "");
 }
 
-function matchesAgeFilter(row: InventoryRow, ageFilter: AgeFilter) {
-  if (ageFilter === "all") return true;
-
-  const ageDays = calculateInventoryAgeDays(row);
-
-  if (ageDays == null) return ageFilter === "unknown";
-
-  const ageWeeks = Math.floor(ageDays / 7);
-
-  if (ageFilter === "0_6") return ageWeeks <= 6;
-  if (ageFilter === "7_12") return ageWeeks >= 7 && ageWeeks <= 12;
-  if (ageFilter === "13_24") return ageWeeks >= 13 && ageWeeks <= 24;
-  if (ageFilter === "25_plus") return ageWeeks >= 25;
-
-  return false;
+function calculateInventoryAgeDays(row: InventoryRow) {
+  return calculateAgeAtAvailabilityDays(
+    row.origin_date ?? "",
+    row.available_date,
+  );
 }
 
 function isBirdRowChanged(
@@ -4566,26 +4274,6 @@ function getStoreVisibilityAction(item: FlatInventoryItem): {
   }
 
   return { item, label: "Hide from store", nextStatus: "hidden" };
-}
-
-function mergeLiveBirdPublicationStates(
-  rows: InventoryRow[],
-  states: LiveBirdListingPublicationState[],
-) {
-  const statesByBatchId = new Map(
-    states.map((state) => [state.listing_batch_id, state]),
-  );
-
-  return rows.map((row) => {
-    const state = statesByBatchId.get(row.listing_batch_id);
-
-    return {
-      ...row,
-      has_published_activity: state?.has_published_activity ?? false,
-      is_unfinished_add_v2_draft:
-        state?.is_unfinished_add_v2_draft ?? false,
-    };
-  });
 }
 
 function getStoreVisibilityTargetItems(
