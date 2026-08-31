@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../_components/seller-context";
 import {
@@ -13,15 +13,9 @@ import {
 } from "../_components/seller-ui";
 import {
   formatCurrency,
-  formatInventoryLabel,
   formatOrderLifecycle,
   formatPaymentMethod,
-  getOrderLifecycleState,
 } from "../orders/order-formatters";
-import {
-  classifyOrderItemCategory,
-  formatOrderItemCategoryLabel,
-} from "../orders/_lib/order-item-category";
 
 type ReportTab = "sales" | "items" | "customers";
 type DateRange =
@@ -57,56 +51,7 @@ type SellerReportOrderRow = {
   total_amount: number | null;
   item_count: number | null;
   total_item_quantity: number | null;
-};
-
-type SellerReportItemRow = {
-  order_id: string;
-  order_item_id: string;
-  inventory_item_id: string | null;
-  equipment_inventory_item_id: string | null;
-  processed_poultry_inventory_item_id: string | null;
-  hatching_egg_inventory_item_id: string | null;
-  order_item_source: string | null;
-  species_name_snapshot: string | null;
-  breed_display_name_snapshot: string | null;
-  inventory_type_snapshot: string | null;
-  custom_inventory_label_snapshot: string | null;
-  batch_type_snapshot: string | null;
-  product_type_snapshot: string | null;
-  item_name_snapshot: string | null;
-  item_category_snapshot: string | null;
-  custom_item_name_snapshot: string | null;
-  unit_price_snapshot: number | null;
-  quantity: number | null;
-  line_subtotal: number | null;
-};
-
-type SellerReportCustomerRow = {
-  customer_id: string;
-  email: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  business_name: string | null;
-  delivery_address_line1: string | null;
-  delivery_address_line2: string | null;
-  delivery_city: string | null;
-  delivery_state: string | null;
-  delivery_postal_code: string | null;
-  delivery_country: string | null;
-  internal_notes: string | null;
-  created_at: string;
-  updated_at: string;
-  order_count: number | null;
-  open_order_count: number | null;
-  lifetime_order_total: number | null;
-  latest_order_created_at: string | null;
-};
-
-type ReportData = {
-  customers: SellerReportCustomerRow[];
-  items: SellerReportItemRow[];
-  orders: SellerReportOrderRow[];
+  item_summary: string;
 };
 
 type DateSettings = {
@@ -119,10 +64,10 @@ type ItemSummaryRow = {
   breed: string;
   item: string;
   itemType: Exclude<ItemTypeFilter, "all">;
-  orderIds: Set<string>;
   orders: number;
   quantity: number;
   revenue: number;
+  rowKey: string;
   species: string;
 };
 
@@ -136,10 +81,13 @@ type CustomerSummaryRow = {
   customerName: string;
   customerPhone: string;
   internalNotes: string;
+  importedOrderCount: number;
+  importedOrderTotal: number;
+  importedSource: string;
   itemsBought: number;
-  lastOrder: string;
+  lastOrder: string | null;
   lastOrderTotal: number;
-  latestOrderAt: string;
+  latestOrderAt: string | null;
   lifetimeOrderTotal: number;
   mailingAddressLine1: string;
   mailingAddressLine2: string;
@@ -149,9 +97,28 @@ type CustomerSummaryRow = {
   mailingState: string;
   openOrders: number;
   orders: number;
+  nativeOrders: number;
+  nativeSpent: number;
   totalOrders: number;
   totalSpent: number;
   updatedAt: string;
+};
+
+type ReportResponse<Row> = {
+  has_any_data: boolean;
+  options: { breeds?: string[]; species?: string[] };
+  rows: Row[];
+  summary: Record<string, string | number | boolean>;
+  total_count: number;
+};
+
+type ReportState = {
+  hasAnyData: boolean;
+  options: { breeds: string[]; species: string[] };
+  rows: Array<SellerReportOrderRow | ItemSummaryRow | CustomerSummaryRow>;
+  summary: Record<string, string | number | boolean>;
+  tab: ReportTab | null;
+  totalCount: number;
 };
 
 const tabs: { label: string; value: ReportTab }[] = [
@@ -187,6 +154,8 @@ const itemTypeOptions: { label: string; value: ItemTypeFilter }[] = [
 ];
 
 const dash = "\u2014";
+const reportPageSize = 50;
+const exportPageSize = 500;
 
 function getOptionLabel(
   options: Array<{ label: string; value: string }>,
@@ -198,11 +167,6 @@ function getOptionLabel(
 export function ReportsDashboard() {
   const { seller } = useSellerContext();
   const [activeTab, setActiveTab] = useState<ReportTab>("sales");
-  const [data, setData] = useState<ReportData>({
-    customers: [],
-    items: [],
-    orders: [],
-  });
   const [dateSettings, setDateSettings] = useState<DateSettings>({
     customEnd: "",
     customStart: "",
@@ -219,63 +183,92 @@ export function ReportsDashboard() {
     useState<AmountFilter>("any");
   const [customerCustomSpend, setCustomerCustomSpend] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
+  const deferredItemSearch = useDeferredValue(itemSearch);
+  const deferredCustomerSearch = useDeferredValue(customerSearch);
+  const [pages, setPages] = useState<Record<ReportTab, number>>({
+    customers: 0,
+    items: 0,
+    sales: 0,
+  });
+  const [report, setReport] = useState<ReportState>({
+    hasAnyData: false,
+    options: { breeds: [], species: [] },
+    rows: [],
+    summary: {},
+    tab: null,
+    totalCount: 0,
+  });
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const page = pages[activeTab];
+  const dateRangeLabel = getDateRangeLabel(dateSettings);
+  const queryParameters = useMemo(
+    () =>
+      buildReportRpcParameters({
+        amountOver:
+          activeTab === "sales"
+            ? getAmountThreshold(salesAmountFilter, salesCustomAmount)
+            : activeTab === "customers"
+              ? getAmountThreshold(customerSpendFilter, customerCustomSpend)
+              : null,
+        breed: breedFilter,
+        dateSettings,
+        includeImported:
+          activeTab === "customers" && dateSettings.range === "all_time",
+        itemType: itemTypeFilter,
+        limit: reportPageSize,
+        offset: page * reportPageSize,
+        report: activeTab,
+        search:
+          activeTab === "items"
+            ? deferredItemSearch
+            : activeTab === "customers"
+              ? deferredCustomerSearch
+              : "",
+        species: speciesFilter,
+        storeId: seller?.store_id ?? null,
+      }),
+    [
+      activeTab,
+      breedFilter,
+      customerCustomSpend,
+      customerSpendFilter,
+      dateSettings,
+      deferredCustomerSearch,
+      deferredItemSearch,
+      itemTypeFilter,
+      page,
+      salesAmountFilter,
+      salesCustomAmount,
+      seller?.store_id,
+      speciesFilter,
+    ],
+  );
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadReports() {
-      if (!seller) return;
+      if (!seller || !queryParameters) return;
 
       setIsLoading(true);
       setError(null);
 
-      const [ordersResult, itemsResult, customersResult] = await Promise.all([
-        supabase
-          .from("seller_order_management")
-          .select(
-            "order_id, order_number, order_status, payment_method, ready_for_pickup_at, created_at, customer_id, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_email_snapshot, buyer_phone_snapshot, buyer_notes, pickup_note, total_amount, item_count, total_item_quantity",
-          )
-          .eq("store_id", seller.store_id)
-          .order("created_at", { ascending: false })
-          .limit(1000)
-          .returns<SellerReportOrderRow[]>(),
-        supabase
-          .from("seller_order_item_detail")
-          .select(
-            "order_id, order_item_id, inventory_item_id, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, order_item_source, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, batch_type_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, custom_item_name_snapshot, unit_price_snapshot, quantity, line_subtotal",
-          )
-          .eq("store_id", seller.store_id)
-          .order("created_at", { ascending: false })
-          .limit(2000)
-          .returns<SellerReportItemRow[]>(),
-        supabase
-          .from("seller_customer_detail")
-          .select(
-            "customer_id, email, first_name, last_name, phone, business_name, delivery_address_line1, delivery_address_line2, delivery_city, delivery_state, delivery_postal_code, delivery_country, internal_notes, created_at, updated_at, order_count, open_order_count, lifetime_order_total, latest_order_created_at",
-          )
-          .eq("store_id", seller.store_id)
-          .limit(1000)
-          .returns<SellerReportCustomerRow[]>(),
-      ]);
+      const result = await supabase.rpc(
+        "seller_get_report_page",
+        queryParameters,
+      );
 
       if (!isMounted) return;
 
-      const firstError =
-        ordersResult.error ?? itemsResult.error ?? customersResult.error;
-
-      if (firstError) {
-        setError(firstError.message);
+      if (result.error) {
+        setError(result.error.message);
         setIsLoading(false);
         return;
       }
 
-      setData({
-        customers: customersResult.data ?? [],
-        items: itemsResult.data ?? [],
-        orders: ordersResult.data ?? [],
-      });
+      setReport(normalizeReportResponse(activeTab, result.data));
       setIsLoading(false);
     }
 
@@ -284,145 +277,74 @@ export function ReportsDashboard() {
     return () => {
       isMounted = false;
     };
-  }, [seller]);
+  }, [activeTab, queryParameters, seller]);
 
-  const itemSummaryByOrder = useMemo(
-    () => buildOrderItemSummaryMap(data.items),
-    [data.items],
-  );
-  const customerLookup = useMemo(
-    () =>
-      new Map(data.customers.map((customer) => [customer.customer_id, customer])),
-    [data.customers],
-  );
-  const latestOrderTotalByCustomer = useMemo(
-    () => buildLatestOrderTotalByCustomer(data.orders),
-    [data.orders],
-  );
-  const dateRangeLabel = getDateRangeLabel(dateSettings);
+  function resetPage(tab: ReportTab = activeTab) {
+    setPages((current) => ({ ...current, [tab]: 0 }));
+  }
 
-  const salesReport = useMemo(() => {
-    const dateOrders = data.orders
-      .filter(isSaleOrder)
-      .filter((order) => isOrderInDateRange(order, dateSettings));
-    const threshold = getAmountThreshold(salesAmountFilter, salesCustomAmount);
-    const filteredOrders =
-      threshold === null
-        ? dateOrders
-        : dateOrders.filter((order) => (order.total_amount ?? 0) > threshold);
-    const totalSales = dateOrders.reduce(
-      (total, order) => total + (order.total_amount ?? 0),
-      0,
-    );
-    const salesOverAmount =
-      threshold === null
-        ? dateOrders.length
-        : dateOrders.filter((order) => (order.total_amount ?? 0) > threshold)
-            .length;
+  async function exportCurrentReport() {
+    if (!queryParameters || isExporting) return;
 
-    return {
-      averageSale: dateOrders.length > 0 ? totalSales / dateOrders.length : 0,
-      filteredOrders,
-      salesOverAmount,
-      threshold,
-      totalSales,
-      totalSalesCount: dateOrders.length,
-    };
-  }, [data.orders, dateSettings, salesAmountFilter, salesCustomAmount]);
+    setIsExporting(true);
+    setError(null);
 
-  const itemBaseRows = useMemo(() => {
-    const saleOrderIds = new Set(
-      data.orders
-        .filter(isSaleOrder)
-        .filter((order) => isOrderInDateRange(order, dateSettings))
-        .map((order) => order.order_id),
-    );
+    try {
+      const csvParts: string[] = ["\uFEFF"];
+      let offset = 0;
+      let totalCount = 0;
+      let isFirstPage = true;
 
-    return buildItemSummaries(
-      data.items.filter((item) => saleOrderIds.has(item.order_id)),
-    );
-  }, [data.items, data.orders, dateSettings]);
+      do {
+        const result = await supabase.rpc("seller_get_report_page", {
+          ...queryParameters,
+          p_limit: exportPageSize,
+          p_offset: offset,
+        });
 
-  const itemOptions = useMemo(() => {
-    const byTypeAndSearch = itemBaseRows.filter((item) => {
-      const matchesType =
-        itemTypeFilter === "all" || item.itemType === itemTypeFilter;
-      const matchesSearch = matchesSearchTerm(
-        [item.item, item.itemType, item.species, item.breed],
-        itemSearch,
+        if (result.error) throw result.error;
+
+        const pageResult = normalizeReportResponse(activeTab, result.data);
+        totalCount = pageResult.totalCount;
+        const pageRows =
+          activeTab === "sales"
+            ? buildSalesCsvRows(pageResult.rows as SellerReportOrderRow[])
+            : activeTab === "items"
+              ? buildItemsCsvRows(
+                  pageResult.rows as ItemSummaryRow[],
+                  dateRangeLabel,
+                )
+              : buildCustomersCsvRows(
+                  pageResult.rows as CustomerSummaryRow[],
+                  dateRangeLabel,
+                );
+        const rowsToAppend = isFirstPage ? pageRows : pageRows.slice(1);
+
+        const pageCsv = rowsToAppend
+            .map((row) => row.map((value) => escapeCsvCell(value)).join(","))
+            .join("\r\n");
+
+        if (pageCsv) csvParts.push(isFirstPage ? pageCsv : `\r\n${pageCsv}`);
+        offset += pageResult.rows.length;
+        isFirstPage = false;
+      } while (offset < totalCount);
+
+      downloadCsvParts({
+        filename: `flockfront-${activeTab}-${formatFileDate(new Date())}.csv`,
+        parts: csvParts,
+      });
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "The report export could not be created.",
       );
+    } finally {
+      setIsExporting(false);
+    }
+  }
 
-      return matchesType && matchesSearch;
-    });
-    const bySpecies = byTypeAndSearch.filter(
-      (item) => speciesFilter === "all" || item.species === speciesFilter,
-    );
-
-    return {
-      breeds: getDistinctOptions(bySpecies.map((item) => item.breed)),
-      species: getDistinctOptions(byTypeAndSearch.map((item) => item.species)),
-    };
-  }, [itemBaseRows, itemSearch, itemTypeFilter, speciesFilter]);
-
-  const filteredItemRows = useMemo(
-    () =>
-      itemBaseRows.filter((item) => {
-        const matchesType =
-          itemTypeFilter === "all" || item.itemType === itemTypeFilter;
-        const matchesSpecies =
-          speciesFilter === "all" || item.species === speciesFilter;
-        const matchesBreed = breedFilter === "all" || item.breed === breedFilter;
-        const matchesSearch = matchesSearchTerm(
-          [item.item, item.itemType, item.species, item.breed],
-          itemSearch,
-        );
-
-        return matchesType && matchesSpecies && matchesBreed && matchesSearch;
-      }),
-    [breedFilter, itemBaseRows, itemSearch, itemTypeFilter, speciesFilter],
-  );
-
-  const customerBaseRows = useMemo(() => {
-    const saleOrders = data.orders
-      .filter(isSaleOrder)
-      .filter((order) => isOrderInDateRange(order, dateSettings));
-
-    return buildCustomerSummaries(
-      saleOrders,
-      customerLookup,
-      latestOrderTotalByCustomer,
-    );
-  }, [
-    customerLookup,
-    data.orders,
-    dateSettings,
-    latestOrderTotalByCustomer,
-  ]);
-
-  const filteredCustomerRows = useMemo(() => {
-    const threshold = getAmountThreshold(
-      customerSpendFilter,
-      customerCustomSpend,
-    );
-
-    return customerBaseRows.filter((customer) => {
-      const matchesSpend =
-        threshold === null || customer.totalSpent > threshold;
-      const matchesSearch = matchesSearchTerm(
-        [customer.customerName, customer.customerEmail, customer.customerPhone],
-        customerSearch,
-      );
-
-      return matchesSpend && matchesSearch;
-    });
-  }, [
-    customerBaseRows,
-    customerCustomSpend,
-    customerSearch,
-    customerSpendFilter,
-  ]);
-
-  if (isLoading) {
+  if (isLoading || report.tab !== activeTab) {
     return <LoadingState label="Loading reports" />;
   }
 
@@ -435,7 +357,7 @@ export function ReportsDashboard() {
     );
   }
 
-  if (data.orders.length === 0) {
+  if (!report.hasAnyData) {
     return (
       <EmptyState
         title="No report data yet"
@@ -458,43 +380,63 @@ export function ReportsDashboard() {
             amountFilter={salesAmountFilter}
             customAmount={salesCustomAmount}
             dateSettings={dateSettings}
-            itemSummaryByOrder={itemSummaryByOrder}
-            report={salesReport}
-            setAmountFilter={setSalesAmountFilter}
+            isExporting={isExporting}
+            onExport={exportCurrentReport}
+            page={page}
+            report={report}
+            setAmountFilter={(value) => {
+              resetPage("sales");
+              setSalesAmountFilter(value);
+            }}
             setCustomAmount={setSalesCustomAmount}
             setDateSettings={setDateSettings}
+            setPage={(nextPage) =>
+              setPages((current) => ({ ...current, sales: nextPage }))
+            }
           />
         ) : null}
 
         {activeTab === "items" ? (
           <ItemsTab
             breedFilter={breedFilter}
-            dateRangeLabel={dateRangeLabel}
             dateSettings={dateSettings}
-            itemRows={filteredItemRows}
+            isExporting={isExporting}
+            itemRows={normalizeItemRows(report.rows)}
             itemSearch={itemSearch}
             itemTypeFilter={itemTypeFilter}
-            options={itemOptions}
+            onExport={exportCurrentReport}
+            options={report.options}
+            page={page}
+            report={report}
             setBreedFilter={setBreedFilter}
             setDateSettings={setDateSettings}
             setItemSearch={setItemSearch}
             setItemTypeFilter={setItemTypeFilter}
             setSpeciesFilter={setSpeciesFilter}
+            setPage={(nextPage) =>
+              setPages((current) => ({ ...current, items: nextPage }))
+            }
             speciesFilter={speciesFilter}
           />
         ) : null}
 
         {activeTab === "customers" ? (
           <CustomersTab
-            customerRows={filteredCustomerRows}
+            customerRows={report.rows as CustomerSummaryRow[]}
             customSpend={customerCustomSpend}
-            dateRangeLabel={dateRangeLabel}
             dateSettings={dateSettings}
+            isExporting={isExporting}
+            onExport={exportCurrentReport}
+            page={page}
+            report={report}
             search={customerSearch}
             setCustomSpend={setCustomerCustomSpend}
             setDateSettings={setDateSettings}
             setSearch={setCustomerSearch}
             setSpendFilter={setCustomerSpendFilter}
+            setPage={(nextPage) =>
+              setPages((current) => ({ ...current, customers: nextPage }))
+            }
             spendFilter={customerSpendFilter}
           />
         ) : null}
@@ -544,35 +486,40 @@ function SalesTab({
   amountFilter,
   customAmount,
   dateSettings,
-  itemSummaryByOrder,
+  isExporting,
+  onExport,
+  page,
   report,
   setAmountFilter,
   setCustomAmount,
   setDateSettings,
+  setPage,
 }: {
   amountFilter: AmountFilter;
   customAmount: string;
   dateSettings: DateSettings;
-  itemSummaryByOrder: Map<string, string>;
-  report: {
-    averageSale: number;
-    filteredOrders: SellerReportOrderRow[];
-    salesOverAmount: number;
-    threshold: number | null;
-    totalSales: number;
-    totalSalesCount: number;
-  };
+  isExporting: boolean;
+  onExport: () => void;
+  page: number;
+  report: ReportState;
   setAmountFilter: (value: AmountFilter) => void;
   setCustomAmount: (value: string) => void;
   setDateSettings: (value: DateSettings) => void;
+  setPage: (value: number) => void;
 }) {
+  const orders = report.rows as SellerReportOrderRow[];
+  const threshold = getAmountThreshold(amountFilter, customAmount);
+
   return (
     <div className="grid gap-4">
       <div className="grid gap-3 lg:hidden">
         <SellerCard className="p-3.5">
           <DateRangeControl
             dateSettings={dateSettings}
-            onChange={setDateSettings}
+            onChange={(value) => {
+              setPage(0);
+              setDateSettings(value);
+            }}
           />
           <MobileFilterPanel
             activeCount={amountFilter === "any" ? 0 : 1}
@@ -580,7 +527,10 @@ function SalesTab({
             <AmountControl
               customValue={customAmount}
               label="Order amount"
-              onCustomChange={setCustomAmount}
+              onCustomChange={(value) => {
+                setPage(0);
+                setCustomAmount(value);
+              }}
               onFilterChange={setAmountFilter}
               value={amountFilter}
             />
@@ -595,16 +545,9 @@ function SalesTab({
           />
         </SellerCard>
         <ExportButton
-          label="Export CSV"
-          onClick={() =>
-            downloadCsv({
-              filename: `flockfront-sales-${formatFileDate(new Date())}.csv`,
-              rows: buildSalesCsvRows(
-                report.filteredOrders,
-                itemSummaryByOrder,
-              ),
-            })
-          }
+          disabled={isExporting}
+          label={isExporting ? "Exporting…" : "Export CSV"}
+          onClick={onExport}
         />
       </div>
 
@@ -612,26 +555,25 @@ function SalesTab({
         <div className="grid gap-3 lg:grid-cols-[minmax(12rem,1fr)_minmax(12rem,1fr)_auto] lg:items-end">
           <DateRangeControl
             dateSettings={dateSettings}
-            onChange={setDateSettings}
+            onChange={(value) => {
+              setPage(0);
+              setDateSettings(value);
+            }}
           />
           <AmountControl
             customValue={customAmount}
             label="Order amount"
-            onCustomChange={setCustomAmount}
+            onCustomChange={(value) => {
+              setPage(0);
+              setCustomAmount(value);
+            }}
             onFilterChange={setAmountFilter}
             value={amountFilter}
           />
           <ExportButton
-            label="Export CSV"
-            onClick={() =>
-              downloadCsv({
-                filename: `flockfront-sales-${formatFileDate(new Date())}.csv`,
-                rows: buildSalesCsvRows(
-                  report.filteredOrders,
-                  itemSummaryByOrder,
-                ),
-              })
-            }
+            disabled={isExporting}
+            label={isExporting ? "Exporting…" : "Export CSV"}
+            onClick={onExport}
           />
         </div>
       </SellerCard>
@@ -640,22 +582,22 @@ function SalesTab({
         <SummaryCard
           glyph="/glyphs/feed-sack.png"
           label="Total sales"
-          value={formatCurrency(report.totalSales)}
+          value={formatCurrency(getSummaryNumber(report, "total_sales"))}
         />
         <SummaryCard
           glyph="/glyphs/shopping-bag.png"
           label="Number of sales"
-          value={`${report.totalSalesCount}`}
+          value={`${getSummaryNumber(report, "order_count")}`}
         />
         <SummaryCard
           glyph="/glyphs/reports.png"
-          label={getSalesOverLabel(report.threshold)}
-          value={`${report.salesOverAmount}`}
+          label={getSalesOverLabel(threshold)}
+          value={`${getSummaryNumber(report, "sales_over_amount")}`}
         />
         <SummaryCard
           glyph="/glyphs/egg.png"
           label="Average sale"
-          value={formatCurrency(report.averageSale)}
+          value={formatCurrency(getSummaryNumber(report, "average_order_value"))}
         />
       </SummaryGrid>
 
@@ -663,8 +605,16 @@ function SalesTab({
         description="Orders that match your filters."
         title="Sales detail"
       >
-        {report.filteredOrders.length > 0 ? (
-          <SalesTable orders={report.filteredOrders} />
+        {orders.length > 0 ? (
+          <>
+            <SalesTable orders={orders} />
+            <ReportPagination
+              page={page}
+              pageSize={reportPageSize}
+              setPage={setPage}
+              totalCount={report.totalCount}
+            />
+          </>
         ) : (
           <TabEmptyState
             action={<ResetSalesFilters onReset={() => setAmountFilter("any")} />}
@@ -679,44 +629,51 @@ function SalesTab({
 
 function ItemsTab({
   breedFilter,
-  dateRangeLabel,
   dateSettings,
+  isExporting,
   itemRows,
   itemSearch,
   itemTypeFilter,
+  onExport,
   options,
+  page,
+  report,
   setBreedFilter,
   setDateSettings,
   setItemSearch,
   setItemTypeFilter,
+  setPage,
   setSpeciesFilter,
   speciesFilter,
 }: {
   breedFilter: string;
-  dateRangeLabel: string;
   dateSettings: DateSettings;
+  isExporting: boolean;
   itemRows: ItemSummaryRow[];
   itemSearch: string;
   itemTypeFilter: ItemTypeFilter;
+  onExport: () => void;
   options: { breeds: string[]; species: string[] };
+  page: number;
+  report: ReportState;
   setBreedFilter: (value: string) => void;
   setDateSettings: (value: DateSettings) => void;
   setItemSearch: (value: string) => void;
   setItemTypeFilter: (value: ItemTypeFilter) => void;
+  setPage: (value: number) => void;
   setSpeciesFilter: (value: string) => void;
   speciesFilter: string;
 }) {
-  const totalRevenue = sumBy(itemRows, (item) => item.revenue);
-  const quantitySold = sumBy(itemRows, (item) => item.quantity);
-  const topItem = itemRows[0]?.item ?? dash;
-
   return (
     <div className="grid gap-4">
       <div className="grid gap-3 lg:hidden">
         <SellerCard className="p-3.5">
           <DateRangeControl
             dateSettings={dateSettings}
-            onChange={setDateSettings}
+            onChange={(value) => {
+              setPage(0);
+              setDateSettings(value);
+            }}
           />
           <MobileFilterPanel
             activeCount={[
@@ -730,6 +687,7 @@ function ItemsTab({
               <FilterSelect
                 label="Item type"
                 onChange={(value) => {
+                  setPage(0);
                   setItemTypeFilter(value as ItemTypeFilter);
                   setSpeciesFilter("all");
                   setBreedFilter("all");
@@ -740,6 +698,7 @@ function ItemsTab({
               <FilterSelect
                 label="Species"
                 onChange={(value) => {
+                  setPage(0);
                   setSpeciesFilter(value);
                   setBreedFilter("all");
                 }}
@@ -754,7 +713,10 @@ function ItemsTab({
               />
               <FilterSelect
                 label="Breed"
-                onChange={setBreedFilter}
+                onChange={(value) => {
+                  setPage(0);
+                  setBreedFilter(value);
+                }}
                 options={[
                   { label: "All breeds", value: "all" },
                   ...options.breeds.map((breed) => ({
@@ -766,7 +728,10 @@ function ItemsTab({
               />
               <SearchControl
                 label="Search item"
-                onChange={setItemSearch}
+                onChange={(value) => {
+                  setPage(0);
+                  setItemSearch(value);
+                }}
                 placeholder="Search items"
                 value={itemSearch}
               />
@@ -783,13 +748,9 @@ function ItemsTab({
           />
         </SellerCard>
         <ExportButton
-          label="Export CSV"
-          onClick={() =>
-            downloadCsv({
-              filename: `flockfront-items-${formatFileDate(new Date())}.csv`,
-              rows: buildItemsCsvRows(itemRows, dateRangeLabel),
-            })
-          }
+          disabled={isExporting}
+          label={isExporting ? "Exporting…" : "Export CSV"}
+          onClick={onExport}
         />
       </div>
 
@@ -797,11 +758,15 @@ function ItemsTab({
         <div className="grid gap-3 lg:grid-cols-[repeat(4,minmax(8.5rem,1fr))] xl:grid-cols-[minmax(8.5rem,1fr)_minmax(7.75rem,0.85fr)_minmax(7.75rem,0.85fr)_minmax(7.75rem,0.85fr)_minmax(12rem,1.25fr)_auto] xl:items-end">
           <DateRangeControl
             dateSettings={dateSettings}
-            onChange={setDateSettings}
+            onChange={(value) => {
+              setPage(0);
+              setDateSettings(value);
+            }}
           />
           <FilterSelect
             label="Item type"
             onChange={(value) => {
+              setPage(0);
               setItemTypeFilter(value as ItemTypeFilter);
               setSpeciesFilter("all");
               setBreedFilter("all");
@@ -812,6 +777,7 @@ function ItemsTab({
           <FilterSelect
             label="Species"
             onChange={(value) => {
+              setPage(0);
               setSpeciesFilter(value);
               setBreedFilter("all");
             }}
@@ -826,7 +792,10 @@ function ItemsTab({
           />
           <FilterSelect
             label="Breed"
-            onChange={setBreedFilter}
+            onChange={(value) => {
+              setPage(0);
+              setBreedFilter(value);
+            }}
             options={[
               { label: "All breeds", value: "all" },
               ...options.breeds.map((breed) => ({
@@ -838,18 +807,17 @@ function ItemsTab({
           />
           <SearchControl
             label="Search item"
-            onChange={setItemSearch}
+            onChange={(value) => {
+              setPage(0);
+              setItemSearch(value);
+            }}
             placeholder="Search item"
             value={itemSearch}
           />
           <ExportButton
-            label="Export CSV"
-            onClick={() =>
-              downloadCsv({
-                filename: `flockfront-items-${formatFileDate(new Date())}.csv`,
-                rows: buildItemsCsvRows(itemRows, dateRangeLabel),
-              })
-            }
+            disabled={isExporting}
+            label={isExporting ? "Exporting…" : "Export CSV"}
+            onClick={onExport}
           />
         </div>
       </SellerCard>
@@ -858,22 +826,22 @@ function ItemsTab({
         <SummaryCard
           glyph="/glyphs/feed-sack.png"
           label="Item revenue"
-          value={formatCurrency(totalRevenue)}
+          value={formatCurrency(getSummaryNumber(report, "item_revenue"))}
         />
         <SummaryCard
           glyph="/glyphs/egg-carton.png"
           label="Qty sold"
-          value={`${quantitySold}`}
+          value={`${getSummaryNumber(report, "quantity_sold")}`}
         />
         <SummaryCard
           glyph="/glyphs/clipboard.png"
           label="Unique items sold"
-          value={`${itemRows.length}`}
+          value={`${getSummaryNumber(report, "unique_items")}`}
         />
         <SummaryCard
           glyph="/glyphs/checkmark.png"
           label="Top item"
-          value={topItem}
+          value={getSummaryString(report, "top_item")}
           wrapValue
         />
       </SummaryGrid>
@@ -883,7 +851,15 @@ function ItemsTab({
         title="Items sold"
       >
         {itemRows.length > 0 ? (
-          <ItemsTable rows={itemRows} />
+          <>
+            <ItemsTable rows={itemRows} />
+            <ReportPagination
+              page={page}
+              pageSize={reportPageSize}
+              setPage={setPage}
+              totalCount={report.totalCount}
+            />
+          </>
         ) : (
           <TabEmptyState
             action={
@@ -891,6 +867,7 @@ function ItemsTab({
                 className="seller-secondary-button"
                 type="button"
                 onClick={() => {
+                  setPage(0);
                   setItemTypeFilter("all");
                   setSpeciesFilter("all");
                   setBreedFilter("all");
@@ -912,30 +889,35 @@ function ItemsTab({
 function CustomersTab({
   customerRows,
   customSpend,
-  dateRangeLabel,
   dateSettings,
+  isExporting,
+  onExport,
+  page,
+  report,
   search,
   setCustomSpend,
   setDateSettings,
   setSearch,
   setSpendFilter,
+  setPage,
   spendFilter,
 }: {
   customerRows: CustomerSummaryRow[];
   customSpend: string;
-  dateRangeLabel: string;
   dateSettings: DateSettings;
+  isExporting: boolean;
+  onExport: () => void;
+  page: number;
+  report: ReportState;
   search: string;
   setCustomSpend: (value: string) => void;
   setDateSettings: (value: DateSettings) => void;
   setSearch: (value: string) => void;
   setSpendFilter: (value: AmountFilter) => void;
+  setPage: (value: number) => void;
   spendFilter: AmountFilter;
 }) {
-  const topCustomer = customerRows[0];
-  const totalSpent = sumBy(customerRows, (customer) => customer.totalSpent);
-  const averageSpend =
-    customerRows.length > 0 ? totalSpent / customerRows.length : 0;
+  const includesImported = dateSettings.range === "all_time";
 
   return (
     <div className="grid gap-4">
@@ -943,7 +925,10 @@ function CustomersTab({
         <SellerCard className="p-3.5">
           <DateRangeControl
             dateSettings={dateSettings}
-            onChange={setDateSettings}
+            onChange={(value) => {
+              setPage(0);
+              setDateSettings(value);
+            }}
           />
           <MobileFilterPanel
             activeCount={[
@@ -955,13 +940,22 @@ function CustomersTab({
               <AmountControl
                 customValue={customSpend}
                 label="Minimum spend"
-                onCustomChange={setCustomSpend}
-                onFilterChange={setSpendFilter}
+                onCustomChange={(value) => {
+                  setPage(0);
+                  setCustomSpend(value);
+                }}
+                onFilterChange={(value) => {
+                  setPage(0);
+                  setSpendFilter(value);
+                }}
                 value={spendFilter}
               />
               <SearchControl
                 label="Search customer"
-                onChange={setSearch}
+                onChange={(value) => {
+                  setPage(0);
+                  setSearch(value);
+                }}
                 placeholder="Search customers"
                 value={search}
               />
@@ -978,13 +972,9 @@ function CustomersTab({
           />
         </SellerCard>
         <ExportButton
-          label="Export CSV"
-          onClick={() =>
-            downloadCsv({
-              filename: `flockfront-customers-${formatFileDate(new Date())}.csv`,
-              rows: buildCustomersCsvRows(customerRows, dateRangeLabel),
-            })
-          }
+          disabled={isExporting}
+          label={isExporting ? "Exporting…" : "Export CSV"}
+          onClick={onExport}
         />
       </div>
 
@@ -992,57 +982,71 @@ function CustomersTab({
         <div className="grid gap-3 lg:grid-cols-[minmax(12rem,1fr)_minmax(12rem,1fr)_minmax(14rem,1.35fr)_auto] lg:items-end">
           <DateRangeControl
             dateSettings={dateSettings}
-            onChange={setDateSettings}
+            onChange={(value) => {
+              setPage(0);
+              setDateSettings(value);
+            }}
           />
           <AmountControl
             customValue={customSpend}
             label="Minimum spend"
-            onCustomChange={setCustomSpend}
-            onFilterChange={setSpendFilter}
+            onCustomChange={(value) => {
+              setPage(0);
+              setCustomSpend(value);
+            }}
+            onFilterChange={(value) => {
+              setPage(0);
+              setSpendFilter(value);
+            }}
             value={spendFilter}
           />
           <SearchControl
             label="Search customer"
-            onChange={setSearch}
+            onChange={(value) => {
+              setPage(0);
+              setSearch(value);
+            }}
             placeholder="Search customer"
             value={search}
           />
           <ExportButton
-            label="Export CSV"
-            onClick={() =>
-              downloadCsv({
-                filename: `flockfront-customers-${formatFileDate(new Date())}.csv`,
-                rows: buildCustomersCsvRows(customerRows, dateRangeLabel),
-              })
-            }
+            disabled={isExporting}
+            label={isExporting ? "Exporting…" : "Export CSV"}
+            onClick={onExport}
           />
         </div>
       </SellerCard>
+
+      {includesImported ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          All-time customer counts and spend are known lifetime values. They
+          include imported history where available; dated ranges use only
+          FlockFront orders with reliable order dates.
+        </p>
+      ) : null}
 
       <SummaryGrid>
         <SummaryCard
           glyph="/glyphs/customers.png"
           label="Total customers"
-          value={`${customerRows.length}`}
+          value={`${getSummaryNumber(report, "total_customers")}`}
         />
         <SummaryCard
           glyph="/glyphs/reports.png"
-          label="Repeat customers"
-          value={`${customerRows.filter((customer) => customer.orders > 1).length}`}
+          label={includesImported ? "Repeat known customers" : "Repeat customers"}
+          value={`${getSummaryNumber(report, "repeat_customers")}`}
         />
         <SummaryCard
           glyph="/glyphs/checkmark.png"
           label="Top customer"
-          subvalue={
-            topCustomer ? `${formatCurrency(topCustomer.totalSpent)} spent` : ""
-          }
-          value={topCustomer?.customerName ?? dash}
+          subvalue={`${formatCurrency(getSummaryNumber(report, "top_customer_spent"))} spent`}
+          value={getSummaryString(report, "top_customer_name")}
           wrapValue
         />
         <SummaryCard
           glyph="/glyphs/feed-sack.png"
-          label="Average spend"
-          value={formatCurrency(averageSpend)}
+          label={includesImported ? "Average known spend" : "Average spend"}
+          value={formatCurrency(getSummaryNumber(report, "average_spend"))}
         />
       </SummaryGrid>
 
@@ -1051,7 +1055,18 @@ function CustomersTab({
         title="Customers"
       >
         {customerRows.length > 0 ? (
-          <CustomersTable rows={customerRows} />
+          <>
+            <CustomersTable
+              includesImported={includesImported}
+              rows={customerRows}
+            />
+            <ReportPagination
+              page={page}
+              pageSize={reportPageSize}
+              setPage={setPage}
+              totalCount={report.totalCount}
+            />
+          </>
         ) : (
           <TabEmptyState
             action={
@@ -1059,6 +1074,7 @@ function CustomersTab({
                 className="seller-secondary-button"
                 type="button"
                 onClick={() => {
+                  setPage(0);
                   setSpendFilter("any");
                   setSearch("");
                 }}
@@ -1259,20 +1275,66 @@ function SearchControl({
 }
 
 function ExportButton({
+  disabled = false,
   label,
   onClick,
 }: {
+  disabled?: boolean;
   label: string;
   onClick: () => void;
 }) {
   return (
     <button
-      className="seller-secondary-button min-h-12 w-full justify-center rounded-lg border-emerald-700 px-3 text-base text-emerald-800 hover:bg-emerald-50 lg:min-h-10 lg:w-auto lg:self-end lg:rounded-full lg:text-sm"
+      className="seller-secondary-button min-h-12 w-full justify-center rounded-lg border-emerald-700 px-3 text-base text-emerald-800 hover:bg-emerald-50 disabled:cursor-wait disabled:opacity-60 lg:min-h-10 lg:w-auto lg:self-end lg:rounded-full lg:text-sm"
+      disabled={disabled}
       type="button"
       onClick={onClick}
     >
       {label}
     </button>
+  );
+}
+
+function ReportPagination({
+  page,
+  pageSize,
+  setPage,
+  totalCount,
+}: {
+  page: number;
+  pageSize: number;
+  setPage: (value: number) => void;
+  totalCount: number;
+}) {
+  if (totalCount <= pageSize) return null;
+
+  const start = page * pageSize + 1;
+  const end = Math.min((page + 1) * pageSize, totalCount);
+
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-stone-200 px-4 py-3 text-sm text-stone-600 sm:px-5">
+      <span>
+        {start}–{end} of {totalCount}
+      </span>
+      <div className="flex gap-2">
+        <button
+          className="seller-secondary-button min-h-10"
+          disabled={page === 0}
+          onClick={() => setPage(Math.max(page - 1, 0))}
+          type="button"
+        >
+          Previous
+        </button>
+        <button
+          className="seller-secondary-button min-h-10"
+          disabled={end >= totalCount}
+          onClick={() => setPage(page + 1)}
+          type="button"
+        >
+          Next
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -1443,7 +1505,7 @@ function ItemsTable({ rows }: { rows: ItemSummaryRow[] }) {
           </thead>
           <tbody className="divide-y divide-stone-200">
             {rows.map((item) => (
-              <tr className="align-top" key={`${item.item}-${item.itemType}`}>
+              <tr className="align-top" key={item.rowKey}>
                 <TableCell strong>{item.item}</TableCell>
                 <TableCell>{item.itemType}</TableCell>
                 <TableCell>{item.species}</TableCell>
@@ -1462,7 +1524,7 @@ function ItemsTable({ rows }: { rows: ItemSummaryRow[] }) {
         {rows.map((item) => (
           <MobileItemRow
             item={item}
-            key={`${item.item}-${item.itemType}`}
+            key={item.rowKey}
           />
         ))}
       </div>
@@ -1470,7 +1532,13 @@ function ItemsTable({ rows }: { rows: ItemSummaryRow[] }) {
   );
 }
 
-function CustomersTable({ rows }: { rows: CustomerSummaryRow[] }) {
+function CustomersTable({
+  includesImported,
+  rows,
+}: {
+  includesImported: boolean;
+  rows: CustomerSummaryRow[];
+}) {
   return (
     <>
       <div className="hidden lg:block">
@@ -1478,9 +1546,15 @@ function CustomersTable({ rows }: { rows: CustomerSummaryRow[] }) {
           <thead className="border-y border-stone-200 bg-stone-50 text-xs font-semibold uppercase tracking-[0.04em] text-stone-500">
             <tr>
               <TableHeader>Customer</TableHeader>
-              <TableHeader align="right">Orders</TableHeader>
-              <TableHeader align="right">Items bought</TableHeader>
-              <TableHeader align="right">Total spent</TableHeader>
+              <TableHeader align="right">
+                {includesImported ? "Known orders" : "Orders"}
+              </TableHeader>
+              <TableHeader align="right">
+                {includesImported ? "FlockFront items" : "Items bought"}
+              </TableHeader>
+              <TableHeader align="right">
+                {includesImported ? "Known spend" : "Total spent"}
+              </TableHeader>
               <TableHeader>Last order</TableHeader>
               <TableHeader align="right">View</TableHeader>
             </tr>
@@ -1488,7 +1562,14 @@ function CustomersTable({ rows }: { rows: CustomerSummaryRow[] }) {
           <tbody className="divide-y divide-stone-200">
             {rows.map((customer) => (
               <tr className="align-top" key={customer.customerId}>
-                <TableCell strong>{customer.customerName}</TableCell>
+                <TableCell strong>
+                  {customer.customerName}
+                  {includesImported && customer.importedOrderCount > 0 ? (
+                    <span className="mt-0.5 block text-xs font-medium text-amber-800">
+                      Includes imported history
+                    </span>
+                  ) : null}
+                </TableCell>
                 <TableCell align="right">{customer.orders}</TableCell>
                 <TableCell align="right">{customer.itemsBought}</TableCell>
                 <TableCell align="right">
@@ -1508,6 +1589,7 @@ function CustomersTable({ rows }: { rows: CustomerSummaryRow[] }) {
           <MobileCustomerRow
             customer={customer}
             href={`/dashboard/customers/${customer.customerId}`}
+            includesImported={includesImported}
             key={customer.customerId}
           />
         ))}
@@ -1635,9 +1717,11 @@ function MobileItemRow({ item }: { item: ItemSummaryRow }) {
 function MobileCustomerRow({
   customer,
   href,
+  includesImported,
 }: {
   customer: CustomerSummaryRow;
   href: string;
+  includesImported: boolean;
 }) {
   return (
     <Link
@@ -1660,179 +1744,18 @@ function MobileCustomerRow({
       <p className="mt-1 text-sm font-medium text-stone-600">
         Last order {formatShortDate(customer.lastOrder)}
       </p>
+      {includesImported && customer.importedOrderCount > 0 ? (
+        <p className="mt-1 text-xs font-semibold text-amber-800">
+          Includes {customer.importedOrderCount} imported historical{" "}
+          {customer.importedOrderCount === 1 ? "order" : "orders"}
+        </p>
+      ) : null}
     </Link>
-  );
-}
-
-function buildItemSummaries(items: SellerReportItemRow[]) {
-  const summaries = new Map<string, ItemSummaryRow>();
-
-  for (const item of items) {
-    const itemType = getBroadItemType(item);
-    const name = getItemName(item, itemType);
-    const species =
-      itemType === "Equipment & Supplies" || itemType === "Custom / Other"
-        ? dash
-        : item.species_name_snapshot || dash;
-    const breed =
-      itemType === "Live Birds" || itemType === "Hatching Eggs"
-        ? item.breed_display_name_snapshot || dash
-        : dash;
-    const key = [name, itemType, species, breed].join("|");
-    const quantity = item.quantity ?? 0;
-    const revenue = item.line_subtotal ?? 0;
-    const existing = summaries.get(key);
-
-    if (existing) {
-      existing.quantity += quantity;
-      existing.revenue += revenue;
-      existing.orderIds.add(item.order_id);
-      existing.orders = existing.orderIds.size;
-      continue;
-    }
-
-    summaries.set(key, {
-      breed,
-      item: name,
-      itemType,
-      orderIds: new Set([item.order_id]),
-      orders: 1,
-      quantity,
-      revenue,
-      species,
-    });
-  }
-
-  return Array.from(summaries.values()).sort((first, second) => {
-    if (second.revenue !== first.revenue) return second.revenue - first.revenue;
-    return second.quantity - first.quantity;
-  });
-}
-
-function buildCustomerSummaries(
-  orders: SellerReportOrderRow[],
-  customers: Map<string, SellerReportCustomerRow>,
-  latestOrderTotalByCustomer: Map<string, number>,
-) {
-  const summaries = new Map<string, CustomerSummaryRow>();
-
-  for (const order of orders) {
-    const customerId = order.customer_id ?? `order-${order.order_id}`;
-    const customer = order.customer_id ? customers.get(order.customer_id) : null;
-    const existing = summaries.get(customerId);
-
-    if (existing) {
-      existing.orders += 1;
-      existing.itemsBought += order.total_item_quantity ?? 0;
-      existing.totalSpent += order.total_amount ?? 0;
-      if (new Date(order.created_at) > new Date(existing.lastOrder)) {
-        existing.lastOrder = order.created_at;
-      }
-      continue;
-    }
-
-    summaries.set(customerId, {
-      businessName: customer?.business_name ?? "",
-      createdAt: customer?.created_at ?? "",
-      customerEmail: customer?.email ?? order.buyer_email_snapshot ?? "",
-      customerFirstName:
-        customer?.first_name ?? order.buyer_first_name_snapshot ?? "",
-      customerId,
-      customerLastName:
-        customer?.last_name ?? order.buyer_last_name_snapshot ?? "",
-      customerName: customer ? formatCustomerName(customer) : formatCustomerName(order),
-      customerPhone: customer?.phone ?? order.buyer_phone_snapshot ?? "",
-      internalNotes: customer?.internal_notes ?? "",
-      itemsBought: order.total_item_quantity ?? 0,
-      lastOrder: order.created_at,
-      lastOrderTotal: customer
-        ? latestOrderTotalByCustomer.get(customer.customer_id) ?? 0
-        : order.total_amount ?? 0,
-      latestOrderAt: customer?.latest_order_created_at ?? order.created_at,
-      lifetimeOrderTotal:
-        customer?.lifetime_order_total ?? order.total_amount ?? 0,
-      mailingAddressLine1: customer?.delivery_address_line1 ?? "",
-      mailingAddressLine2: customer?.delivery_address_line2 ?? "",
-      mailingCity: customer?.delivery_city ?? "",
-      mailingCountry: customer?.delivery_country ?? "",
-      mailingPostalCode: customer?.delivery_postal_code ?? "",
-      mailingState: customer?.delivery_state ?? "",
-      openOrders: customer?.open_order_count ?? 0,
-      orders: 1,
-      totalOrders: customer?.order_count ?? 1,
-      totalSpent: order.total_amount ?? 0,
-      updatedAt: customer?.updated_at ?? "",
-    });
-  }
-
-  return Array.from(summaries.values()).sort((first, second) => {
-    if (second.totalSpent !== first.totalSpent) {
-      return second.totalSpent - first.totalSpent;
-    }
-
-    return second.orders - first.orders;
-  });
-}
-
-function buildLatestOrderTotalByCustomer(orders: SellerReportOrderRow[]) {
-  const latestOrders = new Map<
-    string,
-    { createdAt: string; totalAmount: number }
-  >();
-
-  for (const order of orders) {
-    if (!order.customer_id || !isSaleOrder(order)) continue;
-
-    const existing = latestOrders.get(order.customer_id);
-    if (
-      !existing ||
-      new Date(order.created_at).getTime() >
-        new Date(existing.createdAt).getTime()
-    ) {
-      latestOrders.set(order.customer_id, {
-        createdAt: order.created_at,
-        totalAmount: order.total_amount ?? 0,
-      });
-    }
-  }
-
-  return new Map(
-    Array.from(latestOrders.entries()).map(([customerId, order]) => [
-      customerId,
-      order.totalAmount,
-    ]),
-  );
-}
-
-function buildOrderItemSummaryMap(items: SellerReportItemRow[]) {
-  const summaries = new Map<string, string[]>();
-
-  for (const item of items) {
-    const itemType = getBroadItemType(item);
-    const name = getItemName(item, itemType);
-    const quantity = item.quantity ?? 0;
-    const label = quantity > 0 ? `${quantity} ${name}` : name;
-    const existing = summaries.get(item.order_id);
-
-    if (existing) {
-      existing.push(label);
-      continue;
-    }
-
-    summaries.set(item.order_id, [label]);
-  }
-
-  return new Map(
-    Array.from(summaries.entries()).map(([orderId, labels]) => [
-      orderId,
-      labels.join("; "),
-    ]),
   );
 }
 
 function buildSalesCsvRows(
   orders: SellerReportOrderRow[],
-  itemSummaryByOrder: Map<string, string>,
 ) {
   return [
     [
@@ -1856,7 +1779,7 @@ function buildSalesCsvRows(
         order.buyer_email_snapshot ?? "",
         order.buyer_phone_snapshot ?? "",
         formatOrderLifecycle(order),
-        itemSummaryByOrder.get(order.order_id) ?? "",
+        order.item_summary ?? "",
         `${order.total_item_quantity ?? order.item_count ?? 0}`,
         formatCsvNumber(order.total_amount),
         formatPaymentMethod(order.payment_method),
@@ -1895,6 +1818,8 @@ function buildCustomersCsvRows(
   rows: CustomerSummaryRow[],
   dateRangeLabel: string,
 ) {
+  const isAllTime = dateRangeLabel === "All time";
+
   return [
     [
       "Customer ID",
@@ -1912,12 +1837,15 @@ function buildCustomersCsvRows(
       "Private Notes",
       "Customer Created Date",
       "Last Updated Date",
-      "Orders in Date Range",
-      "Items Purchased in Date Range",
-      "Total Spent in Date Range",
+      isAllTime ? "Known Lifetime Orders" : "Orders in Date Range",
+      isAllTime ? "FlockFront Items Purchased" : "Items Purchased in Date Range",
+      isAllTime ? "Known Lifetime Spend" : "Total Spent in Date Range",
       "Total Orders",
       "Working/Open Orders",
       "Lifetime Total",
+      "Imported Historical Orders",
+      "Imported Historical Total",
+      "Imported Source",
       "Last Order",
       "Last Order Total",
       "Date Range",
@@ -1944,29 +1872,14 @@ function buildCustomersCsvRows(
       `${row.totalOrders}`,
       `${row.openOrders}`,
       formatCsvNumber(row.lifetimeOrderTotal),
+      `${row.importedOrderCount}`,
+      formatCsvNumber(row.importedOrderTotal),
+      row.importedSource,
       formatCsvDateTime(row.latestOrderAt),
       formatCsvNumber(row.lastOrderTotal),
       dateRangeLabel,
     ]),
   ];
-}
-
-function downloadCsv({ filename, rows }: { filename: string; rows: string[][] }) {
-  const csv = rows
-    .map((row) => row.map((value) => escapeCsvCell(value)).join(","))
-    .join("\r\n");
-  const blob = new Blob([`\uFEFF${csv}`], {
-    type: "text/csv;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
 }
 
 function escapeCsvCell(value: string) {
@@ -1975,20 +1888,6 @@ function escapeCsvCell(value: string) {
   }
 
   return value;
-}
-
-function isSaleOrder(order: SellerReportOrderRow) {
-  return getOrderLifecycleState(order) !== "canceled";
-}
-
-function isOrderInDateRange(order: SellerReportOrderRow, settings: DateSettings) {
-  const { end, start } = getDateBounds(settings);
-  const date = new Date(order.created_at);
-
-  if (start && date < start) return false;
-  if (end && date > end) return false;
-
-  return true;
 }
 
 function getDateBounds(settings: DateSettings) {
@@ -2018,6 +1917,196 @@ function getDateBounds(settings: DateSettings) {
   start.setDate(start.getDate() - days);
 
   return { end, start };
+}
+
+function downloadCsvParts({
+  filename,
+  parts,
+}: {
+  filename: string;
+  parts: string[];
+}) {
+  const blob = new Blob(parts, { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function buildReportRpcParameters({
+  amountOver,
+  breed,
+  dateSettings,
+  includeImported,
+  itemType,
+  limit,
+  offset,
+  report,
+  search,
+  species,
+  storeId,
+}: {
+  amountOver: number | null;
+  breed: string;
+  dateSettings: DateSettings;
+  includeImported: boolean;
+  itemType: ItemTypeFilter;
+  limit: number;
+  offset: number;
+  report: ReportTab;
+  search: string;
+  species: string;
+  storeId: string | null;
+}) {
+  if (!storeId) return null;
+
+  const { end, start } = getDateBounds(dateSettings);
+
+  return {
+    p_amount_over: amountOver,
+    p_breed: breed,
+    p_end_at: end?.toISOString() ?? null,
+    p_include_imported: includeImported,
+    p_item_type: itemType,
+    p_limit: limit,
+    p_offset: offset,
+    p_report: report,
+    p_search: search,
+    p_species: species,
+    p_start_at: start?.toISOString() ?? null,
+    p_store_id: storeId,
+  };
+}
+
+function normalizeReportResponse(tab: ReportTab, value: unknown): ReportState {
+  const response = (value ?? {}) as ReportResponse<Record<string, unknown>>;
+  const rawRows = Array.isArray(response.rows) ? response.rows : [];
+  const rows =
+    tab === "sales"
+      ? rawRows.map(normalizeSalesRow)
+      : tab === "items"
+        ? rawRows.map(normalizeItemRow)
+        : rawRows.map(normalizeCustomerRow);
+
+  return {
+    hasAnyData: Boolean(response.has_any_data),
+    options: {
+      breeds: response.options?.breeds ?? [],
+      species: response.options?.species ?? [],
+    },
+    rows,
+    summary: response.summary ?? {},
+    tab,
+    totalCount: Number(response.total_count ?? 0),
+  };
+}
+
+function normalizeSalesRow(
+  row: Record<string, unknown>,
+): SellerReportOrderRow {
+  return {
+    buyer_email_snapshot: nullableString(row.buyer_email_snapshot),
+    buyer_first_name_snapshot: nullableString(row.buyer_first_name_snapshot),
+    buyer_last_name_snapshot: nullableString(row.buyer_last_name_snapshot),
+    buyer_notes: nullableString(row.buyer_notes),
+    buyer_phone_snapshot: nullableString(row.buyer_phone_snapshot),
+    created_at: String(row.created_at ?? ""),
+    customer_id: nullableString(row.customer_id),
+    item_count: nullableNumber(row.item_count),
+    item_summary: String(row.item_summary ?? ""),
+    order_id: String(row.order_id ?? ""),
+    order_number: String(row.order_number ?? dash),
+    order_status: nullableString(row.order_status),
+    payment_method: nullableString(row.payment_method),
+    pickup_note: nullableString(row.pickup_note),
+    ready_for_pickup_at: nullableString(row.ready_for_pickup_at),
+    total_amount: nullableNumber(row.total_amount),
+    total_item_quantity: nullableNumber(row.total_item_quantity),
+  };
+}
+
+function normalizeItemRow(row: Record<string, unknown>): ItemSummaryRow {
+  const breed = String(row.breed ?? dash);
+  const item = String(row.item ?? "Item");
+  const itemType = String(
+    row.item_type ?? row.itemType ?? "Custom / Other",
+  ) as Exclude<ItemTypeFilter, "all">;
+  const species = String(row.species ?? dash);
+
+  return {
+    breed,
+    item,
+    itemType,
+    orders: Number(row.orders ?? 0),
+    quantity: Number(row.quantity ?? 0),
+    revenue: Number(row.revenue ?? 0),
+    rowKey: JSON.stringify([item, itemType, species, breed]),
+    species,
+  };
+}
+
+function normalizeItemRows(rows: ReportState["rows"]) {
+  return rows.map((row) =>
+    normalizeItemRow(row as unknown as Record<string, unknown>),
+  );
+}
+
+function normalizeCustomerRow(
+  row: Record<string, unknown>,
+): CustomerSummaryRow {
+  return {
+    businessName: String(row.business_name ?? ""),
+    createdAt: String(row.created_at ?? ""),
+    customerEmail: String(row.customer_email ?? ""),
+    customerFirstName: String(row.customer_first_name ?? ""),
+    customerId: String(row.customer_id ?? ""),
+    customerLastName: String(row.customer_last_name ?? ""),
+    customerName: String(row.customer_name ?? "Customer"),
+    customerPhone: String(row.customer_phone ?? ""),
+    importedOrderCount: Number(row.imported_order_count ?? 0),
+    importedOrderTotal: Number(row.imported_order_total ?? 0),
+    importedSource: String(row.imported_source ?? ""),
+    internalNotes: String(row.internal_notes ?? ""),
+    itemsBought: Number(row.items_bought ?? 0),
+    lastOrder: row.last_order ? String(row.last_order) : null,
+    lastOrderTotal: Number(row.last_order_total ?? 0),
+    latestOrderAt: row.latest_order_at ? String(row.latest_order_at) : null,
+    lifetimeOrderTotal: Number(row.lifetime_order_total ?? 0),
+    mailingAddressLine1: String(row.mailing_address_line1 ?? ""),
+    mailingAddressLine2: String(row.mailing_address_line2 ?? ""),
+    mailingCity: String(row.mailing_city ?? ""),
+    mailingCountry: String(row.mailing_country ?? ""),
+    mailingPostalCode: String(row.mailing_postal_code ?? ""),
+    mailingState: String(row.mailing_state ?? ""),
+    nativeOrders: Number(row.native_orders ?? 0),
+    nativeSpent: Number(row.native_spent ?? 0),
+    openOrders: Number(row.open_orders ?? 0),
+    orders: Number(row.orders ?? 0),
+    totalOrders: Number(row.total_orders ?? 0),
+    totalSpent: Number(row.total_spent ?? 0),
+    updatedAt: String(row.updated_at ?? ""),
+  };
+}
+
+function nullableNumber(value: unknown) {
+  return value === null || value === undefined ? null : Number(value);
+}
+
+function nullableString(value: unknown) {
+  return value === null || value === undefined ? null : String(value);
+}
+
+function getSummaryNumber(report: ReportState, key: string) {
+  return Number(report.summary[key] ?? 0);
+}
+
+function getSummaryString(report: ReportState, key: string) {
+  return String(report.summary[key] ?? dash);
 }
 
 function startOfDay(value: string) {
@@ -2057,45 +2146,6 @@ function getDateRangeLabel(settings: DateSettings) {
   }
 
   return "Custom";
-}
-
-function getBroadItemType(
-  item: SellerReportItemRow,
-): Exclude<ItemTypeFilter, "all"> {
-  return formatOrderItemCategoryLabel(classifyOrderItemCategory(item));
-}
-
-function getItemName(
-  item: SellerReportItemRow,
-  itemType: Exclude<ItemTypeFilter, "all">,
-) {
-  if (item.custom_item_name_snapshot) return item.custom_item_name_snapshot;
-  if (item.item_name_snapshot) return item.item_name_snapshot;
-
-  if (itemType === "Equipment & Supplies") {
-    return item.custom_inventory_label_snapshot || "Equipment & Supplies";
-  }
-
-  const breed = item.breed_display_name_snapshot || "Item";
-  const label = formatInventoryLabel({
-    custom_inventory_label: item.custom_inventory_label_snapshot,
-    inventory_type: item.inventory_type_snapshot,
-  });
-
-  return label === "Not set" ? breed : `${breed} ${label}`;
-}
-
-function getDistinctOptions(values: string[]) {
-  return Array.from(new Set(values.filter((value) => value && value !== dash))).sort(
-    (first, second) => first.localeCompare(second),
-  );
-}
-
-function matchesSearchTerm(values: string[], search: string) {
-  const trimmed = search.trim().toLowerCase();
-  if (!trimmed) return true;
-
-  return values.some((value) => value.toLowerCase().includes(trimmed));
 }
 
 function formatCustomerName(customer: {
@@ -2149,8 +2199,4 @@ function formatCsvNumber(value: number | null) {
 
 function formatFileDate(value: Date) {
   return value.toISOString().slice(0, 10);
-}
-
-function sumBy<TValue>(values: TValue[], getValue: (value: TValue) => number) {
-  return values.reduce((total, value) => total + getValue(value), 0);
 }
