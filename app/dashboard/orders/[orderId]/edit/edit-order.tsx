@@ -7,6 +7,11 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSellerContext } from "../../../_components/seller-context";
 import {
+  buildCustomerSearchFilter,
+  ORDER_CUSTOMER_SEARCH_DEBOUNCE_MS,
+  ORDER_CUSTOMER_SEARCH_RESULT_LIMIT,
+} from "../../../customers/customers-list-query";
+import {
   ErrorState,
   LoadingState,
   SellerCard,
@@ -66,7 +71,7 @@ import { canEditOrder } from "../../order-action-predicates";
 
 type CustomerRow = {
   customer_id: string;
-  email: string;
+  email: string | null;
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
@@ -114,7 +119,6 @@ type EditableOrderRow = {
 };
 
 type EditOrderState = {
-  customers: CustomerRow[];
   deliveryOptions: DeliveryOption[];
   inventory: InventorySearchRow[];
   hasAdjustedItemQuantities: boolean;
@@ -135,7 +139,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
   const router = useRouter();
   const { seller } = useSellerContext();
   const [data, setData] = useState<EditOrderState>({
-    customers: [],
     deliveryOptions: [],
     inventory: [],
     hasAdjustedItemQuantities: false,
@@ -147,8 +150,18 @@ export function EditOrder({ orderId }: { orderId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerRow | null>(
+    null,
+  );
   const [isChangingCustomer, setIsChangingCustomer] = useState(false);
   const [customerQuery, setCustomerQuery] = useState("");
+  const [customerSearchResults, setCustomerSearchResults] = useState<
+    CustomerRow[]
+  >([]);
+  const [isCustomerSearchLoading, setIsCustomerSearchLoading] = useState(false);
+  const [customerSearchError, setCustomerSearchError] = useState<string | null>(
+    null,
+  );
   const [lines, setLines] = useState<OrderLine[]>([]);
   const [inventoryQuery, setInventoryQuery] = useState("");
   const [isBrowseOpen, setIsBrowseOpen] = useState(false);
@@ -195,7 +208,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
       const [
         orderResult,
         itemResult,
-        customerResult,
         listingResult,
         equipmentResult,
         hatchingEggResult,
@@ -221,17 +233,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
           .eq("order_id", orderId)
           .order("created_at", { ascending: true })
           .returns<EditableOrderItemRow[]>(),
-        supabase
-          .from("seller_customer_summary")
-          .select("customer_id, email, first_name, last_name, phone, business_name")
-          .eq("store_id", seller.store_id)
-          .order("latest_order_created_at", {
-            ascending: false,
-            nullsFirst: false,
-          })
-          .order("created_at", { ascending: false })
-          .limit(200)
-          .returns<CustomerRow[]>(),
         supabase
           .from("seller_inventory_management")
           .select(
@@ -302,7 +303,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
       const firstError =
         orderResult.error ??
         itemResult.error ??
-        customerResult.error ??
         listingResult.error ??
         hatchingEggResult.error ??
         equipmentResult.error ??
@@ -318,6 +318,27 @@ export function EditOrder({ orderId }: { orderId: string }) {
       }
 
       const order = orderResult.data ?? null;
+      let currentCustomer: CustomerRow | null = null;
+
+      if (order?.customer_id) {
+        const currentCustomerResult = await supabase
+          .from("seller_customer_summary")
+          .select("customer_id, email, first_name, last_name, phone, business_name")
+          .eq("store_id", seller.store_id)
+          .eq("customer_id", order.customer_id)
+          .maybeSingle<CustomerRow>();
+
+        if (!isMounted) return;
+
+        if (currentCustomerResult.error) {
+          setLoadError(currentCustomerResult.error.message);
+          setIsLoading(false);
+          return;
+        }
+
+        currentCustomer = currentCustomerResult.data;
+      }
+
       const mappedItems = mapEditableOrderItemsToLines(itemResult.data ?? []);
       const pickupMethod =
         order?.pickup_option_id ||
@@ -336,7 +357,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
       );
 
       setData({
-        customers: customerResult.data ?? [],
         deliveryOptions: nextDeliveryOptions,
         inventory: normalizeSellableInventoryRows({
           equipmentRows: equipmentResult.data ?? [],
@@ -356,6 +376,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
         pickupOptions: nextPickupOptions,
       });
       setSelectedCustomerId(order?.customer_id ?? "");
+      setSelectedCustomer(currentCustomer);
       setLines(mappedItems.lines);
       setOriginalLines(mappedItems.lines);
       setFulfillmentMethod(currentFulfillmentMethod);
@@ -411,6 +432,54 @@ export function EditOrder({ orderId }: { orderId: string }) {
       isMounted = false;
     };
   }, [orderId, seller]);
+
+  useEffect(() => {
+    const normalizedQuery = customerQuery.trim();
+    const storeId = seller?.store_id;
+
+    if (!storeId || normalizedQuery.length < 2) return;
+
+    let isMounted = true;
+
+    const timeoutId = window.setTimeout(() => {
+      async function searchCustomers() {
+        const searchFilter = buildCustomerSearchFilter(normalizedQuery);
+        if (!searchFilter) return;
+
+        const { data, error } = await supabase
+          .from("seller_customer_summary")
+          .select("customer_id, email, first_name, last_name, phone, business_name")
+          .eq("store_id", storeId)
+          .or(searchFilter)
+          .order("latest_order_created_at", {
+            ascending: false,
+            nullsFirst: false,
+          })
+          .order("created_at", { ascending: false })
+          .limit(ORDER_CUSTOMER_SEARCH_RESULT_LIMIT)
+          .returns<CustomerRow[]>();
+
+        if (!isMounted) return;
+
+        if (error) {
+          console.error("edit order customer search failed", error);
+          setCustomerSearchError(error.message);
+          setIsCustomerSearchLoading(false);
+          return;
+        }
+
+        setCustomerSearchResults(data ?? []);
+        setIsCustomerSearchLoading(false);
+      }
+
+      void searchCustomers();
+    }, ORDER_CUSTOMER_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      isMounted = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [customerQuery, seller?.store_id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -475,9 +544,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
         has_adjusted_item_quantities: data.hasAdjustedItemQuantities,
       })
     : false;
-  const selectedCustomer = data.customers.find(
-    (customer) => customer.customer_id === selectedCustomerId,
-  );
   const displayedCustomer = selectedCustomer
     ? {
         email: selectedCustomer.email,
@@ -489,9 +555,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
         name: order ? formatOrderCustomerName(order) : "Customer",
         phone: order?.buyer_phone_snapshot ?? null,
       };
-  const visibleCustomers = isChangingCustomer
-    ? filterCustomers(data.customers, customerQuery).slice(0, 6)
-    : [];
   const usesConfiguredPickupOptions =
     fulfillmentMethod === "pickup" && pickupMode === "manual_options";
   const canUseDelivery = data.deliveryOptions.length > 0;
@@ -637,18 +700,26 @@ export function EditOrder({ orderId }: { orderId: string }) {
   }
 
   function openCustomerSearch() {
-    setCustomerQuery("");
+    updateCustomerQuery("");
     setIsChangingCustomer(true);
   }
 
   function cancelCustomerSearch() {
-    setCustomerQuery("");
+    updateCustomerQuery("");
     setIsChangingCustomer(false);
   }
 
-  function selectCustomer(customerId: string) {
-    setSelectedCustomerId(customerId);
-    setCustomerQuery("");
+  function updateCustomerQuery(nextQuery: string) {
+    setCustomerQuery(nextQuery);
+    setCustomerSearchResults([]);
+    setCustomerSearchError(null);
+    setIsCustomerSearchLoading(nextQuery.trim().length >= 2);
+  }
+
+  function selectCustomer(customer: CustomerRow) {
+    setSelectedCustomer(customer);
+    setSelectedCustomerId(customer.customer_id);
+    updateCustomerQuery("");
     setIsChangingCustomer(false);
     if (fulfillmentMethod === "delivery") {
       setDeliveryAddressCustomerId(null);
@@ -937,17 +1008,27 @@ export function EditOrder({ orderId }: { orderId: string }) {
                       placeholder="Search by name, email, or phone"
                       type="text"
                       value={customerQuery}
-                      onChange={(event) => setCustomerQuery(event.target.value)}
+                      onChange={(event) =>
+                        updateCustomerQuery(event.target.value)
+                      }
                     />
                     {customerQuery.trim().length >= 2 ? (
                       <div className="overflow-hidden rounded-md border border-stone-200 bg-white">
-                        {visibleCustomers.length > 0 ? (
-                          visibleCustomers.map((customer) => (
+                        {isCustomerSearchLoading ? (
+                          <p className="px-3 py-2 text-sm text-stone-600">
+                            Searching customers…
+                          </p>
+                        ) : customerSearchError ? (
+                          <p className="px-3 py-2 text-sm text-stone-600">
+                            Customer search could not load. Try again.
+                          </p>
+                        ) : customerSearchResults.length > 0 ? (
+                          customerSearchResults.map((customer) => (
                             <button
                               className="flex min-h-10 w-full items-center justify-between gap-3 border-b border-stone-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none"
                               key={customer.customer_id}
                               type="button"
-                              onClick={() => selectCustomer(customer.customer_id)}
+                              onClick={() => selectCustomer(customer)}
                             >
                               <span className="min-w-0 truncate">
                                 {formatCustomerSummary(customer)}
@@ -961,7 +1042,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
                           ))
                         ) : (
                           <p className="px-3 py-2 text-sm text-stone-600">
-                            No customers match.
+                            No results
                           </p>
                         )}
                       </div>
@@ -1366,23 +1447,6 @@ function formatCustomerSummary(customer: CustomerRow) {
   ]
     .filter(Boolean)
     .join(" - ");
-}
-
-function filterCustomers(customers: CustomerRow[], query: string) {
-  const normalized = query.trim().toLowerCase();
-
-  if (!normalized) return [];
-
-  return customers.filter((customer) =>
-    [
-      formatCustomerName(customer),
-      customer.email,
-      customer.phone,
-      customer.business_name,
-    ]
-      .filter(Boolean)
-      .some((value) => value?.toLowerCase().includes(normalized)),
-  );
 }
 
 function formatCustomerName(customer: CustomerRow) {

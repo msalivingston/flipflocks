@@ -1,4 +1,6 @@
 export const CUSTOMERS_PER_PAGE = 6;
+export const ORDER_CUSTOMER_SEARCH_DEBOUNCE_MS = 275;
+export const ORDER_CUSTOMER_SEARCH_RESULT_LIMIT = 8;
 
 export type CustomerSortOption =
   | "last-order-newest"

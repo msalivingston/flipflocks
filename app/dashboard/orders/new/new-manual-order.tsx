@@ -8,7 +8,11 @@ import {
   AddCustomerButton,
   type CreatedCustomer,
 } from "../../customers/add-customer-modal";
-import { buildCustomerSearchFilter } from "../../customers/customers-list-query";
+import {
+  buildCustomerSearchFilter,
+  ORDER_CUSTOMER_SEARCH_DEBOUNCE_MS,
+  ORDER_CUSTOMER_SEARCH_RESULT_LIMIT,
+} from "../../customers/customers-list-query";
 import {
   ErrorState,
   LoadingState,
@@ -120,8 +124,6 @@ type RestoreDraft = {
 };
 
 const manualOrderSuccessStorageKey = "flockfront:manual-order-success";
-const CUSTOMER_SEARCH_DEBOUNCE_MS = 275;
-const CUSTOMER_SEARCH_RESULT_LIMIT = 8;
 
 export function NewManualOrder({
   restoreFromOrderId = null,
@@ -440,7 +442,7 @@ export function NewManualOrder({
             nullsFirst: false,
           })
           .order("created_at", { ascending: false })
-          .limit(CUSTOMER_SEARCH_RESULT_LIMIT)
+          .limit(ORDER_CUSTOMER_SEARCH_RESULT_LIMIT)
           .returns<CustomerRow[]>();
 
         if (!isMounted) return;
@@ -457,7 +459,7 @@ export function NewManualOrder({
       }
 
       void searchCustomers();
-    }, CUSTOMER_SEARCH_DEBOUNCE_MS);
+    }, ORDER_CUSTOMER_SEARCH_DEBOUNCE_MS);
 
     return () => {
       isMounted = false;
