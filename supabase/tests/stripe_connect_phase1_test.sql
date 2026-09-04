@@ -1,6 +1,6 @@
 begin;
 
-select plan(26);
+select plan(29);
 
 select has_table('public', 'store_stripe_connections', 'private connected-account table exists');
 select has_table('public', 'storefront_card_checkout_reservations', 'private card reservation table exists');
@@ -170,6 +170,12 @@ select is(
   'paid order has the connected Checkout payment classification'
 );
 select is((select quantity_available from public.equipment_inventory_items where id='d1000000-0000-4000-8000-000000000050'),0,'paid settlement does not decrement inventory twice');
+select is(
+  (select quantity::text||':'||inventory_debited_quantity::text||':'||restored_quantity::text
+   from public.order_items where order_id=(select order_id from connect_paid_settlement_result)),
+  '2:2:0',
+  'paid settlement classifies the reservation debit and leaves restoration at zero'
+);
 select is((select count(*)::integer from public.storefront_card_checkout_reservations where id='d1000000-0000-4000-8000-000000000102'),0,'paid settlement closes the temporary reservation');
 select is((select count(*)::integer from public.stripe_checkout_sessions where stripe_checkout_session_id='cs_test_ConnectReservationPaid'),1,'paid settlement records the existing Stripe session binding');
 
@@ -181,6 +187,18 @@ select is(
   (select order_id from connect_duplicate_settlement_result),
   (select order_id from connect_paid_settlement_result),
   'duplicate webhook or success-page settlement returns the original order'
+);
+select is(
+  (select quantity::text||':'||inventory_debited_quantity::text||':'||restored_quantity::text
+   from public.order_items where order_id=(select order_id from connect_paid_settlement_result)),
+  '2:2:0',
+  'duplicate settlement preserves debit and restoration classification'
+);
+select is(
+  (select quantity_available from public.equipment_inventory_items
+   where id='d1000000-0000-4000-8000-000000000050'),
+  0,
+  'duplicate settlement does not deduct inventory again'
 );
 
 select finish();
