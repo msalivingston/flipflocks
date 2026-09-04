@@ -166,5 +166,6 @@ export type AdminWebinarRegistrationRow = {
   annual_birds_sold: string;
   referral_source: string | null;
   attended: boolean;
+  canceled_at: string | null;
   created_at: string;
 };

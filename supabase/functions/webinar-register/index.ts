@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.0";
 import { sendWebinarEmail, type WebinarEmail } from "../webinar-email-worker/email.ts";
+import { PostmarkDeliveryError } from "../postmark-email-worker/delivery-state.ts";
 import { resolveFlockFrontCors } from "../_shared/cors.ts";
 
 function response(status: number, body: Record<string, unknown>, corsHeaders: Record<string, string>) {
@@ -27,14 +28,35 @@ Deno.serve(async (request) => {
     return response(400, { error: "registration_failed" }, cors.headers);
   }
   const registration = Array.isArray(data) ? data[0] : data;
-  const claim = await service.rpc("claim_webinar_email", { p_email_type: "confirmation", p_registration_id: registration.registration_id });
-  const item = (Array.isArray(claim.data) ? claim.data[0] : claim.data) as WebinarEmail | null;
-  if (claim.error || !item) return response(200, { registration_id: registration.registration_id }, cors.headers);
-  try {
-    const sent = await sendWebinarEmail(item, Deno.env.get("POSTMARK_SERVER_TOKEN")!);
-    await service.rpc("mark_webinar_email_sent", { p_queue_id: item.queue_id, p_processing_token: item.processing_token, p_provider_message_id: sent.messageId });
-  } catch {
-    await service.rpc("mark_webinar_email_failed", { p_queue_id: item.queue_id, p_processing_token: item.processing_token, p_error: "Immediate confirmation delivery failed." });
+  for (const emailType of ["confirmation", "admin_registration"] as const) {
+    const claim = await service.rpc("claim_webinar_email", {
+      p_email_type: emailType,
+      p_registration_id: registration.registration_id,
+    });
+    const item = (Array.isArray(claim.data) ? claim.data[0] : claim.data) as WebinarEmail | null;
+    if (claim.error || !item) continue;
+    try {
+      const sent = await sendWebinarEmail(item, Deno.env.get("POSTMARK_SERVER_TOKEN")!);
+      await service.rpc("mark_webinar_email_sent", {
+        p_queue_id: item.queue_id,
+        p_processing_token: item.processing_token,
+        p_provider_message_id: sent.messageId,
+      });
+    } catch (sendError) {
+      const deliveryUnknown = sendError instanceof PostmarkDeliveryError &&
+        sendError.outcome === "delivery_unknown";
+      await service.rpc(deliveryUnknown
+        ? "mark_webinar_email_delivery_unknown"
+        : "mark_webinar_email_failed", {
+        p_queue_id: item.queue_id,
+        p_processing_token: item.processing_token,
+        p_error: deliveryUnknown
+          ? sendError.message
+          : emailType === "confirmation"
+          ? "Immediate confirmation delivery failed."
+          : "Immediate admin registration notification failed.",
+      });
+    }
   }
   return response(200, { registration_id: registration.registration_id }, cors.headers);
 });

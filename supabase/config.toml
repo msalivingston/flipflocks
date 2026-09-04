@@ -35,3 +35,12 @@ verify_jwt = true
 
 [functions.admin-catalog-breed-delete]
 verify_jwt = true
+
+[functions.webinar-register]
+verify_jwt = false
+
+[functions.webinar-email-worker]
+verify_jwt = false
+
+[functions.webinar-registration-cancel]
+verify_jwt = false
