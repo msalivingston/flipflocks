@@ -30,6 +30,9 @@ verify_jwt = false
 [functions.stripe-connect-webhook]
 verify_jwt = false
 
+[functions.stripe-connect-cancellation-preflight]
+verify_jwt = true
+
 [functions.admin-breed-image-workbench]
 verify_jwt = true
 

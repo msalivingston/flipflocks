@@ -56,15 +56,16 @@ test("reason and email controls remain part of the cancellation dialog", async (
   );
 });
 
-test("paid online orders still have no usable cancellation action", async () => {
-  const source = await readFile(predicatesPath, "utf8");
+test("paid online orders reach preflight without reaching the existing cancellation RPC", async () => {
+  const [predicates, detail] = await Promise.all([
+    readFile(predicatesPath, "utf8"),
+    readFile(detailPath, "utf8"),
+  ]);
 
   assert.match(
-    source,
-    /order\.payment_method === "stripe_checkout" &&\s*order\.payment_status === "unpaid"/,
+    predicates,
+    /\["unpaid", "paid", "partially_refunded", "refunded"\]/,
   );
-  assert.doesNotMatch(
-    source,
-    /order\.payment_method === "stripe_checkout" &&\s*order\.payment_status === "paid"/,
-  );
+  assert.match(detail, /stripe-connect-cancellation-preflight/);
+  assert.match(detail, /requiresPaidPreflight[\s\S]*setShowCancelPanel\(false\)/);
 });

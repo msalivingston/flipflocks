@@ -164,11 +164,11 @@ select ok(
   (
     select definition like '%archived_at is null%'
       and definition like '%order_status in (''pending'', ''open'')%'
-      and definition like '%quantity - order_item.fulfilled_quantity - order_item.restored_quantity > 0%'
+      and definition like '%quantity - order_item.fulfilled_quantity - order_item.canceled_quantity > 0%'
     from active_order_action_functions
     where function_name = 'seller_bulk_mark_orders_fulfilled'
   ),
-  'bulk fulfillment skips archived, non-open, and fully processed orders'
+  'bulk fulfillment skips archived, non-open, and fully fulfilled-or-canceled orders'
 );
 
 select ok(

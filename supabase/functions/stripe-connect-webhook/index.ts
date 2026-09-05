@@ -29,6 +29,18 @@ const serviceRoleKey = required("SUPABASE_SERVICE_ROLE_KEY");
 const service = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
+const refundEventTypes = new Set([
+  "refund.created",
+  "refund.updated",
+  "refund.failed",
+]);
+const refundStatuses = new Set([
+  "pending",
+  "requires_action",
+  "succeeded",
+  "failed",
+  "canceled",
+]);
 
 async function triggerPostmarkEmailWorker(orderId: string): Promise<void> {
   const workerSecret = Deno.env.get("POSTMARK_WORKER_SECRET")?.trim();
@@ -89,16 +101,95 @@ Deno.serve(async (request) => {
   } catch {
     return response(400, { error: "invalid_signature" });
   }
-  if (event.type !== "checkout.session.completed" && event.type !== "checkout.session.expired") {
+  const isCheckoutEvent = event.type === "checkout.session.completed" ||
+    event.type === "checkout.session.expired";
+  if (!isCheckoutEvent && !refundEventTypes.has(event.type)) {
     return response(200, { received: true });
   }
   const accountId = event.account;
   if (!accountId || !/^acct_[A-Za-z0-9]+$/.test(accountId)) {
     return response(400, { error: "connected_account_required" });
   }
-  const eventSession = event.data.object as Stripe.Checkout.Session;
-
   try {
+    if (refundEventTypes.has(event.type)) {
+      const eventRefund = event.data.object as Stripe.Refund;
+      if (!/^re_[A-Za-z0-9]+$/.test(eventRefund.id)) {
+        return response(400, { error: "refund_binding_invalid" });
+      }
+
+      const refund = await stripe.refunds.retrieve(
+        eventRefund.id,
+        {},
+        { stripeAccount: accountId },
+      );
+      const paymentIntentId = typeof refund.payment_intent === "string"
+        ? refund.payment_intent
+        : refund.payment_intent?.id ?? null;
+      if (
+        !paymentIntentId ||
+        !/^pi_[A-Za-z0-9]+$/.test(paymentIntentId) ||
+        refund.livemode !== livemode ||
+        !Number.isSafeInteger(refund.amount) ||
+        refund.amount <= 0 ||
+        !/^[a-z]{3}$/.test(refund.currency) ||
+        !refund.status ||
+        !refundStatuses.has(refund.status)
+      ) {
+        return response(400, { error: "refund_binding_invalid" });
+      }
+
+      const paymentIntent = await stripe.paymentIntents.retrieve(
+        paymentIntentId,
+        {},
+        { stripeAccount: accountId },
+      );
+      if (
+        paymentIntent.id !== paymentIntentId ||
+        paymentIntent.livemode !== livemode ||
+        paymentIntent.currency !== refund.currency ||
+        paymentIntent.amount_received < refund.amount
+      ) {
+        return response(400, { error: "refund_binding_invalid" });
+      }
+
+      const trustedMetadata = Object.fromEntries(
+        [
+          "ff_cancellation_schema_version",
+          "ff_refund_action_id",
+          "ff_order_id",
+          "ff_request_hash",
+        ].flatMap((key) => {
+          const value = refund.metadata?.[key];
+          return typeof value === "string" ? [[key, value]] : [];
+        }),
+      );
+      const { data, error } = await service.rpc(
+        "record_stripe_connect_refund_event",
+        {
+          p_provider_event_id: event.id,
+          p_event_type: event.type,
+          p_provider_refund_id: refund.id,
+          p_provider_status: refund.status,
+          p_refund_amount_cents: refund.amount,
+          p_currency: refund.currency,
+          p_stripe_payment_intent_id: paymentIntentId,
+          p_stripe_account_id: accountId,
+          p_stripe_livemode: livemode,
+          p_stripe_metadata: trustedMetadata,
+          p_request_idempotency_key: event.request?.idempotency_key ?? null,
+          p_refund_created_at: new Date(refund.created * 1000).toISOString(),
+        },
+      );
+      if (error || !Array.isArray(data) || !data[0]) {
+        throw error ?? new Error("refund_observation_failed");
+      }
+      return response(200, {
+        received: true,
+        duplicate: data[0].was_duplicate === true,
+      });
+    }
+
+    const eventSession = event.data.object as Stripe.Checkout.Session;
     const session = await stripe.checkout.sessions.retrieve(
       eventSession.id,
       {},
@@ -154,7 +245,7 @@ Deno.serve(async (request) => {
     }
     return response(200, { received: true });
   } catch (error) {
-    console.error("stripe-connect-webhook settlement failed", error instanceof Error ? error.message : "unknown");
-    return response(500, { error: "settlement_failed" });
+    console.error("stripe-connect-webhook processing failed", error instanceof Error ? error.message : "unknown");
+    return response(500, { error: "webhook_processing_failed" });
   }
 });

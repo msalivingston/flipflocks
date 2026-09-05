@@ -102,7 +102,7 @@ const stateMatrix = [
       bulkFulfill: true,
       bulkMarkPaid: false,
       bulkUnarchive: false,
-      cancel: false,
+      cancel: true,
       edit: false,
       fulfill: true,
       markPaid: false,

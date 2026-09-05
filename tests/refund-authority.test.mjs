@@ -253,7 +253,7 @@ test("new writes have explicit offline and provider consistency rules", async ()
   );
 });
 
-test("active application and Edge code do not call refund authority primitives", async () => {
+test("only the Connect webhook calls the service-only Stripe refund observer", async () => {
   const roots = [
     path.join(repositoryRoot, "app"),
     path.join(repositoryRoot, "supabase/functions"),
@@ -266,16 +266,12 @@ test("active application and Edge code do not call refund authority primitives",
   for (const file of activeFiles) {
     if (!/\.(?:ts|tsx|js|jsx|mjs)$/.test(file)) continue;
     const source = await readFile(file, "utf8");
-    if (
-      /seller_record_refund|record_stripe_refund_result|seller_record_offline_refund/.test(
-        source,
-      )
-    ) {
-      matches.push(path.relative(repositoryRoot, file));
+    if (/record_stripe_connect_refund_event/.test(source)) {
+      matches.push(path.relative(repositoryRoot, file).replaceAll("\\", "/"));
     }
   }
 
-  assert.deepEqual(matches, []);
+  assert.deepEqual(matches, ["supabase/functions/stripe-connect-webhook/index.ts"]);
 });
 
 test("Batch D paid-Stripe edit protection remains intact", async () => {

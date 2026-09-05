@@ -127,6 +127,7 @@ type SellerOrderItemRow = {
   unit_price_snapshot: number | null;
   quantity: number;
   fulfilled_quantity: number;
+  canceled_quantity: number;
   remaining_unfulfilled_quantity: number;
   line_subtotal: number | null;
 };
@@ -3340,6 +3341,14 @@ function getCombinedOrderStatus(order: SellerOrderRow): CombinedOrderStatus {
     };
   }
 
+  if (order.payment_status === "partially_refunded") {
+    return {
+      description: "Payment status is partially refunded.",
+      label: "Partially refunded",
+      tone: "refunded",
+    };
+  }
+
   const isFulfilled = isOrderFulfilled(order);
   const isPaid = isOrderPaid(order);
 
@@ -3383,7 +3392,9 @@ function isOrderFulfilled(order: SellerOrderRow) {
 }
 
 function isOrderPaid(order: SellerOrderRow) {
-  return order.payment_status === "paid";
+  return ["paid", "partially_refunded", "refunded"].includes(
+    order.payment_status ?? "",
+  );
 }
 
 function isOrderUnfulfilledForArchive(order: SellerOrderRow) {

@@ -21,10 +21,10 @@ export function canCancelOrder(order: OrderActionSnapshot) {
   if (!activeOrderStatuses.has(order.order_status ?? "")) return false;
   if (order.payment_method === "pay_at_pickup") return true;
 
-  return (
-    order.payment_method === "stripe_checkout" &&
-    order.payment_status === "unpaid"
-  );
+  return order.payment_method === "stripe_checkout" &&
+    ["unpaid", "paid", "partially_refunded", "refunded"].includes(
+      order.payment_status ?? "",
+    );
 }
 
 export function canEditOrder(order: OrderActionSnapshot) {

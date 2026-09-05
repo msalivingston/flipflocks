@@ -122,8 +122,18 @@ type SellerOrderItemRow = {
   unit_price_snapshot: number | null;
   quantity: number;
   fulfilled_quantity: number;
+  canceled_quantity: number;
   remaining_unfulfilled_quantity: number;
   line_subtotal: number | null;
+};
+
+type PaidCancellationPreflightResponse = {
+  status?:
+    | "eligible"
+    | "resume_flockfront_action"
+    | "support_required"
+    | "ineligible";
+  message?: string;
 };
 
 type SellerMediaRow = {
@@ -240,7 +250,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         supabase
           .from("seller_order_item_detail")
           .select(
-            "order_item_id, inventory_item_id, listing_batch_id, listing_batch_breed_id, seller_breed_profile_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, batch_type_snapshot, custom_inventory_label_snapshot, breeding_history_snapshot, feather_condition_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, remaining_unfulfilled_quantity, line_subtotal",
+            "order_item_id, inventory_item_id, listing_batch_id, listing_batch_breed_id, seller_breed_profile_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, batch_type_snapshot, custom_inventory_label_snapshot, breeding_history_snapshot, feather_condition_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, canceled_quantity, remaining_unfulfilled_quantity, line_subtotal",
           )
           .eq("store_id", seller.store_id)
           .eq("order_id", orderId)
@@ -881,7 +891,9 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     runOrderPrint("order-print-active");
   }
 
-  function openCancelPanel() {
+  async function openCancelPanel() {
+    if (!order || isCanceling) return;
+
     setActionError(null);
     setActionMessage(null);
     setActionWarning(null);
@@ -897,7 +909,50 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setShowUnfulfillmentDialog(false);
     setShowResendConfirmationDialog(false);
     setShowUnarchiveDialog(false);
-    setShowCancelPanel(true);
+    setShowCancelPanel(false);
+
+    const requiresPaidPreflight =
+      order.payment_method === "stripe_checkout" &&
+      order.payment_status !== "unpaid";
+    if (!requiresPaidPreflight) {
+      setShowCancelPanel(true);
+      return;
+    }
+
+    setIsCanceling(true);
+    try {
+      const { data: preflight, error: preflightError } =
+        await supabase.functions.invoke<PaidCancellationPreflightResponse>(
+          "stripe-connect-cancellation-preflight",
+          { body: { order_id: order.order_id } },
+        );
+
+      if (preflightError || !preflight?.status) {
+        setActionError(
+          "Stripe cancellation eligibility could not be checked. Please try again.",
+        );
+      } else if (preflight.status === "eligible") {
+        setActionMessage(
+          preflight.message ??
+            "This order is eligible for FlockFront cancellation. Paid cancellation processing is not enabled yet.",
+        );
+      } else if (preflight.status === "resume_flockfront_action") {
+        setActionWarning(
+          preflight.message ??
+            "A FlockFront cancellation refund already exists for this order. Paid cancellation recovery is not enabled yet.",
+        );
+      } else {
+        setActionError(
+          preflight.message ?? "This order is not eligible for paid cancellation.",
+        );
+      }
+    } catch {
+      setActionError(
+        "Stripe cancellation eligibility could not be checked. Please try again.",
+      );
+    } finally {
+      setIsCanceling(false);
+    }
   }
 
   function openArchiveDialog() {
@@ -983,7 +1038,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
             isOpen={isActionsMenuOpen}
             label="Actions"
             onArchive={openArchiveDialog}
-            onCancel={openCancelPanel}
+            onCancel={() => void openCancelPanel()}
             onMarkComplete={() => {
               setActionError(null);
               setActionMessage(null);
@@ -1101,7 +1156,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
               isBusy={isSaving || isCanceling || isResendingConfirmation || isArchiving}
               isOpen={isActionsMenuOpen}
               onArchive={openArchiveDialog}
-              onCancel={openCancelPanel}
+              onCancel={() => void openCancelPanel()}
               onMarkComplete={() => {
                 setActionError(null);
                 setActionMessage(null);
@@ -2031,6 +2086,7 @@ function getSavedOrderStatusTone(status: string | null) {
 
 function formatSavedPaymentStatus(status: string | null) {
   if (status === "paid") return "PAID";
+  if (status === "partially_refunded") return "PARTIALLY REFUNDED";
   if (status === "refunded") return "REFUNDED";
 
   return "UNPAID";
@@ -2038,6 +2094,7 @@ function formatSavedPaymentStatus(status: string | null) {
 
 function getSavedPaymentStatusTone(status: string | null) {
   if (status === "paid") return "bg-emerald-100 text-emerald-800";
+  if (status === "partially_refunded") return "bg-sky-100 text-sky-800";
   if (status === "refunded") return "bg-sky-100 text-sky-800";
 
   return "bg-amber-100 text-amber-800";

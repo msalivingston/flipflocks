@@ -1,6 +1,6 @@
 begin;
 
-select plan(29);
+select plan(59);
 
 select has_table('public', 'store_stripe_connections', 'private connected-account table exists');
 select has_table('public', 'storefront_card_checkout_reservations', 'private card reservation table exists');
@@ -199,6 +199,326 @@ select is(
    where id='d1000000-0000-4000-8000-000000000050'),
   0,
   'duplicate settlement does not deduct inventory again'
+);
+
+select is(
+  (select canceled_quantity from public.order_items
+   where order_id=(select order_id from connect_paid_settlement_result)),
+  0,
+  'new and historical-compatible order lines default canceled quantity to zero'
+);
+
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.record_stripe_connect_refund_event(text,text,text,text,bigint,text,text,text,boolean,jsonb,text,timestamptz)',
+    'execute'
+  )
+  and not has_function_privilege(
+    'authenticated',
+    'public.record_stripe_connect_refund_event(text,text,text,text,bigint,text,text,text,boolean,jsonb,text,timestamptz)',
+    'execute'
+  ),
+  'Stripe refund observation is service-only'
+);
+
+create temporary table external_refund_created as
+select * from public.record_stripe_connect_refund_event(
+  'evt_ExternalRefundCreated', 'refund.created', 're_ExternalRefund',
+  'succeeded', 1000, 'usd', 'pi_ConnectReservationPaid',
+  'acct_TestConnectReservation', false, '{}'::jsonb, null, now()
+);
+
+select is((select origin_classification from external_refund_created), 'external_unproven',
+  'a refund without provider origin proof is external and unproven');
+select is(
+  (select payment_status from public.orders where id=(select order_id from connect_paid_settlement_result)),
+  'partially_refunded',
+  'a successful external refund updates payment knowledge'
+);
+select is(
+  (select order_status from public.orders where id=(select order_id from connect_paid_settlement_result)),
+  'open',
+  'refund observation never cancels the order'
+);
+select is(
+  (select canceled_quantity::text||':'||restored_quantity::text from public.order_items
+   where order_id=(select order_id from connect_paid_settlement_result)),
+  '0:0',
+  'refund observation never cancels items or restores inventory'
+);
+select is(
+  (select quantity_available from public.equipment_inventory_items
+   where id='d1000000-0000-4000-8000-000000000050'),
+  0,
+  'refund observation leaves physical inventory unchanged'
+);
+select is(
+  (select count(*)::integer from public.order_refunds where provider_refund_id='re_ExternalRefund'),
+  1,
+  'the real external Stripe refund is recorded once'
+);
+
+create temporary table external_refund_duplicate as
+select * from public.record_stripe_connect_refund_event(
+  'evt_ExternalRefundCreated', 'refund.created', 're_ExternalRefund',
+  'succeeded', 1000, 'usd', 'pi_ConnectReservationPaid',
+  'acct_TestConnectReservation', false, '{}'::jsonb, null, now()
+);
+select is((select was_duplicate from external_refund_duplicate), true,
+  'duplicate webhook delivery is idempotent');
+select is(
+  (select count(*)::integer from public.payment_provider_events where provider_event_id='evt_ExternalRefundCreated'),
+  1,
+  'duplicate delivery retains one provider event');
+
+create temporary table external_refund_updated as
+select * from public.record_stripe_connect_refund_event(
+  'evt_ExternalRefundUpdated', 'refund.updated', 're_ExternalRefund',
+  'pending', 1000, 'usd', 'pi_ConnectReservationPaid',
+  'acct_TestConnectReservation', false, '{}'::jsonb, null, now()
+);
+select is(
+  (select refund_status||':'||provider_status from public.order_refunds where provider_refund_id='re_ExternalRefund'),
+  'pending:pending',
+  'refund.updated refreshes the observed provider status'
+);
+
+create temporary table external_refund_failed as
+select * from public.record_stripe_connect_refund_event(
+  'evt_ExternalRefundFailed', 'refund.failed', 're_ExternalRefund',
+  'failed', 1000, 'usd', 'pi_ConnectReservationPaid',
+  'acct_TestConnectReservation', false, '{}'::jsonb, null, now()
+);
+select is(
+  (select refund_status||':'||provider_status from public.order_refunds where provider_refund_id='re_ExternalRefund'),
+  'failed:failed',
+  'refund.failed records the terminal provider failure'
+);
+select is(
+  (select payment_status from public.orders where id=(select order_id from connect_paid_settlement_result)),
+  'paid',
+  'a failed refund does not reduce the paid amount'
+);
+
+insert into public.order_refunds (
+  id, store_id, order_id, idempotency_key, request_hash, refund_amount,
+  refund_method, refund_status, metadata, currency_code,
+  stripe_checkout_session_id, stripe_payment_intent_id,
+  stripe_account_id, stripe_livemode
+)
+select
+  'd1000000-0000-4000-8000-000000000201', store_id, order_id,
+  'ff-cancel-proof-key', 'ff-cancel-request-hash', 5.00,
+  'stripe', 'pending',
+  '{"schema_version":"ff_connect_cancellation_v1","workflow_type":"paid_order_cancellation","workflow_state":"refund_succeeded"}'::jsonb,
+  'USD', stripe_checkout_session_id, stripe_payment_intent_id,
+  metadata->>'stripe_account_id', (metadata->>'stripe_livemode')::boolean
+from public.stripe_checkout_sessions
+where order_id=(select order_id from connect_paid_settlement_result);
+
+create temporary table proven_refund_created as
+select * from public.record_stripe_connect_refund_event(
+  'evt_FlockFrontRefundCreated', 'refund.created', 're_FlockFrontRefund',
+  'succeeded', 500, 'usd', 'pi_ConnectReservationPaid',
+  'acct_TestConnectReservation', false,
+  jsonb_build_object(
+    'ff_cancellation_schema_version','ff_connect_cancellation_v1',
+    'ff_refund_action_id','d1000000-0000-4000-8000-000000000201',
+    'ff_order_id',(select order_id::text from connect_paid_settlement_result),
+    'ff_request_hash','ff-cancel-request-hash'
+  ),
+  'ff-cancel-proof-key', now()
+);
+select is((select origin_classification from proven_refund_created), 'flockfront',
+  'full trusted correlation proves FlockFront origin');
+select is(
+  (select provider_refund_id from public.order_refunds where id='d1000000-0000-4000-8000-000000000201'),
+  're_FlockFrontRefund',
+  'the proven provider refund binds to the pre-existing action'
+);
+select is(
+  (select payload_summary->>'origin_proof' from public.payment_provider_events where provider_event_id='evt_FlockFrontRefundCreated'),
+  'stripe_event_request_idempotency',
+  'the signed event idempotency match is persisted as provider evidence'
+);
+
+insert into public.order_refunds (
+  id, store_id, order_id, idempotency_key, request_hash, refund_amount,
+  refund_method, refund_status, metadata, currency_code,
+  stripe_checkout_session_id, stripe_payment_intent_id,
+  stripe_account_id, stripe_livemode
+)
+select
+  'd1000000-0000-4000-8000-000000000202', store_id, order_id,
+  'different-provider-key', 'metadata-only-hash', 2.00,
+  'stripe', 'pending',
+  '{"schema_version":"ff_connect_cancellation_v1","workflow_type":"paid_order_cancellation","workflow_state":"refund_succeeded"}'::jsonb,
+  'USD', stripe_checkout_session_id, stripe_payment_intent_id,
+  metadata->>'stripe_account_id', (metadata->>'stripe_livemode')::boolean
+from public.stripe_checkout_sessions
+where order_id=(select order_id from connect_paid_settlement_result);
+
+create temporary table metadata_only_refund as
+select * from public.record_stripe_connect_refund_event(
+  'evt_MetadataOnlyRefundCreated', 'refund.created', 're_MetadataOnlyRefund',
+  'succeeded', 200, 'usd', 'pi_ConnectReservationPaid',
+  'acct_TestConnectReservation', false,
+  jsonb_build_object(
+    'ff_cancellation_schema_version','ff_connect_cancellation_v1',
+    'ff_refund_action_id','d1000000-0000-4000-8000-000000000202',
+    'ff_order_id',(select order_id::text from connect_paid_settlement_result),
+    'ff_request_hash','metadata-only-hash'
+  ),
+  'wrong-provider-key', now()
+);
+select is((select origin_classification from metadata_only_refund), 'external_unproven',
+  'matching editable Stripe metadata without provider idempotency proof remains external');
+select is(
+  (select provider_refund_id from public.order_refunds where id='d1000000-0000-4000-8000-000000000202'),
+  null,
+  'metadata-only evidence does not bind the external refund to the action'
+);
+select is(
+  (select count(*)::integer from public.order_refunds where provider_refund_id='re_MetadataOnlyRefund'
+    and metadata->>'origin_classification'='external_unproven'),
+  1,
+  'the metadata-only refund is still recorded for payment observation'
+);
+
+insert into public.order_refunds (
+  id, store_id, order_id, idempotency_key, request_hash, refund_amount,
+  refund_method, refund_status, metadata, currency_code,
+  stripe_checkout_session_id, stripe_payment_intent_id,
+  stripe_account_id, stripe_livemode
+)
+select
+  'd1000000-0000-4000-8000-000000000203', store_id, order_id,
+  'out-of-order-provider-key', 'out-of-order-request-hash', 3.00,
+  'stripe', 'pending',
+  '{"schema_version":"ff_connect_cancellation_v1","workflow_type":"paid_order_cancellation","workflow_state":"refund_succeeded"}'::jsonb,
+  'USD', stripe_checkout_session_id, stripe_payment_intent_id,
+  metadata->>'stripe_account_id', (metadata->>'stripe_livemode')::boolean
+from public.stripe_checkout_sessions
+where order_id=(select order_id from connect_paid_settlement_result);
+
+create temporary table out_of_order_updated as
+select * from public.record_stripe_connect_refund_event(
+  'evt_OutOfOrderRefundUpdated', 'refund.updated', 're_OutOfOrderRefund',
+  'pending', 300, 'usd', 'pi_ConnectReservationPaid',
+  'acct_TestConnectReservation', false,
+  jsonb_build_object(
+    'ff_cancellation_schema_version','ff_connect_cancellation_v1',
+    'ff_refund_action_id','d1000000-0000-4000-8000-000000000203',
+    'ff_order_id',(select order_id::text from connect_paid_settlement_result),
+    'ff_request_hash','out-of-order-request-hash'
+  ),
+  null, now()
+);
+select is((select origin_classification from out_of_order_updated), 'external_unproven',
+  'an update arriving before provider origin proof remains external');
+
+create temporary table out_of_order_created as
+select * from public.record_stripe_connect_refund_event(
+  'evt_OutOfOrderRefundCreated', 'refund.created', 're_OutOfOrderRefund',
+  'succeeded', 300, 'usd', 'pi_ConnectReservationPaid',
+  'acct_TestConnectReservation', false,
+  jsonb_build_object(
+    'ff_cancellation_schema_version','ff_connect_cancellation_v1',
+    'ff_refund_action_id','d1000000-0000-4000-8000-000000000203',
+    'ff_order_id',(select order_id::text from connect_paid_settlement_result),
+    'ff_request_hash','out-of-order-request-hash'
+  ),
+  'out-of-order-provider-key', now()
+);
+select is((select origin_classification from out_of_order_created), 'flockfront',
+  'the signed created event can prove origin even when an update arrived first');
+select is(
+  (select count(*)::integer from public.order_refunds
+   where provider_refund_id='re_OutOfOrderRefund'
+     and id='d1000000-0000-4000-8000-000000000203'),
+  1,
+  'out-of-order observation consolidates onto the pre-existing action'
+);
+
+select is(
+  (select canceled_quantity::text||':'||restored_quantity::text from public.order_items
+   where order_id=(select order_id from connect_paid_settlement_result)),
+  '0:0',
+  'all refund-event variants preserve cancellation and restoration quantities'
+);
+
+set local "request.jwt.claim.role" = 'authenticated';
+set local "request.jwt.claim.sub" = 'd1000000-0000-4000-8000-000000000001';
+
+update public.order_items
+set restored_quantity = 1
+where order_id=(select order_id from connect_paid_settlement_result);
+
+select is(
+  (select remaining_unfulfilled_quantity from public.seller_order_item_detail
+   where order_id=(select order_id from connect_paid_settlement_result)),
+  2,
+  'restored quantity alone does not reduce active remaining quantity'
+);
+
+select is(
+  (select quantity_available from public.equipment_inventory_items
+   where id='d1000000-0000-4000-8000-000000000050'),
+  0,
+  'changing restoration history in the test does not itself mutate stock'
+);
+
+update public.order_items
+set restored_quantity = 0, canceled_quantity = 1
+where order_id=(select order_id from connect_paid_settlement_result);
+
+select is(
+  (select remaining_unfulfilled_quantity from public.seller_order_item_detail
+   where order_id=(select order_id from connect_paid_settlement_result)),
+  1,
+  'active remaining quantity is ordered minus fulfilled minus canceled'
+);
+
+select is(
+  (select quantity_available from public.equipment_inventory_items
+   where id='d1000000-0000-4000-8000-000000000050'),
+  0,
+  'canceled quantity does not automatically restore stock'
+);
+
+select throws_ok(
+  format(
+    'select * from public.seller_record_order_fulfillment(%L::uuid, %L::jsonb)',
+    (select order_id from connect_paid_settlement_result),
+    jsonb_build_array(jsonb_build_object(
+      'order_item_id', (select id from public.order_items
+        where order_id=(select order_id from connect_paid_settlement_result)),
+      'quantity', 2
+    ))::text
+  ),
+  'Fulfillment quantity exceeds remaining unfulfilled quantity.',
+  'fulfillment cannot exceed quantity remaining after cancellation'
+);
+
+select lives_ok(
+  format(
+    'select * from public.seller_record_order_fulfillment(%L::uuid, %L::jsonb)',
+    (select order_id from connect_paid_settlement_result),
+    jsonb_build_array(jsonb_build_object(
+      'order_item_id', (select id from public.order_items
+        where order_id=(select order_id from connect_paid_settlement_result)),
+      'quantity', 1
+    ))::text
+  ),
+  'the active remaining quantity can still be fulfilled'
+);
+
+select is(
+  (select fulfilled_quantity::text||':'||canceled_quantity::text||':'||restored_quantity::text
+   from public.order_items where order_id=(select order_id from connect_paid_settlement_result)),
+  '1:1:0',
+  'fulfillment, cancellation, and restoration remain independent quantities'
 );
 
 select finish();
