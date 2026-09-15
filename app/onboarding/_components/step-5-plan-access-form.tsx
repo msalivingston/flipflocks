@@ -34,7 +34,7 @@ const planCards: Array<{
   {
     id: "small_flock",
     cta: "Choose Coop",
-    purpose: "For occasional sellers",
+    purpose: "For occasional sellers listing a few live birds",
     includes: [
       "Up to 5 birds for sale at once",
       "Live poultry only",
@@ -43,9 +43,9 @@ const planCards: Array<{
   },
   {
     id: "full_flock",
-    badge: "Best for active sellers",
+    badge: "Full FlockFront",
     cta: "Choose Market",
-    purpose: "For active sellers",
+    purpose: "For sellers managing regular inventory and orders",
     includes: [
       "Unlimited birds for sale",
       "All sale types (birds, eggs, products, equipment)",
@@ -61,7 +61,7 @@ export function Step5PlanAccessForm({
   onComplete,
 }: Step5PlanAccessFormProps) {
   const [selectedPlan, setSelectedPlan] = useState<PlanId>(
-    normalizePlanId(initialPlanKey),
+    initialPlanKey ? normalizePlanId(initialPlanKey) : "full_flock",
   );
   const [selectedBillingPlan, setSelectedBillingPlan] =
     useState<BillingCadence>(normalizeBillingCadence(initialBillingPlan));

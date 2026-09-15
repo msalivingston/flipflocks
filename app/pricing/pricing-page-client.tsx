@@ -172,8 +172,9 @@ export function PricingPageClient({
             Pick the plan that fits your flock
           </h1>
           <p className="mx-auto mt-1.5 max-w-3xl text-balance text-[14px] leading-5 text-[#3f463f] md:text-[15px]">
-            Start small with Coop, or choose the full Market toolkit for an
-            active poultry business.
+            Market gives active poultry sellers the full FlockFront toolkit.
+            Coop is a lightweight option for occasional sellers with just a few
+            birds to list.
           </p>
         </section>
 
@@ -189,7 +190,7 @@ export function PricingPageClient({
             <div className="border-r border-[#e8deca]" aria-hidden="true" />
             <PlanHeader
               buttonLabel="Choose Coop"
-              description="For occasional sellers who only need to list a few birds at a time."
+              description="For occasional sellers who only need to list a few live birds at a time."
               monthlyPrice={pricing.smallMonthlyPrice}
               name={smallFlock.displayName}
               yearlyPrice={pricing.smallYearlyPrice}
@@ -198,7 +199,7 @@ export function PricingPageClient({
             />
             <PlanHeader
               buttonLabel="Choose Market"
-              description="For active poultry sellers who need room to sell more birds and more types of poultry inventory."
+              description="For poultry sellers managing regular inventory, orders, customers and pickups."
               emphasized
               monthlyPrice={pricing.fullMonthlyPrice}
               name={fullFlock.displayName}
@@ -215,7 +216,7 @@ export function PricingPageClient({
           <div className="grid gap-3 lg:hidden">
             <PlanSummaryCard
               buttonLabel="Choose Coop"
-              description="For occasional sellers who only need to list a few birds at a time."
+              description="For occasional sellers who only need to list a few live birds at a time."
               monthlyPrice={pricing.smallMonthlyPrice}
               name={smallFlock.displayName}
               yearlyPrice={pricing.smallYearlyPrice}
@@ -224,7 +225,7 @@ export function PricingPageClient({
             />
             <PlanSummaryCard
               buttonLabel="Choose Market"
-              description="For active poultry sellers who need room to sell more birds and more types of poultry inventory."
+              description="For poultry sellers managing regular inventory, orders, customers and pickups."
               emphasized
               monthlyPrice={pricing.fullMonthlyPrice}
               name={fullFlock.displayName}
@@ -340,7 +341,7 @@ function PlanHeader({
     >
       {emphasized ? (
         <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-[#a86908]">
-          Best value
+          Full FlockFront
         </p>
       ) : null}
       <h3 className="font-serif text-[1.45rem] font-semibold leading-tight text-[#123d27]">
@@ -401,7 +402,7 @@ function PlanSummaryCard({
     >
       {emphasized ? (
         <p className="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-[#a86908] sm:text-sm">
-          Best value
+          Full FlockFront
         </p>
       ) : null}
       <h3 className="font-serif text-[1.85rem] font-semibold leading-tight text-[#123d27] sm:text-[2.15rem]">

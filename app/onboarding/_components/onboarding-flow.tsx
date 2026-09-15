@@ -213,7 +213,7 @@ export function OnboardingFlow({ checkoutCanceled = false }: { checkoutCanceled?
   if (view === "step3") {
     return (
       <OnboardingShell
-        body="Try FlockFront free for 7 days. Choose the plan and billing schedule that fit how you sell."
+        body="Try FlockFront free for 7 days. Market is the full FlockFront toolkit for active sellers; Coop is available for occasional sellers."
         compactOnMobile
         currentStep={3}
         headline="Choose your plan"
