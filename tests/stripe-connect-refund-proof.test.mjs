@@ -121,6 +121,36 @@ test("editable Stripe metadata alone never proves FlockFront origin", async () =
   );
 });
 
+test("a trusted API-response provider binding proves the current Stripe Refund", async () => {
+  const apiProvenAction = {
+    ...action,
+    metadata: {
+      ...action.metadata,
+      origin_classification: "flockfront",
+      origin_proof: "stripe_api_response",
+    },
+  };
+
+  assert.equal(
+    await isProvenFlockFrontRefund({
+      action: apiProvenAction,
+      binding,
+      proofEvent: null,
+      refund,
+    }),
+    true,
+  );
+  assert.equal(
+    await isProvenFlockFrontRefund({
+      action: apiProvenAction,
+      binding,
+      proofEvent: null,
+      refund: { ...refund, id: "re_different" },
+    }),
+    false,
+  );
+});
+
 test("a mismatched provider idempotency proof fails closed", async () => {
   const proofEvent = {
     provider: "stripe",

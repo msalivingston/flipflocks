@@ -3,6 +3,7 @@ export const FLOCKFRONT_CANCELLATION_SCHEMA_VERSION =
 export const FLOCKFRONT_CANCELLATION_WORKFLOW = "paid_order_cancellation";
 export const STRIPE_REFUND_ORIGIN_PROOF =
   "stripe_event_request_idempotency";
+export const STRIPE_API_RESPONSE_ORIGIN_PROOF = "stripe_api_response";
 
 export type StripeRefundSnapshot = {
   id: string;
@@ -21,7 +22,9 @@ export type RefundActionSnapshot = {
   request_hash: string;
   refund_amount: string | number;
   refund_method: string;
+  refund_status?: string;
   provider_refund_id: string | null;
+  provider_status?: string | null;
   currency_code: string | null;
   stripe_checkout_session_id: string | null;
   stripe_payment_intent_id: string | null;
@@ -81,7 +84,7 @@ export async function isProvenFlockFrontRefund({
   proofEvent: RefundProofEventSnapshot | null;
   refund: StripeRefundSnapshot;
 }): Promise<boolean> {
-  if (!action || !proofEvent) return false;
+  if (!action) return false;
   if (action.refund_method !== "stripe") return false;
   if (action.provider_refund_id !== refund.id) return false;
   if (action.store_id !== binding.storeId || action.order_id !== binding.orderId) {
@@ -120,6 +123,18 @@ export async function isProvenFlockFrontRefund({
   if (Math.floor(new Date(action.created_at).getTime() / 1000) > refund.created) {
     return false;
   }
+
+  // This marker is written only by the service-only RPC after the cancellation
+  // orchestrator receives this exact Refund from Stripe. The preflight still
+  // verifies the current Refund object and every immutable provider binding.
+  if (
+    actionMetadata.origin_classification === "flockfront" &&
+    actionMetadata.origin_proof === STRIPE_API_RESPONSE_ORIGIN_PROOF
+  ) {
+    return true;
+  }
+
+  if (!proofEvent) return false;
 
   const proofSummary = proofEvent.payload_summary ?? {};
   if (

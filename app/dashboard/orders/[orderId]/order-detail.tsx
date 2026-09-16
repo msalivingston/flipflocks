@@ -132,8 +132,23 @@ type PaidCancellationPreflightResponse = {
     | "eligible"
     | "resume_flockfront_action"
     | "support_required"
-    | "ineligible";
+    | "ineligible"
+    | "canceled"
+    | "refund_processing"
+    | "refund_failed";
   message?: string;
+  refund_amount?: number;
+  refund_state?: string;
+  retry_allowed?: boolean;
+  order?: {
+    buyer_notification_queued?: boolean;
+    seller_copy_queued?: boolean;
+  };
+};
+
+type PaidCancellationDialogState = {
+  mode: "cancel" | "resume";
+  refundAmount: number;
 };
 
 type SellerMediaRow = {
@@ -216,6 +231,8 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [emailCancellationToBuyer, setEmailCancellationToBuyer] = useState(false);
   const [isPrintPortalReady, setIsPrintPortalReady] = useState(false);
   const [showCancelPanel, setShowCancelPanel] = useState(false);
+  const [paidCancellationDialog, setPaidCancellationDialog] =
+    useState<PaidCancellationDialogState | null>(null);
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [showFulfillmentDialog, setShowFulfillmentDialog] = useState(false);
   const [showUnfulfillmentDialog, setShowUnfulfillmentDialog] = useState(false);
@@ -675,6 +692,79 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setArchiveError(null);
 
     const shouldEmailCancellation = buyerHasEmail && emailCancellationToBuyer;
+    if (paidCancellationDialog) {
+      const { data: paidResult, error: paidError } =
+        await supabase.functions.invoke<PaidCancellationPreflightResponse>(
+          "stripe-connect-cancellation-preflight",
+          {
+            body: {
+              action: "cancel_full",
+              order_id: order.order_id,
+              canceled_reason: trimmedReason || null,
+              send_buyer_notification: shouldEmailCancellation,
+            },
+          },
+        );
+
+      if (paidError || !paidResult?.status) {
+        setCancellationError(
+          paidResult?.message ??
+            "Stripe cancellation could not be completed. The order has not been canceled. Please try again.",
+        );
+        setIsCanceling(false);
+        return;
+      }
+      if (paidResult.status === "canceled") {
+        const { buyerEmailQueued, anyEmailQueued } =
+          getCancellationEmailQueueState(paidResult.order ?? null);
+        const emailProcessingStarted = anyEmailQueued
+          ? await kickPostmarkEmailWorker(order.order_id)
+          : false;
+        setActionMessage(
+          shouldEmailCancellation && buyerEmailQueued && emailProcessingStarted
+            ? "Order has been canceled and refunded. A cancellation email was sent to the buyer."
+            : "Order has been canceled and refunded.",
+        );
+        if (shouldEmailCancellation && !buyerEmailQueued) {
+          setActionWarning(
+            "Order canceled, but the cancellation email could not be queued.",
+          );
+        } else if (anyEmailQueued && !emailProcessingStarted) {
+          setActionWarning(
+            "Order canceled, but email processing could not be started automatically. The cancellation email may be delayed.",
+          );
+        }
+        setCancelReason("");
+        setEmailCancellationToBuyer(false);
+        setPaidCancellationDialog(null);
+        setShowCancelPanel(false);
+        setRefreshKey((current) => current + 1);
+      } else if (paidResult.status === "resume_flockfront_action") {
+        setPaidCancellationDialog((current) =>
+          current ? { ...current, mode: "resume" } : current,
+        );
+        setCancellationError(
+          paidResult.message ?? "Refund completed. Finish cancellation.",
+        );
+      } else if (paidResult.status === "refund_processing") {
+        setShowCancelPanel(false);
+        setPaidCancellationDialog(null);
+        setActionWarning(
+          paidResult.message ??
+            "Refund is processing. The order has not been canceled yet.",
+        );
+      } else {
+        setShowCancelPanel(false);
+        setPaidCancellationDialog(null);
+        setActionError(
+          paidResult.message ??
+            "This order cannot be canceled automatically. Please contact FlockFront support.",
+        );
+      }
+      setIsCanceling(false);
+      return;
+    }
+
     const { data: cancelData, error: cancelError } = await supabase.rpc("cancel_order", {
       p_order_id: order.order_id,
       p_canceled_reason: trimmedReason || null,
@@ -712,6 +802,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setCancelReason("");
     setRestoreInventoryOnCancel(false);
     setEmailCancellationToBuyer(false);
+    setPaidCancellationDialog(null);
     setShowCancelPanel(false);
     setIsActionsMenuOpen(false);
     setRefreshKey((current) => current + 1);
@@ -910,6 +1001,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     setShowResendConfirmationDialog(false);
     setShowUnarchiveDialog(false);
     setShowCancelPanel(false);
+    setPaidCancellationDialog(null);
 
     const requiresPaidPreflight =
       order.payment_method === "stripe_checkout" &&
@@ -924,7 +1016,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
       const { data: preflight, error: preflightError } =
         await supabase.functions.invoke<PaidCancellationPreflightResponse>(
           "stripe-connect-cancellation-preflight",
-          { body: { order_id: order.order_id } },
+          { body: { action: "preflight", order_id: order.order_id } },
         );
 
       if (preflightError || !preflight?.status) {
@@ -932,15 +1024,27 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           "Stripe cancellation eligibility could not be checked. Please try again.",
         );
       } else if (preflight.status === "eligible") {
-        setActionMessage(
-          preflight.message ??
-            "This order is eligible for FlockFront cancellation. Paid cancellation processing is not enabled yet.",
-        );
+        setPaidCancellationDialog({
+          mode: "cancel",
+          refundAmount: preflight.refund_amount ?? Number(order.total_amount ?? 0),
+        });
+        setShowCancelPanel(true);
       } else if (preflight.status === "resume_flockfront_action") {
-        setActionWarning(
-          preflight.message ??
-            "A FlockFront cancellation refund already exists for this order. Paid cancellation recovery is not enabled yet.",
-        );
+        if (preflight.refund_state === "succeeded") {
+          setPaidCancellationDialog({
+            mode: "resume",
+            refundAmount: preflight.refund_amount ?? Number(order.total_amount ?? 0),
+          });
+          setShowCancelPanel(true);
+          setActionWarning(
+            preflight.message ?? "Refund completed. Finish cancellation.",
+          );
+        } else {
+          setActionWarning(
+            preflight.message ??
+              "Refund is processing. The order has not been canceled yet.",
+          );
+        }
       } else {
         setActionError(
           preflight.message ?? "This order is not eligible for paid cancellation.",
@@ -1266,6 +1370,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           error={cancellationError}
           hasBuyerEmail={buyerHasEmail}
           isCanceling={isCanceling}
+          paidCancellation={paidCancellationDialog}
           restoreInventoryOnCancel={restoreInventoryOnCancel}
           onCancel={cancelOrder}
           onClose={() => {
@@ -1273,6 +1378,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
             setCancelReason("");
             setRestoreInventoryOnCancel(false);
             setEmailCancellationToBuyer(false);
+            setPaidCancellationDialog(null);
             setCancellationError(null);
             setShowCancelPanel(false);
           }}
@@ -2836,6 +2942,7 @@ function CancellationDialog({
   error,
   hasBuyerEmail,
   isCanceling,
+  paidCancellation,
   restoreInventoryOnCancel,
   onCancel,
   onClose,
@@ -2848,6 +2955,7 @@ function CancellationDialog({
   error: string | null;
   hasBuyerEmail: boolean;
   isCanceling: boolean;
+  paidCancellation: PaidCancellationDialogState | null;
   restoreInventoryOnCancel: boolean;
   onCancel: () => void;
   onClose: () => void;
@@ -2867,17 +2975,25 @@ function CancellationDialog({
           className="text-lg font-bold text-stone-950"
           id="cancel-order-dialog-title"
         >
-          Cancel order?
+          {paidCancellation?.mode === "resume"
+            ? "Finish cancellation?"
+            : paidCancellation
+              ? `Cancel this order and refund ${formatCurrency(paidCancellation.refundAmount)}?`
+              : "Cancel order?"}
         </h2>
         <p className="mt-2 text-sm leading-6 text-stone-700">
-          This will cancel the order. Choose whether eligible inventory should
-          be restored.
+          {paidCancellation?.mode === "resume"
+            ? "The customer’s Stripe refund is complete. Finish canceling the order and return all remaining unfulfilled inventory to available stock."
+            : paidCancellation
+              ? "The customer will receive a full refund through Stripe. All remaining unfulfilled inventory will be returned to available stock."
+              : "This will cancel the order. Choose whether eligible inventory should be restored."}
         </p>
         {error ? (
           <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
             {error}
           </p>
         ) : null}
+        {!paidCancellation ? (
         <label className="mt-4 flex gap-3 rounded-md border border-stone-200 bg-[#fffdf8] p-3 text-sm text-stone-700">
           <input
             checked={restoreInventoryOnCancel}
@@ -2898,6 +3014,7 @@ function CancellationDialog({
             </span>
           </span>
         </label>
+        ) : null}
         <label className="mt-4 grid gap-1.5 text-sm font-semibold text-stone-950">
           Reason for cancellation
           <span className="text-xs font-semibold text-stone-500">Optional</span>
@@ -2936,7 +3053,17 @@ function CancellationDialog({
             type="button"
             onClick={onCancel}
           >
-            {isCanceling ? "Canceling..." : "Cancel order"}
+            {isCanceling
+              ? paidCancellation?.mode === "resume"
+                ? "Finishing..."
+                : paidCancellation
+                  ? "Refunding..."
+                  : "Canceling..."
+              : paidCancellation?.mode === "resume"
+                ? "Finish cancellation"
+                : paidCancellation
+                  ? "Cancel and refund"
+                  : "Cancel order"}
           </button>
           <button
             className={`${orderDetailBackButtonClass} min-h-10`}

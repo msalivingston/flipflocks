@@ -17,7 +17,7 @@ test("Connect webhook observes exactly the supported refund events", async () =>
   assert.doesNotMatch(webhook, /cancel_order|reconcile_order_inventory|restored_quantity|canceled_quantity/);
 });
 
-test("paid cancellation preflight is read-only and paginates Stripe refunds", async () => {
+test("paid cancellation boundary preserves the complete paginated Stripe preflight", async () => {
   const preflight = await read("supabase/functions/stripe-connect-cancellation-preflight/index.ts");
 
   assert.match(preflight, /metadata->>schema_version",\s*"ff_connect_checkout_v1"/);
@@ -27,15 +27,17 @@ test("paid cancellation preflight is read-only and paginates Stripe refunds", as
     assert.match(preflight, new RegExp(`"${status}"`));
   }
   assert.match(preflight, /isProvenFlockFrontRefund/);
-  assert.doesNotMatch(preflight, /stripe\.refunds\.create|cancel_order|reconcile_order_inventory/);
+  assert.match(preflight, /action !== "preflight" && action !== "cancel_full"/);
+  assert.doesNotMatch(preflight, /\.rpc\("cancel_order"|reconcile_order_inventory/);
 });
 
-test("order detail sends paid Stripe cancellation through preflight only", async () => {
+test("order detail sends paid Stripe cancellation through the authenticated boundary", async () => {
   const detail = await read("app/dashboard/orders/[orderId]/order-detail.tsx");
   const predicates = await read("app/dashboard/orders/order-action-predicates.ts");
 
   assert.match(detail, /stripe-connect-cancellation-preflight/);
-  assert.match(detail, /Paid cancellation processing is not enabled yet/);
+  assert.match(detail, /action: "cancel_full"/);
+  assert.match(detail, /Cancel and refund/);
   assert.match(detail, /requiresPaidPreflight[\s\S]*setShowCancelPanel\(false\)/);
   assert.match(predicates, /"partially_refunded",\s*"refunded"/);
 });
