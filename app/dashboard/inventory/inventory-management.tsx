@@ -36,6 +36,10 @@ import {
   formatInventoryAgeLabel,
   formatInventoryTypeLabel,
 } from "../_lib/listing-formatters";
+import {
+  breedingHistoryOptions,
+  featherConditionOptions,
+} from "@/lib/live-bird-advanced-attributes";
 import { buildPublicListingPath } from "../_lib/public-listing-url";
 import {
   type EquipmentInventoryRow,
@@ -77,6 +81,9 @@ type InventoryRow = {
   is_unfinished_add_v2_draft: boolean;
   archived_at: string | null;
   inventory_updated_at: string | null;
+  breeding_history: string | null;
+  feather_condition: string | null;
+  barn_location: string | null;
 };
 
 type HatchingEggInventoryRow = {
@@ -503,6 +510,36 @@ export function InventoryManagement() {
       }
 
       const nextRows = nextPage.rows.map((entry) => entry.row);
+      const liveBirdRows =
+        activeTab === "live_poultry"
+          ? (nextRows as unknown as InventoryRow[])
+          : [];
+      const liveBirdInventoryItemIds = liveBirdRows.map(
+        (row) => row.inventory_item_id,
+      );
+      const advancedDetailsResult =
+        liveBirdInventoryItemIds.length > 0
+          ? await supabase
+              .from("seller_inventory_management")
+              .select(
+                "inventory_item_id, breeding_history, feather_condition, barn_location",
+              )
+              .eq("store_id", seller.store_id)
+              .in("inventory_item_id", liveBirdInventoryItemIds)
+          : null;
+
+      if (!isMounted) return;
+
+      const advancedDetailsByInventoryItemId = new Map(
+        (advancedDetailsResult?.data ?? []).map((row) => [
+          row.inventory_item_id,
+          row,
+        ]),
+      );
+      const liveBirdRowsWithAdvancedDetails = liveBirdRows.map((row) => ({
+        ...row,
+        ...advancedDetailsByInventoryItemId.get(row.inventory_item_id),
+      }));
       const reservationMap = Object.fromEntries(
         nextPage.rows.map((entry) => [
           getInventoryPageRowId(activeTab, entry.row),
@@ -512,7 +549,7 @@ export function InventoryManagement() {
 
       setRows(
         activeTab === "live_poultry"
-          ? (nextRows as unknown as InventoryRow[])
+          ? liveBirdRowsWithAdvancedDetails
           : [],
       );
       setHatchingEggRows(
@@ -2761,11 +2798,16 @@ function FlatInventoryTableRow({
       ) : null}
       <td className="px-3 py-3 align-top">
         <Link
-          className="inline-flex min-w-0 items-center gap-2 font-semibold text-stone-950 underline-offset-4 hover:underline"
+          className="inline-flex min-w-0 items-start gap-2 font-semibold text-stone-950 underline-offset-4 hover:underline"
           href={item.manageHref}
         >
           <InventoryItemThumbnail item={item} />
-          <span className="min-w-0">{item.breedOrItem}</span>
+          <span className="min-w-0">
+            <span className="block">{item.breedOrItem}</span>
+            {item.kind === "bird" ? (
+              <InventoryBirdDetails row={item.row} />
+            ) : null}
+          </span>
         </Link>
       </td>
       {tab === "live_poultry" ? (
@@ -2835,6 +2877,31 @@ function FlatInventoryTableRow({
       </td>
     </tr>
   );
+}
+
+function InventoryBirdDetails({ row }: { row: InventoryRow }) {
+  const details = [
+    getAdvancedAttributeLabel(featherConditionOptions, row.feather_condition),
+    getAdvancedAttributeLabel(breedingHistoryOptions, row.breeding_history),
+    row.barn_location?.trim() || null,
+  ].filter((detail): detail is string => Boolean(detail));
+
+  if (details.length === 0) return null;
+
+  return (
+    <span className="mt-0.5 block text-xs font-medium leading-4 text-stone-500">
+      {details.join(" · ")}
+    </span>
+  );
+}
+
+function getAdvancedAttributeLabel(
+  options: ReadonlyArray<{ value: string; label: string }>,
+  value: string | null,
+) {
+  if (!value) return null;
+
+  return options.find((option) => option.value === value)?.label ?? null;
 }
 
 function FlatInventoryCard({
