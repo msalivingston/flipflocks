@@ -233,6 +233,8 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   const [showCancelPanel, setShowCancelPanel] = useState(false);
   const [paidCancellationDialog, setPaidCancellationDialog] =
     useState<PaidCancellationDialogState | null>(null);
+  const [hasPaidCancellationToFinish, setHasPaidCancellationToFinish] =
+    useState(false);
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [showFulfillmentDialog, setShowFulfillmentDialog] = useState(false);
   const [showUnfulfillmentDialog, setShowUnfulfillmentDialog] = useState(false);
@@ -355,6 +357,13 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         mediaByItemId,
         storeLogo,
       });
+      if (
+        !orderResult.data || orderResult.data.order_status === "canceled" ||
+        orderResult.data.payment_method !== "stripe_checkout" ||
+        orderResult.data.payment_status !== "refunded"
+      ) {
+        setHasPaidCancellationToFinish(false);
+      }
       setIsLoading(false);
     }
 
@@ -366,6 +375,35 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   }, [orderId, refreshKey, seller]);
 
   const order = data.order;
+  useEffect(() => {
+    let isMounted = true;
+    if (
+      !order || order.order_status === "canceled" ||
+      order.payment_method !== "stripe_checkout" || order.payment_status !== "refunded"
+    ) {
+      return;
+    }
+    const activeOrder = order;
+
+    async function checkForPaidCancellationToFinish() {
+      const { data: preflight, error: preflightError } =
+        await supabase.functions.invoke<PaidCancellationPreflightResponse>(
+          "stripe-connect-cancellation-preflight",
+          { body: { action: "preflight", order_id: activeOrder.order_id } },
+        );
+      if (!isMounted) return;
+      setHasPaidCancellationToFinish(
+        !preflightError && preflight?.status === "resume_flockfront_action" &&
+          preflight.refund_state === "succeeded",
+      );
+    }
+
+    void checkForPaidCancellationToFinish();
+    return () => {
+      isMounted = false;
+    };
+  }, [order]);
+
   const customerName = useMemo(
     () => (order ? formatCustomerName(order) : "Buyer"),
     [order],
@@ -737,15 +775,27 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         setCancelReason("");
         setEmailCancellationToBuyer(false);
         setPaidCancellationDialog(null);
+        setHasPaidCancellationToFinish(false);
         setShowCancelPanel(false);
         setRefreshKey((current) => current + 1);
       } else if (paidResult.status === "resume_flockfront_action") {
+        if (paidResult.refund_state === "proof_pending") {
+          setShowCancelPanel(false);
+          setPaidCancellationDialog(null);
+          setCancellationError(null);
+          setActionWarning(
+            paidResult.message ??
+              "Refund completed. FlockFront is still confirming the cancellation. Do not retry the refund.",
+          );
+          setIsCanceling(false);
+          return;
+        }
         setPaidCancellationDialog((current) =>
           current ? { ...current, mode: "resume" } : current,
         );
-        setCancellationError(
-          paidResult.message ?? "Refund completed. Finish cancellation.",
-        );
+        setCancellationError(null);
+        setActionWarning(null);
+        setHasPaidCancellationToFinish(true);
       } else if (paidResult.status === "refund_processing") {
         setShowCancelPanel(false);
         setPaidCancellationDialog(null);
@@ -1049,9 +1099,9 @@ export function OrderDetail({ orderId }: { orderId: string }) {
             refundAmount: preflight.refund_amount ?? Number(order.total_amount ?? 0),
           });
           setShowCancelPanel(true);
-          setActionWarning(
-            preflight.message ?? "Refund completed. Finish cancellation.",
-          );
+          setActionWarning(null);
+          setCancellationError(null);
+          setHasPaidCancellationToFinish(true);
         } else {
           setActionWarning(
             preflight.message ??
@@ -1399,6 +1449,18 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           onReasonChange={setCancelReason}
           onRestoreInventoryChange={setRestoreInventoryOnCancel}
         />
+      ) : null}
+      {hasPaidCancellationToFinish ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-900">
+          <span>Refund complete — cancellation still needs to be finished.</span>
+          <button
+            className="rounded-md border border-sky-300 bg-white px-3 py-1.5 text-sm font-bold text-sky-900 transition hover:bg-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-600/30"
+            type="button"
+            onClick={() => void openCancelPanel()}
+          >
+            Finish cancellation
+          </button>
+        </div>
       ) : null}
 
       {showRestoreDialog ? (
@@ -2989,7 +3051,7 @@ function CancellationDialog({
           id="cancel-order-dialog-title"
         >
           {paidCancellation?.mode === "resume"
-            ? "Finish cancellation?"
+            ? "Refund complete"
             : paidCancellation?.mode === "retry"
               ? `Retry cancellation and refund ${formatCurrency(paidCancellation.refundAmount)}?`
             : paidCancellation
@@ -2998,7 +3060,7 @@ function CancellationDialog({
         </h2>
         <p className="mt-2 text-sm leading-6 text-stone-700">
           {paidCancellation?.mode === "resume"
-            ? "The customer’s Stripe refund is complete. Finish canceling the order and return all remaining unfulfilled inventory to available stock."
+            ? `The customer has been refunded ${formatCurrency(paidCancellation.refundAmount)}. Finish canceling the order to return the remaining inventory to stock.`
             : paidCancellation?.mode === "retry"
               ? "The previous refund did not start. This retries the same cancellation action. The order and inventory will change only after Stripe confirms the refund."
             : paidCancellation

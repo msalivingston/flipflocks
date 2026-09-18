@@ -12,6 +12,10 @@ test("Connect webhook observes exactly the supported refund events", async () =>
   }
   assert.match(webhook, /stripe\.refunds\.retrieve\([\s\S]*stripeAccount:\s*accountId/);
   assert.match(webhook, /stripe\.paymentIntents\.retrieve\([\s\S]*stripeAccount:\s*accountId/);
+  assert.match(webhook, /event\.livemode !== livemode/);
+  assert.match(webhook, /p_stripe_livemode:\s*event\.livemode/);
+  assert.match(webhook, /isValidConnectedRefundEvent/);
+  assert.doesNotMatch(webhook, /refund\.livemode/);
   assert.match(webhook, /record_stripe_connect_refund_event/);
   assert.doesNotMatch(webhook, /stripe\.refunds\.create/);
   assert.doesNotMatch(webhook, /cancel_order|reconcile_order_inventory|restored_quantity|canceled_quantity/);

@@ -2,6 +2,7 @@ import Stripe from "npm:stripe@22.3.2";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.0";
 import { resolveFlockFrontCors } from "../_shared/cors.ts";
 import { createStripeConnectClient } from "../_shared/stripe-connect-client.ts";
+import { buildFullCancellationRefundResponseArgs } from "../_shared/stripe-connect-refund-validation.ts";
 import {
   decidePaidCancellationPreflight,
   decideZeroRefundActionRecovery,
@@ -38,6 +39,15 @@ function logRefundError(error: unknown) {
   } else {
     console.error("Stripe full cancellation refund request failed", { type: "unknown" });
   }
+}
+
+function logRefundReconciliationError(stage: string, error: unknown) {
+  const candidate = error as { code?: unknown; status?: unknown } | null;
+  console.error("Stripe refund proof reconciliation failed", {
+    stage,
+    code: typeof candidate?.code === "string" ? candidate.code : null,
+    status: typeof candidate?.status === "number" ? candidate.status : null,
+  });
 }
 
 function required(name: string): string {
@@ -312,18 +322,11 @@ Deno.serve(async (request) => {
       }
       const { error } = await service.rpc(
         "record_stripe_full_cancellation_refund_response",
-        {
-          p_refund_action_id: actionId,
-          p_provider_refund_id: providerRefund.id,
-          p_provider_status: providerRefund.status ?? "pending",
-          p_refund_amount_cents: providerRefund.amount,
-          p_currency: providerRefund.currency,
-          p_stripe_payment_intent_id: paymentIntentId,
-          p_stripe_account_id: accountId,
-          p_stripe_livemode: providerRefund.livemode,
-          p_stripe_metadata: providerRefund.metadata,
-          p_refund_created_at: new Date(providerRefund.created * 1000).toISOString(),
-        },
+        buildFullCancellationRefundResponseArgs({
+          actionId,
+          binding,
+          refund: providerRefund,
+        }),
       );
       if (error) throw error;
     }
@@ -463,7 +466,7 @@ Deno.serve(async (request) => {
           refund.id === resumable.provider_refund_id
         )?.status ?? resumable.refund_status ?? "pending";
         const message = providerState === "succeeded"
-          ? "Refund completed. Finish cancellation."
+          ? "Refund complete — cancellation still needs to be finished."
           : providerState === "failed" || providerState === "canceled"
           ? "The Stripe refund failed. The order has not been canceled."
           : "Refund is processing. The order has not been canceled yet.";
@@ -516,10 +519,12 @@ Deno.serve(async (request) => {
       if (refundAction.refund_status !== "succeeded" || refundAction.provider_status !== "succeeded") {
         try {
           await recordProviderRefund(refundAction.id, providerRefund);
-        } catch {
+        } catch (error) {
+          logRefundReconciliationError("resume", error);
           return json(200, {
             status: "resume_flockfront_action",
-            message: "Refund completed. Finish cancellation.",
+            refund_state: "proof_pending",
+            message: "Refund completed. FlockFront is still confirming the cancellation. Do not retry the refund.",
             ...safeSummary,
           }, cors.headers);
         }
@@ -654,7 +659,8 @@ Deno.serve(async (request) => {
 
       try {
         await recordProviderRefund(prepared.refund_action_id, stripeRefund);
-      } catch {
+      } catch (error) {
+        logRefundReconciliationError("create_response", error);
         if (stripeRefund.status === "failed" || stripeRefund.status === "canceled") {
           return json(200, {
             status: "refund_failed",
@@ -672,7 +678,8 @@ Deno.serve(async (request) => {
         }
         return json(200, {
           status: "resume_flockfront_action",
-          message: "Refund completed. Finish cancellation.",
+          refund_state: "proof_pending",
+          message: "Refund completed. FlockFront is still confirming the cancellation. Do not retry the refund.",
           ...safeSummary,
         }, cors.headers);
       }
@@ -726,7 +733,12 @@ Deno.serve(async (request) => {
     );
     if (finalizeError) {
       console.error("Stripe refund succeeded but cancellation finalization failed", finalizeError.message);
-      return json(200, { status: "resume_flockfront_action", message: "Refund completed. Finish cancellation.", ...safeSummary }, cors.headers);
+      return json(200, {
+        status: "resume_flockfront_action",
+        refund_state: "succeeded",
+        message: "Refund complete — cancellation still needs to be finished.",
+        ...safeSummary,
+      }, cors.headers);
     }
     const finalized = Array.isArray(finalizedData) ? finalizedData[0] : finalizedData;
     return json(200, {

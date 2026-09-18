@@ -1,6 +1,10 @@
 import Stripe from "npm:stripe@22.3.2";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.0";
 import { createStripeConnectClient } from "../_shared/stripe-connect-client.ts";
+import {
+  isValidConnectedRefundEvent,
+  refundPaymentIntentId,
+} from "../_shared/stripe-connect-refund-validation.ts";
 import { assertStripeWebhookTimestampWithinTolerance } from "../_shared/stripe-saas-runtime.mjs";
 
 function required(name: string): string {
@@ -113,7 +117,7 @@ Deno.serve(async (request) => {
   try {
     if (refundEventTypes.has(event.type)) {
       const eventRefund = event.data.object as Stripe.Refund;
-      if (!/^re_[A-Za-z0-9]+$/.test(eventRefund.id)) {
+      if (event.livemode !== livemode || !/^re_[A-Za-z0-9]+$/.test(eventRefund.id)) {
         return response(400, { error: "refund_binding_invalid" });
       }
 
@@ -122,13 +126,10 @@ Deno.serve(async (request) => {
         {},
         { stripeAccount: accountId },
       );
-      const paymentIntentId = typeof refund.payment_intent === "string"
-        ? refund.payment_intent
-        : refund.payment_intent?.id ?? null;
+      const paymentIntentId = refundPaymentIntentId(refund);
       if (
         !paymentIntentId ||
         !/^pi_[A-Za-z0-9]+$/.test(paymentIntentId) ||
-        refund.livemode !== livemode ||
         !Number.isSafeInteger(refund.amount) ||
         refund.amount <= 0 ||
         !/^[a-z]{3}$/.test(refund.currency) ||
@@ -143,12 +144,13 @@ Deno.serve(async (request) => {
         {},
         { stripeAccount: accountId },
       );
-      if (
-        paymentIntent.id !== paymentIntentId ||
-        paymentIntent.livemode !== livemode ||
-        paymentIntent.currency !== refund.currency ||
-        paymentIntent.amount_received < refund.amount
-      ) {
+      if (!isValidConnectedRefundEvent({
+        eventLivemode: event.livemode,
+        expectedLivemode: livemode,
+        paymentIntent,
+        refund,
+        validStatuses: refundStatuses,
+      })) {
         return response(400, { error: "refund_binding_invalid" });
       }
 
@@ -174,7 +176,7 @@ Deno.serve(async (request) => {
           p_currency: refund.currency,
           p_stripe_payment_intent_id: paymentIntentId,
           p_stripe_account_id: accountId,
-          p_stripe_livemode: livemode,
+          p_stripe_livemode: event.livemode,
           p_stripe_metadata: trustedMetadata,
           p_request_idempotency_key: event.request?.idempotency_key ?? null,
           p_refund_created_at: new Date(refund.created * 1000).toISOString(),

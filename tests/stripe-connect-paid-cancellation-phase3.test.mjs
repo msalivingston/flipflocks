@@ -24,6 +24,8 @@ test("money is reconciled and rechecked before database finalization", async () 
   assert.ok(finalProviderRead > record);
   assert.ok(finalize > finalProviderRead);
   assert.match(boundary, /refunds\.some\(\(refund\) => refund\.id !== currentAction\.provider_refund_id\)/);
+  assert.match(boundary, /buildFullCancellationRefundResponseArgs/);
+  assert.doesNotMatch(boundary, /providerRefund\.livemode/);
 });
 
 test("refund failures and lost responses leave cancellation resumable without inventory work", async () => {
@@ -31,7 +33,7 @@ test("refund failures and lost responses leave cancellation resumable without in
   assert.match(boundary, /status: "refund_processing"/);
   assert.match(boundary, /status: "refund_failed"/);
   assert.match(boundary, /status: "resume_flockfront_action"/);
-  assert.match(boundary, /Refund completed\. Finish cancellation\./);
+  assert.match(boundary, /Refund complete — cancellation still needs to be finished\./);
   assert.doesNotMatch(boundary, /\.rpc\("cancel_order"/);
 });
 
@@ -70,6 +72,23 @@ test("the order-detail UI labels a prior unobserved attempt as a retry, not a co
   assert.match(detail, /mode: "retry"/);
   assert.match(detail, /Retry cancel and refund/);
   assert.match(detail, /paidResult\.status === "refund_failed" && paidResult\.retry_allowed/);
+});
+
+test("successful refund resume is informational and offers finalization without a red dialog error", async () => {
+  const detail = await read("app/dashboard/orders/[orderId]/order-detail.tsx");
+  assert.match(detail, /paidResult\.refund_state === "proof_pending"/);
+  assert.match(detail, /setCancellationError\(null\)[\s\S]*setHasPaidCancellationToFinish\(true\)/);
+  assert.match(detail, /\? "Refund complete"/);
+  assert.match(detail, /The customer has been refunded \$\{formatCurrency\(paidCancellation\.refundAmount\)\}/);
+  assert.match(detail, /Refund complete — cancellation still needs to be finished\./);
+  assert.match(detail, /onClick=\{\(\) => void openCancelPanel\(\)\}[\s\S]*Finish cancellation/);
+  assert.doesNotMatch(
+    detail.slice(
+      detail.indexOf('paidResult.status === "resume_flockfront_action"'),
+      detail.indexOf('paidResult.status === "refund_processing"'),
+    ),
+    /setCancellationError\([^n]/,
+  );
 });
 
 test("phase 3 finalizer is service-only, idempotent, and uses shared inventory reconciliation", async () => {
