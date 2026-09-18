@@ -4,8 +4,12 @@ import { resolveFlockFrontCors } from "../_shared/cors.ts";
 import { createStripeConnectClient } from "../_shared/stripe-connect-client.ts";
 import {
   decidePaidCancellationPreflight,
+  decideZeroRefundActionRecovery,
   isProvenFlockFrontRefund,
+  isRetryableUnobservedCancellationAction,
   isUnfinishedCancellationAction,
+  majorAmountToCents,
+  type CancellationItemSnapshot,
   type RefundActionSnapshot,
   type RefundProofEventSnapshot,
   type StripeRefundSnapshot,
@@ -14,6 +18,27 @@ import {
 
 const supportMessage = "You’ve already refunded some or all of this order directly through Stripe. To prevent duplicate refunds or incorrect inventory changes, this order can’t be canceled automatically in FlockFront. Please contact FlockFront support to complete the cancellation.";
 const fulfilledMessage = "This order can’t be canceled automatically because part of it has already been fulfilled. Please contact FlockFront support to complete the cancellation.";
+const recoverySupportMessage = "A previous cancellation attempt cannot be safely retried automatically. The order has not been canceled. Please contact FlockFront support.";
+const retryMessage = "A previous cancellation attempt did not complete. You can safely retry this cancellation.";
+
+function isDefiniteRefundRejection(error: unknown): boolean {
+  return error instanceof Stripe.errors.StripeAuthenticationError ||
+    error instanceof Stripe.errors.StripePermissionError ||
+    error instanceof Stripe.errors.StripeInvalidRequestError;
+}
+
+function logRefundError(error: unknown) {
+  if (error instanceof Stripe.errors.StripeError) {
+    console.error("Stripe full cancellation refund request failed", {
+      type: error.type,
+      code: error.code ?? null,
+      statusCode: error.statusCode ?? null,
+      requestId: error.requestId ?? null,
+    });
+  } else {
+    console.error("Stripe full cancellation refund request failed", { type: "unknown" });
+  }
+}
 
 function required(name: string): string {
   const value = Deno.env.get(name)?.trim();
@@ -214,7 +239,7 @@ Deno.serve(async (request) => {
         .eq("store_id", order.store_id).eq("order_id", order.id)
         .eq("metadata->>schema_version", "ff_connect_checkout_v1").limit(2),
       service.from("order_items")
-        .select("fulfilled_quantity,canceled_quantity,order_item_source,inventory_debited_quantity")
+        .select("id,quantity,fulfilled_quantity,canceled_quantity,restored_quantity,order_item_source,inventory_debited_quantity")
         .eq("store_id", order.store_id).eq("order_id", order.id),
     ]);
     if (sessionError || !sessions || sessions.length !== 1 || itemsError || !items?.length) {
@@ -305,7 +330,7 @@ Deno.serve(async (request) => {
 
     async function loadActionsAndProofs() {
       const { data: actions, error: actionsError } = await service.from("order_refunds")
-        .select("id,store_id,order_id,idempotency_key,request_hash,refund_amount,refund_method,refund_status,provider_refund_id,provider_status,currency_code,stripe_checkout_session_id,stripe_payment_intent_id,stripe_account_id,stripe_livemode,metadata,created_at")
+        .select("id,store_id,order_id,idempotency_key,request_hash,refund_amount,refund_method,refund_status,provider_refund_id,provider_status,processed_at,payment_provider_event_id,currency_code,stripe_checkout_session_id,stripe_payment_intent_id,stripe_account_id,stripe_livemode,metadata,created_at")
         .eq("store_id", order.store_id).eq("order_id", order.id).eq("refund_method", "stripe");
       if (actionsError) throw actionsError;
       const actionRows = (actions ?? []) as RefundActionSnapshot[];
@@ -313,8 +338,7 @@ Deno.serve(async (request) => {
       if (!actionIds.length) return { actionRows, proofRows: [] as RefundProofEventSnapshot[] };
       const { data: events, error: eventsError } = await service.from("payment_provider_events")
         .select("provider,event_type,event_status,provider_refund_id,stripe_payment_intent_id,related_refund_id,payload_summary")
-        .eq("provider", "stripe").eq("event_type", "refund.created")
-        .eq("event_status", "processed").in("related_refund_id", actionIds);
+        .eq("provider", "stripe").in("related_refund_id", actionIds);
       if (eventsError) throw eventsError;
       return { actionRows, proofRows: (events ?? []) as RefundProofEventSnapshot[] };
     }
@@ -332,7 +356,8 @@ Deno.serve(async (request) => {
         if (matchingActions.length !== 1) return { safe: false, provenActions };
         const matchedAction = matchingActions[0];
         const matchingEvents = proofRows.filter((event) =>
-          event.related_refund_id === matchedAction.id && event.provider_refund_id === refund.id
+          event.related_refund_id === matchedAction.id && event.provider_refund_id === refund.id &&
+          event.event_type === "refund.created" && event.event_status === "processed"
         );
         if (
           matchingEvents.length > 1 ||
@@ -363,11 +388,35 @@ Deno.serve(async (request) => {
         : "partially_refunded",
     };
 
+    if (refunds.length === 0 && (
+      order.payment_status !== "paid" ||
+      majorAmountToCents(order.total_amount) !== paymentRecord.amount_total_cents
+    )) {
+      return json(200, {
+        status: "ineligible",
+        message: "This order’s paid Stripe state could not be verified for cancellation.",
+        ...safeSummary,
+      }, cors.headers);
+    }
+
     if (!classification.safe) {
       return json(200, { status: "support_required", message: supportMessage, ...safeSummary }, cors.headers);
     }
+    const zeroRefundRecovery = refunds.length === 0
+      ? await decideZeroRefundActionRecovery({
+          actions: actionRows,
+          linkedProviderEventCount: proofRows.length,
+          binding,
+          items: items as CancellationItemSnapshot[],
+          paidAmountCents: paymentRecord.amount_total_cents,
+        })
+      : undefined;
+    const recoveryAction = zeroRefundRecovery?.action;
+    if (zeroRefundRecovery?.decision === "support_required") {
+      return json(200, { status: "support_required", message: recoverySupportMessage, ...safeSummary }, cors.headers);
+    }
     const unfinished = [...classification.provenActions.values()].filter(isUnfinishedCancellationAction);
-    const decision = decidePaidCancellationPreflight({
+    const decision = recoveryAction ? "resume_flockfront_action" : decidePaidCancellationPreflight({
       refundCount: refunds.length,
       provenRefundCount: classification.provenActions.size,
       unfinishedActionCount: unfinished.length,
@@ -401,6 +450,14 @@ Deno.serve(async (request) => {
         }, cors.headers);
       }
       if (decision === "resume_flockfront_action") {
+        if (recoveryAction) {
+          return json(200, {
+            status: "resume_flockfront_action",
+            refund_state: "not_started",
+            message: retryMessage,
+            ...safeSummary,
+          }, cors.headers);
+        }
         const resumable = unfinished[0];
         const providerState = refunds.find((refund) =>
           refund.id === resumable.provider_refund_id
@@ -425,7 +482,7 @@ Deno.serve(async (request) => {
     }
 
     let refundAction: RefundActionSnapshot | undefined;
-    if (decision === "resume_flockfront_action") {
+    if (decision === "resume_flockfront_action" && !recoveryAction) {
       refundAction = unfinished[0];
       const providerRefund = refunds.find((refund) =>
         refund.id === refundAction?.provider_refund_id
@@ -467,7 +524,7 @@ Deno.serve(async (request) => {
           }, cors.headers);
         }
       }
-    } else if (decision !== "eligible") {
+    } else if (decision !== "eligible" && !recoveryAction) {
       return json(200, {
         status: "ineligible",
         message: "This order is not eligible for paid cancellation.",
@@ -490,6 +547,67 @@ Deno.serve(async (request) => {
       prepared = (Array.isArray(preparedData) ? preparedData[0] : preparedData) as PreparedAction | undefined;
       if (!prepared) throw new Error("refund_action_not_prepared");
 
+      if (recoveryAction && (
+        prepared.refund_action_id !== recoveryAction.id ||
+        prepared.idempotency_key !== recoveryAction.idempotency_key ||
+        prepared.request_hash !== recoveryAction.request_hash
+      )) {
+        return json(200, { status: "support_required", message: recoverySupportMessage, ...safeSummary }, cors.headers);
+      }
+      if (prepared.provider_refund_id != null || prepared.provider_status != null || prepared.refund_status !== "pending") {
+        return json(200, { status: "support_required", message: recoverySupportMessage, ...safeSummary }, cors.headers);
+      }
+
+      // A prior provider read is not enough: check again just before claiming
+      // this one attempt and sending the same immutable Stripe parameters.
+      const freshRefunds = await listAllRefunds(paymentIntentId, accountId);
+      const [freshLedger, { data: freshItems, error: freshItemsError },
+        { data: freshOrder, error: freshOrderError }] = await Promise.all([
+        loadActionsAndProofs(),
+        service.from("order_items")
+          .select("id,quantity,fulfilled_quantity,canceled_quantity,restored_quantity,order_item_source,inventory_debited_quantity")
+          .eq("store_id", order.store_id).eq("order_id", order.id),
+        service.from("orders")
+          .select("order_status,canceled_at,payment_method,payment_provider,payment_status,total_amount,currency_code")
+          .eq("store_id", order.store_id).eq("id", order.id).maybeSingle(),
+      ]);
+      const { actionRows: freshActions, proofRows: freshProofs } = freshLedger;
+      const freshAction = freshActions.find((row) => row.id === prepared?.refund_action_id);
+      if (freshRefunds.length !== 0 || freshActions.length !== 1 || freshProofs.length !== 0 ||
+          freshItemsError || !freshItems?.length || freshOrderError || !freshOrder ||
+          !["pending", "open"].includes(freshOrder.order_status) || freshOrder.canceled_at ||
+          freshOrder.payment_method !== "stripe_checkout" || freshOrder.payment_provider !== "stripe" ||
+          freshOrder.payment_status !== "paid" ||
+          freshOrder.currency_code?.toLowerCase() !== binding.currency.toLowerCase() ||
+          majorAmountToCents(freshOrder.total_amount) !== paymentRecord.amount_total_cents ||
+          freshItems.some((item) => item.fulfilled_quantity > 0 || item.canceled_quantity > 0 ||
+            (item.order_item_source !== "custom" && item.inventory_debited_quantity == null)) ||
+          !freshAction || !await isRetryableUnobservedCancellationAction({
+            action: freshAction,
+            binding,
+            items: freshItems as CancellationItemSnapshot[],
+            paidAmountCents: paymentRecord.amount_total_cents,
+          })) {
+        return json(200, { status: "support_required", message: recoverySupportMessage, ...safeSummary }, cors.headers);
+      }
+
+      const { data: claimed, error: claimError } = await service.rpc(
+        "transition_stripe_full_cancellation_refund_attempt",
+        {
+          p_refund_action_id: prepared.refund_action_id,
+          p_expected_state: freshAction.metadata?.workflow_state,
+          p_next_state: "refund_request_in_flight",
+        },
+      );
+      if (claimError) {
+        return json(200, { status: "support_required", message: recoverySupportMessage, ...safeSummary }, cors.headers);
+      }
+      if (claimed !== true) {
+        return json(200, { status: "refund_processing", retry_allowed: false,
+          message: "A cancellation attempt is already being checked. The order has not been canceled.",
+          ...safeSummary }, cors.headers);
+      }
+
       let stripeRefund: Stripe.Refund;
       try {
         stripeRefund = await stripe.refunds.create(
@@ -507,7 +625,25 @@ Deno.serve(async (request) => {
           },
         );
       } catch (error) {
-        console.error("stripe full cancellation refund request did not complete", error instanceof Error ? error.message : "unknown");
+        logRefundError(error);
+        if (isDefiniteRefundRejection(error)) {
+          const { data: released, error: releaseError } = await service.rpc(
+            "transition_stripe_full_cancellation_refund_attempt",
+            {
+              p_refund_action_id: prepared.refund_action_id,
+              p_expected_state: "refund_request_in_flight",
+              p_next_state: "refund_start_rejected",
+            },
+          );
+          if (!releaseError && released === true) {
+            return json(200, {
+              status: "refund_failed",
+              retry_allowed: true,
+              message: "The refund could not be started. The order has not been canceled. Please try again after the payment connection issue is resolved.",
+              ...safeSummary,
+            }, cors.headers);
+          }
+        }
         return json(200, {
           status: "refund_processing",
           retry_allowed: false,

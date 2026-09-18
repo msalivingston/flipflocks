@@ -147,7 +147,7 @@ type PaidCancellationPreflightResponse = {
 };
 
 type PaidCancellationDialogState = {
-  mode: "cancel" | "resume";
+  mode: "cancel" | "resume" | "retry";
   refundAmount: number;
 };
 
@@ -753,6 +753,12 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           paidResult.message ??
             "Refund is processing. The order has not been canceled yet.",
         );
+      } else if (paidResult.status === "refund_failed" && paidResult.retry_allowed) {
+        setShowCancelPanel(false);
+        setPaidCancellationDialog(null);
+        setActionWarning(
+          paidResult.message ?? "The refund could not be started. The order has not been canceled.",
+        );
       } else {
         setShowCancelPanel(false);
         setPaidCancellationDialog(null);
@@ -1030,7 +1036,14 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         });
         setShowCancelPanel(true);
       } else if (preflight.status === "resume_flockfront_action") {
-        if (preflight.refund_state === "succeeded") {
+        if (preflight.refund_state === "not_started") {
+          setPaidCancellationDialog({
+            mode: "retry",
+            refundAmount: preflight.refund_amount ?? Number(order.total_amount ?? 0),
+          });
+          setShowCancelPanel(true);
+          setActionWarning(preflight.message ?? "A previous cancellation attempt did not complete. You can safely retry this cancellation.");
+        } else if (preflight.refund_state === "succeeded") {
           setPaidCancellationDialog({
             mode: "resume",
             refundAmount: preflight.refund_amount ?? Number(order.total_amount ?? 0),
@@ -2977,6 +2990,8 @@ function CancellationDialog({
         >
           {paidCancellation?.mode === "resume"
             ? "Finish cancellation?"
+            : paidCancellation?.mode === "retry"
+              ? `Retry cancellation and refund ${formatCurrency(paidCancellation.refundAmount)}?`
             : paidCancellation
               ? `Cancel this order and refund ${formatCurrency(paidCancellation.refundAmount)}?`
               : "Cancel order?"}
@@ -2984,6 +2999,8 @@ function CancellationDialog({
         <p className="mt-2 text-sm leading-6 text-stone-700">
           {paidCancellation?.mode === "resume"
             ? "The customer’s Stripe refund is complete. Finish canceling the order and return all remaining unfulfilled inventory to available stock."
+            : paidCancellation?.mode === "retry"
+              ? "The previous refund did not start. This retries the same cancellation action. The order and inventory will change only after Stripe confirms the refund."
             : paidCancellation
               ? "The customer will receive a full refund through Stripe. All remaining unfulfilled inventory will be returned to available stock."
               : "This will cancel the order. Choose whether eligible inventory should be restored."}
@@ -3061,6 +3078,8 @@ function CancellationDialog({
                   : "Canceling..."
               : paidCancellation?.mode === "resume"
                 ? "Finish cancellation"
+                : paidCancellation?.mode === "retry"
+                  ? "Retry cancel and refund"
                 : paidCancellation
                   ? "Cancel and refund"
                   : "Cancel order"}

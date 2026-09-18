@@ -35,6 +35,43 @@ test("refund failures and lost responses leave cancellation resumable without in
   assert.doesNotMatch(boundary, /\.rpc\("cancel_order"/);
 });
 
+test("an unobserved action retries only after a fresh zero-refund read and reuses its prepared identity", async () => {
+  const boundary = await read("supabase/functions/stripe-connect-cancellation-preflight/index.ts");
+  assert.match(boundary, /decideZeroRefundActionRecovery/);
+  assert.match(boundary, /refund_state: "not_started"/);
+  assert.match(boundary, /prepared\.refund_action_id !== recoveryAction\.id/);
+  assert.match(boundary, /prepared\.idempotency_key !== recoveryAction\.idempotency_key/);
+  assert.match(boundary, /prepared\.request_hash !== recoveryAction\.request_hash/);
+  assert.match(boundary, /const freshRefunds = await listAllRefunds\(paymentIntentId, accountId\)/);
+  assert.match(boundary, /freshRefunds\.length !== 0 \|\| freshActions\.length !== 1 \|\| freshProofs\.length !== 0/);
+  assert.ok(boundary.indexOf("const freshRefunds = await listAllRefunds") < boundary.indexOf("p_next_state: \"refund_request_in_flight\""));
+  assert.ok(boundary.indexOf("p_next_state: \"refund_request_in_flight\"") < boundary.indexOf("stripeRefund = await stripe.refunds.create"));
+  assert.equal(boundary.match(/stripe\.refunds\.create\(/g)?.length, 1);
+});
+
+test("definite Stripe rejection is retryable but ambiguous outcomes remain claimed", async () => {
+  const boundary = await read("supabase/functions/stripe-connect-cancellation-preflight/index.ts");
+  assert.match(boundary, /Stripe\.errors\.StripeAuthenticationError/);
+  assert.match(boundary, /Stripe\.errors\.StripePermissionError/);
+  assert.match(boundary, /Stripe\.errors\.StripeInvalidRequestError/);
+  assert.match(boundary, /if \(isDefiniteRefundRejection\(error\)\)/);
+  assert.match(boundary, /p_next_state: "refund_start_rejected"[\s\S]*retry_allowed: true/);
+  assert.match(boundary, /status: "refund_processing",\s*retry_allowed: false/);
+  assert.match(boundary, /logRefundError\(error\)/);
+  const migration = await read("supabase/migrations/20260915120000_stripe_full_cancellation_retry_state.sql");
+  assert.match(migration, /refund_request_in_flight/);
+  assert.match(migration, /provider_refund_id is not null/);
+  assert.match(migration, /related_refund_id = v_action\.id/);
+});
+
+test("the order-detail UI labels a prior unobserved attempt as a retry, not a completed refund", async () => {
+  const detail = await read("app/dashboard/orders/[orderId]/order-detail.tsx");
+  assert.match(detail, /preflight\.refund_state === "not_started"/);
+  assert.match(detail, /mode: "retry"/);
+  assert.match(detail, /Retry cancel and refund/);
+  assert.match(detail, /paidResult\.status === "refund_failed" && paidResult\.retry_allowed/);
+});
+
 test("phase 3 finalizer is service-only, idempotent, and uses shared inventory reconciliation", async () => {
   const migration = await read("supabase/migrations/20260904140000_stripe_paid_full_cancellation.sql");
   assert.match(migration, /grant execute on function public\.finalize_stripe_full_cancellation[\s\S]*to service_role/);

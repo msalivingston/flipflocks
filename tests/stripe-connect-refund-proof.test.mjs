@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   decidePaidCancellationPreflight,
+  decideZeroRefundActionRecovery,
   isProvenFlockFrontRefund,
   isUnfinishedCancellationAction,
   majorAmountToCents,
@@ -35,6 +36,84 @@ test("paid cancellation preflight fails closed on unproven refund activity", () 
     provenRefundCount: 1,
     unfinishedActionCount: 0,
   }), "ineligible");
+});
+
+test("zero-refund recovery distinguishes no action, a valid unfinished action, and ambiguous attempts", async () => {
+  const nowMs = Date.parse("2026-09-16T01:00:00Z");
+  const recoveryBinding = {
+    storeId: "22000000-0000-4000-8000-000000000002",
+    orderId: "22000000-0000-4000-8000-000000000003",
+    checkoutSessionId: "cs_test_recovery",
+    paymentIntentId: "pi_test_recovery",
+    stripeAccountId: "acct_test_recovery",
+    livemode: false,
+    currency: "usd",
+  };
+  const items = [{
+    id: "22000000-0000-4000-8000-000000000004",
+    quantity: 1,
+    fulfilled_quantity: 0,
+    canceled_quantity: 0,
+    restored_quantity: 0,
+    inventory_debited_quantity: 1,
+    order_item_source: "equipment_inventory",
+  }];
+  const key = "ff-full-cancel-v1:" + await sha256Hex(
+    [recoveryBinding.orderId, recoveryBinding.paymentIntentId, 100, "USD"].join(":"),
+  );
+  const recoveryAction = {
+    id: "22000000-0000-4000-8000-000000000001",
+    store_id: recoveryBinding.storeId,
+    order_id: recoveryBinding.orderId,
+    idempotency_key: key,
+    request_hash: "a".repeat(64),
+    refund_amount: "1.00",
+    refund_method: "stripe",
+    refund_status: "pending",
+    provider_refund_id: null,
+    provider_status: null,
+    processed_at: null,
+    payment_provider_event_id: null,
+    currency_code: "USD",
+    stripe_checkout_session_id: recoveryBinding.checkoutSessionId,
+    stripe_payment_intent_id: recoveryBinding.paymentIntentId,
+    stripe_account_id: recoveryBinding.stripeAccountId,
+    stripe_livemode: false,
+    metadata: {
+      schema_version: "ff_connect_cancellation_v1",
+      ff_schema_version: "ff_connect_cancellation_v1",
+      workflow_type: "paid_order_cancellation",
+      workflow_state: "refund_pending",
+      cancellation_type: "full",
+      request_hash: "a".repeat(64),
+      restoration_intent: "all_eligible_remaining_inventory",
+      remaining_active_quantities: [{
+        order_item_id: items[0].id,
+        quantity: 1,
+        remaining_active_quantity: 1,
+        eligible_restoration_quantity: 1,
+      }],
+    },
+    created_at: "2026-09-16T00:47:40Z",
+  };
+  const decide = (actions, linkedProviderEventCount = 0) => decideZeroRefundActionRecovery({
+    actions, linkedProviderEventCount, binding: recoveryBinding, items,
+    paidAmountCents: 100, nowMs,
+  });
+
+  assert.equal((await decide([])).decision, "eligible");
+  assert.deepEqual(await decide([recoveryAction]), {
+    decision: "resume_flockfront_action", action: recoveryAction,
+  });
+  assert.equal((await decide([{ ...recoveryAction, provider_refund_id: "re_unknown" }])).decision, "support_required");
+  assert.equal((await decide([recoveryAction], 1)).decision, "support_required");
+  assert.equal((await decide([{ ...recoveryAction, metadata: { ...recoveryAction.metadata, workflow_state: "refund_request_in_flight" } }])).decision, "support_required");
+  assert.equal((await decide([{ ...recoveryAction, stripe_account_id: "acct_wrong" }])).decision, "support_required");
+  assert.equal((await decide([{ ...recoveryAction, request_hash: "b".repeat(64) }])).decision, "support_required");
+  assert.equal((await decide([{ ...recoveryAction, created_at: "2026-09-14T00:47:40Z" }])).decision, "support_required");
+  assert.equal((await decide([recoveryAction, recoveryAction])).decision, "support_required");
+  assert.equal((await decide([{ ...recoveryAction, metadata: { ...recoveryAction.metadata, workflow_state: "refund_start_rejected" } }])).decision, "resume_flockfront_action");
+  assert.equal((await decide([{ ...recoveryAction, metadata: { ...recoveryAction.metadata, remaining_active_quantities: [{ ...recoveryAction.metadata.remaining_active_quantities[0], eligible_restoration_quantity: 0 }] } }])).decision, "support_required");
 });
 
 const action = {

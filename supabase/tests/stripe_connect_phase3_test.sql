@@ -1,6 +1,6 @@
 begin;
 
-select plan(45);
+select plan(57);
 set local "request.jwt.claim.role" = 'service_role';
 
 insert into auth.users (
@@ -78,6 +78,11 @@ select ok(
   and not has_function_privilege('authenticated','public.finalize_stripe_full_cancellation(uuid,uuid,text,boolean)','execute'),
   'paid cancellation finalization is service-only'
 );
+select ok(
+  has_function_privilege('service_role','public.transition_stripe_full_cancellation_refund_attempt(uuid,text,text)','execute')
+  and not has_function_privilege('authenticated','public.transition_stripe_full_cancellation_refund_attempt(uuid,text,text)','execute'),
+  'refund attempt state transition is service-only'
+);
 
 set local "request.jwt.claim.role" = 'authenticated';
 set local "request.jwt.claim.sub" = 'd3000000-0000-4000-8000-000000000001';
@@ -124,6 +129,47 @@ select * from public.prepare_stripe_full_cancellation(
 select is((select refund_action_id from phase3_duplicate_action),(select refund_action_id from phase3_action),'duplicate preparation reuses one action');
 select is((select idempotency_key from phase3_duplicate_action),(select idempotency_key from phase3_action),'duplicate preparation reuses the deterministic Stripe key');
 select is((select count(*)::integer from public.order_refunds where order_id=(select order_id from phase3_settlement)),1,'duplicate preparation creates no second refund ledger row');
+
+select is(
+  (select metadata->>'workflow_state' from public.order_refunds where id=(select refund_action_id from phase3_action)),
+  'refund_pending', 'prepared action is retryable before any provider attempt'
+);
+select is(public.transition_stripe_full_cancellation_refund_attempt(
+  (select refund_action_id from phase3_action), 'refund_pending', 'refund_request_in_flight'
+),true,'the first request atomically claims the existing action');
+select is(
+  (select metadata->>'workflow_state' from public.order_refunds where id=(select refund_action_id from phase3_action)),
+  'refund_request_in_flight','an unconfirmed provider attempt is marked in flight before POST'
+);
+select is(public.transition_stripe_full_cancellation_refund_attempt(
+  (select refund_action_id from phase3_action), 'refund_pending', 'refund_request_in_flight'
+),false,'duplicate request cannot claim an in-flight action');
+select is(
+  (select order_status||':'||payment_status from public.orders where id=(select order_id from phase3_settlement)),
+  'open:paid','an in-flight refund attempt leaves order and payment unchanged'
+);
+select is(public.transition_stripe_full_cancellation_refund_attempt(
+  (select refund_action_id from phase3_action), 'refund_request_in_flight', 'refund_start_rejected'
+),true,'definite Stripe rejection releases the same action for retry');
+select is(
+  (select metadata->>'workflow_state' from public.order_refunds where id=(select refund_action_id from phase3_action)),
+  'refund_start_rejected','definite rejection is distinguishable from an ambiguous timeout'
+);
+select is(
+  (select order_status||':'||payment_status from public.orders where id=(select order_id from phase3_settlement)),
+  'open:paid','a rejected refund request does not cancel the order'
+);
+select is(
+  (select quantity_available from public.equipment_inventory_items where id='d3000000-0000-4000-8000-000000000050'),
+  0,'a rejected refund request does not restore inventory'
+);
+select is(public.transition_stripe_full_cancellation_refund_attempt(
+  (select refund_action_id from phase3_action), 'refund_start_rejected', 'refund_request_in_flight'
+),true,'retry claims the exact same action after a definite rejection');
+select is(
+  (select count(*)::integer from public.order_refunds where order_id=(select order_id from phase3_settlement)),
+  1,'retry never creates a second refund action'
+);
 
 select throws_ok(
   format(
