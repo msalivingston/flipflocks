@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpDown, Funnel, MoreHorizontal } from "lucide-react";
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ListingShareDialog } from "../_components/listing-share-dialog";
 import { useSellerContext } from "../_components/seller-context";
@@ -407,6 +407,14 @@ export function InventoryManagement() {
     useState<Record<InventoryProductTab, InventoryTabFilters>>(
       defaultTabFilters,
     );
+  const [searchTextByTab, setSearchTextByTab] = useState<
+    Record<InventoryProductTab, string>
+  >({
+    equipment: "",
+    hatching_eggs: "",
+    live_poultry: "",
+    processed_poultry: "",
+  });
   const [pagesByTab, setPagesByTab] = useState<
     Record<InventoryProductTab, number>
   >({ equipment: 0, hatching_eggs: 0, live_poultry: 0, processed_poultry: 0 });
@@ -441,7 +449,6 @@ export function InventoryManagement() {
     inventoryTabParamValues[searchParams.get("tab") ?? ""] ?? "live_poultry";
   const page = pagesByTab[activeTab];
   const filtersForQuery = filtersByTab[activeTab];
-  const deferredSearch = useDeferredValue(filtersForQuery.search);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -484,7 +491,6 @@ export function InventoryManagement() {
         p_limit: 50,
         p_offset: page * 50,
         p_product_category: filtersForQuery.productCategory,
-        p_search: deferredSearch,
         p_sort: filtersForQuery.sortBy,
         p_species: filtersForQuery.species,
         p_store_id: seller.store_id,
@@ -594,7 +600,6 @@ export function InventoryManagement() {
     };
   }, [
     activeTab,
-    deferredSearch,
     filtersForQuery.age,
     filtersForQuery.availability,
     filtersForQuery.breed,
@@ -716,6 +721,7 @@ export function InventoryManagement() {
   );
 
   const activeFilters = filtersByTab[activeTab];
+  const activeSearchText = searchTextByTab[activeTab];
   const activeTabItems = useMemo(
     () => inventoryItems.filter((item) => item.productTab === activeTab),
     [activeTab, inventoryItems],
@@ -739,11 +745,17 @@ export function InventoryManagement() {
   const hasActiveFilters = useMemo(
     () =>
       JSON.stringify(effectiveActiveFilters) !==
-      JSON.stringify(defaultTabFilters[activeTab]),
-    [effectiveActiveFilters, activeTab],
+        JSON.stringify(defaultTabFilters[activeTab]) || Boolean(activeSearchText),
+    [activeSearchText, effectiveActiveFilters, activeTab],
   );
 
-  const filteredItems = activeTabItems;
+  const filteredItems = useMemo(() => {
+    const searchText = activeSearchText.trim().toLowerCase();
+
+    if (!searchText) return activeTabItems;
+
+    return activeTabItems.filter((item) => item.searchText.includes(searchText));
+  }, [activeSearchText, activeTabItems]);
 
   const selectedItems = useMemo(
     () => filteredItems.filter((item) => selectedItemIds.includes(item.id)),
@@ -784,10 +796,16 @@ export function InventoryManagement() {
 
     setPagesByTab((current) => ({ ...current, [activeTab]: 0 }));
     setSelectedItemIds([]);
+    setSearchTextByTab((current) => ({ ...current, [activeTab]: "" }));
     setFiltersByTab((current) => ({
       ...current,
       [activeTab]: defaultTabFilters[activeTab],
     }));
+  }
+
+  function updateActiveSearchText(value: string) {
+    setSelectedItemIds([]);
+    setSearchTextByTab((current) => ({ ...current, [activeTab]: value }));
   }
 
   function updateDraftQuantity(item: FlatInventoryItem, nextValue: string) {
@@ -1567,10 +1585,11 @@ export function InventoryManagement() {
               placeholder={getMobileSearchPlaceholder(activeTab)}
               style={{ paddingLeft: "3.5rem" }}
               type="search"
-              value={activeFilters.search}
-              onChange={(event) =>
-                updateActiveFilter("search", event.target.value)
-              }
+              value={activeSearchText}
+              onChange={(event) => updateActiveSearchText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.preventDefault();
+              }}
             />
           </label>
           <div className="grid grid-cols-2 gap-2">
@@ -1713,10 +1732,11 @@ export function InventoryManagement() {
             <input
               className="min-h-11 w-full rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 lg:min-h-10 lg:px-2.5"
               placeholder={getSearchPlaceholder(activeTab)}
-              value={activeFilters.search}
-              onChange={(event) =>
-                updateActiveFilter("search", event.target.value)
-              }
+              value={activeSearchText}
+              onChange={(event) => updateActiveSearchText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.preventDefault();
+              }}
             />
           </label>
           {activeTab === "live_poultry" ? (
@@ -3470,9 +3490,11 @@ function buildFlatInventoryItems({
           row.breed_display_name,
           row.species_name,
           typeSex,
+          row.inventory_type,
           row.custom_inventory_label,
           availability.label,
           formatInventoryStatus(row.operational_availability_status),
+          row.operational_availability_status,
         ]
           .filter(Boolean)
           .join(" ")
