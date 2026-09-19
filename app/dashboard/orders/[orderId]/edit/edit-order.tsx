@@ -838,7 +838,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
     );
     setSaveWarning(emailWarning);
     setIsSaving(false);
-    router.refresh();
+    router.push("/dashboard/orders");
   }
 
   function resetSaveMessages() {
