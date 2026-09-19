@@ -149,6 +149,17 @@ test("Pull Sheet emphasizes quantity and barn location for barn visibility", asy
   );
 });
 
+test("Pull Sheet PDF renders every report value in bold", async () => {
+  const source = await readFile(
+    new URL("app/dashboard/orders/pickup-summary-report-downloads.ts", root),
+    "utf8",
+  );
+
+  assert.match(source, /function buildPullSheetPdfPages[\s\S]*?allTextBold: true/);
+  assert.match(source, /allTextBold \? "bold" : "regular"/);
+  assert.match(source, /bold: allTextBold,/);
+});
+
 test("Pull Sheet PDF uses half-inch top and bottom margins", async () => {
   const source = await readFile(
     new URL("app/dashboard/orders/pickup-summary-report-downloads.ts", root),

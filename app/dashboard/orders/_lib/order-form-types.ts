@@ -116,6 +116,7 @@ export type StoreDefaults = {
 
 export type PickupOption = {
   id: string;
+  isUnavailable?: boolean;
   label: string;
   description: string | null;
 };

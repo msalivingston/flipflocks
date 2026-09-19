@@ -415,6 +415,14 @@ export function InventoryManagement() {
     live_poultry: "",
     processed_poultry: "",
   });
+  const [serverSearchTextByTab, setServerSearchTextByTab] = useState<
+    Record<InventoryProductTab, string>
+  >({
+    equipment: "",
+    hatching_eggs: "",
+    live_poultry: "",
+    processed_poultry: "",
+  });
   const [pagesByTab, setPagesByTab] = useState<
     Record<InventoryProductTab, number>
   >({ equipment: 0, hatching_eggs: 0, live_poultry: 0, processed_poultry: 0 });
@@ -445,10 +453,14 @@ export function InventoryManagement() {
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const isMountedRef = useRef(true);
   const isShareResolvingRef = useRef(false);
+  const loadedInventoryTabRef = useRef<InventoryProductTab | null>(null);
+  const inventoryRequestIdRef = useRef(0);
   const activeTab =
     inventoryTabParamValues[searchParams.get("tab") ?? ""] ?? "live_poultry";
   const page = pagesByTab[activeTab];
   const filtersForQuery = filtersByTab[activeTab];
+  const activeSearchText = searchTextByTab[activeTab];
+  const serverSearchText = serverSearchTextByTab[activeTab];
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -473,12 +485,32 @@ export function InventoryManagement() {
   }
 
   useEffect(() => {
+    const timeout = setTimeout(() => {
+      setPagesByTab((current) =>
+        current[activeTab] === 0 ? current : { ...current, [activeTab]: 0 },
+      );
+      setServerSearchTextByTab((current) =>
+        current[activeTab] === activeSearchText
+          ? current
+          : { ...current, [activeTab]: activeSearchText },
+      );
+    }, 400);
+
+    return () => clearTimeout(timeout);
+  }, [activeSearchText, activeTab]);
+
+  useEffect(() => {
     let isMounted = true;
 
     async function loadInventory() {
       if (!seller) return;
 
-      setIsLoading(true);
+      const requestId = inventoryRequestIdRef.current + 1;
+      inventoryRequestIdRef.current = requestId;
+
+      if (loadedInventoryTabRef.current !== activeTab) {
+        setIsLoading(true);
+      }
       setLoadError(null);
 
       const result = await supabase.rpc("seller_get_inventory_management_page", {
@@ -491,13 +523,14 @@ export function InventoryManagement() {
         p_limit: 50,
         p_offset: page * 50,
         p_product_category: filtersForQuery.productCategory,
+        p_search: serverSearchText,
         p_sort: filtersForQuery.sortBy,
         p_species: filtersForQuery.species,
         p_store_id: seller.store_id,
         p_type_sex: filtersForQuery.typeSex,
       });
 
-      if (!isMounted) return;
+      if (!isMounted || requestId !== inventoryRequestIdRef.current) return;
 
       if (result.error) {
         setLoadError(result.error.message);
@@ -534,7 +567,7 @@ export function InventoryManagement() {
               .in("inventory_item_id", liveBirdInventoryItemIds)
           : null;
 
-      if (!isMounted) return;
+      if (!isMounted || requestId !== inventoryRequestIdRef.current) return;
 
       const advancedDetailsByInventoryItemId = new Map(
         (advancedDetailsResult?.data ?? []).map((row) => [
@@ -589,6 +622,7 @@ export function InventoryManagement() {
       setReservedByEquipmentId(activeTab === "equipment" ? reservationMap : {});
       setReservedByProcessedPoultryId(activeTab === "processed_poultry" ? reservationMap : {});
       setInventoryPage(nextPage);
+      loadedInventoryTabRef.current = activeTab;
       setSelectedItemIds([]);
       setIsLoading(false);
     }
@@ -600,6 +634,7 @@ export function InventoryManagement() {
     };
   }, [
     activeTab,
+    serverSearchText,
     filtersForQuery.age,
     filtersForQuery.availability,
     filtersForQuery.breed,
@@ -721,7 +756,6 @@ export function InventoryManagement() {
   );
 
   const activeFilters = filtersByTab[activeTab];
-  const activeSearchText = searchTextByTab[activeTab];
   const activeTabItems = useMemo(
     () => inventoryItems.filter((item) => item.productTab === activeTab),
     [activeTab, inventoryItems],
@@ -749,13 +783,7 @@ export function InventoryManagement() {
     [activeSearchText, effectiveActiveFilters, activeTab],
   );
 
-  const filteredItems = useMemo(() => {
-    const searchText = activeSearchText.trim().toLowerCase();
-
-    if (!searchText) return activeTabItems;
-
-    return activeTabItems.filter((item) => item.searchText.includes(searchText));
-  }, [activeSearchText, activeTabItems]);
+  const filteredItems = activeTabItems;
 
   const selectedItems = useMemo(
     () => filteredItems.filter((item) => selectedItemIds.includes(item.id)),
@@ -797,6 +825,7 @@ export function InventoryManagement() {
     setPagesByTab((current) => ({ ...current, [activeTab]: 0 }));
     setSelectedItemIds([]);
     setSearchTextByTab((current) => ({ ...current, [activeTab]: "" }));
+    setServerSearchTextByTab((current) => ({ ...current, [activeTab]: "" }));
     setFiltersByTab((current) => ({
       ...current,
       [activeTab]: defaultTabFilters[activeTab],

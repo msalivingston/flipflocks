@@ -75,7 +75,11 @@ export function OrderFulfillmentSection({
             >
               <option value="">Choose pickup option</option>
               {pickupOptions.map((option) => (
-                <option key={option.id} value={option.id}>
+                <option
+                  disabled={option.isUnavailable}
+                  key={option.id}
+                  value={option.id}
+                >
                   {option.label}
                 </option>
               ))}

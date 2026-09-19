@@ -92,6 +92,7 @@ export function createPickupSummaryPdf(reportData: PickupSummaryReportData) {
 
 function buildPullSheetPdfPages(reportData: PickupSummaryReportData) {
   return buildTablePdfPages({
+    allTextBold: true,
     columns: [
       { align: "left", label: "Breed", width: 210 },
       {
@@ -162,6 +163,7 @@ function buildOrderSummaryPdfPages(reportData: PickupSummaryReportData) {
 }
 
 function buildTablePdfPages({
+  allTextBold = false,
   columns,
   dateLabel,
   layout,
@@ -169,6 +171,7 @@ function buildTablePdfPages({
   title,
   totals,
 }: {
+  allTextBold?: boolean;
   columns: PdfTableColumn[];
   dateLabel: string;
   layout: PdfPageLayout;
@@ -195,7 +198,7 @@ function buildTablePdfPages({
       layout.width - layout.horizontalMargin - 190,
       y,
       18,
-      "regular",
+      allTextBold ? "bold" : "regular",
     );
     y -= 38;
 
@@ -213,7 +216,7 @@ function buildTablePdfPages({
 
     while (rowIndex < rows.length && y - rowHeight >= bottomY) {
       drawPdfTableRow({
-        bold: false,
+        bold: allTextBold,
         columns,
         commands,
         row: rows[rowIndex],

@@ -6,6 +6,8 @@ import test from "node:test";
 const repositoryRoot = process.cwd();
 const migrationPath =
   "supabase/migrations/20260824100000_pickup_option_archiving.sql";
+const orderEditMigrationPath =
+  "supabase/migrations/20260918100000_preserve_archived_pickup_options_on_order_edit.sql";
 
 function read(relativePath) {
   return readFileSync(resolve(repositoryRoot, relativePath), "utf8");
@@ -100,23 +102,20 @@ test("Orders filter is derived only from open-order pickup assignments", () => {
   );
 });
 
-test("Edit Order includes active, recent archived, and the current pickup option", () => {
+test("Edit Order includes active options and its current archived option only", () => {
   const editOrder = read(
     "app/dashboard/orders/[orderId]/edit/edit-order.tsx",
   );
-  const migration = read(migrationPath);
+  const migration = read(orderEditMigrationPath);
 
-  assert.match(editOrder, /90 \* 24 \* 60 \* 60 \* 1000/);
   assert.match(editOrder, /option\.id === order\?\.pickup_option_id/);
   assert.match(editOrder, /option\.is_active && !option\.archived_at/);
-  assert.match(
-    editOrder,
-    /!option\.is_active[\s\S]*new Date\(option\.archived_at\)\.getTime\(\) >= archivedCutoff/,
-  );
   assert.match(editOrder, /includeSavedPickupOption/);
+  assert.match(editOrder, /\$\{option\.label\} — archived/);
+  assert.match(editOrder, /\$\{order\.pickup_option_label_snapshot\} — unavailable/);
   assert.match(
     migration,
-    /create or replace function public\.seller_edit_order_strict_wrapper[\s\S]*store_pickup_options\.archived_at >= now\(\) - interval '90 days'[\s\S]*store_pickup_options\.id = v_order\.pickup_option_id/,
+    /seller_edit_order_batch_d_internal[\s\S]*store_pickup_options\.archived_at is null[\s\S]*store_pickup_options\.id = v_order\.pickup_option_id/,
   );
 });
 

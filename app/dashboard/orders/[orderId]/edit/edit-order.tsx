@@ -701,19 +701,27 @@ export function EditOrder({ orderId }: { orderId: string }) {
   async function saveOrder() {
     if (!seller || !order || isSaving) return;
 
-    const errors = validateEditOrderForm({
-      canUseDelivery,
-      deliveryAddress,
-      deliveryOptionId,
-      discountType,
-      discountValue,
-      fulfillmentMethod,
-      inventory: data.inventory,
-      lines,
-      originalLines,
-      pickupOptionId,
-      usesConfiguredPickupOptions,
-    });
+    const selectedPickupOption = data.pickupOptions.find(
+      (option) => option.id === pickupOptionId,
+    );
+    const errors =
+      fulfillmentMethod === "pickup" && selectedPickupOption?.isUnavailable
+      ? [
+          "This order's assigned pickup option no longer exists. Choose an active pickup option before saving.",
+        ]
+      : validateEditOrderForm({
+          canUseDelivery,
+          deliveryAddress,
+          deliveryOptionId,
+          discountType,
+          discountValue,
+          fulfillmentMethod,
+          inventory: data.inventory,
+          lines,
+          originalLines,
+          pickupOptionId,
+          usesConfiguredPickupOptions,
+        });
 
     setValidationErrors(errors);
     setSaveError(null);
@@ -1256,7 +1264,8 @@ function includeSavedPickupOption(
   return [
     {
       id: order.pickup_option_id,
-      label: order.pickup_option_label_snapshot,
+      isUnavailable: true,
+      label: `${order.pickup_option_label_snapshot} — unavailable`,
       description: null,
     },
     ...options,
@@ -1267,18 +1276,20 @@ function getEditablePickupOptions(
   options: ConfiguredPickupOption[],
   order: EditableOrderRow | null,
 ) {
-  const archivedCutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
-
-  return options.filter((option) => {
-    if (option.id === order?.pickup_option_id) return true;
-    if (option.is_active && !option.archived_at) return true;
-
-    return Boolean(
-      !option.is_active &&
-        option.archived_at &&
-        new Date(option.archived_at).getTime() >= archivedCutoff,
-    );
-  });
+  return options
+    .filter(
+      (option) =>
+        option.id === order?.pickup_option_id ||
+        (option.is_active && !option.archived_at),
+    )
+    .map((option) => ({
+      ...option,
+      label:
+        option.id === order?.pickup_option_id &&
+        (!option.is_active || option.archived_at)
+          ? `${option.label} — archived`
+          : option.label,
+    }));
 }
 
 function includeSavedDeliveryOption(
