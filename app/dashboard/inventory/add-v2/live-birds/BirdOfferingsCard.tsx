@@ -19,6 +19,10 @@ import { MobileLiveBirdsArtwork } from "./MobileLiveBirdsArtwork";
 import { EntryPhotoControl } from "./EntryPhotoControl";
 import { BreedCombobox, getBreedOptionValue } from "./BreedCombobox";
 import type { BirdOffering, BreedOption } from "./types";
+import {
+  breedingHistoryOptions,
+  featherConditionOptions,
+} from "@/lib/live-bird-advanced-attributes";
 
 export function BirdOfferingsCard({
   addOffering,
@@ -552,6 +556,30 @@ function ExpandedOfferingCard({
             onChange={(value) => updateOffering(offering.id, { price: value })}
           />
         </div>
+        <div className="mt-5 grid gap-4 border-t border-stone-100 pt-5 sm:col-span-full sm:mt-0 sm:grid-cols-3 sm:border-stone-200 sm:pt-4">
+          <AdvancedSelectField
+            label="Breeding History"
+            options={breedingHistoryOptions}
+            value={offering.breedingHistory}
+            onChange={(value) =>
+              updateOffering(offering.id, { breedingHistory: value })
+            }
+          />
+          <AdvancedSelectField
+            label="Feather Condition"
+            options={featherConditionOptions}
+            value={offering.featherCondition}
+            onChange={(value) =>
+              updateOffering(offering.id, { featherCondition: value })
+            }
+          />
+          <BarnLocationField
+            value={offering.barnLocation}
+            onChange={(value) =>
+              updateOffering(offering.id, { barnLocation: value })
+            }
+          />
+        </div>
       </div>
       {hasBreed ? (
       <div className="border-t border-stone-100 px-4 py-4 sm:border-stone-200 sm:px-4 sm:py-3">
@@ -943,6 +971,71 @@ function NumberField({
           onChange={(event) => onChange(event.target.value)}
         />
       </span>
+    </label>
+  );
+}
+
+function AdvancedSelectField({
+  label,
+  onChange,
+  options,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  options: ReadonlyArray<{ label: string; value: string }>;
+  value: string;
+}) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1.5 block text-sm font-bold leading-5 text-stone-700 sm:font-semibold sm:text-stone-600">
+        {label}
+      </span>
+      <span className="relative block">
+        <select
+          className={`${inputClass} appearance-none pr-9`}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          {options.map((option) => (
+            <option key={option.value || "unspecified"} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute right-3 top-1/2 h-2 w-2 -translate-y-1/2 rotate-45 border-b-2 border-r-2 border-emerald-800/70"
+        />
+      </span>
+    </label>
+  );
+}
+
+function BarnLocationField({
+  onChange,
+  value,
+}: {
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1.5 block text-sm font-bold leading-5 text-stone-700 sm:font-semibold sm:text-stone-600">
+        Barn Location
+      </span>
+      <input
+        className={inputClass}
+        placeholder="Optional"
+        type="text"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {value.length > 160 ? (
+        <span className="mt-1 block text-right text-xs font-medium text-stone-500">
+          {value.length}/200
+        </span>
+      ) : null}
     </label>
   );
 }

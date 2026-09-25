@@ -29,6 +29,9 @@ export type CreateLiveBirdsPayload = {
       sort_order: number;
       visibility_status: "active";
       seller_notes: null;
+      breeding_history: string | null;
+      feather_condition: string | null;
+      barn_location: string | null;
     }>;
   }>;
   p_auto_price_increase_enabled: false;
@@ -184,6 +187,9 @@ function getBreedGroups({
       sort_order: group.inventory_items.length,
       visibility_status: "active",
       seller_notes: null,
+      breeding_history: offering.breedingHistory || null,
+      feather_condition: offering.featherCondition || null,
+      barn_location: offering.barnLocation.trim() || null,
     });
   });
 

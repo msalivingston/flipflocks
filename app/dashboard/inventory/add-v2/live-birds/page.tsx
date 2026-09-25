@@ -24,7 +24,6 @@ import {
   restoreCatalogDefaultPhotoBestEffort,
   sellerBreedProfileSelect,
   sellerMediaSelect,
-  toDisplayImageUrl,
   type BreedLibraryItem,
   type BreedSpecies,
   type SellerBreedProfile,
@@ -82,6 +81,10 @@ import type { PublishStatus, SaveDraftStatus } from "./ReviewPublishCard";
 import { getSaveDraftPreflight } from "./saveDraftPreflight";
 import { SavePreviewCard } from "./SavePreviewCard";
 import { MobileLiveBirdsArtwork } from "./MobileLiveBirdsArtwork";
+import {
+  isBreedingHistory,
+  isFeatherCondition,
+} from "@/lib/live-bird-advanced-attributes";
 import type {
   BirdOffering,
   BreedOption,
@@ -131,6 +134,9 @@ type DraftInventoryRow = {
   custom_inventory_label: string | null;
   quantity_available: number | null;
   price_override: number | null;
+  breeding_history: string | null;
+  feather_condition: string | null;
+  barn_location: string | null;
   inventory_item_sort_order: number | null;
   inventory_visibility_status: string;
 };
@@ -532,8 +538,6 @@ export function LiveBirdsListingForm({
       getPublishValidationIssues({
         allowZeroQuantity: isEditMode,
         availableDate,
-        breedMediaItemsByProfileId,
-        breedOptions,
         hatchDate,
         offerings,
         priceAdjustment,
@@ -541,8 +545,6 @@ export function LiveBirdsListingForm({
       }),
     [
       availableDate,
-      breedMediaItemsByProfileId,
-      breedOptions,
       hatchDate,
       isEditMode,
       offerings,
@@ -3911,6 +3913,16 @@ function getEditSaveBlockingIssues({
     } else if (!Number.isFinite(price) || price < 0) {
       issues.push(`Enter a price for ${label}.`);
     }
+
+    if (offering.barnLocation.trim().length > 200) {
+      issues.push(`Barn Location for ${label} must be 200 characters or fewer.`);
+    }
+    if (!isBreedingHistory(offering.breedingHistory)) {
+      issues.push(`Choose a valid Breeding History value for ${label}.`);
+    }
+    if (!isFeatherCondition(offering.featherCondition)) {
+      issues.push(`Choose a valid Feather Condition value for ${label}.`);
+    }
   });
 
   return [
@@ -4159,6 +4171,9 @@ async function syncExistingEditOfferings({
         p_sort_order: index,
         p_visibility_status: "active",
         p_seller_notes: null,
+        p_barn_location: offering.barnLocation.trim() || null,
+        p_breeding_history: offering.breedingHistory || null,
+        p_feather_condition: offering.featherCondition || null,
       });
 
       if (createItemResult.error) {
@@ -4216,6 +4231,10 @@ async function syncExistingEditOfferings({
           : getNumberInputValue(offering.price),
       p_sort_order: index,
       p_seller_notes: null,
+      p_barn_location: offering.barnLocation.trim() || null,
+      p_breeding_history: offering.breedingHistory || null,
+      p_feather_condition: offering.featherCondition || null,
+      p_update_advanced_attributes: true,
     });
 
     if (inventoryResult.error) {
@@ -4469,6 +4488,10 @@ async function syncDraftOfferings({
           : getNumberInputValue(offering.price),
         p_sort_order: index,
         p_seller_notes: null,
+        p_barn_location: offering.barnLocation.trim() || null,
+        p_breeding_history: offering.breedingHistory || null,
+        p_feather_condition: offering.featherCondition || null,
+        p_update_advanced_attributes: true,
       });
 
       if (inventoryResult.error) {
@@ -4497,6 +4520,9 @@ async function syncDraftOfferings({
         p_sort_order: index,
         p_visibility_status: "active",
         p_seller_notes: null,
+        p_barn_location: offering.barnLocation.trim() || null,
+        p_breeding_history: offering.breedingHistory || null,
+        p_feather_condition: offering.featherCondition || null,
       });
 
       if (createItemResult.error) {
@@ -4549,7 +4575,7 @@ async function loadListingRows({
   let query = supabase
     .from("seller_inventory_management")
     .select(
-      "listing_batch_id, listing_batch_breed_id, inventory_item_id, species_id, species_name, species_slug, seller_breed_profile_id, breed_display_name, batch_type, origin_date, available_date, base_price, auto_price_adjustment_enabled, price_adjustment_direction, price_adjustment_amount, price_adjustment_interval_weeks, price_adjustment_max_price, price_adjustment_min_price, internal_batch_label, listing_batch_visibility_status, listing_batch_breed_sort_order, listing_batch_breed_visibility_status, inventory_type, custom_inventory_label, quantity_available, price_override, inventory_item_sort_order, inventory_visibility_status",
+      "listing_batch_id, listing_batch_breed_id, inventory_item_id, species_id, species_name, species_slug, seller_breed_profile_id, breed_display_name, batch_type, origin_date, available_date, base_price, auto_price_adjustment_enabled, price_adjustment_direction, price_adjustment_amount, price_adjustment_interval_weeks, price_adjustment_max_price, price_adjustment_min_price, internal_batch_label, listing_batch_visibility_status, listing_batch_breed_sort_order, listing_batch_breed_visibility_status, inventory_type, custom_inventory_label, quantity_available, price_override, breeding_history, feather_condition, barn_location, inventory_item_sort_order, inventory_visibility_status",
     )
     .eq("store_id", storeId)
     .eq("listing_batch_id", listingBatchId)
@@ -4616,6 +4642,9 @@ function createBlankOffering(id: string): BirdOffering {
     soldAs: "",
     quantity: "",
     price: "",
+    breedingHistory: "",
+    featherCondition: "",
+    barnLocation: "",
     description: "",
     expanded: true,
     breedContentExpanded: false,
@@ -4713,8 +4742,6 @@ function getBirdsForSaleCompletionErrorMessage(
 function getPublishValidationIssues({
   allowZeroQuantity = false,
   availableDate,
-  breedMediaItemsByProfileId,
-  breedOptions,
   hatchDate,
   offerings,
   priceAdjustment,
@@ -4722,8 +4749,6 @@ function getPublishValidationIssues({
 }: {
   allowZeroQuantity?: boolean;
   availableDate: string;
-  breedMediaItemsByProfileId: Record<string, ListingPhotoItem[]>;
-  breedOptions: BreedOption[];
   hatchDate: string;
   offerings: BirdOffering[];
   priceAdjustment: PriceAdjustmentState;
@@ -4783,13 +4808,6 @@ function getPublishValidationIssues({
     const target = { type: "offering", offeringId: offering.id } as const;
     const quantity = Number(offering.quantity);
     const price = Number(offering.price);
-    const breedOption =
-      findBreedOptionById(breedOptions, offering.sellerBreedProfileId) ??
-      findBreedOptionByBreedId(breedOptions, offering.breedId ?? null);
-    const breedMediaItems = offering.sellerBreedProfileId
-      ? breedMediaItemsByProfileId[offering.sellerBreedProfileId] ?? []
-      : [];
-
     if (!offering.sellerBreedProfileId) {
       issues.push({
         id: `${offering.id}-breed`,
@@ -4829,13 +4847,24 @@ function getPublishValidationIssues({
       });
     }
 
-    if (
-      offering.sellerBreedProfileId &&
-      !hasPublishReadyBreedPhoto({ breedMediaItems, breedOption })
-    ) {
+    if (offering.barnLocation.trim().length > 200) {
       issues.push({
-        id: `${offering.id}-photo`,
-        message: `Add a breed photo for ${groupLabel}.`,
+        id: `${offering.id}-barn-location`,
+        message: `Barn Location for ${groupLabel} must be 200 characters or fewer.`,
+        target,
+      });
+    }
+    if (!isBreedingHistory(offering.breedingHistory)) {
+      issues.push({
+        id: `${offering.id}-breeding-history`,
+        message: `Choose a valid Breeding History value for ${groupLabel}.`,
+        target,
+      });
+    }
+    if (!isFeatherCondition(offering.featherCondition)) {
+      issues.push({
+        id: `${offering.id}-feather-condition`,
+        message: `Choose a valid Feather Condition value for ${groupLabel}.`,
         target,
       });
     }
@@ -4864,26 +4893,6 @@ function getPublishValidationIssues({
   ];
 }
 
-function hasPublishReadyBreedPhoto({
-  breedMediaItems,
-  breedOption,
-}: {
-  breedMediaItems: ListingPhotoItem[];
-  breedOption: BreedOption | null;
-}) {
-  return (
-    breedMediaItems.some(
-      (item) =>
-        item.visibility_status === "active" &&
-        item.asset_status === "active" &&
-        item.moderation_status === "approved" &&
-        Boolean(toDisplayImageUrl(item.public_url)),
-    ) ||
-    Boolean(toDisplayImageUrl(breedOption?.sellerPhotoUrl)) ||
-    Boolean(toDisplayImageUrl(breedOption?.catalogImageUrl))
-  );
-}
-
 function getLiveBirdsFormSnapshot({
   availableDate,
   hatchDate,
@@ -4904,6 +4913,9 @@ function getLiveBirdsFormSnapshot({
       breed: offering.breed.trim(),
       breedId: offering.breedId ?? null,
       description: offering.description.trim(),
+      breedingHistory: offering.breedingHistory,
+      featherCondition: offering.featherCondition,
+      barnLocation: offering.barnLocation.trim(),
       price: offering.price.trim(),
       quantity: offering.quantity.trim(),
       sellerBreedProfileId: offering.sellerBreedProfileId,
@@ -5127,6 +5139,9 @@ function getOfferingsFromDraftRows(rows: DraftInventoryRow[]) {
       ),
       quantity: String(row.quantity_available ?? 0),
       price: String(row.price_override ?? row.base_price ?? 0),
+      breedingHistory: row.breeding_history ?? "",
+      featherCondition: row.feather_condition ?? "",
+      barnLocation: row.barn_location ?? "",
       description: "",
       expanded: index === 0,
     }),

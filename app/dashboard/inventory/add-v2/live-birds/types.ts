@@ -8,6 +8,9 @@ export type BirdOffering = {
   soldAs: string;
   quantity: string;
   price: string;
+  breedingHistory: string;
+  featherCondition: string;
+  barnLocation: string;
   description: string;
   expanded: boolean;
   breedContentExpanded?: boolean;

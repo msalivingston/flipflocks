@@ -132,11 +132,6 @@ export function validateBatchRow(row: BatchBirdRow): BatchRowErrors {
     !row.breed.catalogDescription?.trim()
   ) {
     errors.breed = "Add a description to this breed in your Breed Library first.";
-  } else if (
-    !row.breed.sellerPhotoUrl?.trim() &&
-    !row.breed.catalogImageUrl?.trim()
-  ) {
-    errors.breed = "Add a photo to this breed in your Breed Library first.";
   }
 
   if (

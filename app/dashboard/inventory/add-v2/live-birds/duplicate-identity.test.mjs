@@ -60,6 +60,9 @@ function offering(id, quantity, price = "18") {
     id,
     price,
     quantity: String(quantity),
+    breedingHistory: "never_bred",
+    featherCondition: "excellent",
+    barnLocation: "North Barn",
     sellerBreedProfileId: "profile-1",
     soldAs: "Female",
   };
@@ -109,10 +112,27 @@ test("creation payload preserves semantic duplicates and stable row tokens", () 
       clientRowToken: item.client_row_token,
       inventoryType: item.inventory_type,
       quantity: item.quantity_available,
+      breedingHistory: item.breeding_history,
+      featherCondition: item.feather_condition,
+      barnLocation: item.barn_location,
     })),
     [
-      { clientRowToken: "row-a", inventoryType: "female", quantity: 5 },
-      { clientRowToken: "row-b", inventoryType: "female", quantity: 10 },
+      {
+        clientRowToken: "row-a",
+        inventoryType: "female",
+        quantity: 5,
+        breedingHistory: "never_bred",
+        featherCondition: "excellent",
+        barnLocation: "North Barn",
+      },
+      {
+        clientRowToken: "row-b",
+        inventoryType: "female",
+        quantity: 10,
+        breedingHistory: "never_bred",
+        featherCondition: "excellent",
+        barnLocation: "North Barn",
+      },
     ],
   );
 });
@@ -219,4 +239,39 @@ test("normal Edit keeps persisted writes and removal keyed by inventory UUID", (
   assert.match(source, /entityId: offering\.inventoryItemId/);
   assert.match(source, /p_inventory_item_id: rowToUpdate\.inventory_item_id/);
   assert.doesNotMatch(source, /getOfferingPersistenceKey|getDraftRowOfferingKey/);
+});
+
+test("normal Add and Edit carry advanced attributes on each inventory row", () => {
+  const source = readFileSync(
+    resolve(root, "app/dashboard/inventory/add-v2/live-birds/page.tsx"),
+    "utf8",
+  );
+  const editRoute = readFileSync(
+    resolve(root, "app/dashboard/inventory/[listingBatchId]/edit/page.tsx"),
+    "utf8",
+  );
+
+  assert.match(editRoute, /<LiveBirdsListingForm listingBatchId=\{listingBatchId\} mode="edit"/);
+  assert.match(source, /breeding_history, feather_condition, barn_location/);
+  assert.match(source, /breedingHistory: row\.breeding_history \?\? ""/);
+  assert.match(source, /featherCondition: row\.feather_condition \?\? ""/);
+  assert.match(source, /barnLocation: row\.barn_location \?\? ""/);
+  assert.match(source, /p_update_advanced_attributes: true/);
+  assert.match(source, /p_barn_location: offering\.barnLocation\.trim\(\) \|\| null/);
+  assert.match(source, /p_breeding_history: offering\.breedingHistory \|\| null/);
+  assert.match(source, /p_feather_condition: offering\.featherCondition \|\| null/);
+});
+
+test("a breed photo is optional for normal Add", () => {
+  const source = readFileSync(
+    resolve(root, "app/dashboard/inventory/add-v2/live-birds/page.tsx"),
+    "utf8",
+  );
+  const publishValidation = source.slice(
+    source.indexOf("function getPublishValidationIssues"),
+    source.indexOf("function getLiveBirdsFormSnapshot"),
+  );
+
+  assert.doesNotMatch(publishValidation, /Add a breed photo/);
+  assert.doesNotMatch(publishValidation, /hasPublishReadyBreedPhoto/);
 });

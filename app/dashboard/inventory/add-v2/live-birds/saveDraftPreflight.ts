@@ -2,6 +2,10 @@ import { mapSoldAsToInventoryType } from "./payloadPreview";
 import { getPriceAdjustmentIssues } from "./priceAdjustment";
 import { isBirdsForSaleGroupStarted } from "./helpers";
 import type { BirdOffering, PriceAdjustmentState, SpeciesOption } from "./types";
+import {
+  isBreedingHistory,
+  isFeatherCondition,
+} from "../../../../../lib/live-bird-advanced-attributes";
 
 export type SaveDraftPreflightResult = {
   canSaveDraft: boolean;
@@ -110,6 +114,16 @@ function getOfferingIssues(offerings: BirdOffering[]) {
 
     if (Number.isFinite(price) && price < 0) {
       issues.push(`Enter a price for ${label}.`);
+    }
+
+    if (offering.barnLocation.trim().length > 200) {
+      issues.push(`Barn Location for ${label} must be 200 characters or fewer.`);
+    }
+    if (!isBreedingHistory(offering.breedingHistory)) {
+      issues.push(`Choose a valid Breeding History value for ${label}.`);
+    }
+    if (!isFeatherCondition(offering.featherCondition)) {
+      issues.push(`Choose a valid Feather Condition value for ${label}.`);
     }
   });
 

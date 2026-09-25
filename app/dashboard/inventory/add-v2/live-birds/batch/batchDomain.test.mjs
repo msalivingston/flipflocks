@@ -231,6 +231,20 @@ test("advanced attribute controls use only allowed values and reject unknown sta
   assert.match(errors.featherCondition, /valid Feather Condition/i);
 });
 
+test("a breed photo is optional for Batch Add rows", () => {
+  const errors = domain.validateBatchRow(
+    completeRow("row-a", {
+      breed: {
+        ...barredRock,
+        catalogImageUrl: null,
+        sellerPhotoUrl: null,
+      },
+    }),
+  );
+
+  assert.equal(errors.breed, undefined);
+});
+
 test("buyer details preserve Sex when empty and render every natural combination", () => {
   assert.equal(advancedAttributes.getLiveBirdDetailsColumnLabel([{}]), "Sex");
   assert.equal(
