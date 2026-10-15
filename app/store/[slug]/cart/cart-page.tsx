@@ -250,7 +250,7 @@ export function CartPage({
             </dl>
             <div className="mt-3 grid gap-2">
               {verified && validation.message ? (
-                <p className="whitespace-pre-line rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-stone-800" role="status">
+                <p className={`whitespace-pre-line rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-stone-800 ${validation.message.startsWith("This store requires at least ") ? "font-bold" : ""}`} role="status">
                   {validation.message}
                 </p>
               ) : null}

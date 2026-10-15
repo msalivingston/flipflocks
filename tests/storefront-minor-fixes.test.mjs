@@ -5,6 +5,19 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 
+test("minimum-order shortages are bold in cart and desktop/mobile checkout only", async () => {
+  const [cart, checkout] = await Promise.all([
+    read("app/store/[slug]/cart/cart-page.tsx"),
+    read("app/store/[slug]/checkout/checkout-page.tsx"),
+  ]);
+  for (const [source, value] of [[cart, "validation.message"], [checkout, "errorMessage"], [checkout, "summaryMessage"], [checkout, "children"]]) {
+    assert.ok(source.includes(`${value}.startsWith("This store requires at least ") ? "font-bold" : ""`));
+  }
+  assert.match(checkout, /typeof children === "string" && children\.startsWith/);
+  assert.match(checkout, /<MobileError>\{toBuyerOrderError\(summaryMessage\)\}<\/MobileError>/);
+  assert.match(checkout, /<MobileError>\{errorMessage\}<\/MobileError>/);
+});
+
 test("Meadowgate checkout is disabled in the UI and both order submission boundaries", async () => {
   const [checkout, payAtPickup, cardCheckout] = await Promise.all([
     read("app/store/[slug]/checkout/checkout-page.tsx"),

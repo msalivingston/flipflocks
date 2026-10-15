@@ -1435,7 +1435,7 @@ export function CheckoutPage({
               ) : null}
 
               {errorMessage ? (
-                <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-800">
+                <div className={`rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-800 ${errorMessage.startsWith("This store requires at least ") ? "font-bold" : ""}`}>
                   {errorMessage}
                 </div>
               ) : null}
@@ -1497,7 +1497,7 @@ export function CheckoutPage({
                 </p>
               ) : null}
               {summaryMessage ? (
-                <p className="mt-2 whitespace-pre-line rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <p className={`mt-2 whitespace-pre-line rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 ${summaryMessage.startsWith("This store requires at least ") ? "font-bold" : ""}`}>
                   {toBuyerOrderError(summaryMessage)}
                 </p>
               ) : null}
@@ -1894,7 +1894,7 @@ function MobileStickyCheckoutBar({
 
 function MobileError({ children }: { children: React.ReactNode }) {
   return (
-    <div className="whitespace-pre-line rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-800">
+    <div className={`whitespace-pre-line rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-800 ${typeof children === "string" && children.startsWith("This store requires at least ") ? "font-bold" : ""}`}>
       {children}
     </div>
   );
