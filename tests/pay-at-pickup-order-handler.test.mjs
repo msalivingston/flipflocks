@@ -178,7 +178,7 @@ test("normal checkout is rate checked before summary and order creation", async 
 });
 
 test("bird minimum shortages stop checkout before creation and retain the explanation", async () => {
-  const message = "This store requires at least 10 Started & Adult Birds per order. You have 6. Add 4 more Started & Adult Birds to continue.";
+  const message = "This store requires at least 10 adult birds per order. You have 6. Add 4 more adult birds to continue.";
   const harness = createHarness({checkoutSummary:{is_checkout_available:false,message}});
   const response = await harness.handler(requestFor(validPayload()));
   assert.equal(response.status,409);

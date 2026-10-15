@@ -99,9 +99,18 @@ test("minimum quantities against the migrated PostgreSQL commerce paths", {
     const short = await summary([bird(30,2),bird(31,6)]);
     assert.equal(short.is_checkout_available,false);
     assert.match(short.message,/at least 5 Chicks.*You have 2.*Add 3/s);
-    assert.match(short.message,/at least 10 Started & Adult Birds.*You have 6.*Add 4/s);
+    assert.match(short.message,/at least 10 adult birds.*You have 6.*Add 4 more adult birds/s);
     // Duplicate line IDs are summed, not counted as separate requirements.
     assert.equal((await summary([bird(31,6),bird(31,4)])).is_checkout_available,true);
+  });
+  await t.test("customer adult shortages use singular/plural wording without changing chick messages", async () => {
+    for (const [quantity, noun] of [[9, 'adult bird'], [8, 'adult birds']]) {
+      const expected = `This store requires at least 10 adult birds per order. You have ${quantity}. Add ${10-quantity} more ${noun} to continue.`;
+      assert.equal((await shortages([bird(31,quantity)]))[0].message, expected);
+      assert.equal((await summary([bird(31,quantity)])).message, expected);
+    }
+    assert.equal((await summary([bird(30,4)])).message,
+      'This store requires at least 5 Chicks per order. You have 4. Add 1 more chicks to continue.');
   });
   await t.test("other inventory neither triggers nor satisfies bird minimums; eggs keep their own minimum", async () => {
     const equipment = {item_type:'equipment_inventory',item_id:id(250),quantity:1};
