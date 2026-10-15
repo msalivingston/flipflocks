@@ -129,6 +129,8 @@ type StoreAdminForm = {
   cancellation_policy: string;
   other_policies: string;
   custom_policies: CustomPolicyDraft[];
+  minimum_chick_order_quantity: string;
+  minimum_started_adult_bird_order_quantity: string;
   storefront_enabled: boolean;
   hatching_eggs_enabled: boolean;
   equipment_supplies_enabled: boolean;
@@ -417,6 +419,8 @@ const blankForm: StoreAdminForm = {
   cancellation_policy: "",
   other_policies: "",
   custom_policies: [],
+  minimum_chick_order_quantity: "0",
+  minimum_started_adult_bird_order_quantity: "0",
   storefront_enabled: false,
   hatching_eggs_enabled: false,
   equipment_supplies_enabled: false,
@@ -1835,6 +1839,8 @@ export function StoreAdmin() {
       cancellation_policy: form.cancellation_policy,
       other_policies: form.other_policies,
       custom_policies: normalizedCustomPolicies,
+      minimum_chick_order_quantity: Number(form.minimum_chick_order_quantity),
+      minimum_started_adult_bird_order_quantity: Number(form.minimum_started_adult_bird_order_quantity),
       storefront_enabled: form.storefront_enabled,
       hatching_eggs_enabled: form.hatching_eggs_enabled,
       equipment_supplies_enabled: form.equipment_supplies_enabled,
@@ -2394,6 +2400,16 @@ export function StoreAdmin() {
                 TextAreaField={TextAreaField}
                 customPolicyDragPreview={customPolicyDragPreview}
                 customPolicies={form.custom_policies}
+                minimumChickQuantity={form.minimum_chick_order_quantity}
+                minimumStartedAdultQuantity={
+                  form.minimum_started_adult_bird_order_quantity
+                }
+                onMinimumChickQuantityChange={(value) =>
+                  updateField("minimum_chick_order_quantity", value)
+                }
+                onMinimumStartedAdultQuantityChange={(value) =>
+                  updateField("minimum_started_adult_bird_order_quantity", value)
+                }
                 draggingCustomPolicyId={draggingCustomPolicyId}
                 onAddCustomPolicy={addCustomPolicy}
                 onBeginCustomPolicyDrag={beginCustomPolicyDrag}
@@ -3058,7 +3074,10 @@ type StorefrontAccordionId =
 
 type ImagesAccordionId = "logo" | "hero" | "about-photo";
 type PickupDeliveryAccordionId = "pickup" | "delivery";
-type PoliciesAccordionId = "pickup-policy" | "custom-policies";
+type PoliciesAccordionId =
+  | "pickup-policy"
+  | "minimum-order-quantities"
+  | "custom-policies";
 type StoreSetupAccordionId =
   | StorefrontAccordionId
   | ImagesAccordionId
@@ -5252,6 +5271,8 @@ function buildInitialForm(
     cancellation_policy: seller.cancellation_policy ?? "",
     other_policies: seller.other_policies ?? "",
     custom_policies: toCustomPolicyDrafts(seller.custom_policies),
+    minimum_chick_order_quantity: String(seller.minimum_chick_order_quantity ?? 0),
+    minimum_started_adult_bird_order_quantity: String(seller.minimum_started_adult_bird_order_quantity ?? 0),
     storefront_enabled: Boolean(seller.storefront_enabled),
     hatching_eggs_enabled: Boolean(seller.hatching_eggs_enabled),
     equipment_supplies_enabled: Boolean(seller.equipment_supplies_enabled),
@@ -5564,6 +5585,18 @@ function validateForm(
   pickupOptions: PickupOptionDraft[],
   activeTab: StoreSetupTab,
 ) {
+  for (const value of [
+    form.minimum_chick_order_quantity,
+    form.minimum_started_adult_bird_order_quantity,
+  ]) {
+    if (
+      !/^\d+$/.test(value) ||
+      !Number.isSafeInteger(Number(value)) ||
+      Number(value) > 2147483647
+    ) {
+      return "Minimum order quantities must be whole numbers of 0 or more. Use 0 for no minimum.";
+    }
+  }
   if (!form.pay_at_pickup_enabled && !form.card_payments_enabled) {
     return "At least one payment method must be enabled.";
   }

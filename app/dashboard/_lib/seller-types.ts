@@ -23,6 +23,8 @@ export type SellerContext = {
   cancellation_policy: string | null;
   other_policies: string | null;
   custom_policies: StoreCustomPolicy[] | null;
+  minimum_chick_order_quantity: number;
+  minimum_started_adult_bird_order_quantity: number;
   public_phone: string | null;
   show_public_email: boolean;
   show_public_phone: boolean;

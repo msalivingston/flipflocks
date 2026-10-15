@@ -27,6 +27,7 @@ import {
   type EmbeddedOrderModeContext,
 } from "@/lib/embedded-order-mode";
 import { formatLiveBirdAdvancedDetails } from "@/lib/live-bird-advanced-attributes";
+import { publicSupabase } from "@/lib/public-supabase";
 
 const emptyItems: StorefrontCart["items"] = [];
 
@@ -50,6 +51,36 @@ export function CartPage({
 
   const items = cart?.items ?? emptyItems;
   const summary = useMemo(() => summarizeStorefrontCart(items), [items]);
+  const [validation, setValidation] = useState<{
+    items: typeof items;
+    available: boolean;
+    message: string | null;
+  } | null>(null);
+  const verified = validation?.items === items;
+
+  useEffect(() => {
+    if (!items.length) return;
+    let active = true;
+    async function checkCart() {
+      const { data, error } = await publicSupabase.rpc("get_public_checkout_summary", {
+        p_store_slug: store.store_slug,
+        p_items: items.filter((item) => item.quantity > 0).map((item) => ({
+          item_type: item.itemType, item_id: item.itemId, quantity: item.quantity,
+        })),
+      });
+      if (!active) return;
+      const result = Array.isArray(data) ? data[0] : null;
+      setValidation({
+        items,
+        available: !error && result?.is_checkout_available === true,
+        message: error || !result
+          ? "We could not verify your cart. Please try again at checkout."
+          : result.message,
+      });
+    }
+    void checkCart();
+    return () => { active = false; };
+  }, [items, store.store_slug]);
   const continueHref = buildEmbeddedOrderModeHref(
     `/store/${store.store_slug}`,
     orderMode,
@@ -208,7 +239,7 @@ export function CartPage({
               Order summary
             </p>
             <h2 className="mt-1 text-lg font-semibold text-stone-950 sm:mt-1.5 sm:text-xl">
-              Ready for checkout
+              {verified && !validation.available ? "Review your cart" : "Order total"}
             </h2>
             <dl className="mt-2.5 grid gap-1 text-sm sm:mt-3 sm:gap-1.5">
               <SummaryRow label="Items" value={String(summary.totalQuantity)} />
@@ -218,6 +249,11 @@ export function CartPage({
               />
             </dl>
             <div className="mt-3 grid gap-2">
+              {verified && validation.message ? (
+                <p className="whitespace-pre-line rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-stone-800" role="status">
+                  {validation.message}
+                </p>
+              ) : null}
               <StorefrontButton
                 className="min-h-10"
                 href={checkoutHref}

@@ -59,6 +59,8 @@ function createHarness({
   }),
   environment = {},
   payAtPickupEnabled = true,
+  checkoutSummary = null,
+  orderError = null,
 } = {}) {
   const calls = [];
   let emailWorkerCalls = 0;
@@ -88,7 +90,7 @@ function createHarness({
 
       if (name === "get_public_checkout_summary") {
         return {
-          data: [{
+          data: [checkoutSummary ?? {
             is_checkout_available: true,
             item_count: 1,
             total_quantity: 1,
@@ -102,6 +104,7 @@ function createHarness({
         name === "create_pay_at_pickup_order" ||
         name === "create_pay_at_pickup_order_v2"
       ) {
+        if (orderError) return { data: null, error: orderError };
         return {
           data: [{
             order_id: ORDER_ID,
@@ -172,6 +175,53 @@ test("normal checkout is rate checked before summary and order creation", async 
   assert.equal(limiterCall.args.p_buyer_ip, "203.0.113.10");
   assert.equal(harness.emailWorkerCalls, 1);
   assert.equal(harness.emailWorkerBodies[0].order_id, ORDER_ID);
+});
+
+test("bird minimum shortages stop checkout before creation and retain the explanation", async () => {
+  const message = "This store requires at least 10 Started & Adult Birds per order. You have 6. Add 4 more Started & Adult Birds to continue.";
+  const harness = createHarness({checkoutSummary:{is_checkout_available:false,message}});
+  const response = await harness.handler(requestFor(validPayload()));
+  assert.equal(response.status,409);
+  assert.equal((await response.json()).message,message);
+  assert.equal(harness.calls.some((call)=>call.name === "create_pay_at_pickup_order_v2"),false);
+  assert.equal(harness.emailWorkerCalls,0);
+});
+
+test("conflicting IDs and types fail before pay-at-pickup database work", async () => {
+  for (const item of [
+    { item_type: "listing_inventory", item_id: ITEM_ID, inventory_item_id: ORDER_ID, quantity: 10 },
+    { item_type: "equipment_inventory", item_id: ITEM_ID, inventory_item_id: ITEM_ID, quantity: 10 },
+  ]) {
+    const harness = createHarness();
+    const response = await harness.handler(requestFor({ ...validPayload(), items: [item] }));
+    assert.equal(response.status, 400);
+    assert.match((await response.json()).message, /Conflicting or ambiguous inventory identifiers/);
+    assert.deepEqual(harness.calls, []);
+  }
+});
+
+test("pay-at-pickup passes identical canonical items to summary and creation for supported formats", async () => {
+  for (const item of [
+    { inventory_item_id: ITEM_ID, quantity: 10 },
+    { item_type: "listing_inventory", item_id: ITEM_ID, inventory_item_id: ITEM_ID, quantity: 10 },
+    { item_type: "listing_inventory", item_id: ITEM_ID, quantity: 10 },
+  ]) {
+    const harness = createHarness();
+    const response = await harness.handler(requestFor({ ...validPayload(), items: [item] }));
+    assert.equal(response.status, 201);
+    const expected = [{ item_type: "listing_inventory", item_id: ITEM_ID, quantity: 10 }];
+    assert.deepEqual(harness.calls.find((call) => call.name === "get_public_checkout_summary").args.p_items, expected);
+    assert.deepEqual(harness.calls.find((call) => call.name === "create_pay_at_pickup_order_v2").args.p_items, expected);
+  }
+});
+
+test("a minimum changed after preflight returns the database shortage safely", async () => {
+  const message = "This store requires at least 10 Chicks per order. You have 6. Add 4 more chicks to continue.";
+  const harness = createHarness({orderError:{message,details:"live_bird_minimum_not_met",code:"P0001"}});
+  const response = await harness.handler(requestFor(validPayload()));
+  assert.equal(response.ok,false);
+  assert.equal((await response.json()).message,message);
+  assert.equal(harness.emailWorkerCalls,0);
 });
 
 test("a complete delivery checkout reaches the existing order RPC", async () => {

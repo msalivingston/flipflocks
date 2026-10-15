@@ -25,6 +25,7 @@ type StoreSetupAccordionId =
   | "pickup"
   | "delivery"
   | "pickup-policy"
+  | "minimum-order-quantities"
   | "custom-policies";
 
 type StoreSetupAccordionSectionProps = {

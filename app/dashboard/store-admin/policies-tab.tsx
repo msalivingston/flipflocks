@@ -20,6 +20,7 @@ type StoreSetupAccordionId =
   | "pickup"
   | "delivery"
   | "pickup-policy"
+  | "minimum-order-quantities"
   | "custom-policies";
 
 type StoreSetupAccordionSectionProps = {
@@ -67,7 +68,10 @@ type DragPreview = {
   y: number;
 };
 
-type PoliciesAccordionId = "pickup-policy" | "custom-policies";
+type PoliciesAccordionId =
+  | "pickup-policy"
+  | "minimum-order-quantities"
+  | "custom-policies";
 
 export type PoliciesTabProps = {
   AccordionSection: ComponentType<StoreSetupAccordionSectionProps>;
@@ -96,6 +100,10 @@ export type PoliciesTabProps = {
     updates: Partial<CustomPolicyDraft>,
   ) => void;
   pickupPolicy: string;
+  minimumChickQuantity: string;
+  minimumStartedAdultQuantity: string;
+  onMinimumChickQuantityChange: (value: string) => void;
+  onMinimumStartedAdultQuantityChange: (value: string) => void;
 };
 
 export default function PoliciesTab({
@@ -116,6 +124,10 @@ export default function PoliciesTab({
   onRestoreDefaultPickupPolicy,
   onUpdateCustomPolicy,
   pickupPolicy,
+  minimumChickQuantity,
+  minimumStartedAdultQuantity,
+  onMinimumChickQuantityChange,
+  onMinimumStartedAdultQuantityChange,
 }: PoliciesTabProps) {
   const canAddPolicy = customPolicies.length < 4;
   const [openSection, setOpenSection] =
@@ -176,6 +188,61 @@ export default function PoliciesTab({
       </AccordionSection>
 
       <AccordionSection
+        glyph="/glyphs/clipboard.png"
+        id="minimum-order-quantities"
+        isOpen={openSection === "minimum-order-quantities"}
+        onToggle={(id) => setOpenSection(id as PoliciesAccordionId | "none")}
+        summary={
+          Number(minimumChickQuantity) > 0 || Number(minimumStartedAdultQuantity) > 0
+            ? "Minimum quantities set"
+            : "No minimum quantities"
+        }
+        title="Minimum Order Quantities"
+      >
+        <div className="grid gap-4">
+          <StorefrontNote>
+            Buyers can combine breeds, sexes, and listings within each group.
+            Use 0 for no minimum.
+          </StorefrontNote>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {[
+              {
+                label: "Chicks",
+                description: "Younger than 14 days",
+                value: minimumChickQuantity,
+                onChange: onMinimumChickQuantityChange,
+              },
+              {
+                label: "Started & Adult Birds",
+                description: "14 days or older",
+                value: minimumStartedAdultQuantity,
+                onChange: onMinimumStartedAdultQuantityChange,
+              },
+            ].map((field) => (
+              <label className="grid gap-1.5 text-sm font-semibold text-stone-700" key={field.label}>
+                {field.label}
+                <span className="text-sm font-normal text-stone-500">{field.description} · Minimum birds per order</span>
+                <input
+                  className="seller-form-field min-h-12 text-base sm:min-h-10 sm:text-sm"
+                  inputMode="numeric"
+                  type="number"
+                  min={0}
+                  max={2147483647}
+                  step={1}
+                  value={field.value}
+                  onChange={(event) => field.onChange(event.target.value)}
+                />
+              </label>
+            ))}
+          </div>
+          <p className="text-sm leading-6 text-stone-500">
+            Groups use the birds’ age today or when ready, whichever is later.
+            Each minimum applies only when buyers order birds in that group.
+          </p>
+        </div>
+      </AccordionSection>
+
+      <AccordionSection
         glyph="/glyphs/open-book.png"
         id="custom-policies"
         isOpen={openSection === "custom-policies"}
@@ -191,8 +258,8 @@ export default function PoliciesTab({
                 terms buyers should know.
               </StorefrontNote>
               <p className="mt-2 text-sm font-medium leading-6 text-stone-600 sm:text-xs sm:leading-5 sm:text-stone-500">
-                Examples: Cancellation policy, Deposit policy, Minimum order
-                policy, Health policy, Biosecurity policy, Livestock guarantee.
+                Examples: Cancellation policy, Deposit policy, Health policy,
+                Biosecurity policy, Livestock guarantee.
               </p>
             </div>
             <div className="flex shrink-0 flex-col gap-2 sm:items-end">

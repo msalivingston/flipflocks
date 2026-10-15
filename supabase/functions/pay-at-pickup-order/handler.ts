@@ -1,3 +1,5 @@
+import { normalizeCheckoutItems, type CheckoutItem } from "../_shared/checkout-items.ts";
+
 type RpcResult = {
   data: unknown;
   error: {
@@ -21,19 +23,6 @@ type HandlerDependencies = {
   env: (name: string) => string | undefined;
   fetch?: typeof fetch;
 };
-
-type CheckoutItem = {
-  item_type:
-    | "listing_inventory"
-    | "equipment_inventory"
-    | "processed_poultry_inventory"
-    | "hatching_egg_inventory";
-  item_id: string;
-  inventory_item_id?: string;
-  quantity: number;
-};
-
-type CheckoutItemType = CheckoutItem["item_type"];
 
 type OrderRequest = {
   store_slug: string;
@@ -363,60 +352,6 @@ function optionalFulfillmentMethod(
   return trimmed;
 }
 
-function normalizeItems(value: unknown): CheckoutItem[] {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Error("At least one checkout item is required.");
-  }
-
-  if (value.length > 50) {
-    throw new Error("Too many checkout items.");
-  }
-
-  return value.map((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) {
-      throw new Error("Each checkout item must be an object.");
-    }
-
-    const record = item as Record<string, unknown>;
-    const legacyInventoryItemId = record.inventory_item_id;
-    const itemType = legacyInventoryItemId ? "listing_inventory" : record.item_type;
-    const itemId = legacyInventoryItemId ?? record.item_id;
-    const quantity = record.quantity;
-
-    if (
-      itemType !== "listing_inventory" &&
-      itemType !== "equipment_inventory" &&
-      itemType !== "processed_poultry_inventory" &&
-      itemType !== "hatching_egg_inventory"
-    ) {
-      throw new Error(
-        "Each checkout item must include a valid item type, item ID, and positive quantity.",
-      );
-    }
-
-    if (typeof itemId !== "string" || !uuidPattern.test(itemId)) {
-      throw new Error(
-        "Each checkout item must include a valid item type, item ID, and positive quantity.",
-      );
-    }
-
-    if (
-      typeof quantity !== "number" ||
-      !Number.isInteger(quantity) ||
-      quantity <= 0
-    ) {
-      throw new Error("Each checkout item quantity must be a positive integer.");
-    }
-
-    return {
-      item_type: itemType as CheckoutItemType,
-      item_id: itemId,
-      ...(legacyInventoryItemId ? { inventory_item_id: itemId } : {}),
-      quantity,
-    };
-  });
-}
-
 function parseBuyerIp(request: Request): string | null {
   const forwardedFor = request.headers.get("x-forwarded-for");
   const realIp = request.headers.get("x-real-ip");
@@ -514,7 +449,7 @@ function parseOrderRequest(body: unknown): OrderRequest {
     pickup_option_id: optionalUuid(record, "pickup_option_id"),
     fulfillment_method: fulfillmentMethod,
     delivery_option_id: optionalUuid(record, "delivery_option_id"),
-    items: normalizeItems(record.items),
+    items: normalizeCheckoutItems(record.items),
   };
 }
 
@@ -845,6 +780,7 @@ export function createPayAtPickupHandler(
       "Each order item must include a valid item type, item ID, and positive quantity.",
       "At least one valid order item is required.",
       "Invalid inventory relationship for checkout.",
+      "Conflicting or ambiguous inventory identifiers.",
       "pickup_option_id must be a valid ID.",
       "delivery_option_id must be a valid ID.",
       "fulfillment_method must be pickup or delivery.",
@@ -854,7 +790,9 @@ export function createPayAtPickupHandler(
       "Delivery option is required for delivery orders.",
       ...conflictMessages,
     ];
-    const safeMessage = safeValidationMessages.includes(message)
+    const isBirdMinimumError = orderError.details === "live_bird_minimum_not_met" ||
+      message === "Bird hatch or availability date is missing or invalid. Please contact the seller.";
+    const safeMessage = safeValidationMessages.includes(message) || isBirdMinimumError
       ? message
       : "Unable to place order. Please review your cart and try again.";
 

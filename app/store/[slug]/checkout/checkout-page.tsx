@@ -429,7 +429,7 @@ export function CheckoutPage({
     isChecking ||
     isLoadingPickupOptions ||
     checkoutItems.length === 0 ||
-    summary?.is_checkout_available === false ||
+    summary?.is_checkout_available !== true ||
     !cardAvailabilityChecked ||
     paymentUnavailable;
 
@@ -629,8 +629,8 @@ export function CheckoutPage({
       return;
     }
 
-    if (summary && !summary.is_checkout_available) {
-      setErrorMessage(toBuyerOrderError(summary.message ?? undefined));
+    if (!summary?.is_checkout_available) {
+      setErrorMessage(toBuyerOrderError(summary?.message ?? "Your cart is still being verified. Please try again."));
       return;
     }
 
@@ -1497,7 +1497,7 @@ export function CheckoutPage({
                 </p>
               ) : null}
               {summaryMessage ? (
-                <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <p className="mt-2 whitespace-pre-line rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
                   {toBuyerOrderError(summaryMessage)}
                 </p>
               ) : null}
@@ -1527,7 +1527,7 @@ export function CheckoutPage({
                   isChecking ||
                   isLoadingPickupOptions ||
                   checkoutItems.length === 0 ||
-                  summary?.is_checkout_available === false ||
+                  summary?.is_checkout_available !== true ||
                   !cardAvailabilityChecked ||
                   paymentUnavailable ||
                   (form.fulfillmentMethod === "pickup" &&
@@ -1894,7 +1894,7 @@ function MobileStickyCheckoutBar({
 
 function MobileError({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-800">
+    <div className="whitespace-pre-line rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-800">
       {children}
     </div>
   );
@@ -2267,6 +2267,10 @@ async function readFunctionError(error: unknown) {
 }
 
 function toBuyerOrderError(message: string | undefined) {
+  if (message?.startsWith("This store requires at least ") ||
+      message === "Bird hatch or availability date is missing or invalid. Please contact the seller.") {
+    return message;
+  }
   if (
     message === "Store does not offer delivery." ||
     message === "Delivery option is not available for this store." ||

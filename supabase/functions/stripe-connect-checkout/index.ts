@@ -2,12 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.0";
 import type Stripe from "npm:stripe@22.3.2";
 import { resolveFlockFrontCors } from "../_shared/cors.ts";
 import { createStripeConnectClient } from "../_shared/stripe-connect-client.ts";
-
-type CheckoutItem = {
-  item_type: "listing_inventory" | "equipment_inventory" | "processed_poultry_inventory" | "hatching_egg_inventory";
-  item_id: string;
-  quantity: number;
-};
+import { normalizeCheckoutItems, type CheckoutItem } from "../_shared/checkout-items.ts";
 
 type StartRequest = {
   action: "start";
@@ -367,9 +362,13 @@ Deno.serve(async (request) => {
   }
   const start = body as unknown as StartRequest;
   if (!start.idempotency_key || start.idempotency_key.length > 200 || !start.buyer_email ||
-    !start.buyer_first_name || !start.buyer_last_name || !start.buyer_phone || !Array.isArray(start.items) || !start.items.length ||
-    start.items.some((item) => !item || !["listing_inventory","equipment_inventory","processed_poultry_inventory","hatching_egg_inventory"].includes(item.item_type) || !uuid.test(item.item_id) || !Number.isInteger(item.quantity) || item.quantity <= 0)) {
+    !start.buyer_first_name || !start.buyer_last_name || !start.buyer_phone) {
     return json(400, { error: "invalid_request" }, cors.headers);
+  }
+  try {
+    start.items = normalizeCheckoutItems(start.items);
+  } catch (error) {
+    return json(400, { error: "invalid_request", message: error instanceof Error ? error.message : "Checkout items are invalid." }, cors.headers);
   }
 
   const { data: rateRows, error: rateError } = await service.rpc("consume_public_checkout_rate_limit", {
@@ -457,7 +456,10 @@ Deno.serve(async (request) => {
   });
   if (reserveError) {
     try { await stripe.checkout.sessions.expire(session.id, {}, { stripeAccount: accountId }); } catch { /* unseen Session; log only */ }
-    return json(409, { error: "checkout_unavailable", message: "One or more items are no longer available." }, cors.headers);
+    const message = reserveError.details === "live_bird_minimum_not_met" ||
+      reserveError.message === "Bird hatch or availability date is missing or invalid. Please contact the seller."
+      ? reserveError.message : "One or more items are no longer available.";
+    return json(409, { error: "checkout_unavailable", message }, cors.headers);
   }
   if (typeof session.url !== "string" || !session.url.startsWith("https://checkout.stripe.com/")) {
     try { await stripe.checkout.sessions.expire(session.id, {}, { stripeAccount: accountId }); } catch { /* best effort */ }
