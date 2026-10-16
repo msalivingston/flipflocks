@@ -160,23 +160,48 @@ test("minimum quantities against the migrated PostgreSQL commerce paths", {
       assert.equal((await summary([item])).is_checkout_available,true);
     }
   });
-  await t.test("seller creation and editing reject shortages and preserve existing order data on failure", async () => {
+  await t.test("seller creation and editing bypass bird minimums while customer checkout still enforces them", async () => {
     const manualItems = (quantity) => [{item_type:'inventory',inventory_item_id:id(231),quantity}];
     const create = (quantity,key) => one(`select * from seller_create_manual_order(p_store_id=>$1,p_idempotency_key=>$2,p_items=>$3::jsonb,
       p_customer_email=>'manual@example.test',p_customer_first_name=>'Manual',p_customer_last_name=>'Buyer')`,[store,key,JSON.stringify(manualItems(quantity))]);
-    await assert.rejects(create(6,'short-manual'),/Add 4/);
     const conflicting=[{...manualItems(10)[0],item_id:id(230)}];
     await assert.rejects(one(`select * from seller_create_manual_order(p_store_id=>$1,p_idempotency_key=>'conflicting-manual',p_items=>$2::jsonb,
       p_customer_email=>'manual@example.test',p_customer_first_name=>'Manual',p_customer_last_name=>'Buyer')`,[store,JSON.stringify(conflicting)]),/Conflicting or ambiguous inventory identifiers/);
-    const manual=await create(10,'valid-manual');
+    const inventoryBeforeManual = await one("select quantity_available from inventory_items where id=$1",[id(231)]);
+    const manual=await create(9,'below-minimum-manual');
     const line=await one("select id,quantity from order_items where order_id=$1",[manual.order_id]);
+    assert.equal(line.quantity,9);
+    assert.deepEqual(
+      await one("select unit_price_snapshot,line_subtotal from order_items where id=$1",[line.id]),
+      {unit_price_snapshot:'5.00',line_subtotal:'45.00'},
+    );
+    assert.deepEqual(
+      await one("select subtotal_amount,total_amount from orders where id=$1",[manual.order_id]),
+      {subtotal_amount:'45.00',total_amount:'45.00'},
+    );
+    assert.equal(
+      (await one("select quantity_available from inventory_items where id=$1",[id(231)])).quantity_available,
+      inventoryBeforeManual.quantity_available - 9,
+    );
     const edit=(quantity)=>one("select * from seller_edit_order(p_order_id=>$1,p_items=>$2::jsonb,p_customer_id=>$3)",[manual.order_id,JSON.stringify([{...manualItems(quantity)[0],order_item_id:line.id,unit_price:5}]),manual.customer_id]);
-    await assert.rejects(edit(6),/Add 4/);
     await assert.rejects(one('select * from seller_edit_order(p_order_id=>$1,p_items=>$2::jsonb,p_customer_id=>$3)',
       [manual.order_id,JSON.stringify([{...conflicting[0],order_item_id:line.id,unit_price:5}]),manual.customer_id]),/Conflicting or ambiguous inventory identifiers/);
-    assert.equal((await one("select quantity from order_items where id=$1",[line.id])).quantity,10);
-    await edit(12);
-    assert.equal((await one("select quantity from order_items where id=$1",[line.id])).quantity,12);
+    assert.equal((await one("select quantity from order_items where id=$1",[line.id])).quantity,9);
+    await edit(6);
+    assert.equal((await one("select quantity from order_items where id=$1",[line.id])).quantity,6);
+    assert.deepEqual(
+      await one("select unit_price_snapshot,line_subtotal from order_items where id=$1",[line.id]),
+      {unit_price_snapshot:'5.00',line_subtotal:'30.00'},
+    );
+    assert.deepEqual(
+      await one("select subtotal_amount,total_amount from orders where id=$1",[manual.order_id]),
+      {subtotal_amount:'30.00',total_amount:'30.00'},
+    );
+    assert.equal(
+      (await one("select quantity_available from inventory_items where id=$1",[id(231)])).quantity_available,
+      inventoryBeforeManual.quantity_available - 6,
+    );
+    await assert.rejects(pickup([bird(31,9)],'below-minimum-customer'),/Add 1/);
   });
   await t.test("card reservations enforce minimums; policy changes preserve held and paid orders", async () => {
     await db.query("insert into store_stripe_connections(store_id,stripe_livemode,stripe_account_id) values($1,false,'acct_MinimumTest')",[store]);
