@@ -27,7 +27,7 @@ test("Store Information contains email, phone, and text contact controls", () =>
     storeAdmin.indexOf('title="Store information"'),
     storeAdmin.indexOf('id="business"'),
   );
-  assert.match(storeInformation, /label="Show email"/);
+  assert.match(storeInformation, /label="Show my account email publicly on my storefront\."/);
   assert.match(storeInformation, /label="Show phone"/);
   assert.match(
     storeInformation,
@@ -45,7 +45,8 @@ test("Store Information contains email, phone, and text contact controls", () =>
   assert.match(visibilitySection, /onUpdateField\("website_url", value\)/);
 });
 
-test("Store Admin blocks saving both public contact methods off", () => {
+test("Store Admin requires public contact methods while the store is published", () => {
+  assert.match(storeAdmin, /storeStatus === "live" && form\.storefront_enabled/);
   assert.match(
     storeAdmin,
     /!form\.show_public_email &&[\s\S]*!form\.buyer_contact_phone_enabled &&[\s\S]*!form\.buyer_contact_text_enabled/,

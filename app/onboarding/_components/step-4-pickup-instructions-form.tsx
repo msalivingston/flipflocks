@@ -45,7 +45,7 @@ const defaultPickupPolicy =
   "All pickups are by appointment and need at least 24 hours advance notice. At pickup, please come prepared with appropriate transport for your birds. Pet carriers sized appropriately work well. If you bring cardboard boxes, please cut air holes in advance. Please do not bring plastic tubs unless they have appropriate ventilation. Younger birds should have something so they are not standing on slick surfaces.";
 
 const contactOptions: Array<{ key: ContactPreference; label: string }> = [
-  { key: "email", label: "Email" },
+  { key: "email", label: "Show my account email publicly on my storefront." },
   { key: "text", label: "Text message" },
   { key: "phone", label: "Phone call" },
 ];
@@ -72,7 +72,7 @@ export function Step6PickupDetailsForm({
   const [contactPreferences, setContactPreferences] = useState<
     Record<ContactPreference, boolean>
   >({
-    email: initialValues?.buyerContactEmailEnabled ?? true,
+    email: initialValues?.buyerContactEmailEnabled ?? false,
     phone: Boolean(initialValues?.buyerContactPhoneEnabled),
     text: Boolean(initialValues?.buyerContactTextEnabled),
   });

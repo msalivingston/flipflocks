@@ -43,8 +43,8 @@ test("minimum quantities against the migrated PostgreSQL commerce paths", {
   const one = async (sql, args = []) => (await rows(sql, args))[0];
   await db.query(`select set_config('request.jwt.claim.sub',$1,false), set_config('request.jwt.claim.role','service_role',false)`, [owner]);
   await db.query(`insert into auth.users(id,email,raw_app_meta_data,raw_user_meta_data) values($1,'minimum-owner@example.test','{}','{}')`, [owner]);
-  await db.query(`insert into public.stores(id,owner_user_id,store_name,store_slug,store_status,storefront_mode,storefront_enabled)
-    values($1,$2,'Minimum Farm','minimum-farm','live','hosted',true)`, [store, owner]);
+  await db.query(`insert into public.stores(id,owner_user_id,store_name,store_slug,store_status,storefront_mode,storefront_enabled,show_public_email)
+    values($1,$2,'Minimum Farm','minimum-farm','live','hosted',true,true)`, [store, owner]);
   await db.query(`insert into public.seller_billing_status(store_id,requested_plan_key,requested_billing_cadence,plan_key,billing_plan,
     subscription_status,trial_started_at,trial_ends_at,current_period_start,current_period_end,storefront_access_until,billing_state_authority)
     values($1,'full_flock','monthly','full_flock','monthly','trialing',now(),now()+interval '7 days',now(),now()+interval '7 days',now()+interval '7 days','trial')`, [store]);

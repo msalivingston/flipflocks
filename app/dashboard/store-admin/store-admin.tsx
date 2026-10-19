@@ -1666,7 +1666,7 @@ export function StoreAdmin() {
   async function saveChanges() {
     if (!seller) return;
 
-    const validationMessage = validateForm(form, pickupOptions, activeTab);
+    const validationMessage = validateForm(form, pickupOptions, activeTab, seller.store_status);
     const nextDeliveryValidationMessage = validateDeliveryOptions(
       deliveryOptions,
     );
@@ -2875,7 +2875,7 @@ function StorefrontTab({
           <div className="flex flex-wrap items-center gap-3">
             <ToggleField
               checked={form.show_public_email}
-              label="Show email"
+              label="Show my account email publicly on my storefront."
               onChange={(value) => onUpdateField("show_public_email", value)}
             />
             <ToggleField
@@ -2900,7 +2900,8 @@ function StorefrontTab({
                 );
               }}
             />
-            {!form.show_public_email &&
+            {isStoreLive && form.storefront_enabled &&
+            !form.show_public_email &&
             !form.buyer_contact_phone_enabled &&
             !form.buyer_contact_text_enabled ? (
               <p className="text-sm font-semibold text-red-700" role="alert">
@@ -2916,7 +2917,8 @@ function StorefrontTab({
               Account page
             </Link>
             . Phone appears only when a phone number is saved and its visibility
-            option is enabled. Choose at least one contact method.
+            option is enabled. A published storefront needs at least one public
+            contact method. Unpublished stores may keep both private.
           </StorefrontNote>
         </fieldset>
 
@@ -5584,6 +5586,7 @@ function validateForm(
   form: StoreAdminForm,
   pickupOptions: PickupOptionDraft[],
   activeTab: StoreSetupTab,
+  storeStatus: string,
 ) {
   for (const value of [
     form.minimum_chick_order_quantity,
@@ -5604,6 +5607,7 @@ function validateForm(
   if (!form.public_city.trim()) return "City is required.";
   if (!form.public_state.trim()) return "State is required.";
   if (
+    storeStatus === "live" && form.storefront_enabled &&
     !form.show_public_email &&
     !form.buyer_contact_phone_enabled &&
     !form.buyer_contact_text_enabled

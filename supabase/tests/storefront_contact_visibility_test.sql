@@ -11,8 +11,8 @@ select hasnt_column(
 select has_column('public', 'stores', 'show_public_email', 'email visibility remains');
 select has_column('public', 'stores', 'show_public_phone', 'phone visibility remains');
 select col_default_is(
-  'public', 'stores', 'show_public_email', 'true',
-  'new stores start with a valid email contact method'
+  'public', 'stores', 'show_public_email', 'false',
+  'new stores start with account email private'
 );
 select has_check(
   'public', 'stores',
@@ -158,7 +158,7 @@ select throws_ok(
     '{"show_public_email":false,"show_public_phone":false}'::jsonb
   )$$,
   'P0001',
-  'Choose at least one contact method to display on your storefront.',
+  'Choose at least one contact method to display on your published storefront: account email or a saved phone number.',
   'seller settings cannot save both contact methods off'
 );
 reset role;
@@ -186,8 +186,8 @@ select throws_ok(
   $$update public.stores set show_public_email = false, show_public_phone = false
     where id = 'ad000000-0000-4000-8000-000000000010'$$,
   'P0001',
-  'Choose at least one contact method to display on your storefront.',
-  'direct database updates cannot create a both-off state'
+  'Choose at least one contact method to display on your published storefront: account email or a saved phone number.',
+  'direct database updates cannot hide both contacts while published'
 );
 
 insert into public.stores (
@@ -202,8 +202,8 @@ insert into public.stores (
 select is(
   (select show_public_email from public.stores
     where id = 'ad000000-0000-4000-8000-000000000020'),
-  true,
-  'database repairs a new both-off store to canonical email visibility'
+  false,
+  'database preserves privacy for a new unpublished store'
 );
 
 select is(
