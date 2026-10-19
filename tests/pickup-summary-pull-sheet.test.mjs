@@ -97,6 +97,29 @@ test("Pull Sheet loads breeder status from the immutable Live Bird order snapsho
   assert.match(source, /value === "breeder"\) return "Breeder"/);
 });
 
+test("Pull Sheet receives saved Barn Locations for legacy blank order snapshots", async () => {
+  const [ordersSource, migration] = await Promise.all([
+    readFile(new URL("app/dashboard/orders/orders-list.tsx", root), "utf8"),
+    readFile(
+      new URL(
+        "supabase/migrations/20261019180000_pull_sheet_barn_location_fallback.sql",
+        root,
+      ),
+      "utf8",
+    ),
+  ]);
+
+  const data = report([line({ barnLocation: "North Barn" })]);
+
+  assert.equal(data.pullSheetRows[0].barnLocation, "North Barn");
+  assert.match(ordersSource, /barnLocation: item\.barn_location\?\.trim\(\) \?\? ""/);
+  assert.match(
+    migration,
+    /when order_items\.barn_location is null[\s\S]*?orders\.order_status in \('pending', 'open'\)[\s\S]*?then inventory_items\.barn_location/,
+  );
+  assert.match(migration, /left join public\.inventory_items/);
+});
+
 test("seller-selected report date is used only for the generated document", async () => {
   const [ordersSource, downloadsSource] = await Promise.all([
     readFile(new URL("app/dashboard/orders/orders-list.tsx", root), "utf8"),
