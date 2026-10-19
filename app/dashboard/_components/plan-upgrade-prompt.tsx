@@ -25,7 +25,7 @@ export function PlanUpgradePrompt({
   const body =
     message ??
     (feature ? LOCKED_PLAN_MESSAGES[feature] : null) ??
-    "Market includes unlimited live bird quantities, flock/group listings, hatching eggs, equipment/supplies, processed poultry, and Age-Based Pricing.";
+    "Market includes unlimited live bird quantities, flock/group listings, hatching eggs, equipment/supplies, poultry products, and Age-Based Pricing.";
 
   return (
     <div

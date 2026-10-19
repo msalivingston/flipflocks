@@ -516,7 +516,7 @@ function getStorefrontFooterShopLinks(
     {
       enabled: categories.processedPoultry,
       href: `/store/${storeSlug}#processed-poultry-tab`,
-      label: "Processed Poultry",
+      label: "Poultry Products",
     },
   ].filter((link) => link.enabled);
 }

@@ -437,7 +437,7 @@ function getSelectedCategories(store: StoreReview | null) {
   if (store?.processed_poultry_enabled) {
     categories.push({
       glyph: "/glyphs/chicken-leg.png",
-      label: "Processed poultry",
+      label: "Poultry Products",
     });
   }
 

@@ -44,11 +44,11 @@ const categoryOptions: CategoryOption[] = [
     title: "Hatching eggs",
   },
   {
-    description: "Eating eggs, processed poultry, and other farm food products.",
+    description: "Eating eggs, poultry products, and other farm food products.",
     glyph: "/glyphs/chicken-leg.png",
     key: "poultryProducts",
     lockedFeature: "processed_poultry",
-    title: "Processed poultry",
+    title: "Poultry Products",
   },
   {
     description: "Coops, feeders, brooders, farm extras, and more.",

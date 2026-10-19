@@ -42,7 +42,7 @@ export function ProcessedPoultryPhotosSection({
   return (
     <ListingPhotosSection
       canManage={canManage}
-      description="Add up to 4 photos for this processed poultry item."
+      description="Add up to 4 photos for this poultry product item."
       emptyDescription="Add clear photos so buyers can recognize this item."
       entityId={processedPoultryItemId}
       entityType="processed_poultry_inventory_item"

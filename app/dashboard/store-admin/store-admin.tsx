@@ -1443,8 +1443,8 @@ export function StoreAdmin() {
         },
         processed_poultry_enabled: {
           message:
-            "Turning off Processed Poultry will hide processed poultry items from your public storefront. Your inventory will be saved, and you can turn this back on later.",
-          title: "Turn off Processed Poultry?",
+            "Turning off Poultry Products will hide poultry product items from your public storefront. Your inventory will be saved, and you can turn this back on later.",
+          title: "Turn off Poultry Products?",
         },
         equipment_supplies_enabled: {
           message:
@@ -2317,7 +2317,7 @@ export function StoreAdmin() {
                       ? "Not included in your current plan."
                       : undefined
                   }
-                  title="Processed Poultry"
+                  title="Poultry Products"
                 />
                 <ModuleOptionCard
                   action={

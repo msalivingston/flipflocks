@@ -205,7 +205,7 @@ export function ProcessedPoultryInventoryDetail({
       return;
     }
 
-    setSuccessMessage("Processed poultry inventory saved.");
+    setSuccessMessage("Poultry products inventory saved.");
     setIsSaving(false);
     setReloadKey((current) => current + 1);
   }
@@ -235,10 +235,10 @@ export function ProcessedPoultryInventoryDetail({
 
     setSuccessMessage(
       nextStatus === "active"
-        ? "Processed poultry inventory published."
+        ? "Poultry products inventory published."
         : nextStatus === "hidden"
-          ? "Processed poultry inventory hidden."
-          : "Processed poultry inventory archived.",
+          ? "Poultry products inventory hidden."
+          : "Poultry products inventory archived.",
     );
     setIsSaving(false);
     setReloadKey((current) => current + 1);
@@ -270,14 +270,14 @@ export function ProcessedPoultryInventoryDetail({
   }
 
   if (isLoading) {
-    return <LoadingState label="Loading processed poultry inventory" />;
+    return <LoadingState label="Loading poultry products inventory" />;
   }
 
   if (actionError && !row) {
     return (
       <div className="mx-auto w-full max-w-5xl px-5 py-5 sm:px-7">
         <ErrorState
-          title="Processed poultry inventory could not load"
+          title="Poultry products inventory could not load"
           message={actionError}
         />
       </div>
@@ -288,7 +288,7 @@ export function ProcessedPoultryInventoryDetail({
     return (
       <div className="mx-auto w-full max-w-5xl px-5 py-5 sm:px-7">
         <EmptyState
-          title="Processed poultry inventory not found"
+          title="Poultry products inventory not found"
           description="This item may have been archived, deleted, or may not belong to this seller account."
           action={
             <Link className="seller-secondary-button" href="/dashboard/inventory">
@@ -305,7 +305,7 @@ export function ProcessedPoultryInventoryDetail({
       <SellerPageHeader
         eyebrow={seller?.store_name}
         title={row.product_name}
-        description="Manage this Processed Poultry inventory record."
+        description="Manage this Poultry Products inventory record."
         action={
           <Link className="seller-secondary-button" href="/dashboard/inventory">
             Back to Inventory
@@ -481,7 +481,7 @@ export function ProcessedPoultryInventoryDetail({
 
             {saveError ? (
               <ErrorState
-                title="Processed poultry details were not saved"
+                title="Poultry products details were not saved"
                 message={saveError}
               />
             ) : null}
@@ -510,7 +510,7 @@ export function ProcessedPoultryInventoryDetail({
         <SellerCard className="p-5">
           <h2 className="text-lg font-semibold text-stone-950">Visibility</h2>
           <p className="mt-1 text-sm leading-6 text-stone-600">
-            Control whether this processed poultry item appears on your public
+            Control whether this poultry product item appears on your public
             storefront.
           </p>
 
@@ -521,7 +521,7 @@ export function ProcessedPoultryInventoryDetail({
                 <p className="mt-2 text-sm leading-6 text-stone-700">
                   {canDeleteDraft
                     ? "This draft has not been published, so it can be deleted."
-                    : "Archiving preserves this processed poultry record for history."}
+                    : "Archiving preserves this poultry product record for history."}
                 </p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">

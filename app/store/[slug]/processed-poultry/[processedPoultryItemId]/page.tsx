@@ -235,7 +235,7 @@ export default async function StorefrontProcessedPoultryPage({
         <StorefrontPage size="narrow" className="py-12">
           <EmptyStorefront
             title="Item not found"
-            description="This processed poultry item may no longer be visible."
+            description="This poultry product item may no longer be visible."
           />
         </StorefrontPage>
       </StorefrontChrome>

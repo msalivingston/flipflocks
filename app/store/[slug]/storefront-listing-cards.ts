@@ -80,10 +80,10 @@ export function buildStorefrontListingSections({
       cards: sortListingCardsByTitle(
         processedPoultry.map(toProcessedPoultryCard),
       ),
-      description: "Processed poultry items available for local pickup.",
+      description: "Poultry products available for local pickup.",
       emptyDescription:
-        "This seller does not have visible processed poultry right now.",
-      emptyTitle: "No processed poultry available",
+        "This seller does not have visible poultry products right now.",
+      emptyTitle: "No poultry products available",
       id: "processed-poultry",
       label: "Poultry Products",
     });

@@ -391,7 +391,7 @@ function StoreDataCard({ store }: { store: AdminStoreDetailRow }) {
             value={store.equipment_supplies_enabled ? "Enabled" : "Disabled"}
           />
           <StatusField
-            label="Processed Poultry"
+            label="Poultry Products"
             value={store.processed_poultry_enabled ? "Enabled" : "Disabled"}
           />
         </div>
