@@ -164,11 +164,6 @@ type SellerMediaRow = {
   visibility_status: string;
 };
 
-type SellerInventoryLocationRow = {
-  barn_location: string | null;
-  inventory_item_id: string;
-};
-
 type OrderDetailState = {
   items: SellerOrderItemRow[];
   mediaByItemId: Record<string, SellerMediaRow | null>;
@@ -269,7 +264,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         supabase
           .from("seller_order_item_detail")
           .select(
-            "order_item_id, inventory_item_id, listing_batch_id, listing_batch_breed_id, seller_breed_profile_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, batch_type_snapshot, custom_inventory_label_snapshot, breeding_history_snapshot, feather_condition_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, canceled_quantity, remaining_unfulfilled_quantity, line_subtotal",
+            "order_item_id, inventory_item_id, listing_batch_id, listing_batch_breed_id, seller_breed_profile_id, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, batch_type_snapshot, custom_inventory_label_snapshot, barn_location, breeding_history_snapshot, feather_condition_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, order_item_source, custom_item_name_snapshot, equipment_inventory_item_id, processed_poultry_inventory_item_id, hatching_egg_inventory_item_id, product_type_snapshot, item_name_snapshot, item_category_snapshot, unit_price_snapshot, quantity, fulfilled_quantity, canceled_quantity, remaining_unfulfilled_quantity, line_subtotal",
           )
           .eq("store_id", seller.store_id)
           .eq("order_id", orderId)
@@ -297,44 +292,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         return;
       }
 
-      const sourceItems = itemResult.data ?? [];
-      const inventoryItemIds = sourceItems
-        .map((item) => item.inventory_item_id)
-        .filter((id): id is string => Boolean(id));
-      let items: SellerOrderItemRow[] = sourceItems.map((item) => ({
-        ...item,
-        barn_location: null,
-      }));
-
-      if (inventoryItemIds.length > 0) {
-        const locationResult = await supabase
-          .from("seller_inventory_management")
-          .select("inventory_item_id, barn_location")
-          .eq("store_id", seller.store_id)
-          .in("inventory_item_id", inventoryItemIds)
-          .returns<SellerInventoryLocationRow[]>();
-
-        if (!isMounted) return;
-
-        if (locationResult.error) {
-          setError(locationResult.error.message);
-          setIsLoading(false);
-          return;
-        }
-
-        const barnLocationByInventoryId = new Map(
-          (locationResult.data ?? []).map((item) => [
-            item.inventory_item_id,
-            item.barn_location,
-          ]),
-        );
-        items = items.map((item) => ({
-          ...item,
-          barn_location: item.inventory_item_id
-            ? barnLocationByInventoryId.get(item.inventory_item_id) ?? null
-            : null,
-        }));
-      }
+      const items = itemResult.data ?? [];
 
       const mediaByItemId = await loadOrderItemMedia(items, seller.store_id);
 

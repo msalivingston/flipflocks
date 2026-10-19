@@ -4992,6 +4992,12 @@ function getEditChangeSummaries({
     if (saved.soldAs !== offering.soldAs) {
       changes.push(`${offering.breed} sale type changed from ${saved.soldAs} to ${offering.soldAs}.`);
     }
+    if (saved.barnLocation.trim() !== offering.barnLocation.trim()) {
+      changes.push(`${label} barn location changed.`);
+    }
+    if (saved.featherCondition !== offering.featherCondition) {
+      changes.push(`${label} feather condition changed.`);
+    }
   });
 
   pendingRemovedOfferings.forEach(({ offering }) => {
