@@ -1487,11 +1487,28 @@ export function CheckoutPage({
                   </div>
                 ))}
               </div>
+              <div className="mt-4">
+                <CouponEntry
+                  code={couponCode}
+                  email={form.buyerEmail}
+                  items={checkoutItems}
+                  storeSlug={store.store_slug}
+                  onCodeChange={setCouponCode}
+                  onPreview={setCouponPreview}
+                />
+              </div>
               <dl className="mt-3 grid gap-1.5 text-sm">
                 <SummaryRow
                   label="Items"
                   value={String(summary?.total_quantity ?? cartSummary.totalQuantity)}
                 />
+                <SummaryRow label="Subtotal" value={formatCurrency(itemSubtotal)} />
+                {couponAmount > 0 ? (
+                  <SummaryRow
+                    label={`Coupon (${couponPreview?.code})`}
+                    value={`−${formatCurrency(couponAmount)}`}
+                  />
+                ) : null}
                 {selectedDeliveryOption ? (
                   <SummaryRow
                     label={`Delivery — ${selectedDeliveryOption.name}`}

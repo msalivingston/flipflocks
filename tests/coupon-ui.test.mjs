@@ -27,3 +27,26 @@ test("coupon editor exposes only the agreed simple controls",()=>{
   for(const text of ["Coupon code","Fixed amount ($)","Percentage (%)","Selected products","Selected breeds","Selected categories","Minimum purchase","Expiration date","One use per customer email","Save Coupon"])assert.ok(html.includes(text),text);
   assert.ok(!/Batch generation|Redemption limit|Recipient email|Survey integration/.test(html));
 });
+
+test("mobile and desktop checkout both expose coupon entry and its discount breakdown", () => {
+  const source = ts.createSourceFile("checkout-page.tsx", readFileSync(new URL("../app/store/[slug]/checkout/checkout-page.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const descendants = (node, predicate) => {
+    const matches = [];
+    const visit = child => { if (predicate(child)) matches.push(child); ts.forEachChild(child, visit); };
+    visit(node);
+    return matches;
+  };
+  const attribute = (opening, name) => opening.attributes.properties.find(prop => ts.isJsxAttribute(prop) && prop.name.text === name)?.initializer;
+  for (const breakpoint of ["lg:hidden", "lg:grid"]) {
+    const layout = descendants(source, node => ts.isJsxElement(node) && attribute(node.openingElement, "className")?.text?.split(" ").includes(breakpoint))[0];
+    assert.ok(layout, `${breakpoint} checkout layout exists`);
+    const entries = descendants(layout, node => ts.isJsxSelfClosingElement(node) && node.tagName.getText(source) === "CouponEntry");
+    assert.equal(entries.length, 1, `${breakpoint} has a coupon input independent of embed mode`);
+    for (const [name, value] of Object.entries({code:"couponCode", email:"form.buyerEmail", items:"checkoutItems", storeSlug:"store.store_slug", onCodeChange:"setCouponCode", onPreview:"setCouponPreview"})) {
+      assert.equal(attribute(entries[0], name)?.expression?.getText(source), value, `${breakpoint} shares ${name}`);
+    }
+    const discounts = descendants(layout, node => ts.isJsxSelfClosingElement(node) && node.tagName.getText(source) === "SummaryRow" && attribute(node, "label")?.getText(source).includes("Coupon ("));
+    assert.equal(discounts.length, 1, `${breakpoint} displays the applied coupon discount`);
+    assert.match(attribute(discounts[0], "value").getText(source), /formatCurrency\(couponAmount\)/);
+  }
+});
