@@ -23,12 +23,12 @@ values (
 
 insert into public.stores (
   id, owner_user_id, store_name, store_slug, store_status, storefront_mode,
-  storefront_enabled
+  storefront_enabled, show_public_email
 )
 values (
   'd1000000-0000-4000-8000-000000000010',
   'd1000000-0000-4000-8000-000000000001',
-  'Duplicate Lots Farm', 'duplicate-lots-farm', 'live', 'hosted', true
+  'Duplicate Lots Farm', 'duplicate-lots-farm', 'live', 'hosted', true, true
 );
 
 insert into public.seller_billing_status (
