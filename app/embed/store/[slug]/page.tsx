@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { NOINDEX_ROBOTS } from "@/lib/seo-config";
 import {
   loadPublicStorefrontListingData,
-  loadStorefrontHome,
+  loadStorefrontAccess,
 } from "@/app/store/[slug]/storefront-data";
 import {
   buildStorefrontListingSectionsFromPublicData,
@@ -29,7 +29,7 @@ export default async function EmbeddedStoreInventoryPage({
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
   const [storeResult, listingResult] = await Promise.all([
-    loadStorefrontHome(slug),
+    loadStorefrontAccess(slug),
     loadPublicStorefrontListingData(slug),
   ]);
 
@@ -45,7 +45,7 @@ export default async function EmbeddedStoreInventoryPage({
     );
   }
 
-  if (!storeResult.data) notFound();
+  if (!storeResult.data?.is_publicly_available) notFound();
 
   const sections = buildStorefrontListingSectionsFromPublicData(
     listingResult.data,

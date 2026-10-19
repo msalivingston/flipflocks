@@ -504,7 +504,7 @@ export async function loadStorefrontProfileImages(
 
   const { data, error } = await publicSupabase
     .from("public_storefront_media_gallery")
-    .select("*")
+    .select("entity_id, public_url, alt_text")
     .eq("store_slug", slug)
     .eq("entity_type", "seller_breed_profile")
     .in("entity_id", uniqueProfileIds)
@@ -513,7 +513,10 @@ export async function loadStorefrontProfileImages(
 
   const images: StorefrontProfileImageMap = {};
 
-  for (const image of (data ?? []) as StorefrontMedia[]) {
+  for (const image of (data ?? []) as Pick<
+    StorefrontMedia,
+    "entity_id" | "public_url" | "alt_text"
+  >[]) {
     if (images[image.entity_id]) continue;
 
     images[image.entity_id] = {
@@ -529,13 +532,34 @@ export async function loadStorefrontProfileImages(
 }
 
 export async function loadPublicStorefrontListingData(slug: string) {
-  const [inventoryResult, equipmentResult, hatchingEggResult, processedResult] =
-    await Promise.all([
-      loadStorefrontInventory(slug),
-      loadStorefrontEquipment(slug),
-      loadStorefrontHatchingEggInventory(slug),
-      loadStorefrontProcessedPoultry(slug),
-    ]);
+  // Media depends only on eligible bird inventory, not on other product types.
+  const inventoryWithImages = loadStorefrontInventory(slug).then(
+    async (inventoryResult) => {
+      const profileImagesResult = inventoryResult.error
+        ? { data: {} as StorefrontProfileImageMap, error: null }
+        : await loadStorefrontProfileImages(
+            slug,
+            inventoryResult.data
+              .filter((item) =>
+                isLivePoultryStorefrontItem(item) &&
+                isStorefrontCardEligibleInventoryItem(item),
+              )
+              .map((item) => item.seller_breed_profile_id),
+          );
+      return { inventoryResult, profileImagesResult };
+    },
+  );
+  const [
+    { inventoryResult, profileImagesResult },
+    equipmentResult,
+    hatchingEggResult,
+    processedResult,
+  ] = await Promise.all([
+    inventoryWithImages,
+    loadStorefrontEquipment(slug),
+    loadStorefrontHatchingEggInventory(slug),
+    loadStorefrontProcessedPoultry(slug),
+  ]);
   const error =
     inventoryResult.error ??
     equipmentResult.error ??
@@ -554,13 +578,6 @@ export async function loadPublicStorefrontListingData(slug: string) {
       error,
     };
   }
-
-  const profileImagesResult = await loadStorefrontProfileImages(
-    slug,
-    inventoryResult.data
-      .filter(isLivePoultryStorefrontItem)
-      .map((item) => item.seller_breed_profile_id),
-  );
 
   return {
     data: {

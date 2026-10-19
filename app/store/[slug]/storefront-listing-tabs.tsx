@@ -727,11 +727,12 @@ export function StorefrontListingTabs({
                     isEmbed ? "min-[820px]:grid-cols-3 lg:gap-4" : "lg:gap-5",
                   )}
                 >
-                  {(isEmbed ? pagination.cards : filteredCards).map((card) => (
+                  {(isEmbed ? pagination.cards : filteredCards).map((card, index) => (
                     <ListingCard
                       card={card}
                       key={card.href}
                       orderMode={orderMode}
+                      initiallyVisible={index < 3}
                       variant={variant}
                     />
                   ))}
@@ -1280,10 +1281,12 @@ function FilterSelect({
 
 function ListingCard({
   card,
+  initiallyVisible,
   orderMode,
   variant,
 }: {
   card: StorefrontListingCard;
+  initiallyVisible: boolean;
   orderMode: EmbeddedOrderModeContext | null;
   variant: "embed" | "storefront";
 }) {
@@ -1302,7 +1305,16 @@ function ListingCard({
         target={isEmbed ? "_top" : undefined}
       >
         <div className="relative overflow-hidden rounded-md">
-          <ListingPhoto alt={card.imageAlt} aspect="square" src={card.imageUrl} />
+          <ListingPhoto
+            alt={card.imageAlt}
+            aspect="square"
+            src={card.imageUrl}
+            optimize
+            sizes={isEmbed
+              ? "(min-width: 1024px) 1px, (min-width: 820px) 14vw, (min-width: 640px) 21vw, 42vw"
+              : "(min-width: 1024px) 1px, (min-width: 640px) 21vw, 42vw"}
+            fetchPriority={initiallyVisible ? "high" : undefined}
+          />
         </div>
         <div className="flex min-w-0 flex-col pr-0.5">
           <p className="storefront-primary-color truncate text-[0.76rem] font-bold leading-tight text-emerald-700">
@@ -1359,7 +1371,16 @@ function ListingCard({
           ) : null}
         </div>
         <div className="relative">
-          <ListingPhoto alt={card.imageAlt} aspect="square" src={card.imageUrl} />
+          <ListingPhoto
+            alt={card.imageAlt}
+            aspect="square"
+            src={card.imageUrl}
+            optimize
+            sizes={isEmbed
+              ? "(max-width: 1023px) 1px, calc((100vw - 310px) / 3)"
+              : "(max-width: 1023px) 1px, (max-width: 1120px) calc((100vw - 360px) / 3), 254px"}
+            fetchPriority={initiallyVisible ? "high" : undefined}
+          />
           <div className="absolute left-3 top-3">
             <AvailabilityBadge
               code={card.availabilityCode}

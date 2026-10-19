@@ -1,7 +1,15 @@
 import type { NextConfig } from "next";
 import { INDEXING_ENABLED } from "./lib/seo-config";
+import { getListingImageRemotePattern } from "./lib/storefront-images";
+
+const listingImagePattern = getListingImageRemotePattern(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+);
 
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: listingImagePattern ? [listingImagePattern] : [],
+  },
   async headers() {
     const routeHeaders = [
       {

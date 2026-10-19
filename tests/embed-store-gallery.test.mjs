@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ts from "typescript";
 import { buildPublicListingPath } from "../lib/public-listing-url.ts";
+import { getListingImageRemotePattern } from "../lib/storefront-images.ts";
 
 const repositoryRoot = new URL("../", import.meta.url);
 
@@ -22,10 +23,10 @@ test("the embed route loads a valid public store through the shared public data 
         calls.push(["listings", slug]);
         return { data: emptyListingData(), error: null };
       },
-      async loadStorefrontHome(slug) {
+      async loadStorefrontAccess(slug) {
         calls.push(["store", slug]);
         return {
-          data: { store_slug: slug, store_name: "Public Farm" },
+          data: { store_slug: slug, is_publicly_available: true },
           error: null,
         };
       },
@@ -59,13 +60,14 @@ test("the embed route loads a valid public store through the shared public data 
 
 test("an invalid or unavailable public store slug terminates with a safe 404", async () => {
   const notFoundError = new Error("NOT_FOUND");
+  let accessData = null;
   const page = await loadTypeScriptModule(routePath, {
     "@/app/store/[slug]/storefront-data": {
       async loadPublicStorefrontListingData() {
         return { data: emptyListingData(), error: null };
       },
-      async loadStorefrontHome() {
-        return { data: null, error: null };
+      async loadStorefrontAccess() {
+        return { data: accessData, error: null };
       },
     },
     "@/app/store/[slug]/storefront-listing-cards": {
@@ -90,6 +92,14 @@ test("an invalid or unavailable public store slug terminates with a safe 404", a
   await assert.rejects(
     page.default({
       params: Promise.resolve({ slug: "not-a-public-store" }),
+      searchParams: Promise.resolve({}),
+    }),
+    (error) => error === notFoundError,
+  );
+  accessData = { store_slug: "hidden-store", is_publicly_available: false };
+  await assert.rejects(
+    page.default({
+      params: Promise.resolve({ slug: "hidden-store" }),
       searchParams: Promise.resolve({}),
     }),
     (error) => error === notFoundError,
@@ -601,6 +611,7 @@ test("mobile panels close accessibly and restore focus to their triggers", async
 test("framing is same-origin by default and HTTPS-only for the embed route", async () => {
   const launched = await loadTypeScriptModule("next.config.ts", {
     "./lib/seo-config": { INDEXING_ENABLED: true },
+    "./lib/storefront-images": { getListingImageRemotePattern },
   });
   const headers = await launched.default.headers();
 

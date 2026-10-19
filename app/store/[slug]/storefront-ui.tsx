@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { isOptimizableListingImage } from "@/lib/storefront-images";
 import {
   defaultStorefrontTheme,
   getStorefrontFontPair,
@@ -580,10 +581,16 @@ export function StoreLogo({
 export function ListingPhoto({
   alt,
   aspect = "default",
+  optimize = false,
+  sizes,
+  fetchPriority,
   src,
 }: {
   alt: string;
   aspect?: "default" | "square";
+  optimize?: boolean;
+  sizes?: string;
+  fetchPriority?: "high";
   src: string | null;
 }) {
   if (!src) {
@@ -598,7 +605,13 @@ export function ListingPhoto({
       className={`${aspect === "square" ? "aspect-square" : "aspect-[4/3]"} w-full object-cover`}
       height={600}
       src={toPublicImageUrl(src)}
-      unoptimized
+      sizes={sizes}
+      fetchPriority={fetchPriority}
+      unoptimized={
+        !optimize || !isOptimizableListingImage(
+          toPublicImageUrl(src), process.env.NEXT_PUBLIC_SUPABASE_URL,
+        )
+      }
       width={800}
     />
   );
