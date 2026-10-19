@@ -25,6 +25,7 @@ type HandlerDependencies = {
 };
 
 type OrderRequest = {
+  coupon_code?: string | null;
   store_slug: string;
   idempotency_key: string;
   buyer_email: string;
@@ -382,6 +383,7 @@ function parseOrderRequest(body: unknown): OrderRequest {
 
   const record = body as Record<string, unknown>;
   const allowedKeys = new Set([
+    "coupon_code",
     "store_slug",
     "idempotency_key",
     "buyer_email",
@@ -428,6 +430,7 @@ function parseOrderRequest(body: unknown): OrderRequest {
   const fulfillmentMethod = optionalFulfillmentMethod(record);
 
   return {
+    coupon_code: optionalText(record, "coupon_code", 40)?.toUpperCase() ?? null,
     store_slug: storeSlug,
     idempotency_key: idempotencyKey,
     buyer_email: buyerEmail,
@@ -710,6 +713,7 @@ export function createPayAtPickupHandler(
 
   const orderRpcName = "create_pay_at_pickup_order_v2";
   const orderRpcArgs: Record<string, unknown> = {
+    ...(orderRequest.coupon_code ? { p_coupon_code: orderRequest.coupon_code } : {}),
     p_store_id: storeId,
     p_idempotency_key: orderRequest.idempotency_key,
     p_buyer_email: orderRequest.buyer_email,
@@ -752,6 +756,10 @@ export function createPayAtPickupHandler(
       }),
     );
     const conflictMessages = [
+      "Coupon is invalid, inactive, or expired.",
+      "This coupon has already been used or is reserved in another checkout for this email.",
+      "This coupon does not apply to the selected items.",
+      "The eligible merchandise subtotal does not meet this coupon’s minimum purchase.",
       "Idempotency key was already used with a different request.",
       "Store is not available for checkout.",
       "One or more inventory items were not found.",

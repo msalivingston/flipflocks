@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { CouponEntry, couponPreviewKey, type CouponPreview } from "@/app/_components/coupon-entry";
+import { couponOrderItems } from "../_lib/order-coupons";
+import { couponThenManualDiscount } from "@/lib/coupons";
 import { useSellerContext } from "../../_components/seller-context";
 import {
   AddCustomerButton,
@@ -106,6 +109,7 @@ type RestoreDraftItem = {
 };
 
 type RestoreDraft = {
+  discount_snapshot?: { coupon: { code: string } | null; manual_type: DiscountType; manual_value: number } | null;
   can_restore: boolean;
   reasons: RestoreDraftReason[];
   source_order_id: string;
@@ -170,6 +174,8 @@ export function NewManualOrder({
   });
   const [lines, setLines] = useState<OrderLine[]>([]);
   const [discountType, setDiscountType] = useState<DiscountType>("fixed");
+  const [couponCode, setCouponCode] = useState("");
+  const [couponPreview, setCouponPreview] = useState<CouponPreview | null>(null);
   const [discountValue, setDiscountValue] = useState("");
   const [fulfillmentMethod, setFulfillmentMethod] =
     useState<FulfillmentMethod>("pickup");
@@ -355,6 +361,9 @@ export function NewManualOrder({
         });
 
         setLines(restoredLines);
+        setCouponCode(draft.discount_snapshot?.coupon?.code ?? "");
+        setDiscountType(draft.discount_snapshot?.manual_type ?? "fixed");
+        setDiscountValue(draft.discount_snapshot ? String(draft.discount_snapshot.manual_value) : "");
         setSelectedCustomer(draft.customer ?? undefined);
         setCustomerMode("existing");
         setBuyerNotes(draft.buyer_notes ?? "");
@@ -526,8 +535,12 @@ export function NewManualOrder({
   );
   const canEmailBuyerConfirmation = isEmail(buyerConfirmationEmail);
   const subtotal = calculateOrderSubtotal(lines);
-  const discountAmount = calculateDiscountAmount(
-    subtotal,
+  const couponItems = couponOrderItems(lines);
+  const couponIsCurrent = couponPreview?.requestKey === couponPreviewKey(couponCode, buyerConfirmationEmail, couponItems);
+  const couponAmount = couponIsCurrent && couponPreview?.valid ? couponPreview.amount : 0;
+  const couponUnavailable = Boolean(couponCode.trim() && (!couponIsCurrent || !couponPreview?.valid || couponPreview.checking));
+  const discountAmount = couponAmount > 0 ? couponThenManualDiscount(subtotal, subtotal, "fixed", couponAmount, discountType, Number(discountValue || 0)).manual : calculateDiscountAmount(
+    Math.max(subtotal - couponAmount, 0),
     discountType,
     discountValue,
   );
@@ -543,7 +556,7 @@ export function NewManualOrder({
   const total = calculateFinalTotal({
     deliveryFee,
     discountAmount,
-    subtotal,
+    subtotal: Math.max(subtotal - couponAmount, 0),
     taxAmount,
   });
 
@@ -651,6 +664,7 @@ export function NewManualOrder({
   }
 
   async function createOrder() {
+    if (couponUnavailable) { setSaveError("Please check or remove the coupon before creating this order."); return; }
     if (!seller || isSaving) return;
 
     const errors = validateOrderForCreate({
@@ -680,6 +694,7 @@ export function NewManualOrder({
     const shouldSendBuyerConfirmation =
       sendBuyerConfirmation && canEmailBuyerConfirmation;
     const result = await supabase.rpc("seller_create_manual_order", {
+      ...(couponCode.trim() ? { p_coupon_code: couponCode.trim(), p_manual_discount_type: discountType, p_manual_discount_value: Number(discountValue || 0) } : {}),
       p_store_id: seller.store_id,
       p_idempotency_key: crypto.randomUUID(),
       p_items: discountedLines.map((line) => ({
@@ -698,7 +713,7 @@ export function NewManualOrder({
         custom_item_name:
           line.type === "custom" ? formatCustomItemPayloadName(line) : undefined,
         quantity: Number(line.quantity),
-        unit_price: line.discountedUnitPrice,
+        unit_price: couponCode.trim() ? Number(line.unitPrice) : line.discountedUnitPrice,
       })),
       p_customer_id:
         customerMode === "existing" ? selectedCustomer?.customer_id ?? null : null,
@@ -897,6 +912,7 @@ export function NewManualOrder({
           Order Summary
         </h2>
         <div className="mt-3 grid gap-3">
+          {seller ? <CouponEntry code={couponCode} email={buyerConfirmationEmail} items={couponItems} storeId={seller.store_id} onCodeChange={setCouponCode} onPreview={setCouponPreview}/> : null}
           <label className="grid gap-1 text-sm font-semibold text-stone-700">
             Discount
             <div className="grid grid-cols-[1fr_7rem] gap-2">
@@ -927,6 +943,7 @@ export function NewManualOrder({
 
           <dl className="grid gap-2 border-t border-stone-200 pt-3 text-sm">
             <SummaryRow label="Subtotal" value={formatCurrency(subtotal)} />
+            {couponAmount > 0 ? <SummaryRow label="Coupon" value={`-${formatCurrency(couponAmount)}`}/> : null}
             <SummaryRow
               label="Discount"
               value={`-${formatCurrency(discountAmount)}`}

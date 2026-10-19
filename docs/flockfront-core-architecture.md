@@ -1,5 +1,9 @@
 # FlockFront V1 Core Architecture
 
+## Current checkout architecture (October 19, 2026)
+
+The implemented Stripe Connect direct-charge checkout and its transactional inventory reservations supersede the older payment and inventory descriptions below. An incomplete card checkout reserves inventory; successful verified settlement creates the official order, while expiration restores inventory. Coupon support extends this existing reservation lifecycle, not a separate reservation or payment system. Historical V1 exclusions below are not instructions to remove this implemented behavior.
+
 ## Backend Architecture Status
 
 Core backend architecture is complete through Group 28 and is frozen for V1 implementation. Groups 1-28 have been reviewed, applied to the remote Supabase project, committed, and pushed.

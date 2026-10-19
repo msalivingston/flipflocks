@@ -79,17 +79,17 @@ select ok(
 select ok(
   has_function_privilege(
     'service_role',
-    'public.create_pay_at_pickup_order_v2(uuid,text,text,text,text,jsonb,text,text,text,text,text,text,text,text,text,text,text,text,text,inet,text,uuid,text,uuid)',
+    'public.create_pay_at_pickup_order_v2(uuid,text,text,text,text,jsonb,text,text,text,text,text,text,text,text,text,text,text,text,text,inet,text,uuid,text,uuid,text,text,numeric)',
     'execute'
   )
   and not has_function_privilege(
     'anon',
-    'public.create_pay_at_pickup_order_v2(uuid,text,text,text,text,jsonb,text,text,text,text,text,text,text,text,text,text,text,text,text,inet,text,uuid,text,uuid)',
+    'public.create_pay_at_pickup_order_v2(uuid,text,text,text,text,jsonb,text,text,text,text,text,text,text,text,text,text,text,text,text,inet,text,uuid,text,uuid,text,text,numeric)',
     'execute'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.create_pay_at_pickup_order_v2(uuid,text,text,text,text,jsonb,text,text,text,text,text,text,text,text,text,text,text,text,text,inet,text,uuid,text,uuid)',
+    'public.create_pay_at_pickup_order_v2(uuid,text,text,text,text,jsonb,text,text,text,text,text,text,text,text,text,text,text,text,text,inet,text,uuid,text,uuid,text,text,numeric)',
     'execute'
   ),
   'canonical public checkout creation remains service-role-only'
@@ -98,12 +98,12 @@ select ok(
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.seller_create_manual_order(uuid,text,jsonb,uuid,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,numeric,numeric,boolean,boolean,uuid,text,uuid)',
+    'public.seller_create_manual_order(uuid,text,jsonb,uuid,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,numeric,numeric,boolean,boolean,uuid,text,uuid,text,text,numeric)',
     'execute'
   )
   and not has_function_privilege(
     'anon',
-    'public.seller_create_manual_order(uuid,text,jsonb,uuid,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,numeric,numeric,boolean,boolean,uuid,text,uuid)',
+    'public.seller_create_manual_order(uuid,text,jsonb,uuid,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,numeric,numeric,boolean,boolean,uuid,text,uuid,text,text,numeric)',
     'execute'
   ),
   'manual order creation remains an authenticated seller action'
@@ -112,12 +112,12 @@ select ok(
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.seller_edit_order(uuid,jsonb,jsonb,uuid,text,text,text,text,text,text,text,uuid,text,uuid,text,numeric,text,text,text,text,text,text,numeric)',
+    'public.seller_edit_order(uuid,jsonb,jsonb,uuid,text,text,text,text,text,text,text,uuid,text,uuid,text,numeric,text,text,text,text,text,text,numeric,text,text,numeric)',
     'execute'
   )
   and not has_function_privilege(
     'anon',
-    'public.seller_edit_order(uuid,jsonb,jsonb,uuid,text,text,text,text,text,text,text,uuid,text,uuid,text,numeric,text,text,text,text,text,text,numeric)',
+    'public.seller_edit_order(uuid,jsonb,jsonb,uuid,text,text,text,text,text,text,text,uuid,text,uuid,text,numeric,text,text,text,text,text,text,numeric,text,text,numeric)',
     'execute'
   ),
   'order editing remains authenticated and is not anonymous'
@@ -171,7 +171,7 @@ select ok(
           p.proname = 'create_pay_at_pickup_order'
           or (
             p.proname = 'create_pay_at_pickup_order_v2'
-            and p.oid <> 'public.create_pay_at_pickup_order_v2(uuid,text,text,text,text,jsonb,text,text,text,text,text,text,text,text,text,text,text,text,text,inet,text,uuid,text,uuid)'::regprocedure
+            and p.oid <> 'public.create_pay_at_pickup_order_v2(uuid,text,text,text,text,jsonb,text,text,text,text,text,text,text,text,text,text,text,text,text,inet,text,uuid,text,uuid,text,text,numeric)'::regprocedure
           )
         )
     ),

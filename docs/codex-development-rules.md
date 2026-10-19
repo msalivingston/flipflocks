@@ -1,5 +1,7 @@
 # Codex Development Rules for FlockFront
 
+Current checkout clarification (October 19, 2026): preserve the implemented Stripe Connect checkout and its inventory reservations. These supersede the historical inventory rule below. Coupon validation and per-customer redemption may extend that existing lifecycle; do not introduce a separate reservation system or redesign payments. The owner has approved the coupon schema additions described in the October 19 gap review.
+
 These rules are for AI-assisted development. They are intended to prevent architectural drift.
 
 ## Read Docs First

@@ -1,5 +1,7 @@
 # FlockFront V1 Scope
 
+Current implementation clarification (October 19, 2026): Stripe Connect direct-charge checkout and inventory reservations are implemented and approved. Their historical exclusions below are superseded. Standard seller coupons are approved for every subscription level; they reuse the existing order and reservation lifecycle without redesigning payments.
+
 ## Current Implementation Status
 
 Core backend architecture is complete through Group 28 and is frozen for V1 implementation. Future migrations should be limited to reference seed data, verified implementation/testing defects, security hardening, performance indexes, or proven missing V1 requirements.

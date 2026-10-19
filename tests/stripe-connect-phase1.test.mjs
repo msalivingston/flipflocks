@@ -86,7 +86,7 @@ test("buyer cancellation expires only an open Session and reuses idempotent sett
   assert.match(cancel, /\.eq\("id", reservationId\)\.eq\("store_id", storeId\)/);
   assert.match(cancel, /if \(session\.status === "open"\)[\s\S]*checkout\.sessions\.expire/);
   assert.match(cancel, /if \(session\.status === "expired"\)[\s\S]*settle\(session, reservation\.stripe_account_id, "expired"\)/);
-  assert.match(cancel, /session\.status === "complete" && session\.payment_status === "paid"[\s\S]*settle\(session, reservation\.stripe_account_id, "paid"\)/);
+  assert.match(cancel, /isCompletedCouponCheckout\(session\)[\s\S]*settle\(session, reservation\.stripe_account_id, "paid"\)/);
   assert.match(cancel, /if \(session\.status === "complete"\) \{[\s\S]*return json\(200, \{ status: "pending" \}/);
   assert.match(cancel, /return json\(503, \{ error: "checkout_cancellation_unavailable" \}/);
   assert.match(checkoutRoute, /cardCheckoutCancellationId=[\s\S]*card_checkout === "canceled"[\s\S]*query\.reservation_id/);

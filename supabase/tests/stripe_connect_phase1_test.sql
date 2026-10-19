@@ -28,17 +28,17 @@ select is(
 );
 
 select is(
-  has_function_privilege('anon', 'public.reserve_storefront_card_checkout(uuid,uuid,boolean,text,text,timestamptz,bigint,text,text,text,text,text,jsonb,text,text,text,text,text,text,text,text,inet,text,uuid,text,uuid)', 'EXECUTE'),
+  has_function_privilege('anon', 'public.reserve_storefront_card_checkout(uuid,uuid,boolean,text,text,timestamptz,bigint,text,text,text,text,text,jsonb,text,text,text,text,text,text,text,text,inet,text,uuid,text,uuid,text,text,numeric)', 'EXECUTE'),
   false,
   'anon cannot reserve inventory'
 );
 select is(
-  has_function_privilege('authenticated', 'public.reserve_storefront_card_checkout(uuid,uuid,boolean,text,text,timestamptz,bigint,text,text,text,text,text,jsonb,text,text,text,text,text,text,text,text,inet,text,uuid,text,uuid)', 'EXECUTE'),
+  has_function_privilege('authenticated', 'public.reserve_storefront_card_checkout(uuid,uuid,boolean,text,text,timestamptz,bigint,text,text,text,text,text,jsonb,text,text,text,text,text,text,text,text,inet,text,uuid,text,uuid,text,text,numeric)', 'EXECUTE'),
   false,
   'authenticated users cannot reserve inventory directly'
 );
 select is(
-  has_function_privilege('service_role', 'public.reserve_storefront_card_checkout(uuid,uuid,boolean,text,text,timestamptz,bigint,text,text,text,text,text,jsonb,text,text,text,text,text,text,text,text,inet,text,uuid,text,uuid)', 'EXECUTE'),
+  has_function_privilege('service_role', 'public.reserve_storefront_card_checkout(uuid,uuid,boolean,text,text,timestamptz,bigint,text,text,text,text,text,jsonb,text,text,text,text,text,text,text,text,inet,text,uuid,text,uuid,text,text,numeric)', 'EXECUTE'),
   true,
   'service role can reserve inventory'
 );
@@ -71,10 +71,10 @@ insert into auth.users (
 );
 
 insert into public.stores (
-  id, owner_user_id, store_name, store_slug, store_status, storefront_mode, storefront_enabled
+  id, owner_user_id, store_name, store_slug, store_status, storefront_mode, storefront_enabled, show_public_phone, public_phone
 ) values (
   'd1000000-0000-4000-8000-000000000010', 'd1000000-0000-4000-8000-000000000001',
-  'Connect Reservation Test', 'connect-reservation-test', 'live', 'hosted', true
+  'Connect Reservation Test', 'connect-reservation-test', 'live', 'hosted', true, true, '555-0100'
 );
 
 insert into public.seller_billing_status (

@@ -31,6 +31,15 @@ function validPayload(idempotencyKey = "checkout-key-1") {
   };
 }
 
+test("pickup checkout forwards a normalized coupon but rejects client discount amounts", async () => {
+  const harness = createHarness();
+  const response = await harness.handler(requestFor({ ...validPayload(), coupon_code: " survey10 " }));
+  assert.equal(response.status, 201);
+  assert.equal(harness.calls.find(call => call.name === "create_pay_at_pickup_order_v2").args.p_coupon_code, "SURVEY10");
+  const forged = await harness.handler(requestFor({ ...validPayload(), manual_discount_value: 99 }));
+  assert.equal(forged.status, 400);
+});
+
 function requestFor(
   payload,
   {

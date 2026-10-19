@@ -9,6 +9,10 @@ import {
 } from "../order-formatters";
 
 export type PrintableOrder = {
+  discount_snapshot?: { coupon: { code: string } | null } | null;
+  gross_subtotal_amount?: number | null;
+  coupon_discount_amount?: number;
+  manual_discount_amount?: number;
   order_id: string;
   order_number: string;
   created_at: string;
@@ -80,7 +84,7 @@ export function OrderPrintDocument({
   const deliveryFeeAmount = order.delivery_fee_amount ?? 0;
   const hasTaxFee = Boolean(order.tax_fee_amount);
   const hasDeliveryFee = isDeliveryOrder && deliveryFeeAmount > 0;
-  const shouldShowBreakdown = hasTaxFee || hasDeliveryFee;
+  const shouldShowBreakdown = hasTaxFee || hasDeliveryFee || Boolean(order.discount_snapshot);
   const pickupOption = order.pickup_option_label_snapshot?.trim() ?? "";
   const pickupNote = order.pickup_note?.trim() ?? "";
   const customerNote = order.buyer_notes?.trim() ?? "";
@@ -153,6 +157,11 @@ export function OrderPrintDocument({
 
         <section className="order-print-lower">
           <dl className="order-print-totals">
+            {order.discount_snapshot ? <>
+              <div><dt>Merchandise before discounts</dt><dd>{formatCurrency(order.gross_subtotal_amount ?? null)}</dd></div>
+              {Number(order.coupon_discount_amount) > 0 ? <div><dt>Coupon ({order.discount_snapshot.coupon?.code})</dt><dd>-{formatCurrency(order.coupon_discount_amount ?? null)}</dd></div> : null}
+              {Number(order.manual_discount_amount) > 0 ? <div><dt>Manual discount</dt><dd>-{formatCurrency(order.manual_discount_amount ?? null)}</dd></div> : null}
+            </> : null}
             {shouldShowBreakdown ? (
               <>
                 <div>

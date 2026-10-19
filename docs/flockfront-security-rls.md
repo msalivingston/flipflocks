@@ -1,5 +1,7 @@
 # FlockFront Security and RLS Rules
 
+Current implementation clarification (October 19, 2026): the approved Stripe Connect checkout reserves inventory before payment and creates an official order only on verified settlement. Expiration restores inventory. Older statements below deferring Connect or all inventory changes until order creation are superseded; server-side validation, tenant isolation, and payment verification remain mandatory.
+
 ## Current Security Posture
 
 Core backend security architecture is complete through Group 28 and is frozen for V1 implementation. Future database changes should be limited to reference seed data, verified defects, security hardening, performance indexes, or proven missing V1 requirements.

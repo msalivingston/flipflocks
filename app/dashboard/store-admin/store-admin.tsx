@@ -93,6 +93,8 @@ const DynamicPaymentMethodsTab = dynamic<PaymentMethodsTabProps>(
   { loading: () => null, ssr: false },
 );
 
+const DynamicCouponsTab = dynamic(() => import("./coupons-tab"), { loading: () => null, ssr: false });
+
 type StoreAdminForm = {
   store_name: string;
   store_slug: string;
@@ -260,7 +262,8 @@ type StoreSetupTab =
   | "what-you-sell"
   | "pickup"
   | "policies"
-  | "payment-methods";
+  | "payment-methods"
+  | "coupons";
 
 type ModulePreferenceField =
   | "hatching_eggs_enabled"
@@ -381,6 +384,7 @@ const storeSetupTabs: Array<{ id: StoreSetupTab; label: string }> = [
   { id: "pickup", label: "Pickup/Delivery" },
   { id: "policies", label: "Policies" },
   { id: "payment-methods", label: "Payment Methods" },
+  { id: "coupons", label: "Coupons" },
 ];
 
 const blankForm: StoreAdminForm = {
@@ -2439,6 +2443,8 @@ export function StoreAdmin() {
                 payAtPickupEnabled={form.pay_at_pickup_enabled}
               />
             ) : null}
+
+            {activeTab === "coupons" ? <DynamicCouponsTab storeId={seller.store_id} /> : null}
 
           </div>
         </div>

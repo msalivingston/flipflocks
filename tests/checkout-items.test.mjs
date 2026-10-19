@@ -38,6 +38,6 @@ test("card checkout uses the same normalized items for summary and reservation",
   const source = readFileSync(new URL("../supabase/functions/stripe-connect-checkout/index.ts", import.meta.url), "utf8");
   const normalized = source.indexOf("start.items = normalizeCheckoutItems(start.items)");
   assert.ok(normalized > 0 && normalized < source.indexOf('service.rpc("get_public_checkout_summary"'));
-  assert.equal(source.match(/p_items: start\.items/g)?.length, 2);
+  assert.equal(source.match(/p_items: start\.items/g)?.length, 3); // summary, coupon preview, reservation
   assert.equal(source.match(/normalizeCheckoutItems\(start\.items\)/g)?.length, 1);
 });

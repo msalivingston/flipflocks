@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { publicSupabase } from "@/lib/public-supabase";
+import { CouponEntry, couponPreviewKey, type CouponPreview } from "@/app/_components/coupon-entry";
 import { formatPhoneInput } from "@/lib/phone-input";
 import {
   StorefrontCart,
@@ -170,6 +171,8 @@ export function CheckoutPage({
   const router = useRouter();
   const [cart, setCart] = useState<StorefrontCart | null>(null);
   const [form, setForm] = useState<BuyerForm>(initialForm);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponPreview, setCouponPreview] = useState<CouponPreview | null>(null);
   const [summary, setSummary] = useState<CheckoutSummary | null>(null);
   const [summaryMessage, setSummaryMessage] = useState<string | null>(null);
   const [pickupOptions, setPickupOptions] = useState<StorefrontPickupOption[]>(
@@ -381,6 +384,9 @@ export function CheckoutPage({
     [cartItems],
   );
   const checkoutItems = useMemo(() => toCheckoutItems(cartItems), [cartItems]);
+  const couponIsCurrent = couponPreview?.requestKey === couponPreviewKey(couponCode, form.buyerEmail, checkoutItems);
+  const couponAmount = couponIsCurrent && couponPreview?.valid ? couponPreview.amount : 0;
+  const couponUnavailable = Boolean(couponCode.trim() && (!couponIsCurrent || !couponPreview?.valid || couponPreview.checking));
   const validatedSubtotal =
     summary?.is_checkout_available === true
       ? toNumber(summary.subtotal_amount)
@@ -394,7 +400,7 @@ export function CheckoutPage({
         ) ?? null
       : null;
   const selectedDeliveryFee = selectedDeliveryOption?.price_amount ?? 0;
-  const estimatedTotal = itemSubtotal + selectedDeliveryFee;
+  const estimatedTotal = Math.max(itemSubtotal - couponAmount, 0) + selectedDeliveryFee;
   const selectedPickupOption =
     form.fulfillmentMethod === "pickup" && usesManualPickupOptions
       ? pickupOptions.find(
@@ -430,6 +436,7 @@ export function CheckoutPage({
     isLoadingPickupOptions ||
     checkoutItems.length === 0 ||
     summary?.is_checkout_available !== true ||
+    couponUnavailable ||
     !cardAvailabilityChecked ||
     paymentUnavailable;
 
@@ -649,10 +656,13 @@ export function CheckoutPage({
 
     setIsSubmitting(true);
 
+    if (couponUnavailable) { setErrorMessage("Please check or remove the coupon before placing this order."); setIsSubmitting(false); return; }
+
     const payload = {
       store_slug: store.store_slug,
       idempotency_key: createIdempotencyKey(store.store_slug),
       buyer_email: form.buyerEmail.trim(),
+      ...(couponCode.trim() ? { coupon_code: couponCode.trim().toUpperCase() } : {}),
       buyer_first_name: form.buyerFirstName.trim(),
       buyer_last_name: form.buyerLastName.trim(),
       buyer_phone: form.buyerPhone.trim(),
@@ -1163,11 +1173,13 @@ export function CheckoutPage({
                     </div>
                   ))}
                 </div>
+                <div className="mt-4"><CouponEntry code={couponCode} email={form.buyerEmail} items={checkoutItems} storeSlug={store.store_slug} onCodeChange={setCouponCode} onPreview={setCouponPreview}/></div>
                 <dl className="mt-3 grid gap-1.5 border-t border-[#e7decd] pt-3 text-sm">
                   <SummaryRow
                     label="Subtotal"
                     value={formatCurrency(itemSubtotal)}
                   />
+                  {couponAmount > 0 ? <SummaryRow label={`Coupon (${couponPreview?.code})`} value={`−${formatCurrency(couponAmount)}`} /> : null}
                   {selectedDeliveryOption ? (
                     <SummaryRow
                       label="Delivery"

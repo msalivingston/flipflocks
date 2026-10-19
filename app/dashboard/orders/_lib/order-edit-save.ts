@@ -23,6 +23,9 @@ export type EditOrderCustomerSnapshot = {
 };
 
 export type EditOrderPayloadOptions = {
+  couponCode?: string;
+  manualDiscountType?: DiscountType;
+  manualDiscountValue?: number;
   buyerNotes: string;
   customer: EditOrderCustomerSnapshot;
   deliveryAddress: DeliveryAddress;
@@ -42,6 +45,9 @@ export type EditOrderPayloadOptions = {
 };
 
 export type EditOrderRpcPayload = {
+  p_coupon_code?: string;
+  p_manual_discount_type?: DiscountType;
+  p_manual_discount_value?: number;
   p_order_id: string;
   p_items: Array<Record<string, unknown>>;
   p_removed_items: Array<Record<string, unknown>>;
@@ -77,6 +83,7 @@ export function buildEditOrderPayload(
   );
 
   return {
+    ...(options.couponCode !== undefined ? { p_coupon_code: options.couponCode, p_manual_discount_type: options.manualDiscountType ?? "fixed", p_manual_discount_value: options.manualDiscountValue ?? 0 } : {}),
     p_order_id: options.orderId,
     p_items: discountedLines.map((line) => ({
       order_item_id: line.orderItemId ?? null,
@@ -97,7 +104,7 @@ export function buildEditOrderPayload(
       custom_item_name:
         line.type === "custom" ? formatCustomItemPayloadName(line) : null,
       quantity: Number(line.quantity),
-      unit_price: line.discountedUnitPrice,
+      unit_price: options.couponCode !== undefined ? Number(line.unitPrice) : line.discountedUnitPrice,
     })),
     p_removed_items: getRemovedInventoryLines(
       options.originalLines,

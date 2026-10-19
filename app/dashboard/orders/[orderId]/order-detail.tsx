@@ -48,6 +48,10 @@ import {
 import { getCancellationEmailQueueState } from "./cancellation-email-result";
 
 type SellerOrderDetailRow = {
+  discount_snapshot?: { coupon: { code: string } | null } | null;
+  gross_subtotal_amount?: number | null;
+  coupon_discount_amount?: number;
+  manual_discount_amount?: number;
   order_id: string;
   order_number: string;
   order_source: string | null;
@@ -89,6 +93,10 @@ type SellerOrderDetailRow = {
 };
 
 type SellerOrderFulfillmentSnapshotRow = {
+  discount_snapshot: { coupon: { code: string } | null } | null;
+  gross_subtotal_amount: number | null;
+  coupon_discount_amount: number;
+  manual_discount_amount: number;
   fulfillment_method: "pickup" | "delivery" | string | null;
   delivery_option_name_snapshot: string | null;
   delivery_fee_amount: number | null;
@@ -273,7 +281,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         supabase
           .from("orders")
           .select(
-            "fulfillment_method, delivery_option_name_snapshot, delivery_fee_amount",
+            "fulfillment_method, delivery_option_name_snapshot, delivery_fee_amount, discount_snapshot, gross_subtotal_amount, coupon_discount_amount, manual_discount_amount",
           )
           .eq("store_id", seller.store_id)
           .eq("id", orderId)
@@ -302,6 +310,10 @@ export function OrderDetail({ orderId }: { orderId: string }) {
         order: orderResult.data
           ? {
               ...orderResult.data,
+              discount_snapshot: fulfillmentSnapshotResult.data?.discount_snapshot,
+              gross_subtotal_amount: fulfillmentSnapshotResult.data?.gross_subtotal_amount,
+              coupon_discount_amount: fulfillmentSnapshotResult.data?.coupon_discount_amount,
+              manual_discount_amount: fulfillmentSnapshotResult.data?.manual_discount_amount,
               fulfillment_method:
                 fulfillmentSnapshotResult.data?.fulfillment_method ?? "pickup",
               delivery_option_name_snapshot:
@@ -1019,7 +1031,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
 
     const requiresPaidPreflight =
       order.payment_method === "stripe_checkout" &&
-      order.payment_status !== "unpaid";
+      order.payment_status !== "unpaid" && Number(order.total_amount) > 0;
     if (!requiresPaidPreflight) {
       setShowCancelPanel(true);
       return;
@@ -1526,10 +1538,12 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                   ))}
                 </div>
                 <dl className="border-t border-stone-200/80 bg-transparent px-4 py-2.5 text-sm lg:bg-[#fffdf8]">
-                  <RequestedTotalRow
-                    label="Subtotal"
-                    value={formatCurrency(order.subtotal_amount)}
-                  />
+                  {order.discount_snapshot ? <>
+                    <RequestedTotalRow label="Merchandise before discounts" value={formatCurrency(order.gross_subtotal_amount ?? null)} />
+                    {Number(order.coupon_discount_amount) > 0 ? <RequestedTotalRow label={`Coupon (${order.discount_snapshot.coupon?.code ?? ""})`} value={`-${formatCurrency(order.coupon_discount_amount ?? null)}`} /> : null}
+                    {Number(order.manual_discount_amount) > 0 ? <RequestedTotalRow label="Manual discount" value={`-${formatCurrency(order.manual_discount_amount ?? null)}`} /> : null}
+                  </> : null}
+                  <RequestedTotalRow label={order.discount_snapshot ? "Subtotal after discounts" : "Subtotal"} value={formatCurrency(order.subtotal_amount)} />
                   {order.tax_fee_amount ? (
                     <RequestedTotalRow
                       label={order.tax_fee_label_snapshot ?? "Tax/fee"}

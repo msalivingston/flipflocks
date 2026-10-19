@@ -112,6 +112,10 @@ type OrderRow = {
   delivery_option_name_snapshot?: string | null;
   delivery_fee_amount?: number | string | null;
   subtotal_amount: number | string;
+  discount_snapshot?: { coupon: { code: string } | null } | null;
+  gross_subtotal_amount?: number | string | null;
+  coupon_discount_amount?: number | string;
+  manual_discount_amount?: number | string;
   tax_fee_label_snapshot: string | null;
   tax_fee_amount: number | string;
   total_amount: number | string;
@@ -362,7 +366,7 @@ async function fetchEmailContext(
   const { data: order, error: orderError } = await supabase
     .from("orders")
     .select(
-      "id, store_id, customer_id, order_number, order_source, order_status, payment_method, payment_status, buyer_email_snapshot, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, buyer_notes, pickup_note, pickup_option_id, pickup_option_label_snapshot, fulfillment_method, delivery_option_name_snapshot, delivery_fee_amount, subtotal_amount, tax_fee_label_snapshot, tax_fee_amount, total_amount, canceled_at, canceled_reason, created_at",
+      "id, store_id, customer_id, order_number, order_source, order_status, payment_method, payment_status, buyer_email_snapshot, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, buyer_notes, pickup_note, pickup_option_id, pickup_option_label_snapshot, fulfillment_method, delivery_option_name_snapshot, delivery_fee_amount, subtotal_amount, tax_fee_label_snapshot, tax_fee_amount, total_amount, canceled_at, canceled_reason, created_at, discount_snapshot, gross_subtotal_amount, coupon_discount_amount, manual_discount_amount",
     )
     .eq("id", notification.order_id)
     .eq("store_id", notification.store_id)
@@ -1046,6 +1050,11 @@ function renderOrderDocumentEmail(
     hasAmount(order.tax_fee_amount)
       ? fact(order.tax_fee_label_snapshot || "Tax/fee", formatCurrency(order.tax_fee_amount, store.currency))
       : null,
+    ...(order.discount_snapshot ? [
+      fact("Merchandise before discounts", formatCurrency(order.gross_subtotal_amount ?? 0, store.currency)),
+      ...(Number(order.coupon_discount_amount) > 0 ? [fact(`Coupon (${order.discount_snapshot.coupon?.code ?? ""})`, `-${formatCurrency(order.coupon_discount_amount ?? 0, store.currency)}`)] : []),
+      ...(Number(order.manual_discount_amount) > 0 ? [fact("Manual discount", `-${formatCurrency(order.manual_discount_amount ?? 0, store.currency)}`)] : []),
+    ] : []),
     fact("Total", formatCurrency(order.total_amount, store.currency)),
   ];
   const fulfillmentRows = isDeliveryOrder

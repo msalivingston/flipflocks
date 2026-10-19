@@ -1,5 +1,6 @@
 import Stripe from "npm:stripe@22.3.2";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.0";
+import { isCompletedCouponCheckout } from "../_shared/coupon-checkout.ts";
 import { createStripeConnectClient } from "../_shared/stripe-connect-client.ts";
 import {
   isValidConnectedRefundEvent,
@@ -221,7 +222,7 @@ Deno.serve(async (request) => {
     }
 
     const outcome = event.type === "checkout.session.completed" ? "paid" : "expired";
-    if (outcome === "paid" && (session.status !== "complete" || session.payment_status !== "paid")) {
+    if (outcome === "paid" && !isCompletedCouponCheckout(session)) {
       return response(409, { error: "payment_not_complete" });
     }
     if (outcome === "expired" && session.status !== "expired") {

@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { CouponEntry, couponPreviewKey, type CouponPreview } from "@/app/_components/coupon-entry";
+import { couponOrderItems } from "../../_lib/order-coupons";
+import { couponThenManualDiscount } from "@/lib/coupons";
 import { useSellerContext } from "../../../_components/seller-context";
 import {
   buildCustomerSearchFilter,
@@ -90,6 +93,7 @@ type CustomerDetailRow = CustomerRow & {
 };
 
 type EditableOrderRow = {
+  discount_snapshot: { coupon: { code: string } | null; manual_type: DiscountType; manual_value: number } | null;
   id: string;
   customer_id: string | null;
   order_number: string;
@@ -173,6 +177,8 @@ export function EditOrder({ orderId }: { orderId: string }) {
     string | null
   >(null);
   const [discountType, setDiscountType] = useState<DiscountType>("fixed");
+  const [couponCode, setCouponCode] = useState("");
+  const [couponPreview, setCouponPreview] = useState<CouponPreview | null>(null);
   const [discountValue, setDiscountValue] = useState("");
   const [fulfillmentMethod, setFulfillmentMethod] =
     useState<FulfillmentMethod>("pickup");
@@ -231,7 +237,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
         supabase
           .from("orders")
           .select(
-            "id, customer_id, order_number, order_status, payment_method, payment_status, fulfilled_at, canceled_at, buyer_email_snapshot, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, buyer_notes, pickup_note, pickup_option_id, pickup_option_label_snapshot, fulfillment_method, delivery_option_name_snapshot, delivery_fee_amount, subtotal_amount, tax_fee_amount, total_amount",
+            "id, customer_id, order_number, order_status, payment_method, payment_status, fulfilled_at, canceled_at, buyer_email_snapshot, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, buyer_notes, pickup_note, pickup_option_id, pickup_option_label_snapshot, fulfillment_method, delivery_option_name_snapshot, delivery_fee_amount, subtotal_amount, tax_fee_amount, total_amount, discount_snapshot",
           )
           .eq("store_id", seller.store_id)
           .eq("id", orderId)
@@ -284,6 +290,9 @@ export function EditOrder({ orderId }: { orderId: string }) {
       }
 
       const order = orderResult.data ?? null;
+      setCouponCode(order?.discount_snapshot?.coupon?.code ?? "");
+      setDiscountType(order?.discount_snapshot?.manual_type ?? "fixed");
+      setDiscountValue(order?.discount_snapshot ? String(order.discount_snapshot.manual_value) : "");
       let currentCustomer: CustomerRow | null = null;
 
       if (order?.customer_id) {
@@ -531,8 +540,13 @@ export function EditOrder({ orderId }: { orderId: string }) {
     (option) => option.id === deliveryOptionId,
   );
   const subtotal = calculateOrderSubtotal(lines);
-  const discountAmount = calculateDiscountAmount(
-    subtotal,
+  const couponItems = couponOrderItems(lines);
+  const couponEmail = displayedCustomer.email ?? "";
+  const couponIsCurrent = couponPreview?.requestKey === couponPreviewKey(couponCode, couponEmail, couponItems);
+  const couponAmount = couponIsCurrent && couponPreview?.valid ? couponPreview.amount : 0;
+  const couponUnavailable = Boolean(couponCode.trim() && (!couponIsCurrent || !couponPreview?.valid || couponPreview.checking));
+  const discountAmount = couponAmount > 0 ? couponThenManualDiscount(subtotal, subtotal, "fixed", couponAmount, discountType, Number(discountValue || 0)).manual : calculateDiscountAmount(
+    Math.max(subtotal - couponAmount, 0),
     discountType,
     discountValue,
   );
@@ -545,7 +559,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
   const total = calculateFinalTotal({
     deliveryFee,
     discountAmount,
-    subtotal,
+    subtotal: Math.max(subtotal - couponAmount, 0),
     taxAmount,
   });
   const pageTitle = order
@@ -699,6 +713,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
   }
 
   async function saveOrder() {
+    if (couponUnavailable) { setSaveError("Please check or remove the coupon before saving this order."); return; }
     if (!seller || !order || isSaving) return;
 
     const selectedPickupOption = data.pickupOptions.find(
@@ -749,6 +764,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
         };
 
     const payload = buildEditOrderPayload({
+      ...(couponCode.trim() || order.discount_snapshot ? { couponCode: couponCode.trim(), manualDiscountType: discountType, manualDiscountValue: Number(discountValue || 0) } : {}),
       buyerNotes,
       customer: customerSnapshot,
       deliveryAddress,
@@ -1110,6 +1126,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
               Order Summary
             </h2>
             <div className="mt-3 grid gap-3">
+              {seller ? <CouponEntry code={couponCode} email={couponEmail} items={couponItems} storeId={seller.store_id} orderId={orderId} onCodeChange={setCouponCode} onPreview={setCouponPreview}/> : null}
               <div className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm">
                 <p className="text-xs font-bold uppercase text-stone-500">
                   Payment
@@ -1147,6 +1164,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
 
               <dl className="grid gap-2 border-t border-stone-200 pt-3 text-sm">
                 <SummaryRow label="Subtotal" value={formatCurrency(subtotal)} />
+                {couponAmount > 0 ? <SummaryRow label="Coupon" value={`-${formatCurrency(couponAmount)}`} /> : null}
                 <SummaryRow
                   label="Discount"
                   value={`-${formatCurrency(discountAmount)}`}

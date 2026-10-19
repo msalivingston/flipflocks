@@ -3,8 +3,10 @@ import type Stripe from "npm:stripe@22.3.2";
 import { resolveFlockFrontCors } from "../_shared/cors.ts";
 import { createStripeConnectClient } from "../_shared/stripe-connect-client.ts";
 import { normalizeCheckoutItems, type CheckoutItem } from "../_shared/checkout-items.ts";
+import { isCompletedCouponCheckout, splitDiscountedLine } from "../_shared/coupon-checkout.ts";
 
 type StartRequest = {
+  coupon_code?: string | null;
   action: "start";
   checkout_return_path?: string | null;
   store_slug: string;
@@ -193,7 +195,7 @@ async function cleanStale(storeId: string) {
         );
       }
       if (session.status === "expired") await settle(session, reservation.stripe_account_id, "expired");
-      else if (session.status === "complete" && session.payment_status === "paid") await settle(session, reservation.stripe_account_id, "paid");
+      else if (isCompletedCouponCheckout(session)) await settle(session, reservation.stripe_account_id, "paid");
     } catch (error) {
       console.error("stale connected checkout cleanup failed", error instanceof Error ? error.message : "unknown");
     }
@@ -296,7 +298,7 @@ Deno.serve(async (request) => {
         await settle(session, reservation.stripe_account_id, "expired");
         return json(200, { status: "canceled" }, cors.headers);
       }
-      if (session.status === "complete" && session.payment_status === "paid") {
+      if (isCompletedCouponCheckout(session)) {
         const result = await settle(session, reservation.stripe_account_id, "paid");
         return json(200, { status: "paid", order: {
           order_number: result?.order_number ?? null, total_amount: result?.total_amount ?? null,
@@ -339,7 +341,7 @@ Deno.serve(async (request) => {
       if (session.metadata?.store_id !== storeId || session.metadata?.environment_id !== environmentId ||
         session.mode !== "payment" || session.livemode !== livemode || session.amount_total !== reservation.amount_total_cents ||
         session.currency !== reservation.currency) throw new Error("session_binding_invalid");
-      if (session.status === "complete" && session.payment_status === "paid") {
+      if (isCompletedCouponCheckout(session)) {
         const result = await settle(session, reservation.stripe_account_id, "paid");
         return json(200, { status: "paid", order: {
           order_number: result?.order_number ?? null, total_amount: result?.total_amount ?? null, currency: result?.currency ?? null,
@@ -361,6 +363,7 @@ Deno.serve(async (request) => {
     return json(409, { error: "card_payments_disabled" }, cors.headers);
   }
   const start = body as unknown as StartRequest;
+  if (start.coupon_code != null && (typeof start.coupon_code !== "string" || start.coupon_code.length > 40)) return json(400, { error: "invalid_request" }, cors.headers);
   if (!start.idempotency_key || start.idempotency_key.length > 200 || !start.buyer_email ||
     !start.buyer_first_name || !start.buyer_last_name || !start.buyer_phone) {
     return json(400, { error: "invalid_request" }, cors.headers);
@@ -406,14 +409,25 @@ Deno.serve(async (request) => {
     deliveryName = option.name;
   }
   const trustedItems = summary.items as Array<{ item_name: unknown; unit_price: unknown; requested_quantity: unknown }>;
-  const lineItems = trustedItems.map((item) => ({
+  let couponQuote: { coupon_amount: number; net_subtotal: number; lines: Array<{ item_name: string; quantity: number; net_amount: number }> } | null = null;
+  if (start.coupon_code?.trim()) {
+    const { data, error } = await service.rpc("preview_storefront_coupon", { p_store_slug: slug, p_items: start.items, p_coupon_code: start.coupon_code, p_customer_email: start.buyer_email });
+    if (error || !data) return json(409, { error: "coupon_unavailable", message: error?.message ?? "Coupon is unavailable." }, cors.headers);
+    couponQuote = data;
+  }
+  const lineItems = couponQuote ? couponQuote.lines.flatMap(item => splitDiscountedLine(cents(item.net_amount), item.quantity).map(part => ({
+    price_data: { currency, product_data: { name: item.item_name.slice(0, 127) }, unit_amount: part.unit_amount }, quantity: part.quantity,
+  }))) : trustedItems.map((item) => ({
     price_data: { currency, product_data: { name: String(item.item_name).slice(0, 127) }, unit_amount: cents(item.unit_price) },
     quantity: Number(item.requested_quantity),
   }));
   if (deliveryFee > 0) lineItems.push({
     price_data: { currency, product_data: { name: `Delivery — ${deliveryName ?? "Delivery"}` }, unit_amount: cents(deliveryFee) }, quantity: 1,
   });
-  const amountTotal = cents(summary.subtotal_amount) + cents(deliveryFee);
+  const amountTotal = cents(couponQuote?.net_subtotal ?? summary.subtotal_amount) + cents(deliveryFee);
+  if (currency === "usd" && amountTotal > 0 && amountTotal < 50) {
+    return json(409, { error: "card_amount_too_small", message: "Card payments require at least $0.50. Add an item or choose Pay at Pickup if available. Your coupon has not been used." }, cors.headers);
+  }
   const reservationId = crypto.randomUUID();
   const expiresAt = Math.floor(Date.now() / 1000) + 30 * 60;
   const metadata = { reservation_id: reservationId, store_id: storeId, environment_id: environmentId, schema_version: "ff_connect_checkout_v1" };
@@ -453,11 +467,13 @@ Deno.serve(async (request) => {
     p_pickup_note: start.pickup_note ?? null, p_buyer_ip_address: buyerIp(request), p_buyer_user_agent: request.headers.get("user-agent"),
     p_pickup_option_id: start.pickup_option_id ?? null, p_fulfillment_method: start.fulfillment_method ?? "pickup",
     p_delivery_option_id: start.delivery_option_id ?? null,
+    ...(start.coupon_code?.trim() ? { p_coupon_code: start.coupon_code } : {}),
   });
   if (reserveError) {
     try { await stripe.checkout.sessions.expire(session.id, {}, { stripeAccount: accountId }); } catch { /* unseen Session; log only */ }
     const message = reserveError.details === "live_bird_minimum_not_met" ||
       reserveError.message === "Bird hatch or availability date is missing or invalid. Please contact the seller."
+      || /^(Coupon |This coupon |The eligible merchandise)/.test(reserveError.message)
       ? reserveError.message : "One or more items are no longer available.";
     return json(409, { error: "checkout_unavailable", message }, cors.headers);
   }
