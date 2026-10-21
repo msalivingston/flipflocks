@@ -4,6 +4,15 @@ import Image from "next/image";
 import Link from "next/link";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  fetchAllCustomerContacts,
+  filterCustomerRoster,
+  getCustomerRosterSummary,
+  mergeCustomerRoster,
+  paginateCustomerRoster,
+  type CustomerContactRow,
+  type CustomerSummaryRow,
+} from "./customer-roster";
 import { useSellerContext } from "../_components/seller-context";
 import {
   EmptyState,
@@ -71,38 +80,6 @@ type ItemSummaryRow = {
   species: string;
 };
 
-type CustomerSummaryRow = {
-  businessName: string;
-  createdAt: string;
-  customerEmail: string;
-  customerId: string;
-  customerFirstName: string;
-  customerLastName: string;
-  customerName: string;
-  customerPhone: string;
-  internalNotes: string;
-  importedOrderCount: number;
-  importedOrderTotal: number;
-  importedSource: string;
-  itemsBought: number;
-  lastOrder: string | null;
-  lastOrderTotal: number;
-  latestOrderAt: string | null;
-  lifetimeOrderTotal: number;
-  mailingAddressLine1: string;
-  mailingAddressLine2: string;
-  mailingCity: string;
-  mailingCountry: string;
-  mailingPostalCode: string;
-  mailingState: string;
-  openOrders: number;
-  orders: number;
-  nativeOrders: number;
-  nativeSpent: number;
-  totalOrders: number;
-  totalSpent: number;
-  updatedAt: string;
-};
 
 type ReportResponse<Row> = {
   has_any_data: boolean;
@@ -198,6 +175,8 @@ export function ReportsDashboard() {
     tab: null,
     totalCount: 0,
   });
+  const [customerRoster, setCustomerRoster] = useState<CustomerSummaryRow[] | null>(null);
+  const [customerDateInitialized, setCustomerDateInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -246,11 +225,23 @@ export function ReportsDashboard() {
     ],
   );
 
+  const filteredCustomerRoster = useMemo(
+    () => filterCustomerRoster(
+      customerRoster ?? [],
+      deferredCustomerSearch,
+      getAmountThreshold(customerSpendFilter, customerCustomSpend),
+    ),
+    [customerRoster, deferredCustomerSearch, customerSpendFilter, customerCustomSpend],
+  );
+  const displayedReport = activeTab === "customers"
+    ? buildCustomerRosterReport(filteredCustomerRoster, page, customerRoster?.length ?? 0)
+    : report;
+
   useEffect(() => {
     let isMounted = true;
 
     async function loadReports() {
-      if (!seller || !queryParameters) return;
+      if (!seller || !queryParameters || activeTab === "customers") return;
 
       setIsLoading(true);
       setError(null);
@@ -279,6 +270,66 @@ export function ReportsDashboard() {
     };
   }, [activeTab, queryParameters, seller]);
 
+  useEffect(() => {
+    if (activeTab !== "customers" || !seller) return;
+    let isMounted = true;
+    const storeId = seller.store_id;
+
+    async function loadCustomerRoster() {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const contacts = await fetchAllCustomerContacts<CustomerContactRow>(async (from, to) =>
+          supabase.from("customers")
+            .select("id, first_name, last_name, business_name, email, phone, delivery_address_line1, delivery_address_line2, delivery_city, delivery_state, delivery_postal_code, delivery_country, internal_notes, created_at, updated_at, imported_order_count, imported_order_total_cents, imported_source")
+            .eq("store_id", storeId)
+            .order("id")
+            .range(from, to)
+            .returns<CustomerContactRow[]>(),
+        );
+        async function fetchActivityRows(start: Date | null, end: Date | null, includeImported: boolean) {
+          const rows: CustomerSummaryRow[] = [];
+          for (;;) {
+            const result = await supabase.rpc("seller_get_report_page", {
+              p_amount_over: null,
+              p_breed: "all",
+              p_end_at: end?.toISOString() ?? null,
+              p_include_imported: includeImported,
+              p_item_type: "all",
+              p_limit: exportPageSize,
+              p_offset: rows.length,
+              p_report: "customers",
+              p_search: null,
+              p_species: "all",
+              p_start_at: start?.toISOString() ?? null,
+              p_store_id: storeId,
+            });
+            if (result.error) throw result.error;
+            const pageResult = normalizeReportResponse("customers", result.data);
+            rows.push(...pageResult.rows as CustomerSummaryRow[]);
+            if (rows.length >= pageResult.totalCount) return rows;
+            if (pageResult.rows.length === 0) throw new Error("Customer report pagination stopped early");
+          }
+        }
+        const lifetimeRows = await fetchActivityRows(null, null, true);
+        const { start, end } = getDateBounds(dateSettings);
+        const periodRows = dateSettings.range === "all_time"
+          ? lifetimeRows
+          : await fetchActivityRows(start, end, false);
+        if (!isMounted) return;
+        setCustomerRoster(mergeCustomerRoster(contacts, lifetimeRows, periodRows));
+      } catch (caughtError) {
+        if (!isMounted) return;
+        setError(caughtError instanceof Error ? caughtError.message : "Customers could not load");
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    void loadCustomerRoster();
+    return () => { isMounted = false; };
+  }, [activeTab, dateSettings, seller]);
+
   function resetPage(tab: ReportTab = activeTab) {
     setPages((current) => ({ ...current, [tab]: 0 }));
   }
@@ -290,6 +341,14 @@ export function ReportsDashboard() {
     setError(null);
 
     try {
+      if (activeTab === "customers") {
+        const rows = buildCustomersCsvRows(filteredCustomerRoster, dateRangeLabel);
+        downloadCsvParts({
+          filename: `flockfront-customers-${formatFileDate(new Date())}.csv`,
+          parts: ["\uFEFF", rows.map((row) => row.map(escapeCsvCell).join(",")).join("\r\n")],
+        });
+        return;
+      }
       const csvParts: string[] = ["\uFEFF"];
       let offset = 0;
       let totalCount = 0;
@@ -344,7 +403,7 @@ export function ReportsDashboard() {
     }
   }
 
-  if (isLoading || report.tab !== activeTab) {
+  if (isLoading || (activeTab === "customers" ? customerRoster === null : report.tab !== activeTab)) {
     return <LoadingState label="Loading reports" />;
   }
 
@@ -357,7 +416,7 @@ export function ReportsDashboard() {
     );
   }
 
-  if (!report.hasAnyData) {
+  if (!displayedReport.hasAnyData) {
     return (
       <EmptyState
         title="No report data yet"
@@ -373,7 +432,16 @@ export function ReportsDashboard() {
 
   return (
     <div className="grid gap-0">
-      <TabNav activeTab={activeTab} onChange={setActiveTab} />
+      <TabNav activeTab={activeTab} onChange={(nextTab) => {
+        setActiveTab(nextTab);
+        if (nextTab === "customers") {
+          resetPage("customers");
+          if (!customerDateInitialized) {
+            setDateSettings((current) => ({ ...current, range: "all_time" }));
+            setCustomerDateInitialized(true);
+          }
+        }
+      }} />
       <div className="rounded-b-xl rounded-tr-xl border-0 bg-transparent pt-4 shadow-none lg:border lg:border-stone-200 lg:bg-white lg:p-5 lg:shadow-sm">
         {activeTab === "sales" ? (
           <SalesTab
@@ -422,13 +490,13 @@ export function ReportsDashboard() {
 
         {activeTab === "customers" ? (
           <CustomersTab
-            customerRows={report.rows as CustomerSummaryRow[]}
+            customerRows={displayedReport.rows as CustomerSummaryRow[]}
             customSpend={customerCustomSpend}
             dateSettings={dateSettings}
             isExporting={isExporting}
             onExport={exportCurrentReport}
             page={page}
-            report={report}
+            report={displayedReport}
             search={customerSearch}
             setCustomSpend={setCustomerCustomSpend}
             setDateSettings={setDateSettings}
@@ -1051,7 +1119,7 @@ function CustomersTab({
       </SummaryGrid>
 
       <ReportTableCard
-        description="Summary of customer purchases in this period."
+        description="All customer contacts and their purchases in this period."
         title="Customers"
       >
         {customerRows.length > 0 ? (
@@ -2003,6 +2071,21 @@ function normalizeReportResponse(tab: ReportTab, value: unknown): ReportState {
     summary: response.summary ?? {},
     tab,
     totalCount: Number(response.total_count ?? 0),
+  };
+}
+
+function buildCustomerRosterReport(
+  rows: CustomerSummaryRow[],
+  page: number,
+  totalRosterCount: number,
+): ReportState {
+  return {
+    hasAnyData: totalRosterCount > 0,
+    options: { breeds: [], species: [] },
+    rows: paginateCustomerRoster(rows, page, reportPageSize),
+    summary: getCustomerRosterSummary(rows),
+    tab: "customers",
+    totalCount: rows.length,
   };
 }
 
