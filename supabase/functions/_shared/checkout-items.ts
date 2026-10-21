@@ -1,11 +1,11 @@
 export type CheckoutItem = {
-  item_type: "listing_inventory" | "equipment_inventory" | "processed_poultry_inventory" | "hatching_egg_inventory";
+  item_type: "listing_inventory" | "listing_inventory_group" | "equipment_inventory" | "processed_poultry_inventory" | "hatching_egg_inventory";
   item_id: string;
   quantity: number;
 };
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const itemTypes = new Set(["listing_inventory", "equipment_inventory", "processed_poultry_inventory", "hatching_egg_inventory"]);
+const itemTypes = new Set(["listing_inventory", "listing_inventory_group", "equipment_inventory", "processed_poultry_inventory", "hatching_egg_inventory"]);
 
 // Both public payment paths pass this exact, alias-free result to summary and
 // creation/reservation. Never silently give one supplied identifier priority.

@@ -158,6 +158,9 @@ type CustomerRow = {
 };
 
 type OrderItemRow = {
+  inventory_item_id?: string | null;
+  listing_batch_id?: string | null;
+  listing_batch_breed_id?: string | null;
   order_item_source: string | null;
   species_name_snapshot: string | null;
   breed_display_name_snapshot: string | null;
@@ -166,6 +169,8 @@ type OrderItemRow = {
   hatch_date_snapshot?: string | null;
   available_date_snapshot?: string | null;
   age_at_sale_days_snapshot?: number | null;
+  breeding_history_snapshot?: string | null;
+  feather_condition_snapshot?: string | null;
   product_type_snapshot?: string | null;
   item_name_snapshot?: string | null;
   item_category_snapshot?: string | null;
@@ -185,6 +190,7 @@ type EmailContext = {
   store: StoreRow;
   customer: CustomerRow | null;
   items: OrderItemRow[];
+  buyerItemPhotoKeys: Record<string, string>;
   pickupOption: PickupOptionRow | null;
   logo: {
     url: string;
@@ -396,7 +402,7 @@ async function fetchEmailContext(
       supabase
         .from("order_items")
         .select(
-          "order_item_source, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, custom_item_name_snapshot, unit_price_snapshot, quantity, line_subtotal, created_at",
+          "inventory_item_id, listing_batch_id, listing_batch_breed_id, order_item_source, species_name_snapshot, breed_display_name_snapshot, inventory_type_snapshot, custom_inventory_label_snapshot, hatch_date_snapshot, available_date_snapshot, age_at_sale_days_snapshot, breeding_history_snapshot, feather_condition_snapshot, product_type_snapshot, item_name_snapshot, item_category_snapshot, custom_item_name_snapshot, unit_price_snapshot, quantity, line_subtotal, created_at",
         )
         .eq("order_id", order.id)
         .eq("store_id", order.store_id)
@@ -429,11 +435,32 @@ async function fetchEmailContext(
     throw new Error(pickupResult.error.message || "Pickup option could not load.");
   }
 
+  const inventoryIds = (itemsResult.data ?? [])
+    .map((item) => item.inventory_item_id)
+    .filter((id): id is string => Boolean(id));
+  const buyerItemPhotoKeys: Record<string, string> = {};
+  if (inventoryIds.length > 0) {
+    const { data: photoRows, error: photoError } = await supabase
+      .from("public_storefront_inventory")
+      .select("inventory_item_id, featured_image_url, featured_image_alt_text, entry_photo_url, entry_photo_alt")
+      .eq("store_id", order.store_id)
+      .in("inventory_item_id", inventoryIds);
+    if (!photoError) {
+      for (const photo of photoRows ?? []) {
+        buyerItemPhotoKeys[photo.inventory_item_id] = JSON.stringify([
+          photo.featured_image_url, photo.featured_image_alt_text,
+          photo.entry_photo_url, photo.entry_photo_alt,
+        ]);
+      }
+    }
+  }
+
   return {
     order,
     store: storeResult.data,
     customer: customerResult.data ?? null,
     items: itemsResult.data ?? [],
+    buyerItemPhotoKeys,
     pickupOption: pickupResult.data ?? null,
     logo,
   };
@@ -1018,6 +1045,9 @@ function renderOrderDocumentEmail(
   options: OrderEmailOptions,
 ): { html: string; text: string } {
   const { order, store, items, logo } = context;
+  const displayedItems = options.recipientType === "buyer"
+    ? consolidateBuyerLiveBirdItems(items, context.buyerItemPhotoKeys)
+    : items;
   const buyerName = formatPersonName(
     order.buyer_first_name_snapshot,
     order.buyer_last_name_snapshot,
@@ -1114,7 +1144,7 @@ function renderOrderDocumentEmail(
       buyerPrintOrderTitle(order, options.statusLabel),
       buyerPrintOptionalSection("Cancellation", buyerPrintFieldRows(cancellationRows)),
       buyerPrintTwoColumn(buyerRows, paymentRows),
-      buyerPrintItemsTable(items, store.currency),
+      buyerPrintItemsTable(displayedItems, store.currency),
       buyerPrintTotalsTable(totalRows),
       buyerPrintFulfillmentSection(fulfillmentRows),
       buyerPrintOptionalSection("Notes", buyerPrintParagraph(order.buyer_notes ?? "")),
@@ -1145,7 +1175,7 @@ function renderOrderDocumentEmail(
     ...textFacts(buyerRows),
     "",
     "Items:",
-    ...items.map((item) =>
+    ...displayedItems.map((item) =>
       `- ${itemName(item)} x ${item.quantity}: ${formatCurrency(item.line_subtotal, store.currency)}`
     ),
     "",
@@ -1551,6 +1581,49 @@ function textSection(
   });
 
   return lines.length > 0 ? [title + ":", ...lines, ""] : [];
+}
+
+function consolidateBuyerLiveBirdItems(
+  items: OrderItemRow[],
+  photoKeys: Record<string, string>,
+): OrderItemRow[] {
+  const result: OrderItemRow[] = [];
+  const positions = new Map<string, number>();
+  for (const item of items) {
+    const photoKey = item.inventory_item_id
+      ? photoKeys[item.inventory_item_id]
+      : undefined;
+    if (!item.inventory_item_id || !item.listing_batch_id ||
+      !item.listing_batch_breed_id || !photoKey ||
+      item.order_item_source !== "listing_inventory") {
+      result.push(item);
+      continue;
+    }
+    const key = JSON.stringify([
+      item.listing_batch_id, item.listing_batch_breed_id,
+      item.order_item_source, item.species_name_snapshot,
+      item.breed_display_name_snapshot, item.inventory_type_snapshot,
+      item.custom_inventory_label_snapshot, item.hatch_date_snapshot,
+      item.available_date_snapshot, item.age_at_sale_days_snapshot,
+      item.breeding_history_snapshot, item.feather_condition_snapshot,
+      item.product_type_snapshot, item.item_name_snapshot,
+      item.item_category_snapshot, item.custom_item_name_snapshot,
+      String(item.unit_price_snapshot), photoKey,
+    ]);
+    const position = positions.get(key);
+    if (position === undefined) {
+      positions.set(key, result.length);
+      result.push({ ...item });
+    } else {
+      result[position] = {
+        ...result[position],
+        quantity: result[position].quantity + item.quantity,
+        line_subtotal: Number(result[position].line_subtotal) +
+          Number(item.line_subtotal),
+      };
+    }
+  }
+  return result;
 }
 
 function itemName(item: OrderItemRow): string {

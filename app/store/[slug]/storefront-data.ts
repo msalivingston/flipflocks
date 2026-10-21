@@ -208,6 +208,7 @@ export type StorefrontHatchingEggItem = {
 
 export type StorefrontPurchaseOption = {
   inventoryItemId: string;
+  sourceInventoryItemIds?: string[];
   listingBatchBreedId: string | null;
   inventoryType: string;
   label: string;
@@ -654,6 +655,7 @@ export function toStorefrontProduct(
     0,
   );
   const availabilityCode = summarizeAvailability(sorted);
+  const options = groupLiveBirdPurchaseOptions(sorted);
 
   return {
     productId: first.seller_breed_profile_id,
@@ -674,7 +676,7 @@ export function toStorefrontProduct(
       first.breed_annual_egg_production,
     ),
     totalQuantityAvailable,
-    optionsCount: sorted.length,
+    optionsCount: options.length,
     minPrice,
     maxPrice,
     nextAvailableDate: getNextAvailableDate(sorted),
@@ -682,8 +684,32 @@ export function toStorefrontProduct(
     availabilityLabel: formatAvailabilitySummary(availabilityCode),
     pricingLabel: formatPricingSummary(minPrice, maxPrice),
     quantityLabel: formatProductQuantity(totalQuantityAvailable),
-    options: sorted.map(toPurchaseOption),
+    options,
   } satisfies StorefrontProduct;
+}
+
+// Barn location is private and intentionally absent from this identity. Keep
+// the key aligned with the public inventory projection used by checkout.
+export function groupLiveBirdPurchaseOptions(items: StorefrontInventoryItem[]) {
+  const groups = new Map<string, StorefrontInventoryItem[]>();
+  for (const item of items) {
+    const key = JSON.stringify([
+      item.store_id, item.species_id, item.seller_breed_profile_id,
+      item.listing_batch_id, item.listing_batch_breed_id, item.batch_type,
+      item.inventory_type, item.custom_inventory_label, item.origin_date,
+      item.available_date, item.age_at_availability_days,
+      item.buyer_availability_code, item.can_checkout, item.unit_price,
+      item.breeding_history, item.feather_condition,
+      item.featured_image_url, item.featured_image_alt_text,
+      item.entry_photo_url, item.entry_photo_alt,
+    ]);
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  }
+  return Array.from(groups.values()).map((group) => ({
+    ...toPurchaseOption(group[0]),
+    quantityAvailable: group.reduce((total, item) => total + Math.max(0, item.quantity_available), 0),
+    sourceInventoryItemIds: group.map((item) => item.inventory_item_id),
+  }));
 }
 
 export function toHatchingEggStorefrontProduct(

@@ -3,6 +3,7 @@
 export type StorefrontCartItem = {
   itemType:
     | "listing_inventory"
+    | "listing_inventory_group"
     | "equipment_inventory"
     | "processed_poultry_inventory"
     | "hatching_egg_inventory";
@@ -187,7 +188,9 @@ function normalizeCartItem(
   const legacyInventoryItemId =
     typeof item.inventoryItemId === "string" ? item.inventoryItemId : null;
   const itemType =
-    item.itemType === "equipment_inventory"
+    item.itemType === "listing_inventory_group"
+      ? "listing_inventory_group"
+      : item.itemType === "equipment_inventory"
       ? "equipment_inventory"
       : item.itemType === "processed_poultry_inventory"
         ? "processed_poultry_inventory"
@@ -214,7 +217,7 @@ function normalizeCartItem(
     itemType,
     itemId,
     inventoryItemId:
-      itemType === "listing_inventory"
+      itemType === "listing_inventory" || itemType === "listing_inventory_group"
         ? itemId
         : legacyInventoryItemId ?? itemId,
     productId: typeof item.productId === "string" ? item.productId : "",

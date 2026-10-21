@@ -92,7 +92,7 @@ export function ProductOrderOptions({
           itemType:
             product.productSource === "hatching_egg_inventory"
               ? "hatching_egg_inventory"
-              : "listing_inventory",
+              : "listing_inventory_group",
           itemId: option.inventoryItemId,
           inventoryItemId: option.inventoryItemId,
           productId: product.productId,
