@@ -60,6 +60,20 @@ test("archived pages cannot accidentally retain an active lifecycle filter", () 
   assert.equal(params.p_search, null);
 });
 
+test("pickup option sorting keeps the existing server contract valid", () => {
+  const params = buildOrderListRpcParams({
+    archiveView: "active",
+    filter: "all",
+    page: 1,
+    pickupOptionId: null,
+    search: "",
+    sort: "pickup_option",
+    storeId: "seller-store-id",
+  });
+
+  assert.equal(params.p_sort, "newest");
+});
+
 test("pickup summaries can retain explicitly selected orders from more than one page", () => {
   const snapshots = Object.fromEntries(
     Array.from({ length: 125 }, (_, index) => {

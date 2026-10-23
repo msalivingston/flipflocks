@@ -7,7 +7,12 @@ export type OrderListFilter =
   | "completed"
   | "canceled"
   | "all";
-export type OrderListSort = "newest" | "oldest" | "buyer_name" | "order_total";
+export type OrderListSort =
+  | "newest"
+  | "oldest"
+  | "buyer_name"
+  | "order_total"
+  | "pickup_option";
 
 export type OrderListCriteria = {
   archiveView: OrderListArchiveView;
@@ -38,7 +43,9 @@ export function buildOrderListRpcParams(criteria: OrderListCriteria) {
     p_offset: getOrderPageOffset(criteria.page),
     p_pickup_option_id: criteria.pickupOptionId,
     p_search: criteria.search.trim() || null,
-    p_sort: criteria.sort,
+    // Pickup options are seller-authored labels, so the Orders screen applies
+    // their alphabetical ordering after collecting the filtered result set.
+    p_sort: criteria.sort === "pickup_option" ? "newest" : criteria.sort,
     p_status_filter: criteria.archiveView === "archived" ? "all" : criteria.filter,
     p_store_id: criteria.storeId,
   };

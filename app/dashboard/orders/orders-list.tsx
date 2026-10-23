@@ -62,7 +62,12 @@ type OrderFilter =
   | "all";
 
 type OrderArchiveView = "active" | "archived";
-type OrderSort = "newest" | "oldest" | "buyer_name" | "order_total";
+type OrderSort =
+  | "newest"
+  | "oldest"
+  | "buyer_name"
+  | "order_total"
+  | "pickup_option";
 type PickupOptionFilter = "__all__" | string;
 
 type PickupOption = {
@@ -99,6 +104,15 @@ type SellerOrderRow = {
   total_item_quantity: number | null;
   pickup_option_id: string | null;
   pickup_option_label_snapshot: string | null;
+  fulfillment_method: "pickup" | "delivery" | string | null;
+  delivery_option_name_snapshot: string | null;
+};
+
+type SellerOrderFulfillmentSnapshot = Pick<
+  SellerOrderRow,
+  "fulfillment_method" | "delivery_option_name_snapshot"
+> & {
+  id: string;
 };
 
 type SellerOrderItemRow = {
@@ -139,6 +153,81 @@ type OrderListRpcResponse = {
   pickup_options: PickupOption[];
   total_count: number;
 };
+
+async function loadPickupSortedOrderResponse({
+  archiveView,
+  filter,
+  page,
+  pickupOptionId,
+  search,
+  storeId,
+  totalCount,
+}: {
+  archiveView: OrderArchiveView;
+  filter: OrderFilter;
+  page: number;
+  pickupOptionId: string | null;
+  search: string;
+  storeId: string;
+  totalCount: number;
+}): Promise<OrderListRpcResponse | null> {
+  const pageResponses = await Promise.all(
+    Array.from({ length: getOrderTotalPages(totalCount) }, (_, index) =>
+      supabase.rpc(
+        "seller_get_order_list_page",
+        buildOrderListRpcParams({
+          archiveView,
+          filter,
+          page: index + 1,
+          pickupOptionId,
+          search,
+          sort: "pickup_option",
+          storeId,
+        }),
+      ),
+    ),
+  );
+  const failedResponse = pageResponses.find((response) => response.error);
+
+  if (failedResponse?.error) {
+    throw new Error(failedResponse.error.message);
+  }
+
+  const firstResponse = pageResponses[0]?.data as OrderListRpcResponse | null;
+  if (!firstResponse) return null;
+
+  const sortedOrders = pageResponses
+    .flatMap((response) =>
+      ((response.data as OrderListRpcResponse | null)?.orders ?? []),
+    )
+    .sort(compareOrdersByPickupOption);
+  const pagedOrders = sortedOrders.slice(
+    getOrderPageOffset(page),
+    getOrderPageOffset(page) + ORDERS_PER_PAGE,
+  );
+  const pageOrderIds = new Set(pagedOrders.map((order) => order.order_id));
+
+  return {
+    ...firstResponse,
+    items: pageResponses
+      .flatMap(
+        (response) =>
+          ((response.data as OrderListRpcResponse | null)?.items ?? []),
+      )
+      .filter((item) => pageOrderIds.has(item.order_id)),
+    orders: pagedOrders,
+  };
+}
+
+function compareOrdersByPickupOption(
+  left: SellerOrderRow,
+  right: SellerOrderRow,
+) {
+  return pickupOptionCollator.compare(
+    left.pickup_option_label_snapshot?.trim() ?? "",
+    right.pickup_option_label_snapshot?.trim() ?? "",
+  );
+}
 
 type PickupSummaryOrder = {
   items: SellerOrderItemRow[];
@@ -217,9 +306,14 @@ const orderSortOptions: { label: string; value: OrderSort }[] = [
   { label: "Oldest first", value: "oldest" },
   { label: "Buyer name", value: "buyer_name" },
   { label: "Order total", value: "order_total" },
+  { label: "Pickup option (A–Z)", value: "pickup_option" },
 ];
 
 const manualOrderSuccessStorageKey = "flockfront:manual-order-success";
+const pickupOptionCollator = new Intl.Collator("en-US", {
+  numeric: true,
+  sensitivity: "base",
+});
 
 /**
  * Seller-facing order intake list for storefront pay-at-pickup requests.
@@ -365,7 +459,6 @@ export function OrdersList() {
       }
 
       const response = orderResult.data as OrderListRpcResponse | null;
-      const nextOrders = response?.orders ?? [];
       const totalCount = Number(response?.total_count ?? 0);
       const lastValidPage = getLastValidOrderPage(page, totalCount);
 
@@ -373,9 +466,82 @@ export function OrdersList() {
         setPage(lastValidPage);
         return;
       }
-      const nextItemsByOrderId = groupOrderItemsByOrderId(response?.items ?? []);
+      let pickupSortedResponse = response;
 
-      setOrders(nextOrders);
+      if (sort === "pickup_option" && totalCount > ORDERS_PER_PAGE) {
+        try {
+          pickupSortedResponse = await loadPickupSortedOrderResponse({
+            archiveView,
+            filter,
+            page,
+            pickupOptionId:
+              pickupOptionFilter === "__all__" ? null : pickupOptionFilter,
+            search: debouncedSearchQuery,
+            storeId: seller.store_id,
+            totalCount,
+          });
+        } catch (pickupSortError) {
+          if (!isMounted) return;
+
+          setError(
+            pickupSortError instanceof Error
+              ? pickupSortError.message
+              : "Unable to sort orders by pickup option.",
+          );
+          setIsLoading(false);
+          return;
+        }
+      } else if (sort === "pickup_option" && pickupSortedResponse) {
+        pickupSortedResponse = {
+          ...pickupSortedResponse,
+          orders: [...(pickupSortedResponse.orders ?? [])].sort(
+            compareOrdersByPickupOption,
+          ),
+        };
+      }
+
+      if (!isMounted) return;
+
+      const nextOrders = pickupSortedResponse?.orders ?? [];
+      const nextItemsByOrderId = groupOrderItemsByOrderId(
+        pickupSortedResponse?.items ?? [],
+      );
+      const orderIds = nextOrders.map((order) => order.order_id);
+      const fulfillmentSnapshotResult = orderIds.length
+        ? await supabase
+            .from("orders")
+            .select("id, fulfillment_method, delivery_option_name_snapshot")
+            .eq("store_id", seller.store_id)
+            .in("id", orderIds)
+            .returns<SellerOrderFulfillmentSnapshot[]>()
+        : null;
+
+      if (!isMounted) return;
+
+      if (fulfillmentSnapshotResult?.error) {
+        setError(fulfillmentSnapshotResult.error.message);
+        setIsLoading(false);
+        return;
+      }
+
+      const fulfillmentByOrderId = new Map(
+        (fulfillmentSnapshotResult?.data ?? []).map((snapshot) => [
+          snapshot.id,
+          snapshot,
+        ]),
+      );
+      const ordersWithFulfillment = nextOrders.map((order) => {
+        const fulfillment = fulfillmentByOrderId.get(order.order_id);
+
+        return {
+          ...order,
+          delivery_option_name_snapshot:
+            fulfillment?.delivery_option_name_snapshot ?? null,
+          fulfillment_method: fulfillment?.fulfillment_method ?? "pickup",
+        };
+      });
+
+      setOrders(ordersWithFulfillment);
       setOrderItemsByOrderId(nextItemsByOrderId);
       setTotalMatchingOrders(totalCount);
       setOrderArchiveCounts({
@@ -476,6 +642,12 @@ export function OrdersList() {
     setSort(nextSort);
     setPage(1);
     clearSelection();
+
+    if (nextSort === "pickup_option") {
+      setOrders((currentOrders) =>
+        [...currentOrders].sort(compareOrdersByPickupOption),
+      );
+    }
   }
 
   function updatePage(nextPage: number) {
@@ -1143,7 +1315,7 @@ function OrdersTableCard({
   }, [isPartiallySelected]);
 
   return (
-    <SellerCard className="overflow-visible rounded-2xl border-stone-200/80 shadow-[0_16px_38px_rgba(46,39,25,0.05)]">
+    <SellerCard className="overflow-visible rounded-2xl border-stone-200/80 shadow-[0_16px_38px_rgba(46,39,25,0.05)] [container-type:inline-size]">
       <div className="border-b border-stone-200/80 px-4 py-3 xl:hidden">
         <div>
           <p className="text-base font-bold text-stone-950">Orders</p>
@@ -1221,7 +1393,7 @@ function OrdersTableCard({
 
       <div
         aria-hidden="true"
-        className="hidden grid-cols-[2.25rem_minmax(9rem,10.5rem)_minmax(6.5rem,7.5rem)_minmax(0,1.6fr)_minmax(4.75rem,5.75rem)_minmax(9.5rem,11.5rem)_5.5rem] gap-3 bg-[#fbfaf6] px-4 py-3 text-xs font-medium uppercase tracking-[0.08em] text-stone-600 xl:grid"
+        className="hidden grid-cols-[2.25rem_minmax(9rem,10.5rem)_minmax(6.5rem,7.5rem)_minmax(0,1.6fr)_minmax(4.75rem,5.75rem)_minmax(9.5rem,11.5rem)_5.5rem] gap-3 bg-[#fbfaf6] px-4 py-3 text-xs font-medium uppercase tracking-[0.08em] text-stone-600 xl:grid [@container(min-width:1150px)]:grid-cols-[2.25rem_minmax(8rem,9.5rem)_minmax(6.25rem,7rem)_minmax(0,1.35fr)_minmax(4.75rem,5.5rem)_minmax(8.5rem,10rem)_minmax(15rem,16.5rem)_1.5rem_5.5rem]"
       >
         <span />
         <span>Order</span>
@@ -1229,6 +1401,8 @@ function OrdersTableCard({
         <span>Buyer</span>
         <span>Total</span>
         <span>Status</span>
+        <span className="hidden pr-4 [@container(min-width:1150px)]:block">Pickup</span>
+        <span aria-hidden="true" className="hidden [@container(min-width:1150px)]:block" />
         <span className="text-right">Open</span>
       </div>
 
@@ -2720,7 +2894,7 @@ function OrderRow({
         ) : null}
       </div>
 
-      <div className="hidden gap-3 px-4 py-2.5 xl:grid xl:grid-cols-[2.25rem_minmax(9rem,10.5rem)_minmax(6.5rem,7.5rem)_minmax(0,1.6fr)_minmax(4.75rem,5.75rem)_minmax(9.5rem,11.5rem)_5.5rem] xl:items-center">
+      <div className="hidden gap-3 px-4 py-2.5 xl:grid xl:grid-cols-[2.25rem_minmax(9rem,10.5rem)_minmax(6.5rem,7.5rem)_minmax(0,1.6fr)_minmax(4.75rem,5.75rem)_minmax(9.5rem,11.5rem)_5.5rem] xl:items-center [@container(min-width:1150px)]:grid-cols-[2.25rem_minmax(8rem,9.5rem)_minmax(6.25rem,7rem)_minmax(0,1.35fr)_minmax(4.75rem,5.5rem)_minmax(8.5rem,10rem)_minmax(15rem,16.5rem)_1.5rem_5.5rem]">
         <label className="flex min-h-6 items-center gap-3">
           <input
             aria-label={`Select order ${order.order_number}`}
@@ -2820,6 +2994,12 @@ function OrderRow({
         </p>
 
         <CombinedOrderStatusBadge status={combinedStatus} />
+
+        <p className="hidden min-w-0 pr-4 text-sm leading-5 text-stone-600 [@container(min-width:1150px)]:block">
+          {formatOrderPickup(order)}
+        </p>
+
+        <span aria-hidden="true" className="hidden [@container(min-width:1150px)]:block" />
 
         <Link
           className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-md border border-emerald-800 bg-emerald-800 px-3 text-sm font-semibold text-white transition hover:border-emerald-900 hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-800 focus:ring-offset-2"
@@ -3631,6 +3811,16 @@ function formatShortDate(value: string | null) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
+}
+
+function formatOrderPickup(order: SellerOrderRow) {
+  const option =
+    order.fulfillment_method === "delivery"
+      ? order.delivery_option_name_snapshot?.trim()
+      : order.pickup_option_label_snapshot?.trim();
+  const method = order.fulfillment_method === "delivery" ? "Delivery" : "Pickup";
+
+  return option ? `${method} · ${option}` : method;
 }
 
 function getManualOrderCreatedMessage({
