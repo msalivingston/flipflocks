@@ -122,6 +122,7 @@ export type PickupDeliveryTabProps = {
   onPickupOptionLabelChange: (optionId: string, label: string) => void;
   onRemovePickupOption: (optionId: string) => void;
   onReorderPickupOptions: (orderedIds: string[]) => void;
+  onRestorePickupOption: (optionId: string) => void;
   pickupOptions: PickupOptionDraft[];
 };
 
@@ -144,6 +145,7 @@ export default function PickupDeliveryTab({
   onPickupOptionLabelChange,
   onRemovePickupOption,
   onReorderPickupOptions,
+  onRestorePickupOption,
   pickupOptions,
 }: PickupDeliveryTabProps) {
   const [openSection, setOpenSection] =
@@ -278,6 +280,7 @@ export default function PickupDeliveryTab({
                 onLabelChange={onPickupOptionLabelChange}
                 onRemove={onRemovePickupOption}
                 onReorder={onReorderPickupOptions}
+                onRestore={onRestorePickupOption}
                 pickupOptions={pickupOptions}
               />
             ) : null}
@@ -442,6 +445,7 @@ function ManualPickupChoiceBuilder({
   onLabelChange,
   onRemove,
   onReorder,
+  onRestore,
   pickupOptions,
 }: {
   getVisiblePickupOptions: (
@@ -455,9 +459,18 @@ function ManualPickupChoiceBuilder({
   onLabelChange: (optionId: string, label: string) => void;
   onRemove: (optionId: string) => void;
   onReorder: (orderedIds: string[]) => void;
+  onRestore: (optionId: string) => void;
   pickupOptions: PickupOptionDraft[];
 }) {
+  const [showArchived, setShowArchived] = useState(false);
   const visibleOptions = getVisiblePickupOptions(pickupOptions);
+  const archivedOptions = [...pickupOptions]
+    .sort(
+      (first, second) =>
+        first.sort_order - second.sort_order ||
+        first.label.localeCompare(second.label),
+    )
+    .filter((option) => !option.is_active);
 
   return (
     <div className="grid gap-3">
@@ -508,6 +521,54 @@ function ManualPickupChoiceBuilder({
           )}
         />
       )}
+      <div className="border-t border-stone-100 pt-3">
+        <button
+          aria-expanded={showArchived}
+          className="text-sm font-semibold text-emerald-800 underline underline-offset-2"
+          onClick={() => setShowArchived((current) => !current)}
+          type="button"
+        >
+          {showArchived ? "Hide" : "Show"} archived pickup choices ({archivedOptions.length})
+        </button>
+        {showArchived ? (
+          archivedOptions.length === 0 ? (
+            <p className="mt-2 text-sm text-stone-600">No archived pickup choices.</p>
+          ) : (
+            <div className="mt-2 grid gap-2">
+              {archivedOptions.map((option) => (
+                <ArchivedPickupChoiceRow
+                  key={option.id}
+                  onRestore={() => onRestore(option.id)}
+                  option={option}
+                />
+              ))}
+            </div>
+          )
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ArchivedPickupChoiceRow({
+  onRestore,
+  option,
+}: {
+  onRestore: () => void;
+  option: PickupOptionDraft;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-stone-200 bg-stone-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="text-sm font-semibold text-stone-900">{option.label}</p>
+        {option.description ? <p className="text-xs text-stone-600">{option.description}</p> : null}
+        <p className="mt-0.5 text-xs text-stone-600">
+          Archived {formatArchivedDate(option.archived_at)}
+        </p>
+      </div>
+      <button className="seller-small-button" onClick={onRestore} type="button">
+        Restore
+      </button>
     </div>
   );
 }
@@ -569,4 +630,17 @@ function PickupChoiceRow({
 
 function pluralize(count: number, singular: string, plural: string) {
   return count === 1 ? singular : plural;
+}
+
+function formatArchivedDate(value: string | null) {
+  if (!value) return "previously";
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "previously"
+    : date.toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
 }

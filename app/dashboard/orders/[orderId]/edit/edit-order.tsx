@@ -139,6 +139,11 @@ type ConfiguredPickupOption = PickupOption & {
   archived_at: string | null;
 };
 
+type ConfiguredDeliveryOption = DeliveryOption & {
+  is_active: boolean;
+  archived_at: string | null;
+};
+
 const savedDeliveryOptionId = "__saved_delivery_option__";
 
 export function EditOrder({ orderId }: { orderId: string }) {
@@ -266,12 +271,11 @@ export function EditOrder({ orderId }: { orderId: string }) {
           .returns<ConfiguredPickupOption[]>(),
         supabase
           .from("store_delivery_options")
-          .select("id, name, price_amount")
+          .select("id, name, price_amount, is_active, archived_at")
           .eq("store_id", seller.store_id)
-          .eq("is_active", true)
           .order("sort_order", { ascending: true })
           .order("name", { ascending: true })
-          .returns<DeliveryOption[]>(),
+          .returns<ConfiguredDeliveryOption[]>(),
       ]);
 
       if (!isMounted) return;
@@ -1295,27 +1299,30 @@ function getEditablePickupOptions(
   order: EditableOrderRow | null,
 ) {
   return options
-    .filter(
-      (option) =>
-        option.id === order?.pickup_option_id ||
-        (option.is_active && !option.archived_at),
-    )
+    .filter((option) => option.is_active || option.archived_at)
     .map((option) => ({
       ...option,
       label:
-        option.id === order?.pickup_option_id &&
-        (!option.is_active || option.archived_at)
-          ? `${option.label} — archived`
+        !option.is_active || option.archived_at
+          ? `${option.label} (Archived)`
           : option.label,
     }));
 }
 
 function includeSavedDeliveryOption(
-  options: DeliveryOption[],
+  options: ConfiguredDeliveryOption[],
   order: EditableOrderRow | null,
 ) {
-  if (order?.fulfillment_method !== "delivery") return options;
-  if (!order.delivery_option_name_snapshot) return options;
+  const editableOptions = options.map((option) => ({
+    id: option.id,
+    isArchived: !option.is_active || Boolean(option.archived_at),
+    name: option.name,
+    price_amount: option.price_amount,
+  }));
+
+  if (order?.fulfillment_method !== "delivery" || !order.delivery_option_name_snapshot) {
+    return editableOptions;
+  }
 
   return [
     {
@@ -1323,7 +1330,7 @@ function includeSavedDeliveryOption(
       name: order.delivery_option_name_snapshot,
       price_amount: order.delivery_fee_amount ?? 0,
     },
-    ...options.filter((option) => option.id !== savedDeliveryOptionId),
+    ...editableOptions,
   ];
 }
 

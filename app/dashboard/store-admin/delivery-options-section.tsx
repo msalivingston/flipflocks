@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { SortableOptionList } from "./sortable-option-list";
 
 export type DeliveryOptionDraft = {
@@ -9,6 +9,7 @@ export type DeliveryOptionDraft = {
   price: string;
   sort_order: number;
   is_active: boolean;
+  archived_at: string | null;
   isNew?: boolean;
 };
 
@@ -42,7 +43,9 @@ export function DeliveryOptionsSection({
   onToggle,
   validationMessage,
 }: DeliveryOptionsSectionProps) {
+  const [showArchived, setShowArchived] = useState(false);
   const visibleOptions = getVisibleDeliveryOptions(deliveryOptions);
+  const archivedOptions = getArchivedDeliveryOptions(deliveryOptions);
 
   function updateOption(optionId: string, updates: Partial<DeliveryOptionDraft>) {
     onChange(
@@ -61,6 +64,7 @@ export function DeliveryOptionsSection({
         price: "",
         sort_order: visibleOptions.length,
         is_active: true,
+        archived_at: null,
         isNew: true,
       },
     ]);
@@ -71,9 +75,19 @@ export function DeliveryOptionsSection({
       deliveryOptions
         .filter((option) => !(option.id === optionId && option.isNew))
         .map((option) =>
-          option.id === optionId ? { ...option, is_active: false } : option,
+          option.id === optionId
+            ? {
+                ...option,
+                is_active: false,
+                archived_at: new Date().toISOString(),
+              }
+            : option,
         ),
     );
+  }
+
+  function restoreOption(optionId: string) {
+    updateOption(optionId, { is_active: true, archived_at: null });
   }
 
   function reorderOptions(orderedIds: string[]) {
@@ -187,8 +201,35 @@ export function DeliveryOptionsSection({
               )}
             />
           )}
+
         </div>
       ) : null}
+
+      <div className="border-t border-stone-100 pt-3">
+        <button
+          aria-expanded={showArchived}
+          className="text-sm font-semibold text-emerald-800 underline underline-offset-2"
+          onClick={() => setShowArchived((current) => !current)}
+          type="button"
+        >
+          {showArchived ? "Hide" : "Show"} archived delivery options ({archivedOptions.length})
+        </button>
+        {showArchived ? (
+          archivedOptions.length === 0 ? (
+            <p className="mt-2 text-sm text-stone-600">No archived delivery options.</p>
+          ) : (
+            <div className="mt-2 grid gap-2">
+              {archivedOptions.map((option) => (
+                <ArchivedDeliveryOptionRow
+                  key={option.id}
+                  onRestore={() => restoreOption(option.id)}
+                  option={option}
+                />
+              ))}
+            </div>
+          )
+        ) : null}
+      </div>
     </section>
   );
 }
@@ -234,7 +275,29 @@ function DeliveryOptionRow({
         onClick={onRemove}
         type="button"
       >
-        Remove
+        {option.isNew ? "Remove" : "Archive"}
+      </button>
+    </div>
+  );
+}
+
+function ArchivedDeliveryOptionRow({
+  onRestore,
+  option,
+}: {
+  onRestore: () => void;
+  option: DeliveryOptionDraft;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-stone-200 bg-stone-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="text-sm font-semibold text-stone-900">{option.name}</p>
+        <p className="text-xs text-stone-600">
+          ${option.price || "0.00"} · Archived {formatArchivedDate(option.archived_at)}
+        </p>
+      </div>
+      <button className="seller-small-button" onClick={onRestore} type="button">
+        Restore
       </button>
     </div>
   );
@@ -242,6 +305,23 @@ function DeliveryOptionRow({
 
 function getVisibleDeliveryOptions(options: DeliveryOptionDraft[]) {
   return sortDeliveryOptions(options).filter((option) => option.is_active);
+}
+
+function getArchivedDeliveryOptions(options: DeliveryOptionDraft[]) {
+  return sortDeliveryOptions(options).filter((option) => !option.is_active);
+}
+
+function formatArchivedDate(value: string | null) {
+  if (!value) return "previously";
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "previously"
+    : date.toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
 }
 
 function sortDeliveryOptions(options: DeliveryOptionDraft[]) {

@@ -207,6 +207,7 @@ type DeliveryOption = {
   price_amount: number | string;
   sort_order: number;
   is_active: boolean;
+  archived_at: string | null;
 };
 
 type StoreMediaItem = {
@@ -556,7 +557,7 @@ export function StoreAdmin() {
             .returns<PickupOption[]>(),
           supabase
             .from("store_delivery_options")
-            .select("id, store_id, name, price_amount, sort_order, is_active")
+            .select("id, store_id, name, price_amount, sort_order, is_active, archived_at")
             .eq("store_id", seller.store_id)
             .order("sort_order", { ascending: true })
             .order("name", { ascending: true })
@@ -1551,6 +1552,18 @@ export function StoreAdmin() {
     }
   }
 
+  function restorePickupOption(optionId: string) {
+    setSaveState("idle");
+    setSaveMessage(null);
+    setPickupOptions((current) =>
+      current.map((option) =>
+        option.id === optionId
+          ? { ...option, is_active: true, archived_at: null }
+          : option,
+      ),
+    );
+  }
+
   function reorderPickupOptions(orderedIds: string[]) {
     setSaveState("idle");
     setSaveMessage(null);
@@ -2393,6 +2406,7 @@ export function StoreAdmin() {
                 }
                 onRemovePickupOption={removePickupOption}
                 onReorderPickupOptions={reorderPickupOptions}
+                onRestorePickupOption={restorePickupOption}
                 pickupOptions={pickupOptions}
               />
             ) : null}
@@ -5308,6 +5322,7 @@ function toDeliveryOptionDraft(option: DeliveryOption): DeliveryOptionDraft {
     price: formatDeliveryPrice(option.price_amount),
     sort_order: option.sort_order,
     is_active: option.is_active,
+    archived_at: option.archived_at,
   };
 }
 
@@ -5360,6 +5375,7 @@ function normalizeDeliveryOptionDrafts(options: DeliveryOptionDraft[]) {
     price: option.price.trim(),
     sort_order: option.sort_order,
     is_active: option.is_active,
+    archived_at: option.archived_at,
     isNew: option.isNew ?? false,
   }));
 }

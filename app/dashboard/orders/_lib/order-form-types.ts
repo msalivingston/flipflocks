@@ -123,6 +123,7 @@ export type PickupOption = {
 
 export type DeliveryOption = {
   id: string;
+  isArchived?: boolean;
   name: string;
   price_amount: number | null;
 };

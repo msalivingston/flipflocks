@@ -41,5 +41,7 @@ export function formatSavedDeliveryAddress(
 }
 
 export function formatDeliveryOptionLabel(option: DeliveryOption) {
-  return `${option.name} - ${formatCurrency(option.price_amount ?? 0)}`;
+  return `${option.name} - ${formatCurrency(option.price_amount ?? 0)}${
+    option.isArchived ? " (Archived)" : ""
+  }`;
 }
