@@ -1534,16 +1534,17 @@ export function OrderDetail({ orderId }: { orderId: string }) {
                       key={item.order_item_id}
                       item={item}
                       media={data.mediaByItemId[item.order_item_id] ?? null}
+                      showGrossLineSubtotal={Boolean(order.discount_snapshot)}
                     />
                   ))}
                 </div>
                 <dl className="border-t border-stone-200/80 bg-transparent px-4 py-2.5 text-sm lg:bg-[#fffdf8]">
-                  {order.discount_snapshot ? <>
-                    <RequestedTotalRow label="Merchandise before discounts" value={formatCurrency(order.gross_subtotal_amount ?? null)} />
+                  {order.discount_snapshot && (Number(order.coupon_discount_amount) > 0 || Number(order.manual_discount_amount) > 0) ? <>
+                    <RequestedTotalRow label="Subtotal" value={formatCurrency(order.gross_subtotal_amount ?? null)} />
                     {Number(order.coupon_discount_amount) > 0 ? <RequestedTotalRow label={`Coupon (${order.discount_snapshot.coupon?.code ?? ""})`} value={`-${formatCurrency(order.coupon_discount_amount ?? null)}`} /> : null}
                     {Number(order.manual_discount_amount) > 0 ? <RequestedTotalRow label="Manual discount" value={`-${formatCurrency(order.manual_discount_amount ?? null)}`} /> : null}
                   </> : null}
-                  <RequestedTotalRow label={order.discount_snapshot ? "Subtotal after discounts" : "Subtotal"} value={formatCurrency(order.subtotal_amount)} />
+                  {!order.discount_snapshot || (Number(order.coupon_discount_amount) === 0 && Number(order.manual_discount_amount) === 0) ? <RequestedTotalRow label="Subtotal" value={formatCurrency(order.subtotal_amount)} /> : null}
                   {order.tax_fee_amount ? (
                     <RequestedTotalRow
                       label={order.tax_fee_label_snapshot ?? "Tax/fee"}
@@ -1642,9 +1643,11 @@ export function OrderDetail({ orderId }: { orderId: string }) {
 function OrderItemRow({
   item,
   media,
+  showGrossLineSubtotal,
 }: {
   item: SellerOrderItemRow;
   media: SellerMediaRow | null;
+  showGrossLineSubtotal: boolean;
 }) {
   const category = classifyOrderItemCategory(item);
   const categoryLabel = formatOrderItemCategoryLabel(category);
@@ -1727,7 +1730,7 @@ function OrderItemRow({
         />
         <MobileAmount
           label="Line total"
-          value={formatCurrency(item.line_subtotal)}
+          value={formatCurrency(showGrossLineSubtotal ? Number(item.unit_price_snapshot ?? 0) * item.quantity : item.line_subtotal)}
         />
       </div>
     </article>

@@ -1071,20 +1071,21 @@ function renderOrderDocumentEmail(
     fact("Payment status", printPaymentStatusText(order.payment_status)),
   ];
   const totalRows = [
-    hasAmount(order.tax_fee_amount) || hasAmount(order.delivery_fee_amount)
-      ? fact("Subtotal", formatCurrency(order.subtotal_amount, store.currency))
-      : null,
+    ...(order.discount_snapshot ? [
+      fact("Subtotal", formatCurrency(order.gross_subtotal_amount ?? 0, store.currency)),
+      ...(Number(order.coupon_discount_amount) > 0 ? [fact(`Coupon (${order.discount_snapshot.coupon?.code ?? ""})`, `-${formatCurrency(order.coupon_discount_amount ?? 0, store.currency)}`)] : []),
+      ...(Number(order.manual_discount_amount) > 0 ? [fact("Manual discount", `-${formatCurrency(order.manual_discount_amount ?? 0, store.currency)}`)] : []),
+    ] : [
+      hasAmount(order.tax_fee_amount) || hasAmount(order.delivery_fee_amount)
+        ? fact("Subtotal", formatCurrency(order.subtotal_amount, store.currency))
+        : null,
+    ]),
     isDeliveryOrder && hasAmount(order.delivery_fee_amount)
       ? fact("Delivery fee", formatCurrency(order.delivery_fee_amount ?? 0, store.currency))
       : null,
     hasAmount(order.tax_fee_amount)
       ? fact(order.tax_fee_label_snapshot || "Tax/fee", formatCurrency(order.tax_fee_amount, store.currency))
       : null,
-    ...(order.discount_snapshot ? [
-      fact("Merchandise before discounts", formatCurrency(order.gross_subtotal_amount ?? 0, store.currency)),
-      ...(Number(order.coupon_discount_amount) > 0 ? [fact(`Coupon (${order.discount_snapshot.coupon?.code ?? ""})`, `-${formatCurrency(order.coupon_discount_amount ?? 0, store.currency)}`)] : []),
-      ...(Number(order.manual_discount_amount) > 0 ? [fact("Manual discount", `-${formatCurrency(order.manual_discount_amount ?? 0, store.currency)}`)] : []),
-    ] : []),
     fact("Total", formatCurrency(order.total_amount, store.currency)),
   ];
   const fulfillmentRows = isDeliveryOrder
@@ -1144,7 +1145,7 @@ function renderOrderDocumentEmail(
       buyerPrintOrderTitle(order, options.statusLabel),
       buyerPrintOptionalSection("Cancellation", buyerPrintFieldRows(cancellationRows)),
       buyerPrintTwoColumn(buyerRows, paymentRows),
-      buyerPrintItemsTable(displayedItems, store.currency),
+      buyerPrintItemsTable(displayedItems, store.currency, Boolean(order.discount_snapshot)),
       buyerPrintTotalsTable(totalRows),
       buyerPrintFulfillmentSection(fulfillmentRows),
       buyerPrintOptionalSection("Notes", buyerPrintParagraph(order.buyer_notes ?? "")),
@@ -1176,7 +1177,7 @@ function renderOrderDocumentEmail(
     "",
     "Items:",
     ...displayedItems.map((item) =>
-      `- ${itemName(item)} x ${item.quantity}: ${formatCurrency(item.line_subtotal, store.currency)}`
+      `- ${itemName(item)} x ${item.quantity}: ${formatCurrency(order.discount_snapshot ? Number(item.unit_price_snapshot) * item.quantity : item.line_subtotal, store.currency)}`
     ),
     "",
     "Totals:",
@@ -1483,7 +1484,7 @@ function buyerPrintFieldRows(rows: Array<{ label: string; value: string } | null
   }</table>`;
 }
 
-function buyerPrintItemsTable(items: OrderItemRow[], currency?: string | null): string {
+function buyerPrintItemsTable(items: OrderItemRow[], currency?: string | null, showGrossLines = false): string {
   if (items.length === 0) return buyerPrintParagraph("No item details were available.");
 
   return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;table-layout:fixed;margin:0.12in 0 0;">
@@ -1500,7 +1501,7 @@ function buyerPrintItemsTable(items: OrderItemRow[], currency?: string | null): 
       </td>
       <td align="right" style="border-bottom:0.6pt solid #999999;padding:0.085in 0.06in;color:#000000;font-size:10.5pt;line-height:1.22;vertical-align:middle;">${item.quantity}</td>
       <td align="right" style="border-bottom:0.6pt solid #999999;padding:0.085in 0.06in;color:#000000;font-size:10.5pt;line-height:1.22;vertical-align:middle;">${escapeHtml(formatCurrency(item.unit_price_snapshot, currency))}</td>
-      <td align="right" style="border-bottom:0.6pt solid #999999;padding:0.085in 0 0.085in 0.06in;color:#000000;font-size:10.5pt;line-height:1.22;vertical-align:middle;">${escapeHtml(formatCurrency(item.line_subtotal, currency))}</td>
+      <td align="right" style="border-bottom:0.6pt solid #999999;padding:0.085in 0 0.085in 0.06in;color:#000000;font-size:10.5pt;line-height:1.22;vertical-align:middle;">${escapeHtml(formatCurrency(showGrossLines ? Number(item.unit_price_snapshot) * item.quantity : item.line_subtotal, currency))}</td>
     </tr>`).join("")}
   </table>`;
 }

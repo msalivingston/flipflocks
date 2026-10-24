@@ -29,7 +29,7 @@ import {
   calculateFinalTotal,
   calculateOrderSubtotal,
   customLine,
-  distributeDiscount,
+  isActiveLine,
   emptyLine,
   formatCustomItemPayloadName,
   formatMoneyInput,
@@ -544,7 +544,6 @@ export function NewManualOrder({
     discountType,
     discountValue,
   );
-  const discountedLines = distributeDiscount(lines, inventory, discountAmount);
   const taxAmount = 0;
   const selectedDeliveryOption = deliveryOptions.find(
     (option) => option.id === deliveryOptionId,
@@ -694,10 +693,12 @@ export function NewManualOrder({
     const shouldSendBuyerConfirmation =
       sendBuyerConfirmation && canEmailBuyerConfirmation;
     const result = await supabase.rpc("seller_create_manual_order", {
-      ...(couponCode.trim() ? { p_coupon_code: couponCode.trim(), p_manual_discount_type: discountType, p_manual_discount_value: Number(discountValue || 0) } : {}),
+      p_coupon_code: couponCode.trim(),
+      p_manual_discount_type: discountType,
+      p_manual_discount_value: Number(discountValue || 0),
       p_store_id: seller.store_id,
       p_idempotency_key: crypto.randomUUID(),
-      p_items: discountedLines.map((line) => ({
+      p_items: lines.filter(isActiveLine).map((line) => ({
         item_type:
           line.type === "custom" ? "custom" : getManualOrderPayloadItemType(line),
         inventory_item_id:
@@ -713,7 +714,7 @@ export function NewManualOrder({
         custom_item_name:
           line.type === "custom" ? formatCustomItemPayloadName(line) : undefined,
         quantity: Number(line.quantity),
-        unit_price: couponCode.trim() ? Number(line.unitPrice) : line.discountedUnitPrice,
+        unit_price: Number(line.unitPrice),
       })),
       p_customer_id:
         customerMode === "existing" ? selectedCustomer?.customer_id ?? null : null,

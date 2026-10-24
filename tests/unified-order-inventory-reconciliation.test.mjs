@@ -46,6 +46,10 @@ const orderPredicatesPath = new URL(
   "../app/dashboard/orders/order-action-predicates.ts",
   import.meta.url,
 );
+const paidEditGuardPath = new URL(
+  "../supabase/migrations/20261024130000_block_paid_order_edits.sql",
+  import.meta.url,
+);
 
 test("the debit ledger is nullable-first and does not guess source-backed history", async () => {
   const source = await readFile(migrationPath, "utf8");
@@ -359,9 +363,10 @@ test("the checkout Edge handler remains on the secured V2 creation path", async 
   );
 });
 
-test("paid Stripe-backed orders are blocked from the edit surface and RPC", async () => {
-  const [migration, predicates] = await Promise.all([
+test("paid orders are blocked from the edit surface and RPC", async () => {
+  const [migration, guardMigration, predicates] = await Promise.all([
     readFile(migrationPath, "utf8"),
+    readFile(paidEditGuardPath, "utf8"),
     readFile(orderPredicatesPath, "utf8"),
   ]);
 
@@ -370,7 +375,9 @@ test("paid Stripe-backed orders are blocked from the edit surface and RPC", asyn
     /v_order\.payment_method = 'stripe_checkout'[\s\S]*v_order\.payment_status <> 'unpaid'[\s\S]*Paid online orders cannot be edited\./,
   );
   assert.match(
-    predicates,
-    /order\.payment_method === "stripe_checkout"[\s\S]*order\.payment_status !== "unpaid"/,
+    guardMigration,
+    /coalesce\(v_order\.payment_status, ''\) not in \('unpaid', 'pay_at_pickup'\)[\s\S]*Paid orders cannot be edited\./,
   );
+  assert.match(predicates, /order\.payment_status === "unpaid"/);
+  assert.match(predicates, /order\.payment_status === "pay_at_pickup"/);
 });

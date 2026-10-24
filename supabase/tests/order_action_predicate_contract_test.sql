@@ -124,7 +124,7 @@ select ok(
       and retained.definition like '%order_status = ''fulfilled''%'
       and not has_function_privilege(
         'authenticated',
-        'public.seller_edit_order_batch_d_internal(uuid,jsonb,jsonb,uuid,text,text,text,text,text,text,text,uuid,text,uuid,text,numeric,text,text,text,text,text,text,numeric)',
+        'public.seller_edit_order_batch_d_internal(uuid,jsonb,jsonb,uuid,text,text,text,text,text,text,text,uuid,text,uuid,text,numeric,text,text,text,text,text,text,numeric,text,text,numeric)',
         'execute'
       )
     from active_order_action_functions as wrapper

@@ -1,6 +1,6 @@
 import {
-  distributeDiscount,
   formatCustomItemPayloadName,
+  isActiveLine,
   validateSharedOrderForm,
 } from "./order-form-calculations";
 import { getManualOrderPayloadItemType } from "./order-form-inventory";
@@ -76,16 +76,14 @@ export type EditOrderRpcPayload = {
 export function buildEditOrderPayload(
   options: EditOrderPayloadOptions,
 ): EditOrderRpcPayload {
-  const discountedLines = distributeDiscount(
-    options.lines,
-    options.inventory,
-    options.discountAmount,
-  );
+  const selectedLines = options.lines.filter(isActiveLine);
 
   return {
-    ...(options.couponCode !== undefined ? { p_coupon_code: options.couponCode, p_manual_discount_type: options.manualDiscountType ?? "fixed", p_manual_discount_value: options.manualDiscountValue ?? 0 } : {}),
+    p_coupon_code: options.couponCode ?? "",
+    p_manual_discount_type: options.manualDiscountType ?? "fixed",
+    p_manual_discount_value: options.manualDiscountValue ?? 0,
     p_order_id: options.orderId,
-    p_items: discountedLines.map((line) => ({
+    p_items: selectedLines.map((line) => ({
       order_item_id: line.orderItemId ?? null,
       item_type:
         line.type === "custom" ? "custom" : getManualOrderPayloadItemType(line),
@@ -104,7 +102,7 @@ export function buildEditOrderPayload(
       custom_item_name:
         line.type === "custom" ? formatCustomItemPayloadName(line) : null,
       quantity: Number(line.quantity),
-      unit_price: options.couponCode !== undefined ? Number(line.unitPrice) : line.discountedUnitPrice,
+      unit_price: Number(line.unitPrice),
     })),
     p_removed_items: getRemovedInventoryLines(
       options.originalLines,

@@ -100,6 +100,13 @@ type SellerOrderRow = {
   pickup_note: string | null;
   buyer_notes: string | null;
   total_amount: number | null;
+  discount_snapshot?: { coupon: { code: string } | null } | null;
+  gross_subtotal_amount?: number | null;
+  subtotal_amount?: number | null;
+  coupon_discount_amount?: number;
+  manual_discount_amount?: number;
+  tax_fee_amount?: number;
+  delivery_fee_amount?: number;
   item_count: number | null;
   total_item_quantity: number | null;
   pickup_option_id: string | null;
@@ -2183,6 +2190,7 @@ function PickupSummaryModal({
     const payload = buildPickupSummaryPayload({
       exportFormat,
       includedLines,
+      orders,
       reports: selectedReports,
     });
 
@@ -2678,12 +2686,15 @@ function getPickupSummaryTotals(lines: PickupSummaryLine[]) {
 function buildPickupSummaryPayload({
   exportFormat,
   includedLines,
+  orders,
   reports,
 }: {
   exportFormat: PickupSummaryExportFormat;
   includedLines: PickupSummaryLine[];
+  orders: PickupSummaryOrder[];
   reports: PickupSummaryReport[];
 }): PickupSummaryPayload {
+  const ordersById = new Map(orders.map(({ order }) => [order.order_id, order]));
   const includedOrders = new Map<
     string,
     PickupSummaryPayload["includedOrders"][number]
@@ -2710,6 +2721,12 @@ function buildPickupSummaryPayload({
       phone: line.customerPhone,
       totalBirds: 0,
       totalValue: 0,
+      orderSubtotal: Number(ordersById.get(line.orderId)?.gross_subtotal_amount ?? ordersById.get(line.orderId)?.subtotal_amount ?? 0),
+      orderDiscount: Number(ordersById.get(line.orderId)?.coupon_discount_amount ?? 0) + Number(ordersById.get(line.orderId)?.manual_discount_amount ?? 0),
+      couponDiscount: Number(ordersById.get(line.orderId)?.coupon_discount_amount ?? 0),
+      manualDiscount: Number(ordersById.get(line.orderId)?.manual_discount_amount ?? 0),
+      orderFees: Number(ordersById.get(line.orderId)?.tax_fee_amount ?? 0) + Number(ordersById.get(line.orderId)?.delivery_fee_amount ?? 0),
+      orderTotal: Number(ordersById.get(line.orderId)?.total_amount ?? 0),
     };
 
     existing.totalBirds += line.quantity;
@@ -2836,7 +2853,7 @@ function OrderRow({
             className="grid gap-3 border-t border-stone-200/80 pt-3"
             id={mobileDetailsId}
           >
-            <OrderItemsQuickview items={items} />
+            <OrderItemsQuickview items={items} order={order} />
 
             <div className="grid gap-2 text-sm text-stone-700">
               {order.buyer_phone_snapshot ? (
@@ -3015,7 +3032,7 @@ function OrderRow({
           id={desktopDetailsId}
         >
           <div className="pl-[calc(2.25rem+0.75rem)]">
-            <OrderItemsQuickview items={items} />
+            <OrderItemsQuickview items={items} order={order} />
           </div>
         </div>
       ) : null}
@@ -3051,7 +3068,7 @@ function MobileOrderRowContent({ order }: { order: SellerOrderRow }) {
   );
 }
 
-function OrderItemsQuickview({ items }: { items: SellerOrderItemRow[] }) {
+function OrderItemsQuickview({ items, order }: { items: SellerOrderItemRow[]; order: SellerOrderRow }) {
   if (items.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-stone-200 bg-white px-3 py-2 text-sm text-stone-500">
@@ -3085,12 +3102,22 @@ function OrderItemsQuickview({ items }: { items: SellerOrderItemRow[] }) {
                 ) : null}
               </div>
               <p className="text-sm text-stone-600 sm:text-right">
-                {formatCurrency(item.line_subtotal)}
+                {formatCurrency(order.discount_snapshot ? Number(item.unit_price_snapshot ?? 0) * item.quantity : item.line_subtotal)}
               </p>
             </div>
           );
         })}
       </div>
+      {order.discount_snapshot && (Number(order.coupon_discount_amount) > 0 || Number(order.manual_discount_amount) > 0) ? (
+        <div className="border-t border-stone-200 pt-2 text-sm text-stone-600">
+          <div>Subtotal: {formatCurrency(order.gross_subtotal_amount ?? null)}</div>
+          {Number(order.coupon_discount_amount) > 0 ? <div>Coupon ({order.discount_snapshot.coupon?.code}): -{formatCurrency(order.coupon_discount_amount ?? null)}</div> : null}
+          {Number(order.manual_discount_amount) > 0 ? <div>Manual discount: -{formatCurrency(order.manual_discount_amount ?? null)}</div> : null}
+          {Number(order.tax_fee_amount) > 0 ? <div>Tax/local fee: {formatCurrency(order.tax_fee_amount ?? null)}</div> : null}
+          {Number(order.delivery_fee_amount) > 0 ? <div>Delivery: {formatCurrency(order.delivery_fee_amount ?? null)}</div> : null}
+          <div className="font-semibold text-stone-950">Total: {formatCurrency(order.total_amount)}</div>
+        </div>
+      ) : null}
     </div>
   );
 }

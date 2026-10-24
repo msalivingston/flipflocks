@@ -58,6 +58,13 @@ type SellerReportOrderRow = {
   buyer_notes: string | null;
   pickup_note: string | null;
   total_amount: number | null;
+  gross_subtotal_amount: number | null;
+  subtotal_amount: number | null;
+  coupon_discount_amount: number | null;
+  manual_discount_amount: number | null;
+  coupon_code: string | null;
+  tax_fee_amount: number | null;
+  delivery_fee_amount: number | null;
   item_count: number | null;
   total_item_quantity: number | null;
   item_summary: string;
@@ -1530,6 +1537,16 @@ function SalesTable({ orders }: { orders: SellerReportOrderRow[] }) {
                 <TableCell>{order.total_item_quantity ?? 0}</TableCell>
                 <TableCell align="right">
                   {formatCurrency(order.total_amount)}
+                  {order.coupon_discount_amount || order.manual_discount_amount ? (
+                    <div className="text-xs font-normal text-stone-500">
+                      <div>Subtotal: {formatCurrency(order.gross_subtotal_amount ?? order.subtotal_amount)}</div>
+                      {order.coupon_discount_amount ? `Coupon${order.coupon_code ? ` (${order.coupon_code})` : ""}: -${formatCurrency(order.coupon_discount_amount)}` : null}
+                      {order.coupon_discount_amount && order.manual_discount_amount ? " · " : null}
+                      {order.manual_discount_amount ? `Discount: -${formatCurrency(order.manual_discount_amount)}` : null}
+                      {order.tax_fee_amount ? <div>Tax/local fee: {formatCurrency(order.tax_fee_amount)}</div> : null}
+                      {order.delivery_fee_amount ? <div>Delivery: {formatCurrency(order.delivery_fee_amount)}</div> : null}
+                    </div>
+                  ) : null}
                 </TableCell>
                 <TableCell>
                   <StatusPill label={formatOrderLifecycle(order)} />
@@ -1745,6 +1762,16 @@ function MobileSalesRow({
           <p className="text-base font-bold text-stone-950">
             {formatCurrency(order.total_amount)}
           </p>
+          {order.coupon_discount_amount || order.manual_discount_amount ? (
+            <p className="text-xs text-stone-500">
+              Subtotal {formatCurrency(order.gross_subtotal_amount ?? order.subtotal_amount)} · {" "}
+              {order.coupon_discount_amount ? `Coupon -${formatCurrency(order.coupon_discount_amount)}` : null}
+              {order.coupon_discount_amount && order.manual_discount_amount ? " · " : null}
+              {order.manual_discount_amount ? `Discount -${formatCurrency(order.manual_discount_amount)}` : null}
+              {order.tax_fee_amount ? ` · Tax/local fee ${formatCurrency(order.tax_fee_amount)}` : null}
+              {order.delivery_fee_amount ? ` · Delivery ${formatCurrency(order.delivery_fee_amount)}` : null}
+            </p>
+          ) : null}
           <StatusPill label={formatOrderLifecycle(order)} />
         </div>
       </div>
@@ -1836,6 +1863,13 @@ function buildSalesCsvRows(
       "Item Summary",
       "Items Count",
       "Order Total",
+      "Merchandise Subtotal",
+      "Coupon Code",
+      "Coupon Discount",
+      "Manual Discount",
+      "Subtotal After Discounts",
+      "Tax/Local Fee",
+      "Delivery Fee",
       "Payment Method",
       "Notes",
     ],
@@ -1850,6 +1884,13 @@ function buildSalesCsvRows(
         order.item_summary ?? "",
         `${order.total_item_quantity ?? order.item_count ?? 0}`,
         formatCsvNumber(order.total_amount),
+        formatCsvNumber(order.gross_subtotal_amount ?? order.subtotal_amount),
+        order.coupon_code ?? "",
+        formatCsvNumber(order.coupon_discount_amount),
+        formatCsvNumber(order.manual_discount_amount),
+        formatCsvNumber(order.subtotal_amount),
+        formatCsvNumber(order.tax_fee_amount),
+        formatCsvNumber(order.delivery_fee_amount),
         formatPaymentMethod(order.payment_method),
         [order.buyer_notes, order.pickup_note].filter(Boolean).join(" "),
       ];
@@ -2109,6 +2150,13 @@ function normalizeSalesRow(
     pickup_note: nullableString(row.pickup_note),
     ready_for_pickup_at: nullableString(row.ready_for_pickup_at),
     total_amount: nullableNumber(row.total_amount),
+    gross_subtotal_amount: nullableNumber(row.gross_subtotal_amount),
+    subtotal_amount: nullableNumber(row.subtotal_amount),
+    coupon_discount_amount: nullableNumber(row.coupon_discount_amount),
+    manual_discount_amount: nullableNumber(row.manual_discount_amount),
+    coupon_code: nullableString(row.coupon_code),
+    tax_fee_amount: nullableNumber(row.tax_fee_amount),
+    delivery_fee_amount: nullableNumber(row.delivery_fee_amount),
     total_item_quantity: nullableNumber(row.total_item_quantity),
   };
 }

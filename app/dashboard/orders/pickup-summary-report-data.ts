@@ -30,6 +30,12 @@ export type PickupSummaryPayload = {
     phone: string | null;
     totalBirds: number;
     totalValue: number;
+    orderSubtotal?: number;
+    orderDiscount?: number;
+    couponDiscount?: number;
+    manualDiscount?: number;
+    orderFees?: number;
+    orderTotal?: number;
   }>;
   includedOrderLines: PickupSummaryLine[];
   includedOrders: Array<{
@@ -62,6 +68,12 @@ export type PickupSummaryOrderSummaryRow = {
   phone: string;
   totalBirds: number;
   totalValue: number;
+  orderSubtotal: number;
+  orderDiscount: number;
+  couponDiscount: number;
+  manualDiscount: number;
+  orderFees: number;
+  orderTotal: number;
 };
 
 export type PickupSummaryReportData = {
@@ -71,6 +83,12 @@ export type PickupSummaryReportData = {
   orderSummaryTotals: {
     birds: number;
     value: number;
+    orderSubtotal: number;
+    orderDiscount: number;
+    couponDiscount: number;
+    manualDiscount: number;
+    orderFees: number;
+    orderTotal: number;
   };
   pullSheetRows: PickupSummaryPullSheetRow[];
   pullSheetTotalBirds: number;
@@ -91,6 +109,12 @@ export function createPickupSummaryReportData(
       phone: order.phone?.trim() ?? "",
       totalBirds: order.totalBirds,
       totalValue: order.totalValue,
+      orderSubtotal: order.orderSubtotal ?? order.totalValue,
+      orderDiscount: order.orderDiscount ?? 0,
+      couponDiscount: order.couponDiscount ?? 0,
+      manualDiscount: order.manualDiscount ?? 0,
+      orderFees: order.orderFees ?? 0,
+      orderTotal: order.orderTotal ?? order.totalValue,
     }))
     .sort(compareOrderNumbers);
 
@@ -105,6 +129,12 @@ export function createPickupSummaryReportData(
     orderSummaryTotals: {
       birds: orderSummaryRows.reduce((total, row) => total + row.totalBirds, 0),
       value: orderSummaryRows.reduce((total, row) => total + row.totalValue, 0),
+      orderSubtotal: orderSummaryRows.reduce((total, row) => total + row.orderSubtotal, 0),
+      orderDiscount: orderSummaryRows.reduce((total, row) => total + row.orderDiscount, 0),
+      couponDiscount: orderSummaryRows.reduce((total, row) => total + row.couponDiscount, 0),
+      manualDiscount: orderSummaryRows.reduce((total, row) => total + row.manualDiscount, 0),
+      orderFees: orderSummaryRows.reduce((total, row) => total + row.orderFees, 0),
+      orderTotal: orderSummaryRows.reduce((total, row) => total + row.orderTotal, 0),
     },
     pullSheetRows,
     pullSheetTotalBirds: pullSheetRows.reduce(

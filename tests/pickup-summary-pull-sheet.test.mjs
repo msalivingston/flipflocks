@@ -57,6 +57,28 @@ test("Pull Sheet separates feather condition and uses compact age labels", () =>
   assert.equal(formatPullSheetAge(364), "12 mo");
 });
 
+test("Order Summary keeps selected bird revenue distinct from order discounts and final total", () => {
+  const data = createPickupSummaryReportData({
+    defaultSelectionRule: "test",
+    exportFormat: "pdf",
+    includedBirdTotalPerCustomer: [{
+      customerName: "Buyer", email: "buyer@example.test", orderId: "order-1",
+      orderNumber: "1", phone: "", totalBirds: 2, totalValue: 30,
+      orderSubtotal: 40, orderDiscount: 10, couponDiscount: 6,
+      manualDiscount: 4, orderFees: 2.5, orderTotal: 32.5,
+    }],
+    includedOrderLines: [], includedOrders: [], overallBirdTotal: 2,
+    overallPickupValue: 30, reports: ["order_summary"],
+  });
+  assert.equal(data.orderSummaryRows[0].totalValue, 30);
+  assert.equal(data.orderSummaryRows[0].orderSubtotal, 40);
+  assert.equal(data.orderSummaryTotals.orderDiscount, 10);
+  assert.equal(data.orderSummaryTotals.couponDiscount, 6);
+  assert.equal(data.orderSummaryTotals.manualDiscount, 4);
+  assert.equal(data.orderSummaryTotals.orderFees, 2.5);
+  assert.equal(data.orderSummaryTotals.orderTotal, 32.5);
+});
+
 test("Pull Sheet uses breeding history status and groups only identical displayed rows", () => {
   const data = report([
     line({ quantity: 2 }),

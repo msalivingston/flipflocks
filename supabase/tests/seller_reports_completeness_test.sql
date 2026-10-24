@@ -27,24 +27,40 @@ values
 
 insert into public.stores (
   id, owner_user_id, store_name, store_slug, store_status,
-  storefront_mode, storefront_enabled
+  storefront_mode, storefront_enabled, show_public_phone, public_phone
 )
 values
   (
     'eb000000-0000-4000-8000-000000000010',
     'eb000000-0000-4000-8000-000000000001',
-    'Complete Report Store', 'complete-report-store', 'live', 'hosted', true
+    'Complete Report Store', 'complete-report-store', 'live', 'hosted', true, true, '555-0100'
   ),
   (
     'eb000000-0000-4000-8000-000000000020',
     'eb000000-0000-4000-8000-000000000002',
-    'Private Report Store', 'private-report-store', 'live', 'hosted', true
+    'Private Report Store', 'private-report-store', 'live', 'hosted', true, true, '555-0101'
   ),
   (
     'eb000000-0000-4000-8000-000000000030',
     'eb000000-0000-4000-8000-000000000001',
-    'Empty Report Store', 'empty-report-store', 'live', 'hosted', true
+    'Empty Report Store', 'empty-report-store', 'live', 'hosted', true, true, '555-0102'
   );
+
+insert into public.seller_billing_status (
+  store_id, requested_plan_key, requested_billing_cadence, plan_key,
+  billing_plan, subscription_status, trial_started_at, trial_ends_at,
+  current_period_start, current_period_end, storefront_access_until,
+  billing_state_authority
+)
+select id, 'full_flock', 'monthly', 'full_flock', 'monthly', 'trialing',
+  now(), now() + interval '7 days', now(), now() + interval '7 days',
+  now() + interval '7 days', 'trial'
+from public.stores
+where id in (
+  'eb000000-0000-4000-8000-000000000010',
+  'eb000000-0000-4000-8000-000000000020',
+  'eb000000-0000-4000-8000-000000000030'
+);
 
 create temporary table report_test_customers as
 select series, gen_random_uuid() as id

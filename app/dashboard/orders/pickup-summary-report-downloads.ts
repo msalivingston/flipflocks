@@ -133,12 +133,17 @@ function buildPullSheetPdfPages(reportData: PickupSummaryReportData) {
 function buildOrderSummaryPdfPages(reportData: PickupSummaryReportData) {
   return buildTablePdfPages({
     columns: [
-      { align: "center", label: "Order #", width: 70 },
-      { align: "left", label: "Contact name", width: 145 },
-      { align: "left", label: "Phone", width: 120 },
-      { align: "left", label: "Email", width: 220 },
-      { align: "center", label: "Total birds", width: 80 },
-      { align: "right", label: "Order total", width: 101 },
+      { align: "center", label: "Order #", width: 48 },
+      { align: "left", label: "Contact\nname", width: 92 },
+      { align: "left", label: "Phone", width: 72 },
+      { align: "left", label: "Email", width: 104 },
+      { align: "center", label: "Birds", width: 38 },
+      { align: "right", label: "Bird\nvalue", width: 62 },
+      { align: "right", label: "Order\nsubtotal", width: 65 },
+      { align: "right", label: "Coupon", width: 57 },
+      { align: "right", label: "Manual\ndiscount", width: 57 },
+      { align: "right", label: "Tax +\ndelivery", width: 56 },
+      { align: "right", label: "Order\ntotal", width: 85 },
     ],
     dateLabel: reportData.generatedDateLabel,
     layout: landscapePdfPage,
@@ -149,6 +154,11 @@ function buildOrderSummaryPdfPages(reportData: PickupSummaryReportData) {
       row.email,
       row.totalBirds,
       formatCurrency(row.totalValue),
+      formatCurrency(row.orderSubtotal),
+      formatCurrency(row.couponDiscount),
+      formatCurrency(row.manualDiscount),
+      formatCurrency(row.orderFees),
+      formatCurrency(row.orderTotal),
     ]),
     title: "ORDER SUMMARY",
     totals: [
@@ -158,6 +168,11 @@ function buildOrderSummaryPdfPages(reportData: PickupSummaryReportData) {
       "TOTALS",
       reportData.orderSummaryTotals.birds,
       formatCurrency(reportData.orderSummaryTotals.value),
+      formatCurrency(reportData.orderSummaryTotals.orderSubtotal),
+      formatCurrency(reportData.orderSummaryTotals.couponDiscount),
+      formatCurrency(reportData.orderSummaryTotals.manualDiscount),
+      formatCurrency(reportData.orderSummaryTotals.orderFees),
+      formatCurrency(reportData.orderSummaryTotals.orderTotal),
     ],
   });
 }
@@ -495,6 +510,11 @@ function buildOrderSummaryWorksheet(
         stringCell("Phone", 1),
         stringCell("Email", 1),
         stringCell("Total birds", 1),
+        stringCell("Bird value", 1),
+        stringCell("Order subtotal", 1),
+        stringCell("Coupon discount", 1),
+        stringCell("Manual discount", 1),
+        stringCell("Tax and delivery", 1),
         stringCell("Order total", 1),
       ],
     },
@@ -506,6 +526,11 @@ function buildOrderSummaryWorksheet(
         stringCell(row.email, 2),
         numberCell(row.totalBirds, 3),
         numberCell(row.totalValue, 4),
+        numberCell(row.orderSubtotal, 4),
+        numberCell(row.couponDiscount, 4),
+        numberCell(row.manualDiscount, 4),
+        numberCell(row.orderFees, 4),
+        numberCell(row.orderTotal, 4),
       ],
     })),
     {
@@ -516,16 +541,21 @@ function buildOrderSummaryWorksheet(
         stringCell("TOTALS", 5),
         numberCell(reportData.orderSummaryTotals.birds, 6),
         numberCell(reportData.orderSummaryTotals.value, 7),
+        numberCell(reportData.orderSummaryTotals.orderSubtotal, 7),
+        numberCell(reportData.orderSummaryTotals.couponDiscount, 7),
+        numberCell(reportData.orderSummaryTotals.manualDiscount, 7),
+        numberCell(reportData.orderSummaryTotals.orderFees, 7),
+        numberCell(reportData.orderSummaryTotals.orderTotal, 7),
       ],
     },
   ];
 
   return {
-    columns: [12, 24, 18, 36, 14, 14],
+    columns: [12, 24, 18, 36, 14, 14, 16, 16, 16, 17, 16],
     name: "Order Summary",
     path: `xl/worksheets/sheet${sheetId}.xml`,
     relId: `rId${sheetId}`,
-    xml: buildWorksheetXml(rows, [12, 24, 18, 36, 14, 14]),
+    xml: buildWorksheetXml(rows, [12, 24, 18, 36, 14, 14, 16, 16, 16, 17, 16]),
   };
 }
 

@@ -27,19 +27,34 @@ values
 
 insert into public.stores (
   id, owner_user_id, store_name, store_slug, store_status,
-  storefront_mode, storefront_enabled
+  storefront_mode, storefront_enabled, show_public_phone, public_phone
 )
 values
   (
     'ea000000-0000-4000-8000-000000000010',
     'ea000000-0000-4000-8000-000000000001',
-    'Order Page Store A', 'order-page-store-a', 'live', 'hosted', true
+    'Order Page Store A', 'order-page-store-a', 'live', 'hosted', true, true, '555-0110'
   ),
   (
     'ea000000-0000-4000-8000-000000000020',
     'ea000000-0000-4000-8000-000000000002',
-    'Order Page Store B', 'order-page-store-b', 'live', 'hosted', true
+    'Order Page Store B', 'order-page-store-b', 'live', 'hosted', true, true, '555-0120'
   );
+
+insert into public.seller_billing_status (
+  store_id, requested_plan_key, requested_billing_cadence, plan_key,
+  billing_plan, subscription_status, trial_started_at, trial_ends_at,
+  current_period_start, current_period_end, storefront_access_until,
+  billing_state_authority
+)
+select id, 'full_flock', 'monthly', 'full_flock', 'monthly', 'trialing',
+  now(), now() + interval '7 days', now(), now() + interval '7 days',
+  now() + interval '7 days', 'trial'
+from public.stores
+where id in (
+  'ea000000-0000-4000-8000-000000000010',
+  'ea000000-0000-4000-8000-000000000020'
+);
 
 insert into public.customers (
   id, store_id, email, first_name, last_name

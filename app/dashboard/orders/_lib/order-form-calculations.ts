@@ -1,4 +1,3 @@
-import { formatInventorySearchLabel } from "./order-form-inventory";
 import type {
   DeliveryAddress,
   DiscountType,
@@ -171,50 +170,6 @@ export function validateSharedOrderForm({
   }
 
   return errors;
-}
-
-export function distributeDiscount(
-  lines: OrderLine[],
-  inventory: InventorySearchRow[],
-  discountAmount: number,
-) {
-  const selectedLines = lines.filter(isActiveLine);
-  const subtotal = selectedLines.reduce(
-    (total, line) => total + Number(line.quantity || 0) * Number(line.unitPrice || 0),
-    0,
-  );
-
-  if (subtotal <= 0 || discountAmount <= 0) {
-    return selectedLines.map((line) => ({
-      ...line,
-      discountedUnitPrice: Number(line.unitPrice || 0),
-    }));
-  }
-
-  let remainingDiscount = Math.min(discountAmount, subtotal);
-
-  return selectedLines.map((line, index) => {
-    const quantity = Number(line.quantity);
-    const lineTotal = quantity * Number(line.unitPrice);
-    const lineDiscount =
-      index === selectedLines.length - 1
-        ? remainingDiscount
-        : roundCurrency((lineTotal / subtotal) * discountAmount);
-    remainingDiscount = roundCurrency(remainingDiscount - lineDiscount);
-
-    const item = inventory.find((row) => row.id === line.inventoryItemId);
-
-    return {
-      ...line,
-      search:
-        line.type === "inventory" && item
-          ? formatInventorySearchLabel(item)
-          : line.search,
-      discountedUnitPrice: roundCurrency(
-        Math.max((lineTotal - lineDiscount) / quantity, 0),
-      ),
-    };
-  });
 }
 
 export function calculateDiscountAmount(

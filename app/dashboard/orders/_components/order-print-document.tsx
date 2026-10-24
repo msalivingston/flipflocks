@@ -84,7 +84,9 @@ export function OrderPrintDocument({
   const deliveryFeeAmount = order.delivery_fee_amount ?? 0;
   const hasTaxFee = Boolean(order.tax_fee_amount);
   const hasDeliveryFee = isDeliveryOrder && deliveryFeeAmount > 0;
-  const shouldShowBreakdown = hasTaxFee || hasDeliveryFee || Boolean(order.discount_snapshot);
+  const hasDiscount = Boolean(order.discount_snapshot) &&
+    (Number(order.coupon_discount_amount) > 0 || Number(order.manual_discount_amount) > 0);
+  const shouldShowBreakdown = hasTaxFee || hasDeliveryFee || hasDiscount;
   const pickupOption = order.pickup_option_label_snapshot?.trim() ?? "";
   const pickupNote = order.pickup_note?.trim() ?? "";
   const customerNote = order.buyer_notes?.trim() ?? "";
@@ -149,7 +151,7 @@ export function OrderPrintDocument({
                 </td>
                 <td>{item.quantity}</td>
                 <td>{formatCurrency(item.unit_price_snapshot)}</td>
-                <td>{formatCurrency(item.line_subtotal)}</td>
+                <td>{formatCurrency(order.discount_snapshot ? Number(item.unit_price_snapshot ?? 0) * item.quantity : item.line_subtotal)}</td>
               </tr>
             ))}
           </tbody>
@@ -157,17 +159,14 @@ export function OrderPrintDocument({
 
         <section className="order-print-lower">
           <dl className="order-print-totals">
-            {order.discount_snapshot ? <>
-              <div><dt>Merchandise before discounts</dt><dd>{formatCurrency(order.gross_subtotal_amount ?? null)}</dd></div>
-              {Number(order.coupon_discount_amount) > 0 ? <div><dt>Coupon ({order.discount_snapshot.coupon?.code})</dt><dd>-{formatCurrency(order.coupon_discount_amount ?? null)}</dd></div> : null}
+            {hasDiscount ? <>
+              <div><dt>Subtotal</dt><dd>{formatCurrency(order.gross_subtotal_amount ?? null)}</dd></div>
+              {Number(order.coupon_discount_amount) > 0 ? <div><dt>Coupon ({order.discount_snapshot?.coupon?.code})</dt><dd>-{formatCurrency(order.coupon_discount_amount ?? null)}</dd></div> : null}
               {Number(order.manual_discount_amount) > 0 ? <div><dt>Manual discount</dt><dd>-{formatCurrency(order.manual_discount_amount ?? null)}</dd></div> : null}
             </> : null}
             {shouldShowBreakdown ? (
               <>
-                <div>
-                  <dt>Subtotal</dt>
-                  <dd>{formatCurrency(order.subtotal_amount)}</dd>
-                </div>
+                {!hasDiscount ? <div><dt>Subtotal</dt><dd>{formatCurrency(order.subtotal_amount)}</dd></div> : null}
                 {hasTaxFee ? (
                   <div>
                     <dt>{order.tax_fee_label_snapshot ?? "Tax/fee"}</dt>

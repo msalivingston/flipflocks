@@ -17,6 +17,10 @@ const batchDPath = path.join(
   repositoryRoot,
   "supabase/migrations/20260730200000_unified_order_inventory_reconciliation.sql",
 );
+const paidEditGuardPath = path.join(
+  repositoryRoot,
+  "supabase/migrations/20261024130000_block_paid_order_edits.sql",
+);
 const orderPredicatesPath = path.join(
   repositoryRoot,
   "app/dashboard/orders/order-action-predicates.ts",
@@ -274,9 +278,10 @@ test("only the Connect webhook calls the service-only Stripe refund observer", a
   assert.deepEqual(matches, ["supabase/functions/stripe-connect-webhook/index.ts"]);
 });
 
-test("Batch D paid-Stripe edit protection remains intact", async () => {
-  const [batchD, predicates] = await Promise.all([
+test("paid order edit protection covers online and offline payments", async () => {
+  const [batchD, guardMigration, predicates] = await Promise.all([
     readFile(batchDPath, "utf8"),
+    readFile(paidEditGuardPath, "utf8"),
     readFile(orderPredicatesPath, "utf8"),
   ]);
 
@@ -285,9 +290,11 @@ test("Batch D paid-Stripe edit protection remains intact", async () => {
     /v_order\.payment_method = 'stripe_checkout'[\s\S]*v_order\.payment_status <> 'unpaid'[\s\S]*Paid online orders cannot be edited\./,
   );
   assert.match(
-    predicates,
-    /order\.payment_method === "stripe_checkout"[\s\S]*order\.payment_status !== "unpaid"/,
+    guardMigration,
+    /coalesce\(v_order\.payment_status, ''\) not in \('unpaid', 'pay_at_pickup'\)[\s\S]*Paid orders cannot be edited\./,
   );
+  assert.match(predicates, /order\.payment_status === "unpaid"/);
+  assert.match(predicates, /order\.payment_status === "pay_at_pickup"/);
 });
 
 test("Batch E introduces no Stripe request, checkout, webhook, or Edge implementation", async () => {

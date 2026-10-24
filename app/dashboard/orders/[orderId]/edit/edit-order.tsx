@@ -28,7 +28,6 @@ import {
   calculateFinalTotal,
   calculateOrderSubtotal,
   customLine,
-  distributeDiscount,
   formatMoneyInput,
   isActiveLine,
 } from "../../_lib/order-form-calculations";
@@ -94,6 +93,7 @@ type CustomerDetailRow = CustomerRow & {
 
 type EditableOrderRow = {
   discount_snapshot: { coupon: { code: string } | null; manual_type: DiscountType; manual_value: number } | null;
+  manual_discount_amount: number;
   id: string;
   customer_id: string | null;
   order_number: string;
@@ -242,7 +242,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
         supabase
           .from("orders")
           .select(
-            "id, customer_id, order_number, order_status, payment_method, payment_status, fulfilled_at, canceled_at, buyer_email_snapshot, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, buyer_notes, pickup_note, pickup_option_id, pickup_option_label_snapshot, fulfillment_method, delivery_option_name_snapshot, delivery_fee_amount, subtotal_amount, tax_fee_amount, total_amount, discount_snapshot",
+            "id, customer_id, order_number, order_status, payment_method, payment_status, fulfilled_at, canceled_at, buyer_email_snapshot, buyer_first_name_snapshot, buyer_last_name_snapshot, buyer_phone_snapshot, buyer_address_line1_snapshot, buyer_address_line2_snapshot, buyer_city_snapshot, buyer_state_snapshot, buyer_postal_code_snapshot, buyer_country_snapshot, buyer_notes, pickup_note, pickup_option_id, pickup_option_label_snapshot, fulfillment_method, delivery_option_name_snapshot, delivery_fee_amount, subtotal_amount, tax_fee_amount, total_amount, discount_snapshot, manual_discount_amount",
           )
           .eq("store_id", seller.store_id)
           .eq("id", orderId)
@@ -334,7 +334,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
       const currentFulfillmentMethod =
         order?.fulfillment_method === "delivery" ? "delivery" : "pickup";
       const nextPickupOptions = includeSavedPickupOption(
-        getEditablePickupOptions(pickupOptionsResult.data ?? [], order),
+        getEditablePickupOptions(pickupOptionsResult.data ?? []),
         order,
       );
       const nextDeliveryOptions = includeSavedDeliveryOption(
@@ -379,6 +379,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
         order
           ? buildCustomerFacingFingerprint({
               buyerNotes: order.buyer_notes ?? "",
+              couponCode: order.discount_snapshot?.coupon?.code ?? "",
               deliveryAddress: formatOrderDeliveryAddress(order),
               deliveryFee: order.delivery_fee_amount ?? 0,
               deliveryOptionId:
@@ -387,14 +388,13 @@ export function EditOrder({ orderId }: { orderId: string }) {
                   ? savedDeliveryOptionId
                   : "",
               deliveryOptionName: order.delivery_option_name_snapshot ?? "",
-              discountAmount: 0,
+              discountAmount: Number(order.manual_discount_amount ?? 0),
               fulfillmentMethod: currentFulfillmentMethod,
               lines: mappedItems.lines,
               pickupNote: order.pickup_note ?? "",
               pickupOptionId: order.pickup_option_id ?? "",
               taxAmount: order.tax_fee_amount ?? 0,
               total: order.total_amount ?? 0,
-              inventory: existingInventory,
             })
           : "",
       );
@@ -581,6 +581,7 @@ export function EditOrder({ orderId }: { orderId: string }) {
   );
   const currentCustomerFacingFingerprint = buildCustomerFacingFingerprint({
     buyerNotes,
+    couponCode,
     deliveryAddress,
     deliveryFee,
     deliveryOptionId,
@@ -592,7 +593,6 @@ export function EditOrder({ orderId }: { orderId: string }) {
     pickupOptionId,
     taxAmount,
     total,
-    inventory: data.inventory,
   });
   const hasMeaningfulCustomerFacingChange = Boolean(
     savedCustomerFacingFingerprint &&
@@ -768,7 +768,9 @@ export function EditOrder({ orderId }: { orderId: string }) {
         };
 
     const payload = buildEditOrderPayload({
-      ...(couponCode.trim() || order.discount_snapshot ? { couponCode: couponCode.trim(), manualDiscountType: discountType, manualDiscountValue: Number(discountValue || 0) } : {}),
+      couponCode: couponCode.trim(),
+      manualDiscountType: discountType,
+      manualDiscountValue: Number(discountValue || 0),
       buyerNotes,
       customer: customerSnapshot,
       deliveryAddress,
@@ -928,8 +930,11 @@ export function EditOrder({ orderId }: { orderId: string }) {
               This order cannot be edited
             </h2>
             <p className="mt-2 text-sm leading-6 text-stone-600">
-              Fulfilled orders are not editable in V1, and canceled orders must be
-              restored before editing.
+              {order.payment_status === "paid" ||
+              order.payment_status === "partially_refunded" ||
+              order.payment_status === "refunded"
+                ? "Paid orders cannot be edited. Use the order details page for payment-status and fulfillment actions."
+                : "Fulfilled orders are not editable in V1, and canceled orders must be restored before editing."}
             </p>
             <div className="mt-4">
               <BackToOrderLink orderId={orderId} />
@@ -1296,7 +1301,6 @@ function includeSavedPickupOption(
 
 function getEditablePickupOptions(
   options: ConfiguredPickupOption[],
-  order: EditableOrderRow | null,
 ) {
   return options
     .filter((option) => option.is_active || option.archived_at)
@@ -1349,13 +1353,13 @@ function formatOrderDeliveryAddress(order: EditableOrderRow | null): DeliveryAdd
 
 function buildCustomerFacingFingerprint({
   buyerNotes,
+  couponCode,
   deliveryAddress,
   deliveryFee,
   deliveryOptionId,
   deliveryOptionName,
   discountAmount,
   fulfillmentMethod,
-  inventory,
   lines,
   pickupNote,
   pickupOptionId,
@@ -1363,21 +1367,20 @@ function buildCustomerFacingFingerprint({
   total,
 }: {
   buyerNotes: string;
+  couponCode: string;
   deliveryAddress: DeliveryAddress;
   deliveryFee: number;
   deliveryOptionId: string;
   deliveryOptionName: string;
   discountAmount: number;
   fulfillmentMethod: FulfillmentMethod;
-  inventory: InventorySearchRow[];
   lines: OrderLine[];
   pickupNote: string;
   pickupOptionId: string;
   taxAmount: number;
   total: number;
 }) {
-  const discountedLines = distributeDiscount(lines, inventory, discountAmount);
-  const itemFingerprint = discountedLines
+  const itemFingerprint = lines
     .filter(isActiveLine)
     .map((line) => ({
       customItemDescription:
@@ -1390,7 +1393,7 @@ function buildCustomerFacingFingerprint({
       quantity: normalizeInteger(line.quantity),
       savedItemName: normalizeText(line.savedItemName),
       type: line.type,
-      unitPriceCents: cents(line.discountedUnitPrice ?? line.unitPrice),
+      unitPriceCents: cents(line.unitPrice),
     }))
     .sort((left, right) =>
       [
@@ -1408,6 +1411,7 @@ function buildCustomerFacingFingerprint({
 
   return JSON.stringify({
     buyerNotes: normalizeText(buyerNotes),
+    couponCode: normalizeText(couponCode),
     delivery:
       fulfillmentMethod === "delivery"
         ? {
@@ -1426,6 +1430,7 @@ function buildCustomerFacingFingerprint({
         : null,
     fulfillmentMethod,
     items: itemFingerprint,
+    manualDiscountCents: cents(discountAmount),
     pickup:
       fulfillmentMethod === "pickup"
         ? {

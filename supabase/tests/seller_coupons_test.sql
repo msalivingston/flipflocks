@@ -39,6 +39,8 @@ create temp table created_coupon_order as select * from public.seller_create_man
  p_coupon_code=>'survey10',p_manual_discount_type=>'percent',p_manual_discount_value=>10);
 select is((select total_amount from created_coupon_order),45::numeric,'seller order persists discounted total');
 select is((select sum(line_subtotal) from public.order_items where order_id=(select order_id from created_coupon_order)),45::numeric,'line totals reconcile without per-unit rounding loss');
+select is((select unit_price_snapshot from public.order_items where order_id=(select order_id from created_coupon_order)),20::numeric,'coupon and manual discount preserve the original unit price');
+select is((select gross_line_subtotal from public.order_items where order_id=(select order_id from created_coupon_order)),60::numeric,'coupon and manual discount preserve the gross line subtotal');
 select is((select count(*) from public.seller_coupon_redemptions where customer_email='buyer@example.test' and released_at is null),1::bigint,'one normalized-email redemption');
 select throws_ok($$select public.calculate_order_discounts('ca000000-0000-4000-8000-000000000010','BUYER@example.test','[{"line_subtotal":20}]','SURVEY10')$$,'P0001','This coupon has already been used or is reserved in another checkout for this email.','changed email casing cannot redeem again');
 select lives_ok($$select public.calculate_order_discounts('ca000000-0000-4000-8000-000000000010','another@example.test','[{"line_subtotal":20}]','SURVEY10')$$,'shared code works for another customer');
@@ -91,6 +93,9 @@ select public.reserve_storefront_card_checkout(
 create temp table card_coupon_order as select * from public.settle_storefront_card_checkout('cs_test_CouponPaid','acct_CouponTest',false,'paid',1000,'usd','pi_CouponPaid',now());
 select is((select total_amount from card_coupon_order),10::numeric,'paid card order uses reserved discounted total');
 select is((select coupon_discount_amount from public.orders where id=(select order_id from card_coupon_order)),10::numeric,'card order retains coupon snapshot');
+select throws_ok($$select public.seller_edit_order(p_order_id=>(select order_id from card_coupon_order),p_items=>'[]'::jsonb)$$,
+ 'P0001','Paid orders cannot be edited.','paid card order rejects direct edits before modifying its captured total');
+select is((select total_amount from public.orders where id=(select order_id from card_coupon_order)),10::numeric,'rejected paid card edit preserves the captured order total');
 select lives_ok($$select public.settle_storefront_card_checkout('cs_test_CouponPaid','acct_CouponTest',false,'paid',1000,'usd','pi_CouponPaid',now())$$,'duplicate webhook is idempotent');
 select is((select count(*) from public.seller_coupon_redemptions where customer_email='card@example.test' and released_at is null),1::bigint,'duplicate webhook consumes no second use');
 
@@ -113,8 +118,74 @@ create temp table edited_coupon_order as select * from public.seller_edit_order(
  p_customer_id=>(select customer_id from pickup_coupon_order),p_customer_email=>'pickup@example.test',p_customer_first_name=>'Pickup',p_customer_last_name=>'Buyer',
  p_items=>(select jsonb_agg(jsonb_build_object('order_item_id',id,'item_type','equipment_inventory','item_id',equipment_inventory_item_id,'quantity',quantity,'unit_price',unit_price_snapshot)) from public.order_items where order_id=(select order_id from pickup_coupon_order)),
  p_coupon_code=>'SURVEY10',p_manual_discount_type=>'percent',p_manual_discount_value=>10);
+-- Each editor RPC normally commits separately; release its ON COMMIT DROP
+-- scratch tables before the next edit in this transaction-wrapped test.
+drop table pg_temp.edit_existing_items,pg_temp.edit_requested_items,pg_temp.edit_removed_items,pg_temp.edit_inventory_deltas;
 select is((select revised_total_amount from edited_coupon_order),45::numeric,'editing retains original coupon then applies manual discount');
+select is((select unit_price_snapshot from public.order_items where order_id=(select order_id from pickup_coupon_order)),20::numeric,'coupon edit retains the original unit price');
 select is((select count(*) from public.seller_coupon_redemptions where customer_email='pickup@example.test' and released_at is null),1::bigint,'same-coupon edit retains one redemption');
+
+create temp table fixed_manual_order as select * from public.seller_create_manual_order(
+ p_store_id=>'ca000000-0000-4000-8000-000000000010',p_idempotency_key=>'manual-fixed-discount',
+ p_items=>'[{"item_type":"equipment_inventory","item_id":"ca000000-0000-4000-8000-000000000050","quantity":2,"unit_price":20}]',
+ p_customer_email=>'manual-fixed@example.test',p_customer_first_name=>'Manual',p_customer_last_name=>'Fixed',
+ p_coupon_code=>'',p_manual_discount_type=>'fixed',p_manual_discount_value=>10);
+select is((select total_amount from fixed_manual_order),30::numeric,'manual-only fixed discount reduces the order total');
+select is((select gross_subtotal_amount from public.orders where id=(select order_id from fixed_manual_order)),40::numeric,'manual-only order stores gross subtotal');
+select is((select manual_discount_amount from public.orders where id=(select order_id from fixed_manual_order)),10::numeric,'manual-only order stores discount separately');
+select is((select unit_price_snapshot from public.order_items where order_id=(select order_id from fixed_manual_order)),20::numeric,'manual-only order preserves unit price');
+select is((select gross_line_subtotal from public.order_items where order_id=(select order_id from fixed_manual_order)),40::numeric,'manual-only order preserves gross line amount');
+select is((select line_subtotal from public.order_items where order_id=(select order_id from fixed_manual_order)),30::numeric,'manual-only order retains allocated net item revenue');
+
+select public.seller_edit_order(
+ p_order_id=>(select order_id from fixed_manual_order),
+ p_customer_id=>(select customer_id from public.orders where id=(select order_id from fixed_manual_order)),
+ p_items=>(select jsonb_agg(jsonb_build_object('order_item_id',id,'item_type','equipment_inventory','item_id',equipment_inventory_item_id,'quantity',3,'unit_price',20)) from public.order_items where order_id=(select order_id from fixed_manual_order)),
+ p_customer_email=>'manual-fixed@example.test',p_customer_first_name=>'Manual',p_customer_last_name=>'Fixed',
+ p_tax_fee_amount=>2.50,p_coupon_code=>'',p_manual_discount_type=>'fixed',p_manual_discount_value=>10);
+drop table pg_temp.edit_existing_items,pg_temp.edit_requested_items,pg_temp.edit_removed_items,pg_temp.edit_inventory_deltas;
+select is((select total_amount from public.orders where id=(select order_id from fixed_manual_order)),52.50::numeric,'quantity edit recalculates fixed discount and preserves explicit tax fee');
+select is((select gross_subtotal_amount from public.orders where id=(select order_id from fixed_manual_order)),60::numeric,'quantity edit recalculates gross subtotal');
+
+select public.seller_edit_order(
+ p_order_id=>(select order_id from fixed_manual_order),
+ p_customer_id=>(select customer_id from public.orders where id=(select order_id from fixed_manual_order)),
+ p_items=>(select jsonb_agg(jsonb_build_object('order_item_id',id,'item_type','equipment_inventory','item_id',equipment_inventory_item_id,'quantity',3,'unit_price',25)) from public.order_items where order_id=(select order_id from fixed_manual_order)),
+ p_customer_email=>'manual-fixed@example.test',p_customer_first_name=>'Manual',p_customer_last_name=>'Fixed',
+ p_coupon_code=>'',p_manual_discount_type=>'fixed',p_manual_discount_value=>10);
+drop table pg_temp.edit_existing_items,pg_temp.edit_requested_items,pg_temp.edit_removed_items,pg_temp.edit_inventory_deltas;
+select is((select total_amount from public.orders where id=(select order_id from fixed_manual_order)),67.50::numeric,'second edit recalculates price without redistributing discount or losing tax fee');
+select is((select unit_price_snapshot from public.order_items where order_id=(select order_id from fixed_manual_order)),25::numeric,'second edit stores the entered selling price');
+select is((select manual_discount_amount from public.orders where id=(select order_id from fixed_manual_order)),10::numeric,'second edit retains fixed discount intent');
+
+select lives_ok($$select public.mark_order_paid((select order_id from fixed_manual_order))$$,'offline payment can still be marked paid');
+select throws_ok($$select public.seller_edit_order(
+ p_order_id=>(select order_id from fixed_manual_order),
+ p_customer_id=>(select customer_id from public.orders where id=(select order_id from fixed_manual_order)),
+ p_items=>(select jsonb_agg(jsonb_build_object('order_item_id',id,'item_type','equipment_inventory','item_id',equipment_inventory_item_id,'quantity',4,'unit_price',30)) from public.order_items where order_id=(select order_id from fixed_manual_order)),
+ p_customer_email=>'manual-fixed@example.test',p_customer_first_name=>'Manual',p_customer_last_name=>'Fixed',
+ p_coupon_code=>'',p_manual_discount_type=>'fixed',p_manual_discount_value=>15)$$,
+ 'P0001','Paid orders cannot be edited.','paid offline order rejects total-changing edits');
+select is((select total_amount from public.orders where id=(select order_id from fixed_manual_order)),67.50::numeric,'rejected paid edit preserves saved total');
+select is((select manual_discount_amount from public.orders where id=(select order_id from fixed_manual_order)),10::numeric,'rejected paid edit preserves discount');
+select is((select payment_status from public.orders where id=(select order_id from fixed_manual_order)),'paid','rejected paid edit preserves payment status');
+select ok((select paid_at is not null from public.orders where id=(select order_id from fixed_manual_order)),'rejected paid edit preserves payment timestamp');
+select lives_ok($$select public.mark_order_pay_at_pickup((select order_id from fixed_manual_order))$$,'offline payment correction remains available');
+select lives_ok($$select public.seller_edit_order(
+ p_order_id=>(select order_id from fixed_manual_order),
+ p_customer_id=>(select customer_id from public.orders where id=(select order_id from fixed_manual_order)),
+ p_items=>(select jsonb_agg(jsonb_build_object('order_item_id',id,'item_type','equipment_inventory','item_id',equipment_inventory_item_id,'quantity',3,'unit_price',25)) from public.order_items where order_id=(select order_id from fixed_manual_order)),
+ p_customer_email=>'manual-fixed@example.test',p_customer_first_name=>'Manual',p_customer_last_name=>'Fixed',
+ p_coupon_code=>'',p_manual_discount_type=>'fixed',p_manual_discount_value=>10)$$,'corrected unpaid offline order remains editable');
+
+create temp table percent_manual_order as select * from public.seller_create_manual_order(
+ p_store_id=>'ca000000-0000-4000-8000-000000000010',p_idempotency_key=>'manual-percent-discount',
+ p_items=>'[{"item_type":"equipment_inventory","item_id":"ca000000-0000-4000-8000-000000000050","quantity":2,"unit_price":20}]',
+ p_customer_email=>'manual-percent@example.test',p_customer_first_name=>'Manual',p_customer_last_name=>'Percent',
+ p_coupon_code=>'',p_manual_discount_type=>'percent',p_manual_discount_value=>25);
+select is((select total_amount from percent_manual_order),30::numeric,'manual-only percentage discount reduces the order total');
+select is((select discount_snapshot->>'manual_value' from public.orders where id=(select order_id from percent_manual_order)),'25','percentage discount intent survives saving');
+select is((select unit_price_snapshot from public.order_items where order_id=(select order_id from percent_manual_order)),20::numeric,'percentage discount preserves unit price');
 select throws_ok($$select public.preview_storefront_coupon('coupon-test','[{"item_type":"equipment_inventory","item_id":"ca000000-0000-4000-8000-000000000050","quantity":1}]','SURVEY10','new@example.test')$$,'P0001','Coupon is invalid, inactive, or expired.','inactive coupon rejects new orders');
 
 insert into public.seller_coupons(store_id,code,discount_type,discount_value,scope,targets,minimum_purchase,expires_on)

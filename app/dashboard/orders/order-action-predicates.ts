@@ -33,10 +33,9 @@ export function canEditOrder(order: OrderActionSnapshot) {
     order.order_status !== "fulfilled" &&
     !order.fulfilled_at &&
     !order.has_adjusted_item_quantities &&
-    !(
-      order.payment_method === "stripe_checkout" &&
-      order.payment_status !== "unpaid"
-    )
+    (order.payment_status === "unpaid" ||
+      (order.payment_method === "pay_at_pickup" &&
+        order.payment_status === "pay_at_pickup"))
   );
 }
 

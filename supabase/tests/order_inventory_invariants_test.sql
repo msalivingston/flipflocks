@@ -94,6 +94,8 @@ begin
 
       drop function if exists public.__order_inventory_test_checkout_attempt(text);
       drop function if exists public.__order_inventory_test_checkout_attempt(text, bigint);
+      delete from public.seller_first_sale_milestones
+      where store_id = 'c1000000-0000-4000-8000-000000000010';
       delete from public.stores
       where id = 'c1000000-0000-4000-8000-000000000010';
       delete from auth.users
@@ -141,7 +143,9 @@ begin
         store_slug,
         store_status,
         storefront_mode,
-        storefront_enabled
+        storefront_enabled,
+        show_public_phone,
+        public_phone
       )
       values (
         'c1000000-0000-4000-8000-000000000010',
@@ -150,7 +154,9 @@ begin
         'concurrency-invariant-store',
         'live',
         'hosted',
-        true
+        true,
+        true,
+        '555-0100'
       );
 
       insert into public.seller_billing_status (
@@ -482,6 +488,8 @@ begin
     'order_inventory_first',
     $remote$
       drop function if exists public.__order_inventory_test_checkout_attempt(text, bigint);
+      delete from public.seller_first_sale_milestones
+      where store_id = 'c1000000-0000-4000-8000-000000000010';
       delete from public.stores
       where id = 'c1000000-0000-4000-8000-000000000010';
       delete from auth.users
@@ -507,6 +515,8 @@ exception
         'order_inventory_first',
         $remote$
           drop function if exists public.__order_inventory_test_checkout_attempt(text, bigint);
+          delete from public.seller_first_sale_milestones
+          where store_id = 'c1000000-0000-4000-8000-000000000010';
           delete from public.stores
           where id = 'c1000000-0000-4000-8000-000000000010';
           delete from auth.users
@@ -725,7 +735,9 @@ insert into public.stores (
   store_slug,
   store_status,
   storefront_mode,
-  storefront_enabled
+  storefront_enabled,
+  show_public_phone,
+  public_phone
 )
 values
   (
@@ -735,7 +747,9 @@ values
     'order-invariant-store',
     'live',
     'hosted',
-    true
+    true,
+    true,
+    '555-0110'
   ),
   (
     'a1000000-0000-4000-8000-000000000011',
@@ -744,7 +758,9 @@ values
     'other-order-invariant-store',
     'live',
     'hosted',
-    true
+    true,
+    true,
+    '555-0120'
   );
 
 insert into public.seller_billing_status (
@@ -2473,7 +2489,7 @@ select throws_ok(
     )
   $test$,
   'P0001',
-  'Paid online orders cannot be edited.',
+  'Paid orders cannot be edited.',
   'a paid Stripe-backed order cannot be edited through the direct RPC'
 );
 
