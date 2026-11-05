@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpDown, Funnel, MoreHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { createInventoryWorkbook } from "./inventory-export";
 import { ListingShareDialog } from "../_components/listing-share-dialog";
 import { useSellerContext } from "../_components/seller-context";
 import {
@@ -432,6 +433,7 @@ export function InventoryManagement() {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [isArchiveProcessing, setIsArchiveProcessing] = useState(false);
   const [archiveConfirm, setArchiveConfirm] =
     useState<InventoryArchiveDialogState | null>(null);
@@ -469,6 +471,52 @@ export function InventoryManagement() {
       isMountedRef.current = false;
     };
   }, []);
+
+  async function downloadInventory() {
+    if (!seller || isExporting || hasUnsavedChanges) return;
+    setIsExporting(true);
+    setSaveError(null);
+    try {
+      const { data, error } = await supabase.rpc("seller_export_live_inventory", {
+        p_store_id: seller.store_id,
+        p_availability: filtersByTab.live_poultry.availability,
+        p_species: filtersByTab.live_poultry.species,
+        p_type_sex: filtersByTab.live_poultry.typeSex,
+        p_age: filtersByTab.live_poultry.age,
+        p_search: activeSearchText,
+        p_sort: filtersByTab.live_poultry.sortBy,
+      });
+      if (error) throw error;
+      const exportRows = (data as InventoryRow[] | null) ?? [];
+      if (!exportRows.length) {
+        setSaveError("No available birds match these filters. Adjust your filters and try again.");
+        return;
+      }
+      const now = new Date();
+      const name = seller.store_name?.trim() || "FlockFront Seller";
+      const workbook = createInventoryWorkbook(name, exportRows.map((row) => ({
+        species: row.species_name, breed: row.breed_display_name,
+        sex: getInventoryTypeLabel(row), hatchDate: row.origin_date,
+        age: formatInventoryAgeLabel(calculateCurrentBirdAgeDays(row.origin_date, now)).replace(/ old$/, ""),
+        feather: getAdvancedAttributeLabel(featherConditionOptions, row.feather_condition) ?? "Not specified",
+        breeder: getAdvancedAttributeLabel(breedingHistoryOptions, row.breeding_history) ?? "Not specified",
+        quantity: Number(row.quantity_available),
+        price: row.effective_unit_price == null ? null : Number(row.effective_unit_price),
+      })), now);
+      const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
+      const filename = name.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "Inventory";
+      const url = URL.createObjectURL(workbook);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${filename}_Inventory_${date}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Unable to download inventory. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
+  }
 
   function changeInventoryTab(tab: InventoryProductTab) {
     setSelectedItemIds([]);
@@ -1873,6 +1921,17 @@ export function InventoryManagement() {
           </button>
         ) : null}
       </SellerCard>
+
+      {activeTab === "live_poultry" ? (
+        <div className="flex justify-end">
+          <button type="button" onClick={downloadInventory}
+            disabled={isExporting || hasUnsavedChanges}
+            title={hasUnsavedChanges ? "Save or discard changes before downloading" : undefined}
+            className="inline-flex min-h-10 items-center justify-center rounded-md border border-emerald-800 bg-white px-4 text-sm font-bold text-emerald-800 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50">
+            {isExporting ? "Preparing Excel…" : "Download Excel"}
+          </button>
+        </div>
+      ) : null}
 
       <SellerCard className="overflow-hidden">
         {(inventoryPage?.category_count ?? 0) === 0 ? (

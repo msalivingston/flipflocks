@@ -559,7 +559,7 @@ function buildOrderSummaryWorksheet(
   };
 }
 
-function buildWorkbookFiles(
+export function buildWorkbookFiles(
   sheets: Array<{
     name: string;
     path: string;
@@ -730,7 +730,7 @@ const workbookStylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>`;
 
-function createZip(files: Array<{ content: string; path: string }>) {
+export function createZip(files: Array<{ content: string; path: string }>) {
   const localParts: Uint8Array[] = [];
   const centralParts: Uint8Array[] = [];
   let offset = 0;
