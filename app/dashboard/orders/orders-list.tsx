@@ -1400,7 +1400,7 @@ function OrdersTableCard({
 
       <div
         aria-hidden="true"
-        className="hidden grid-cols-[2.25rem_minmax(9rem,10.5rem)_minmax(6.5rem,7.5rem)_minmax(0,1.6fr)_minmax(4.75rem,5.75rem)_minmax(9.5rem,11.5rem)_5.5rem] gap-3 bg-[#fbfaf6] px-4 py-3 text-xs font-medium uppercase tracking-[0.08em] text-stone-600 xl:grid [@container(min-width:1150px)]:grid-cols-[2.25rem_minmax(8rem,9.5rem)_minmax(6.25rem,7rem)_minmax(0,1.35fr)_minmax(4.75rem,5.5rem)_minmax(8.5rem,10rem)_minmax(15rem,16.5rem)_1.5rem_5.5rem]"
+        className="hidden grid-cols-[2.25rem_minmax(9rem,10.5rem)_minmax(6.5rem,7.5rem)_minmax(0,1.6fr)_minmax(4.75rem,5.75rem)_minmax(9.5rem,11.5rem)_5.5rem] gap-3 bg-[#fbfaf6] px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-stone-600 xl:grid [@container(min-width:1150px)]:grid-cols-[2.25rem_minmax(8rem,9.5rem)_minmax(6.25rem,7rem)_minmax(0,1.35fr)_minmax(4.75rem,5.5rem)_minmax(8.5rem,10rem)_minmax(15rem,16.5rem)_1.5rem_5.5rem]"
       >
         <span />
         <span>Order</span>
